@@ -24,7 +24,7 @@ import java.net.URL
  */
 object UpdateCheck {
 
-    private const val ENDPOINT = "https://api.github.com/repos/ryanbr/noop/releases/latest"
+    private const val ENDPOINT = "https://api.github.com/repos/ayiskakov/noop/releases/latest"
 
     sealed interface Result {
         data class UpToDate(val version: String) : Result
