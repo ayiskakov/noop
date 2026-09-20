@@ -445,11 +445,30 @@ object LabMarkerCsvImport {
     /**
      * The `custom_<slug>` key for an unrecognised marker name. MUST stay byte-identical
      * to the manual editor's MarkerUnits.slug (ui/MarkerEditorScreen.kt) so a CSV custom
-     * marker folds onto a hand-added one. Returns "" for a name with no usable characters.
+     * marker folds onto a hand-added one (the editor delegates here). Returns "" for a name
+     * with no usable characters.
+     *
+     * "%" becomes its own `pct` token: a lab export lists a white-cell differential as both a
+     * count and a percentage ("LYMPH" 1.9 and "LYMPH %" 31.2), and mapping "%" to "_" like any
+     * other punctuation gave both `custom_lymph`, so the second row of the day overwrote the
+     * first. The token is joined to a letter/digit neighbour by one "_" (a non-alphanumeric
+     * neighbour already maps to "_"), so "LYMPH %", "LYMPH%" and "Lymph (%)" all give
+     * `custom_lymph_pct`. Names without "%" keep the keys they always had. Byte-identical to
+     * Swift `LabMarkerCsvImport.customKey`.
      */
     internal fun customKey(name: String): String {
         val lowered = Normalizer.normalize(name, Normalizer.Form.NFC).trim().lowercase()
-        val mapped = lowered.map { if (it.isLetterOrDigit()) it else '_' }.joinToString("")
+        val mapped = buildString {
+            lowered.forEachIndexed { i, ch ->
+                if (ch == '%') {
+                    if (i > 0 && lowered[i - 1].isLetterOrDigit()) append('_')
+                    append("pct")
+                    if (i + 1 < lowered.length && lowered[i + 1].isLetterOrDigit()) append('_')
+                } else {
+                    append(if (ch.isLetterOrDigit()) ch else '_')
+                }
+            }
+        }
         val collapsed = mapped.replace("__", "_").trim('_')
         return if (collapsed.isEmpty()) "" else "custom_$collapsed"
     }

@@ -692,10 +692,7 @@ private fun latestLabel(row: LabMarkerRow?, key: String): String {
 private fun lastTakenCaption(row: LabMarkerRow?): String =
     if (row == null) "no readings yet" else "last taken ${labDayLabel(row.takenAt)}"
 
-private fun formatValue(v: Double, key: String): String {
-    val decimals = MarkerCatalog.definition(key)?.decimals ?: 1
-    return if (decimals == 0) Math.round(v).toString() else java.lang.String.format(Locale.US, "%.${decimals}f", v)
-}
+private fun formatValue(v: Double, key: String): String = LabValueFormat.value(v, key)
 
 private fun latestReferenceText(readings: List<LabMarkerRow>): String? =
     readings.lastOrNull { !it.referenceText.isNullOrEmpty() }?.referenceText

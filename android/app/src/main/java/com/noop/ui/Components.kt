@@ -973,6 +973,7 @@ fun GlowRing(
     modifier: Modifier = Modifier,
     showsLabel: Boolean = true,
     format: (Double) -> String = { it.toInt().toString() },
+    targetRange: ClosedFloatingPointRange<Float>? = null,
 ) {
     val target = fraction.coerceIn(0f, 1f)
     val renderStill = rememberPoseStill()
@@ -1036,6 +1037,35 @@ fun GlowRing(
                     val arcSize = Size(d - stroke, d - stroke)
                     val tl = Offset((size.width - d) / 2f + inset, (size.height - d) / 2f + inset)
                     val sweep = animFraction.coerceIn(0f, 1f) * 360f
+
+                    // Target range segment (gray) — the optimal zone. Drawn BEFORE the value arc so it's
+                    // visible even when effort is 0 (most useful in the morning). Sits on its own inset
+                    // track inside the value ring, so the glow/value arc never overlaps it.
+                    if (targetRange != null) {
+                        // Inset the target arc so it sits on its own track inside the value ring, just inside
+                        // the track. The track spans radius ± 0.5 stroke; the target spans its own radius ± 0.3 stroke.
+                        // Insetting by 1.05 stroke places the target's outer edge just inside the track's inner edge,
+                        // accounting for the round caps.
+                        val targetInset = stroke * 1.05f
+                        val targetD = d - stroke - targetInset * 2f
+                        val targetArcSize = Size(targetD, targetD)
+                        val targetTl = Offset(
+                            tl.x + (arcSize.width - targetD) / 2f,
+                            tl.y + (arcSize.height - targetD) / 2f,
+                        )
+                        val startAngle = targetRange.start * 360f - 90f
+                        val sweepAngle = (targetRange.endInclusive - targetRange.start) * 360f
+                        drawArc(
+                            color = Palette.textTertiary.copy(alpha = 0.5f),
+                            startAngle = startAngle,
+                            sweepAngle = sweepAngle,
+                            useCenter = false,
+                            topLeft = targetTl,
+                            size = targetArcSize,
+                            style = Stroke(width = stroke * 0.6f, cap = StrokeCap.Round),
+                        )
+                    }
+
                     // Only draw the arc (+ its glow) when there's ACTUAL progress. A near-zero round-capped
                     // arc renders as a full visible dot at 12 o'clock on Android's Canvas (unlike iOS's
                     // sub-pixel `trim`), which read as the unwanted "dot" on empty / No-Data / Calibrating

@@ -711,6 +711,20 @@ internal fun optimalUpperFraction(recovery: Double?): Double {
     return (band.high.toDouble() / 21.0).coerceIn(0.0, 1.0)
 }
 
+/**
+ * The optimal strain band as a 0..1 fraction range of the 0-21 axis, for ring target arcs.
+ * null when recovery is unknown, so the caller renders no target zone.
+ *
+ * Sibling of [optimalUpperFraction], which returns only the upper bound for the tube fill.
+ * This returns the full band as a range, for the GlowRing target arc.
+ */
+internal fun optimalFractionRange(recovery: Double?): ClosedFloatingPointRange<Float>? {
+    val band = optimalStrainRange(recovery) ?: return null
+    val low = (band.low.toDouble() / 21.0).coerceIn(0.0, 1.0).toFloat()
+    val high = (band.high.toDouble() / 21.0).coerceIn(0.0, 1.0).toFloat()
+    return low..high
+}
+
 /** The optimal band as display text ("14 to 18" / the no-data token). Byte-identical to the Swift twin. */
 internal fun optimalStrainRangeText(recovery: Double?): String {
     val band = optimalStrainRange(recovery) ?: return COUPLED_NO_DATA

@@ -181,6 +181,21 @@ Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `
   that identified the bug. Gate per-connect readouts behind the Test Centre domain; leave rare-event
   evidence (a state transition, a mismatch) always-on, since it costs nothing when nothing happens and is
   what is missing when someone reports a problem without Test Centre enabled.
+- **Two readouts of one fact must not be able to disagree.** The same rule as the bullet above, one
+  layer up: it applies to what a SCREEN states, not only to what a log line claims. The Alarms screen is
+  the worked example. It carried two pickers both labelled "Wake time", holding different values, only
+  one of which woke anybody (#2353), and the per-day list under the wind-down card silently re-timed the
+  strap alarm while its copy said it moved the reminder (#1864). The repair work then introduced the
+  same shape five more times: a line naming the base alarm time where an override day fires at another,
+  a card that hid where its own time came from, a countdown for an alarm that would never arm, a
+  countdown and its date stamp resolved from two clocks a tick apart, and a deadline printed three times
+  in one card.
+  Three defences, in order of preference: do not show the fact twice (the second copy is usually noise,
+  as a date stamp beside figures that already carry the time); when it must appear twice, resolve both
+  from ONE gated funnel and ONE clock, passed in rather than read separately; and gate that funnel on
+  whether the thing will actually happen, since a countdown is a promise and an unarmed alarm has none
+  to make. Counting gated call sites is the weak version of that last test and it passes while a fourth
+  reader resolves the fact by itself: assert the single resolver instead.
 - **Device / strap model resolution:** map a registry `model` label to a family through the ONE
   canonical resolver (`DeviceFamily.forRegistryModel` on both platforms), never a scattered
   string compare — the wizard stores `"4.0"`, other paths `"WHOOP 4.0"`, and single-spelling checks

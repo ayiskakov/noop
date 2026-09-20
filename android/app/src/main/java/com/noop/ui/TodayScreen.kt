@@ -3083,6 +3083,10 @@ private fun ScoreHeroRow(
                     ),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
+                        // Show the optimal strain range as a gray segment in the Effort ring.
+                        // The range is derived from recovery (Charge) and shows where the current effort
+                        // should ideally fall. Returned as a 0..1 fraction (independent of the user's selected scale).
+                        val targetFraction = optimalFractionRange(recovery)
                         HeroScoreVessel(
                             fraction = if (effortOutOf > 0) effortVal / effortOutOf else 0.0,
                             value = effortVal,
@@ -3092,6 +3096,7 @@ private fun ScoreHeroRow(
                             format = { if (effortScale == EffortScale.WHOOP) String.format(Locale.getDefault(), "%.1f", it) else it.toInt().toString() },
                             animated = heroVesselsAnimated,
                             onTap = effortRingTap,
+                            targetRange = targetFraction,
                         )
                         if (strain == null) RingNoData(diameter = ring)
                     }
@@ -3317,6 +3322,7 @@ private fun HeroScoreVessel(
     modifier: Modifier = Modifier,
     showsValue: Boolean = true,
     format: (Double) -> String = { it.roundToInt().toString() },
+    targetRange: ClosedFloatingPointRange<Float>? = null,
     // Both of these are VESSEL-only; the ring branch ignores them.
     //
     // Whether the vessel sloshes live. The caller passes its empty-hero cost gate, so a brand-new user's
@@ -3340,6 +3346,7 @@ private fun HeroScoreVessel(
             modifier = modifier,
             showsLabel = showsValue,
             format = format,
+            targetRange = targetRange,
         )
     } else Box(modifier = modifier.size(diameter), contentAlignment = Alignment.Center) {
         LiquidVessel(
@@ -3356,7 +3363,19 @@ private fun HeroScoreVessel(
             CountUpText(
                 value = value,
                 format = format,
-                style = NoopType.number(numberSp, weight = FontWeight.Bold)
+                // #2346: the weight follows the Appearance preference. BOLD is the shipped look and the
+                // default, so nothing moves unless someone asks; SOFT falls back to `NoopType.number`'s
+                // own default, the weight every other number in the app already uses. The SIZE is not a
+                // preference: it is pinned to the iOS 96-to-26 ratio a few lines up, and moving one
+                // platform alone would break that.
+                style = NoopType.number(
+                    numberSp,
+                    weight = if (AppearancePrefs.gaugeNumerals == GaugeNumeralStyle.SOFT) {
+                        FontWeight.SemiBold
+                    } else {
+                        FontWeight.Bold
+                    },
+                )
                     .copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), offset = Offset(0f, 1f), blurRadius = 6f)),
                 color = Color.White,
                 modifier = Modifier.clearAndSetSemantics {},

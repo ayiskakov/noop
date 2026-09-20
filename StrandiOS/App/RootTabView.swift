@@ -240,11 +240,6 @@ struct RootTabView: View {
                 // so a deep-link lands on the Today tab where that entry lives.
                 withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.24)) { selectedTab = 0 }
                 router.requestedDestination = nil
-            case .coach:
-                // #1862: the Today Coach launcher hands its question here. Coach is a pillar sheet on
-                // iPhone, the same as the Insights hub, so route it that way rather than switching tabs.
-                routedPillar = dest
-                router.requestedDestination = nil
             case .journal:
                 // The #627 Today journal widget opens the journal through the quick-action Journal sheet
                 // (InsightsView), matching the FAB's "Log journal" action. Calm sheet easing.
@@ -329,8 +324,6 @@ struct RootTabView: View {
                 case .fusedRecord: FusedRecordHost()
                 case .rhythm: RhythmHost(onClose: { routedPillar = nil })
                 case .devices: DevicesView()
-                // K5: the scheduled morning-brief notification's tap-through target.
-                case .coach: CoachView()
                 // .trends is never presented as a pillar sheet on iPhone (it's a primary tab — the
                 // requestedDestination handler switches `selectedTab` instead), but the switch must stay
                 // exhaustive. Fall back to Trends inside the sheet host if it ever arrives here.
@@ -344,8 +337,10 @@ struct RootTabView: View {
                 // .journal opens through the quick-action Journal sheet (handled above); this keeps the
                 // switch exhaustive and falls back to the journal's Insights host if it ever reaches here.
                 case .journal: InsightsView()
-                // #1862: Coach IS presented here — the launcher sheet routes to it as a pillar, so unlike
-                // the fallbacks above this arm is the real destination, not a safety net.
+                // .coach switches to the Coach tab (handled above — the morning-brief tap-through and the
+                // #1862 launcher both arrive that way, the launcher's question riding on
+                // `AICoachEngine.pendingPrompt`); this keeps the switch exhaustive and falls back to Coach if
+                // it ever reaches the host.
                 case .coach: CoachView()
                 }
             }

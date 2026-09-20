@@ -2765,4 +2765,24 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">重新连接会断开当前连接（如果有）并再次连接戒指。要配对或切换手环，请打开「设备」。</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">今天页面的环形仪表</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">关闭后恢复为液态仪表。</string>
+    <string name="l10n_sleep_screen_low_confidence_99d4ceae">置信度低</string>
+    <string name="l10n_sleep_screen_this_night_scored_high_efficiency_but_a11d90eb">这一晚睡眠效率很高，但深睡和快速眼动睡眠极少。这更可能是睡眠阶段判定的误差，而非真正的恢复不足。总计数值保持不变，请谨慎解读各阶段占比。</string>
+    <string name="l10n_health_screen_over_reports_r_r_so_no_9d050d53">R-R 间期计数偏多，因此不显示数值</string>
+    <string name="l10n_settings_screen_check_current_name_read_only_acb2f01a">读取当前名称（只读）</string>
+    <string name="l10n_settings_screen_renaming_is_not_supported_on_a_02f7af2c">WHOOP 5.0 或 MG 暂不支持重命名。NOOP 可以向手环查询当前名称，这一步决定重命名是否可行。</string>
+    <string name="l10n_settings_screen_experimental_on_a_whoop_5_0_711d5341">在 WHOOP 5.0 或 MG 上属实验功能：该命令从未在此代手环上得到确认。它可以撤销，若有异常请再次重命名，并用读取当前名称确认是否生效。</string>
+    <string name="l10n_smart_alarm_screen_alarm_in_1_s_688166e3">闹钟将在 %1$s 后响起</string>
+    <string name="l10n_smart_alarm_screen_alarm_in_less_than_a_minute_9821dce0">闹钟将在一分钟内响起</string>
+    <plurals name="alarm_countdown_days">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <plurals name="alarm_countdown_hours">
+        <item quantity="other">%1$d 小时</item>
+    </plurals>
+    <plurals name="alarm_countdown_minutes">
+        <item quantity="other">%1$d 分钟</item>
+    </plurals>
+    <string name="l10n_settings_screen_gauge_numbers_db0d45e3">仪表数字</string>
+    <string name="l10n_settings_screen_bold_19e07430">粗体</string>
+    <string name="l10n_settings_screen_softer_9edfeba1">更柔和</string>
 </resources>

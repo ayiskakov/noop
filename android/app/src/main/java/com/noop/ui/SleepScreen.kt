@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.analytics.AnalyticsEngine
 import com.noop.analytics.CircadianEngine
 import com.noop.analytics.HypnogramCoverage
+import com.noop.analytics.ScoreConfidence
 import com.noop.analytics.SleepEditGuard
 import com.noop.analytics.SleepGroupEdit
 import com.noop.analytics.SleepStageTotals
@@ -1456,21 +1457,45 @@ private fun Hero(
             // so the larger Awake / smaller Deep+REM here isn't misread as the polished numbers the Oura app
             // shows for the same night (the app post-processes the same stream). Mirrors iOS ouraRawStagesNote.
             if (activeIsOura) OuraRawStagesNote()
+            // #H9: when the engine's Rest confidence flags this night's staging as low-confidence (a
+            // high-efficiency night whose deep+REM share is implausibly low, so a likely staging miss
+            // rather than a real night with no restorative sleep), say so honestly under the breakdown
+            // instead of presenting the suspect split as fact. Read straight off ScoreConfidence.forRest,
+            // the SAME engine call the daily pass uses, so the badge cannot disagree with the score.
+            // Efficiency prefers the stored value and falls back to asleep/in-bed, mirroring iOS
+            // efficiencyPct. Mirrors iOS SleepView.stageStagingIsLowConfidence.
+            // Stored first, as a fraction (rows have carried both 0..1 and 0..100); otherwise
+            // asleep/in-bed, capped, which is what iOS falls back to when no row value exists.
+            val h9Efficiency = session?.efficiency?.let { if (it <= 1.0) it else it / 100.0 }
+                ?: (if (s.total > 0.0) minOf(1.0, s.asleep / s.total) else null)
+            if (h9Efficiency != null &&
+                stageStagingIsLowConfidence(s.asleep, s.deep, s.rem, h9Efficiency)
+            ) {
+                SleepLowConfidenceNote()
+            }
+            // The blocks both caveats below read, hoisted so the two cannot consult a different set.
+            // `stagingSparse` is a DAY-level verdict stamped onto EVERY block (see iOS
+            // stageShowsIncompleteNote: "each carries the day's value"), so asking only the main block is
+            // asking one witness out of several. On a night whose main block is imported, and therefore
+            // carries a nil flag, while a computed fragment carries true, iOS warned and Android stayed
+            // silent, though both claimed to mirror each other.
+            val dayBlocks = sleepDayBlocks(session, heroGroup)
             // #345 follow-up: a night staged on SPARSE motion coverage can UNDER-detect and read short
-            // ("slept 8h, shows 1h"). Say so honestly, gated on the persisted stagingSparse flag (the day's
-            // SleepStager.isGravitySparse verdict). `session` is the REAL main block (selectNight's edit
-            // anchor), so it carries the flag; nil (imported / pre-migration) is never flagged. Mirrors iOS
-            // SleepView.stageIncompleteNote.
-            if (session?.stagingSparse == true) SleepIncompleteNote()
+            // ("slept 8h, shows 1h"). Say so honestly — but only when the night ACTUALLY reads short, since
+            // the stagingSparse flag alone fires on one long motion dropout at any night length. The rule
+            // and its reasoning live in [stageSparseNoteApplies]. A nil flag (imported / pre-migration
+            // block) is never itself a flag. Mirrors iOS SleepView.stageShowsIncompleteNote.
+            if (stageSparseNoteApplies(anyBlockStagingSparse(dayBlocks), s.asleep)) {
+                SleepIncompleteNote()
+            }
             // #1716 — a device-provided hypnogram assembled from records that never all arrived leaves a
             // HOLE in the timeline while the session still spans the whole night, so a night we saw a
             // fraction of renders as a complete one. Asked of the bridged main-night GROUP (the quantity
             // analyzeDay gates on), never of one fragment. This is the only place the coverage guard
             // becomes visible: the engine's matching Rest downgrade lands in a transient DayResult field
             // no screen reads. Mirrors iOS SleepView.stagePartialNote.
-            val coverageGroup = heroGroup.ifEmpty { listOfNotNull(session) }
             val stageCoverage = HypnogramCoverage.groupFraction(
-                coverageGroup.map {
+                dayBlocks.map {
                     HypnogramCoverage.Fragment(it.stagesJSON, (it.endTs - it.startTs).toDouble())
                 }
             )
@@ -1589,6 +1614,127 @@ private fun OuraRawStagesNote() {
             color = Palette.textTertiary,
         )
     }
+}
+
+/**
+ * Pure #H9 gate (unit-testable without a Composable) — true when a night's staging is low-confidence: a
+ * high-efficiency night whose deep+REM share is below the restorative floor. Built on the engine's own
+ * [ScoreConfidence.forRest] so the UI flag and the persisted Rest confidence agree. [asleepMin], [deepMin]
+ * and [remMin] are minutes; [efficiency] is asleep/in-bed in [0,1]. Returns false for an unstaged or
+ * zero-asleep night (no staging to doubt).
+ *
+ * Twin of Swift `SleepView.isStagingLowConfidence`. That one has carried "Mirror EXACTLY in Kotlin" since
+ * #H9 and had no Kotlin mirror: an Android night with high efficiency and implausibly little deep+REM was
+ * shown as fact while the same night warned on iPhone and Mac.
+ *
+ * Nothing flagged it, and no phrasing here would. The parity ledger's scope is the engine, protocol and
+ * storage packages; neither `Strand/Screens` nor `com/noop/ui` is scanned, so every mirror claim in the UI
+ * layer is unverified BY CONSTRUCTION. The reference above is written in a form the ledger would resolve,
+ * so it starts working the day the scope widens, but today it is a promise to a reader rather than a
+ * checked fact.
+ */
+internal fun stageStagingIsLowConfidence(
+    asleepMin: Double,
+    deepMin: Double,
+    remMin: Double,
+    efficiency: Double,
+): Boolean {
+    if (asleepMin <= 0.0) return false
+    val restorativeMin = maxOf(0.0, deepMin) + maxOf(0.0, remMin)
+    // An UNSTAGED night (no deep+REM at all) has no staging split to doubt — its base Rest confidence
+    // already reads honestly as BUILDING (NOT a downgrade), so it must never be flagged. Only a night that
+    // DID stage some sleep can be a suspicious "high efficiency yet implausibly little restorative" miss.
+    if (restorativeMin <= 0.0) return false
+    val tier = ScoreConfidence.forRest(
+        hasSession = true,
+        hasStagedSleep = true,
+        asleepSeconds = asleepMin * 60.0,
+        restorativeSeconds = restorativeMin * 60.0,
+        efficiency = efficiency,
+    )
+    // The H9 overload only DOWNGRADES SOLID to BUILDING on the suspicious case; a genuinely
+    // low-restorative-AND-low-efficiency night keeps its honest base tier and isn't flagged here.
+    return tier == ScoreConfidence.BUILDING &&
+        (restorativeMin / asleepMin) < ScoreConfidence.restorativeLowConfidenceShare &&
+        efficiency >= ScoreConfidence.highEfficiencyThreshold
+}
+
+/** The H9 low-confidence note shown beneath the stage breakdown: a warning-tinted badge plus a one-line
+ *  honest explanation. No faked stages, no tanked score, just a clear "treat this split with care" so a
+ *  user does not read a likely staging miss as a real deep/REM drought. Mirrors iOS stageLowConfidenceNote. */
+@Composable
+private fun SleepLowConfidenceNote() {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.padding(horizontal = 2.dp),
+    ) {
+        SourceBadge(text = uiString(R.string.l10n_sleep_screen_low_confidence_99d4ceae), tint = Palette.statusWarning)
+        Text(
+            uiString(R.string.l10n_sleep_screen_this_night_scored_high_efficiency_but_a11d90eb),
+            style = NoopType.caption,
+            color = Palette.textTertiary,
+        )
+    }
+}
+
+/**
+ * The stored blocks the sleep caveats read: the bridged main-night GROUP, falling back to the single main
+ * block when the group is empty. Pure, so the CHOICE of blocks is testable rather than an inline
+ * expression buried in a Composable.
+ *
+ * Narrower than iOS, which reads `night.sourceBlocks`, every real block of the day. `Hero` is handed only
+ * `session` and `heroGroup`, so a block outside the group is not consulted here. Since `stagingSparse` is
+ * stamped on every block of the day, any block in the group carries it, which covers the reported shape;
+ * widening it would mean plumbing a new parameter.
+ */
+internal fun sleepDayBlocks(
+    session: SleepSession?,
+    heroGroup: List<SleepSession>,
+): List<SleepSession> = heroGroup.ifEmpty { listOfNotNull(session) }
+
+/**
+ * Whether ANY of the day's blocks carries the sparse-staging verdict.
+ *
+ * `stagingSparse` is a DAY-level flag stamped onto every block, which iOS states on its own gate ("each
+ * carries the day's value") and reads as `night.sourceBlocks.contains { $0.stagingSparse == true }`.
+ * Android asked the main block alone, so a night whose main block was imported (nil flag) while a computed
+ * fragment carried true warned on iPhone and Mac and stayed silent here, though both claimed to mirror
+ * each other. A nil flag is never itself a flag.
+ */
+internal fun anyBlockStagingSparse(blocks: List<SleepSession>): Boolean =
+    blocks.any { it.stagingSparse == true }
+
+/**
+ * Pure #345 gate (unit-testable without a Composable) — whether the "May be incomplete" caveat applies.
+ * Twin of Swift `SleepView.stageSparseNoteApplies`.
+ *
+ * [stagingSparse] alone is NOT the question the note asks. It is a STAGING-MECHANISM verdict:
+ * [SleepStager.isGravitySparse] returns true when the gravity span is short against the HR span OR when the
+ * LARGEST inter-sample gap exceeds `maxGapMin`, and its own doc calls that second branch "the typical WHOOP
+ * 4.0 backfill (#28)" whose only consequence is to ENABLE `buildRuns`' HR-vouched bridge. So a single long
+ * motion dropout sets it on a night of ANY length, including a complete twelve-hour one, and the flag is
+ * raised precisely where the engine has already applied its own mitigation.
+ *
+ * The note's copy, though, claims something narrower and checkable: that the night may be under-detected and
+ * the sleep total can read short. So require the total to actually read short. A night at or above the
+ * wearer's need cannot honestly be captioned as possibly reading short, whatever the motion trace looked
+ * like.
+ *
+ * A night that staged to NOTHING keeps the caveat: zero asleep is the strongest form of the collapse this
+ * note exists to explain, not an exemption from it.
+ *
+ * [needHours] is a parameter rather than a constant so a personalised need
+ * (`RestScorer.personalizedNeedHours`) can be threaded in later without moving the rule. It is
+ * computed per pass today and not persisted on a row a screen can reach, so the shared default stands in.
+ */
+internal fun stageSparseNoteApplies(
+    stagingSparse: Boolean,
+    asleepMin: Double,
+    needHours: Double = com.noop.analytics.RestScorer.defaultSleepNeedHours,
+): Boolean {
+    if (!stagingSparse) return false
+    return asleepMin < needHours * 60.0
 }
 
 /** The sparse-coverage caveat (#345): a night staged on thin motion data can under-detect and read short

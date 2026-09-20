@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Sensors
@@ -138,6 +139,8 @@ import com.noop.ble.WhoopModel
 import com.noop.data.DataBackup
 import com.noop.ingest.RawSensorExport
 import com.noop.ingest.WhoopCsvExporter
+import com.noop.testcentre.TestCentre
+import com.noop.testcentre.TestDomain
 import com.noop.update.UpdateCheck
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -510,6 +513,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val live by vm.live.collectAsStateWithLifecycle()
+    // #2338: the read-only advertising-name probe result. Its own flow on the BLE client rather than a
+    // LiveState field, matching the other opcode probes.
+    val advertisingNameProbe by vm.advertisingNameProbe.collectAsStateWithLifecycle()
 
     // The profile store is stable for the lifetime of this screen; a version counter
     // forces recomposition after each mutating write (SharedPreferences isn't reactive).
@@ -698,6 +704,8 @@ fun SettingsScreen(
     }
     val distanceUnitSystem = UnitPrefs.resolveDistance(unitSystem, distanceSystemRaw)
     var clockFormat by remember { mutableStateOf(ClockPrefs.preference(context)) }   // #1821
+    // #2346: gauge numeral weight, mirrored locally so the pill is live; AppearancePrefs is the store.
+    var gaugeNumerals by remember { mutableStateOf(AppearancePrefs.gaugeNumerals) }
     var temperatureRaw by remember {
         mutableStateOf(NoopPrefs.of(context).getString(NoopPrefs.KEY_TEMPERATURE_UNIT, "") ?: "")
     }
@@ -1441,6 +1449,27 @@ fun SettingsScreen(
                 )
             }
             SettingsRowDivider()
+            // #2346: how heavy the numeral over a gauge is drawn. A reporter found the Today gauges "too
+            // much in your face"; bold display numerals are the house style on BOTH platforms, so this is
+            // a preference rather than a defect and Bold stays the default. Only the WEIGHT is offered:
+            // the size is pinned to the iOS ratio and is not a per-platform knob. Twin of the Apple row.
+            SettingsFormRow(label = uiString(R.string.l10n_settings_screen_gauge_numbers_db0d45e3)) {
+                SegmentedPillControl(
+                    items = listOf(GaugeNumeralStyle.BOLD, GaugeNumeralStyle.SOFT),
+                    selection = gaugeNumerals,
+                    label = {
+                        when (it) {
+                            GaugeNumeralStyle.BOLD -> uiString(R.string.l10n_settings_screen_bold_19e07430)
+                            GaugeNumeralStyle.SOFT -> uiString(R.string.l10n_settings_screen_softer_9edfeba1)
+                        }
+                    },
+                    onSelect = {
+                        gaugeNumerals = it
+                        AppearancePrefs.setGaugeNumerals(context, it)
+                    },
+                )
+            }
+            SettingsRowDivider()
             // Theme presets — one-tap bundles coordinating accent + chart world + backdrop + card opacity.
             // Derived (no stored value): tweaking any control below flips this to Custom.
             SettingsFormRow(label = uiString(R.string.l10n_settings_screen_preset)) {
@@ -2040,6 +2069,74 @@ fun SettingsScreen(
                         enabled = live.connected || live.bonded,
                         onClick = { vm.disconnect() },
                     )
+                }
+
+                // #2338: the section is shown for a 5/MG too, where it used to be absent entirely. A
+                // second-hand band arrives carrying the previous owner's name, and a section that is not
+                // rendered cannot say why it can do nothing about it.
+                //
+                // The SECTION renders for any connected 5/MG; only the CONTROLS sit behind Test Centre
+                // Connection. Gating the whole thing put it back to invisible on a default install,
+                // which is the state that had this reported as "you cannot change it" rather than "not
+                // supported yet" — the regression this split exists to prevent.
+                //
+                // The controls are gated because opcode 140 has never been confirmed on this family and
+                // the payload shape is mirrored from the 4.0 form rather than observed. Reversible
+                // (rename again), which is what the BLE contract asks, and the read-only check beside it
+                // is how you find out whether the write landed.
+                val fiveMgRenameUnlocked = TestCentre.from(context).active(TestDomain.CONNECTION)
+                if (live.connected && live.whoop5Detected) {
+                    var nameDraft5 by remember(live.advertisingName) { mutableStateOf(live.advertisingName ?: "") }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(uiString(R.string.l10n_settings_screen_strap_name_350de547), style = NoopType.subhead, color = Palette.textPrimary)
+                        Text(
+                            uiString(
+                                if (fiveMgRenameUnlocked) R.string.l10n_settings_screen_experimental_on_a_whoop_5_0_711d5341
+                                else R.string.l10n_settings_screen_renaming_is_not_supported_on_a_02f7af2c,
+                            ),
+                            style = NoopType.footnote,
+                            color = Palette.textTertiary,
+                        )
+                        if (fiveMgRenameUnlocked) {
+                            OutlinedTextField(
+                                value = nameDraft5,
+                                onValueChange = { nameDraft5 = it.take(24) },
+                                singleLine = true,
+                                placeholder = { Text(uiString(R.string.l10n_settings_screen_whoop_a3650379), style = NoopType.body, color = Palette.textTertiary) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Palette.textPrimary,
+                                    unfocusedTextColor = Palette.textPrimary,
+                                    focusedBorderColor = Palette.accent,
+                                    unfocusedBorderColor = Palette.hairline,
+                                    cursorColor = Palette.accent,
+                                    focusedContainerColor = Palette.surfaceInset,
+                                    unfocusedContainerColor = Palette.surfaceInset,
+                                ),
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                NoopButton(
+                                    text = uiString(R.string.l10n_settings_screen_rename_d3f4cb89),
+                                    leadingIcon = Icons.Filled.Edit,
+                                    kind = NoopButtonKind.Primary,
+                                    enabled = live.bonded && nameDraft5.isNotBlank(),
+                                    onClick = { vm.ble.renameStrap(nameDraft5) },
+                                )
+                                // Read-only: GET_ADVERTISING_NAME(141), nothing is written. This is how you
+                                // check whether the write above did anything at all.
+                                NoopButton(
+                                    text = uiString(R.string.l10n_settings_screen_check_current_name_read_only_acb2f01a),
+                                    leadingIcon = Icons.Filled.Search,
+                                    kind = NoopButtonKind.Secondary,
+                                    enabled = live.bonded,
+                                    onClick = { vm.ble.probeAdvertisingName() },
+                                )
+                            }
+                            (live.renameStatus ?: advertisingNameProbe)?.let {
+                                Text(it, style = NoopType.footnote, color = Palette.textSecondary)
+                            }
+                        }
+                    }
                 }
 
                 // Rename the strap's BLE advertising name (WHOOP 4.0 only). Writes the name to the strap

@@ -768,6 +768,24 @@ class WhoopBleClient(
             else -> "status$status"
         }
 
+        /** #2332: is a link RSSI reading worth recording?
+         *
+         *  -127..20 dBm is the LE spec's valid range for a read RSSI, and 127 is its reserved "RSSI is not
+         *  available". Stashing that sentinel would put an impossibly strong reading on a link that died,
+         *  which argues the radio was fine and sends the next reader of the log anywhere but at range. So
+         *  the band is the spec's own range, which rejects 127 and any other out-of-spec value a stack
+         *  invents, and keeps every reading the spec says is real.
+         *
+         *  What it does NOT catch, deliberately: a stack that reports "unavailable" as an IN-BAND value.
+         *  0 dBm is not reachable on a real link, but the spec permits it, so it is indistinguishable here
+         *  from a genuine reading and is kept. Widening the rejection to cover it would start discarding
+         *  spec-valid readings on a guess, which is the worse trade for a diagnostic. The age printed
+         *  beside the value in the epitaph is what a reader uses to judge a suspicious one.
+         *
+         *  Pure so the filter is testable without a BLE stack, like [batteryPollDue] beside it. Twin of
+         *  the Swift `rssiReadingIsUsable`. */
+        fun rssiReadingIsUsable(rssi: Int): Boolean = rssi in -127..20
+
         /** #battery: is a keep-alive tick due to poll the strap's battery?
          *
          *  Normally every SECOND 30 s tick (~60 s), which is plenty while the charge only creeps downward.
@@ -1643,6 +1661,18 @@ class WhoopBleClient(
          *  the dialog does not hang. */
         const val BATTERY_PACK_PROBE_TIMEOUT_MS = 8_000L
 
+        /** #2338: how long the read-only advertising-name probe waits before calling silence a result. */
+        const val ADVERTISING_NAME_PROBE_TIMEOUT_MS = 8_000L
+
+        /** #2338: how long opcode 140 stays admitted after a confirmed rename write. Short on purpose:
+         *  the frame is queued immediately, so this only has to cover the write queue's drain, and a
+         *  window that outlived the send would widen what a default install can form. */
+        const val ADVERTISING_NAME_WRITE_WINDOW_MS = 3_000L
+
+        /** In-flight sentinel for the #2338 probe. The 5/MG allow-list admits opcode 141 ONLY while this
+         *  is in place, so a default install can never form those bytes. */
+        const val WAITING_ADVERTISING_NAME_PROBE = "__waiting__"
+
         /**
          * Blank the pack's six address bytes inside the raw frame dump, leaving every other byte
          * readable. [cmdOff] + 5 is the address offset the decoder uses; [decoded] gates the edit so a
@@ -2136,6 +2166,17 @@ class WhoopBleClient(
     // dialog. Read-only diagnostic: it decodes nothing into live state and gates nothing.
     private val _batteryPackProbe = MutableStateFlow<String?>(null)
     val batteryPackProbe: StateFlow<String?> = _batteryPackProbe.asStateFlow()
+
+    /** #2338: the read-only GET_ADVERTISING_NAME(141) probe result, or the in-flight sentinel. Drives the
+     *  Devices dialog copy; null when no probe has run. */
+    private val _advertisingNameProbe = MutableStateFlow<String?>(null)
+    val advertisingNameProbe: StateFlow<String?> = _advertisingNameProbe.asStateFlow()
+
+    /** #2338: true only while a user-confirmed 5/MG rename write is actually in flight. The allow-list
+     *  admits opcode 140 on this alone, so a default install can never form those bytes, and the window
+     *  is closed again a few seconds later whatever the strap does. */
+    @Volatile
+    private var advertisingNameWriteArmed = false
 
     // #761: the READ-ONLY feature-flag ENUMERATION report — the flag NAMES the strap's own firmware lists
     // — or the waiting sentinel while the walk runs. Nothing is written to the strap to produce it.
@@ -3376,6 +3417,29 @@ class WhoopBleClient(
     private var connectAttemptStartedAtMs: Long? = null
 
     /**
+     * #2332: the most recent link RSSI and the wall time it was read, both scoped to the CURRENT link.
+     *
+     * The epitaph's end status names range as the leading suspect on every supervision timeout, and
+     * before this the log had nothing to say about range at the moment of the drop: RSSI was read once,
+     * [RSSI_READ_DELAY_MS] after connect, and never again. A field report with 21 disconnects carried 11
+     * readings, none of them near a death.
+     *
+     * Cleared on teardown alongside [linkUpSinceMs], and for the same reason: a reading carried over from
+     * the PREVIOUS link would put a number on this link's drop that was never measured on it, which is
+     * the failure mode the epitaph exists to prevent rather than commit. The pair travels to
+     * [ConnectionReadout.linkEpitaph] together so the age is always printed with the value.
+     *
+     * Diagnostic only — nothing reads these to make a decision.
+     */
+    @Volatile
+    private var lastRssiDbm: Int? = null
+
+    /** Wall time (ms) [lastRssiDbm] was read. Meaningless unless [lastRssiDbm] is non-null; the two are
+     *  written together under the GATT callback and cleared together on teardown. */
+    @Volatile
+    private var lastRssiAtMs: Long = 0L
+
+    /**
      * Wall time (ms) this link reached STATE_CONNECTED, or null while down. Read only to LOG how long a
      * connection was held before it dropped.
      *
@@ -4420,6 +4484,19 @@ class WhoopBleClient(
                 // gated). Whether a 5/MG answers at all is exactly the hardware question being asked.
                 !(cmd == CommandNumber.GET_BATTERY_PACK_INFO &&
                     _batteryPackProbe.value == WAITING_BATTERY_PACK_PROBE) &&
+                // SET_ADVERTISING_NAME (140) over puffin: the #2338 rename WRITE. Reversible (rename
+                // again), but NOT hardware-confirmed on a 5/MG and carrying a payload shape mirrored from
+                // the 4.0 Harvard form rather than observed. Admitted ONLY while a user-confirmed write is
+                // in flight, the 151 tier, so a default install can never form these bytes. Same standing
+                // as REBOOT_STRAP(29) above; that one has no body, this one does.
+                !(cmd == CommandNumber.SET_ADVERTISING_NAME_5MG && advertisingNameWriteArmed) &&
+                // GET_ADVERTISING_NAME (141) over puffin: the #2338 read-only name probe. Gated like 151
+                // above, the hardest of the three tiers, because this opcode has never been sent to any
+                // strap by this app: allowed ONLY while a probe is actually in flight, so a default
+                // install cannot form these bytes at all. The SET side (140) is not in CommandNumber, so
+                // no code path can express a write no matter what this gate says.
+                !(cmd == CommandNumber.GET_ADVERTISING_NAME &&
+                    _advertisingNameProbe.value == WAITING_ADVERTISING_NAME_PROBE) &&
                 // START_FF_KEY_EXCHANGE (117) / SEND_NEXT_FF (118) over puffin: the READ-ONLY feature-flag
                 // ENUMERATION probe (#761) — it reads the strap's own flag NAMES and writes no value. Gated
                 // harder than the probes above: allowed ONLY while a probe is actually in flight, so on a
@@ -4780,6 +4857,43 @@ class WhoopBleClient(
      */
     fun renameStrap(rawName: String) {
         val name = rawName.trim()
+        // #2338: a 5/MG takes the non-Harvard opcode 140 over puffin framing. Reversible, so the BLE
+        // contract admits it, but NOT hardware-confirmed: no strap has been sent this, and the payload
+        // below mirrors the 4.0 Harvard shape rather than anything observed on this family. Test Centre
+        // Connection gated in the CLIENT as well as at the call site, because a gate that lives only in
+        // the UI is one refactor away from being gone. The COMMAND_RESPONSE is logged, so a strap log is
+        // what settles whether the frame was accepted.
+        if (connectedFamily == DeviceFamily.WHOOP5) {
+            if (!testCentre.active(com.noop.testcentre.TestDomain.CONNECTION)) {
+                _state.update { it.copy(renameStatus = "5/MG renaming is experimental. Turn on Test Centre, Connection first.") }
+                log("Strap rename: 5/MG write refused, Test Centre Connection is off (#2338)")
+                return
+            }
+            if (!_state.value.connected || !_state.value.bonded) {
+                _state.update { it.copy(renameStatus = "Connect and pair your strap first.") }
+                return
+            }
+            if (name.isEmpty()) {
+                _state.update { it.copy(renameStatus = "Enter a name first.") }
+                return
+            }
+            // Same 24-byte clamp on a whole-character boundary as the 4.0 path: never split a multibyte
+            // char, and leave room for the rest of the advertising structure.
+            var clamped5 = name
+            while (clamped5.toByteArray(Charsets.UTF_8).size > 24) clamped5 = clamped5.dropLast(1)
+            val payload5 = byteArrayOf(0, 0) + clamped5.toByteArray(Charsets.UTF_8) + byteArrayOf(0)
+            // Arm immediately BEFORE send(): the allow-list admits 140 only while this is true, so arming
+            // afterwards would have our own gate drop our own write.
+            advertisingNameWriteArmed = true
+            send(CommandNumber.SET_ADVERTISING_NAME_5MG, payload5, withResponse = true)
+            handler.postDelayed({ advertisingNameWriteArmed = false }, ADVERTISING_NAME_WRITE_WINDOW_MS)
+            // Redacted like the 4.0 path (#2337): the name is user-chosen and routinely a person's.
+            log("Strap rename: 5/MG write sent, name=${logSafeDeviceName(clamped5)} (opcode 140, unconfirmed, #2338)")
+            _state.update { it.copy(
+                renameStatus = "Sent on an unconfirmed command. Use Check current name to see whether it took.",
+            ) }
+            return
+        }
         if (connectedFamily != DeviceFamily.WHOOP4) {
             _state.update { it.copy(renameStatus = "Renaming is WHOOP 4.0 only.") }
             log("Strap rename: WHOOP 4.0 only — ignored.")
@@ -4799,7 +4913,12 @@ class WhoopBleClient(
         while (clamped.toByteArray(Charsets.UTF_8).size > 24) clamped = clamped.dropLast(1)
         val payload = byteArrayOf(0, 0) + clamped.toByteArray(Charsets.UTF_8) + byteArrayOf(0)
         send(CommandNumber.SET_ADVERTISING_NAME, payload, withResponse = true)
-        log("Strap rename: wrote advertising name=$clamped")
+        // #2337: through [logSafeDeviceName], never raw. This name is USER-CHOSEN, so it is the one
+        // string in the rename path that can carry a person's name, and strap logs get attached to public
+        // issues. [redactStrapLogPii] masks MACs, WHOOP serials and hex dumps, none of which this is, so
+        // it would go out verbatim. The scan path already routes the very same value through the helper
+        // ("Discovered $safeName"), which made this the one place the same data was handled two ways.
+        log("Strap rename: wrote advertising name=${logSafeDeviceName(clamped)}")
         _state.update { it.copy(
             renameStatus = "Sent - your strap will reboot to apply, then reconnect with the new name.",
         ) }
@@ -4942,6 +5061,64 @@ class WhoopBleClient(
             if (_batteryPackProbe.compareAndSet(WAITING_BATTERY_PACK_PROBE, msg)) log(msg)
         }, BATTERY_PACK_PROBE_TIMEOUT_MS)
     }
+
+    /**
+     * #2338 READ-ONLY probe: ask the strap for its BLE advertising name over `GET_ADVERTISING_NAME(141)`.
+     *
+     * Renaming a strap is WHOOP 4.0 only today, over the Harvard pair 76/77. A second-hand 5/MG keeps the
+     * previous owner's name with no way to change it. The schema names a non-Harvard pair, 140 set and 141
+     * get, but nothing in this app has ever sent either, so the opcode numbers rest on the schema alone.
+     *
+     * This asks, and writes nothing. Whether a 5/MG answers 141 at all is the hardware question, and
+     * SILENCE IS A RESULT: it says the number is wrong, or the command is unsupported, either of which
+     * settles whether a rename is reachable before anyone writes 140 at firmware. The set side is not in
+     * [CommandNumber], so no code path can express the write until this returns something.
+     *
+     * User-initiated, Test Centre gated at the call site, and admitted by the 5/MG allow-list only while
+     * the sentinel below is in place. Same shape as `probeBatteryPackInfo` (151) and the #690 / #592
+     * probes. The reply is redacted before it is shown: an advertising name routinely carries a person's
+     * name, which is the whole reason #2338 exists.
+     */
+    fun probeAdvertisingName() {
+        if (!_state.value.connected) {
+            log("Advertising-name probe (141) ignored — not connected")
+            return
+        }
+        // 5/MG only, checked HERE and not just at the call site, for the reason [renameStrap] states: a
+        // gate living only in the UI is one refactor from gone. This matters more than it looks. A 4.0
+        // has NO send allow-list, so on that family the frame would actually reach the wire, and 141 is
+        // the wrong opcode for it anyway — a 4.0 reads its name on 76. Deliberately unlike
+        // [probeBatteryPackInfo], which is offered on both families because a 4.0's silence there is
+        // itself the evidence; here the 4.0 answer is already known.
+        if (connectedFamily != DeviceFamily.WHOOP5) {
+            _advertisingNameProbe.value = "The name probe is WHOOP 5.0/MG only. A 4.0 reads its name on opcode 76."
+            log("Advertising-name probe: 5/MG only — ignored (family=$connectedFamily, #2338)")
+            return
+        }
+        // #2338: drop any standing rename status first. The two share one line in the UI, which prefers
+        // renameStatus, and a rename leaves behind "use Check current name to see whether it took" — so
+        // without this the status would sit there hiding the answer to the very question it asked. The
+        // probe is the newer action, so it owns the line.
+        _state.update { it.copy(renameStatus = null) }
+        // MUST be set before send(): the allow-list admits 141 only while this sentinel is in place, so
+        // setting it afterwards would have our own gate drop our own probe.
+        _advertisingNameProbe.value = WAITING_ADVERTISING_NAME_PROBE
+        log("Advertising-name probe: sending GET_ADVERTISING_NAME(141, read-only) on family=$connectedFamily")
+        send(CommandNumber.GET_ADVERTISING_NAME)
+        // Silence is itself a verdict. ATOMIC compare-and-set so a real reply landing microseconds before
+        // the timeout is never clobbered by this late "no reply".
+        handler.postDelayed({
+            val msg = "Advertising-name probe: no COMMAND_RESPONSE for opcode 141 within " +
+                "${ADVERTISING_NAME_PROBE_TIMEOUT_MS / 1000}s — the strap served no reply. That is the " +
+                "answer for now: renaming stays WHOOP 4.0 only (#2338)."
+            if (_advertisingNameProbe.compareAndSet(WAITING_ADVERTISING_NAME_PROBE, msg)) log(msg)
+        }, ADVERTISING_NAME_PROBE_TIMEOUT_MS)
+    }
+
+    // No clearAdvertisingNameProbe(): unlike the 151 and #690 probes, this result renders INLINE in the
+    // Settings strap-name section rather than in a dialog, so there is no dismiss to hang a clear on. The
+    // next probe replaces it, and a rename masks it (the UI prefers renameStatus). Adding the symmetric
+    // clearer would only add an entry point nothing reaches.
 
     /** Clear the cmd-151 probe result (Devices dialog dismissed). */
     fun clearBatteryPackProbe() { _batteryPackProbe.value = null }
@@ -6890,9 +7067,31 @@ class WhoopBleClient(
         }
 
         override fun onReadRemoteRssi(g: BluetoothGatt, rssi: Int, status: Int) {
-            // Signal strength at connect — diagnoses weak-link syncs (drops/busy storms/timeouts) that
-            // otherwise look mysterious in the log. Only on a clean read; a failure just stays silent.
-            if (status == BluetoothGatt.GATT_SUCCESS) log("Signal: RSSI $rssi dBm")
+            // Signal strength — diagnoses weak-link syncs (drops/busy storms/timeouts) that otherwise look
+            // mysterious in the log. Only on a clean read; a failure just stays silent.
+            if (status != BluetoothGatt.GATT_SUCCESS) return
+            // #2332: a read issued on the PREVIOUS link can answer after that link ended and the next one
+            // began. Logging it either way is harmless, but the stash below is per-link state the epitaph
+            // attributes to the drop, so a late answer would put the old link's reading on the new link's
+            // death - the exact fabrication the epitaph's own doc warns about. `gatt` is the current link;
+            // anything else is stale. Kept as a WRITE guard only: the line still gets logged, because a
+            // reading that arrived really did arrive.
+            val stale = g !== gatt
+            // #2332: reject implausible readings HERE rather than in the formatter, where the read status
+            // is known. See [rssiReadingIsUsable] for why it is a band.
+            if (!rssiReadingIsUsable(rssi)) {
+                log("Signal: RSSI read returned $rssi dBm (out of band) — not recorded")
+                return
+            }
+            log("Signal: RSSI $rssi dBm" + if (stale) " (from a link that has already ended)" else "")
+            if (stale) return
+            // Timestamp FIRST, value second. The epitaph snapshots the value and then reads this clock, so
+            // publishing in the other order leaves a window where a fresh value is paired with the PREVIOUS
+            // reading's time - an age up to a full read interval too old, on the one number whose whole job
+            // is to say how close to the drop the reading was. Both are @Volatile, so this order is the
+            // guarantee: a reader that sees the new value cannot then see an older clock.
+            lastRssiAtMs = System.currentTimeMillis()
+            lastRssiDbm = rssi
         }
 
         @SuppressLint("MissingPermission")
@@ -7555,6 +7754,23 @@ class WhoopBleClient(
                         // sink the scrubber otherwise never sees — and the `raw:` frame dump carries the
                         // serial as ASCII inside the hex, which is exactly what redactStrapLogPii masks.
                         _batteryPackProbe.value = redactStrapLogPii(text)
+                    }
+                    // #2338: a reply to the read-only advertising-name probe (141). In-flight-guarded like
+                    // 151 above, for the same reason: 0x8D could coincidentally be some data frame's
+                    // cmd-offset byte, and a stray match must never pop a user-triggered dialog.
+                    if (frame.size > cmdOff && (frame[cmdOff].toInt() and 0xFF) == CommandNumber.GET_ADVERTISING_NAME.rawValue &&
+                        _advertisingNameProbe.value == WAITING_ADVERTISING_NAME_PROBE) {
+                        val decoded = advertisingNameFromWhoop5Response(frame)
+                        // Redact BEFORE anything is stored or logged. An advertising name carries a
+                        // person's name (#2337), and this value also renders behind a copy button, a sink
+                        // the log scrubber never sees.
+                        val text = if (decoded != null) {
+                            "the strap answered 141 with a name: ${logSafeDeviceName(decoded)}"
+                        } else {
+                            "the strap answered 141, but the payload held no printable name"
+                        }
+                        log("Advertising-name probe (141): $text")
+                        _advertisingNameProbe.value = redactStrapLogPii(text)
                     }
                     // #761: a reply to the read-only feature-flag enumeration (117/118). In-flight-guarded
                     // inside handleFeatureFlagProbeResponse, so this is a byte compare on every other frame.
@@ -8711,6 +8927,24 @@ class WhoopBleClient(
                 // Advance the tick for both families so the ~60s battery cadence also fires on 5/MG (it
                 // previously incremented only inside the WHOOP 4 branch).
                 keepAliveTick += 1
+                // #2332: re-read link RSSI on the ODD tick (~60s), for BOTH families. Before this the only
+                // reading came from the one-shot [RSSI_READ_DELAY_MS] read at connect, so a link that
+                // degraded and died at the supervision timeout left a single number from its third second
+                // and nothing about the drop — for the end status that literally says "went out of range".
+                // A periodic read also gives the log a SLOPE rather than a point, which is what separates a
+                // link that was always marginal from one that walked out of range.
+                //
+                // Odd phase, which keeps it off the same tick as the capture's phone-battery line and, on a
+                // DISCHARGING strap, off the battery poll too. It does NOT guarantee a tick to itself, and
+                // it is not meant to: [batteryPollDue] returns true on EVERY tick while charging, and the
+                // WHOOP4 branch re-sends TOGGLE_REALTIME_HR every tick whenever the Live screen wants it.
+                // Sharing is harmless — Android runs one GATT op at a time, so a read that loses the slot
+                // just produces no line this minute, which is why nothing here retries or reports.
+                // safeGatt for the #314 dead-binder case, matching the connect-time read: a signal reading
+                // must never be able to tear the link down.
+                if (keepAliveTick % 2 == 1) {
+                    gattOps?.let { safeGatt("readRemoteRssi") { it.readRemoteRssiCompat() } }
+                }
                 // #1121: ONLY while a detailed capture is running (zero work otherwise — one volatile read):
                 // sample the PHONE battery on the same ~60s cadence as the strap poll, so the capture carries
                 // a phone-battery curve on the offload/connection timeline ("phone dropped N% across this
@@ -10987,10 +11221,22 @@ class WhoopBleClient(
         // this link" about a link that never existed, fabricating the very symptom #1809 is about. Same
         // hazard the hold-time snapshot below already guards.
         linkUpSinceMs?.let { since ->
+            // #2332: ONE read of the stash, not two. [lastRssiDbm] is written from the GATT callback
+            // (a binder thread) and read here, so taking the value and its timestamp as separate volatile
+            // reads would let a reading land between them and pair a value with the wrong age - which is
+            // exactly what the field's doc promises cannot happen. Snapshot the value, then derive the age
+            // from it, so the pair the epitaph prints is always one reading. Read BEFORE the clear below,
+            // for the same reason `since` is: the age is measured against THIS drop, and a null value
+            // yields a null age, so a link that ended before any read prints "never read" rather than an
+            // invented number.
+            val rssiAtDrop = lastRssiDbm
+            val rssiAgeAtDrop = rssiAtDrop?.let { System.currentTimeMillis() - lastRssiAtMs }
             log(ConnectionReadout.linkEpitaph(
                 upMillis = System.currentTimeMillis() - since,
                 inboundFrames = inboundFrames, inboundBytes = inboundBytes,
                 cmdChannelFrames = cmdChannelFrames, realtimeArmed = realtimeArmedThisLink,
+                rssiDbm = rssiAtDrop,
+                rssiAgeMillis = rssiAgeAtDrop,
                 // #1820 parity: Apple's epitaph reports "intentional" for a deliberate teardown rather
                 // than an error code, and a field log showed Android printing "ended=status=0" for the
                 // same event. Two reports of the same drop should not read differently. The flag is set
@@ -11029,6 +11275,10 @@ class WhoopBleClient(
 
         val heldSuffix = heldForLogSuffix()
         linkUpSinceMs = null
+        // #2332: scoped to the link, so it dies with it. Leaving it set would hand the NEXT link's epitaph
+        // a reading taken on this one.
+        lastRssiDbm = null
+        lastRssiAtMs = 0L
         // Reboot trail: if a user reboot is in flight, this drop is the strap acting on it. Log how long the
         // link stayed up (a real reboot drops within ~1-2s) and cancel the no-disconnect watchdog. The
         // reconnect time is logged separately once the handshake completes; rebootRequestedAtMs stays set so
@@ -12114,6 +12364,29 @@ internal fun whoop5CommandResponsePayload(frame: ByteArray): ByteArray? {
     val start = 13
     if (length > frame.size || start >= length) return null
     return frame.copyOfRange(start, length)
+}
+
+/**
+ * #2338: the advertising name carried by a GET_ADVERTISING_NAME COMMAND_RESPONSE from a 5/MG.
+ *
+ * Printable ASCII out of the 5/MG payload, trimmed. Mirrors the shape of Swift
+ * `FrameRouter.advertisingName`, but off [whoop5CommandResponsePayload] rather than the 4.0 envelope:
+ * reading a 5/MG frame with the 4.0 helper does not fail, it returns four bytes of envelope dressed as
+ * payload, which is the exact mistake bhelm/noop#4 was.
+ *
+ * null when the frame carries no payload; null ALSO when the payload holds no printable bytes at all,
+ * which is the answer to "did the strap reply with something that is not a name". An empty string
+ * would read as "the strap says its name is blank", a claim this cannot support.
+ *
+ * Pure and file-scope so the decode is unit-testable without a BLE stack, the [whoop4AlarmPayload]
+ * idiom. What the bytes MEAN on a 5/MG is unverified: no strap has answered 141 yet, and this exists
+ * to find out.
+ */
+internal fun advertisingNameFromWhoop5Response(frame: ByteArray): String? {
+    val payload = whoop5CommandResponsePayload(frame) ?: return null
+    val printable = payload.filter { it >= 32 && it < 127 }.toByteArray()
+    if (printable.isEmpty()) return null
+    return String(printable, Charsets.UTF_8).trim().takeIf { it.isNotEmpty() }
 }
 
 /** Space-separated lowercase hex of a COMMAND_RESPONSE payload, for the raw-hex diagnostic fallback

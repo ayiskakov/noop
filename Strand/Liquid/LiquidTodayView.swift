@@ -674,7 +674,8 @@ struct LiquidTodayView: View {
             // the state pill) rather than an empty vessel, matching the classic Today, the widget/watch/Live
             // Activity (`Repository.widgetAnchor`) and Android. Effort deliberately does NOT carry — it is
             // today's own accumulation, so yesterday's number would be a false statement, not a stale one.
-            HeroScoreCell(label: String(localized: "Charge"), score: chargeDisplay.pct, tint: StrandPalette.chargeColor,
+            HeroScoreCell(label: String(localized: "Charge"), score: chargeDisplay.pct,
+                          tint: chargeDisplay.pct.map { StrandPalette.recoveryColor($0) } ?? StrandPalette.chargeColor,
                           animated: dataLoaded, onGuide: { guideSection = .charge },
                           detailRoute: .metric(HeroRingMetric.charge))
             // #45: the hero Effort must honour the user's Effort scale like every other Effort read-out.

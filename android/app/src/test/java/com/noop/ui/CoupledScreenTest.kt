@@ -95,4 +95,46 @@ class CoupledScreenTest {
             assertTrue("fraction out of range for recovery=$r: $f", f in 0.0..1.0)
         }
     }
+
+    /**
+     * The GlowRing target arc range. Sibling of [optimalUpperFraction], returning the full band as a
+     * 0..1 range instead of just the upper bound.
+     */
+    @Test
+    fun optimalFractionRange_greenDay_returns14to18() {
+        val range = optimalFractionRange(80.0)
+        assertEquals(14.0f / 21.0f, range!!.start, 1e-6f)
+        assertEquals(18.0f / 21.0f, range.endInclusive, 1e-6f)
+    }
+
+    @Test
+    fun optimalFractionRange_yellowDay_returns10to14() {
+        val range = optimalFractionRange(50.0)
+        assertEquals(10.0f / 21.0f, range!!.start, 1e-6f)
+        assertEquals(14.0f / 21.0f, range.endInclusive, 1e-6f)
+    }
+
+    @Test
+    fun optimalFractionRange_redDay_returns4to10() {
+        val range = optimalFractionRange(20.0)
+        assertEquals(4.0f / 21.0f, range!!.start, 1e-6f)
+        assertEquals(10.0f / 21.0f, range.endInclusive, 1e-6f)
+    }
+
+    @Test
+    fun optimalFractionRange_noRecovery_returnsNull() {
+        assertNull(optimalFractionRange(null))
+    }
+
+    @Test
+    fun optimalFractionRange_neverLeavesAxis() {
+        for (r in listOf(null, -50.0, 0.0, 33.9, 34.0, 66.9, 67.0, 100.0, 1000.0)) {
+            val range = optimalFractionRange(r)
+            if (range != null) {
+                assertTrue("start out of range for recovery=$r: ${range.start}", range.start in 0f..1f)
+                assertTrue("end out of range for recovery=$r: ${range.endInclusive}", range.endInclusive in 0f..1f)
+                assertTrue("start > end for recovery=$r", range.start <= range.endInclusive)
+            }
+        }
+    }
 }
