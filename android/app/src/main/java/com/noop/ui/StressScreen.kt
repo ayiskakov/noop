@@ -551,7 +551,7 @@ private fun StressAdvancedCard(
                         StatTile(
                             modifier = m,
                             label = uiString(R.string.l10n_stress_screen_autonomic_balance_lf_hf_776cb6f7),
-                            value = String.format(Locale.US, "%.1f", ratio),
+                            value = StressTrace.formatRatio(ratio),
                             caption = "Sympathetic vs parasympathetic tone from frequency-domain HRV. Higher leans sympathetic (stress-ward).",
                             accent = StressRamp.STEADY,
                         )

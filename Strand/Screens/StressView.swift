@@ -484,7 +484,7 @@ struct StressView: View {
                         if let ratio = f.lfhf {
                             StatTile(
                                 label: "Autonomic balance (LF/HF)",
-                                value: String(format: "%.1f", ratio),
+                                value: StressTrace.formatRatio(ratio),
                                 caption: String(localized: "Sympathetic vs parasympathetic tone from frequency-domain HRV. Higher leans sympathetic (stress-ward)."),
                                 accent: StressRamp.steady
                             )
