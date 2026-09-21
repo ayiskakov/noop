@@ -380,10 +380,14 @@ final class ReadTests: XCTestCase {
     func testStorageRowCountsNamesEveryAccumulatingTable() async throws {
         let store = try await WhoopStore.inMemory()
         let counts = try await store.storageRowCounts()
+        // #891: `ecgCandidate` is Swift-only for now — its Kotlin twin (Room table + WhoopRepository key)
+        // is a deferred follow-up, so this key set leads Android's `WhoopRepository.storageRowCounts` until
+        // that lands. Every other key must still match Android verbatim.
         let expected = ["hr", "rr", "events", "battery", "spo2", "skinTemp", "resp", "gravity",
-                        "steps", "ppgHr", "sleepState", "ppgWaveform", "v18Aux"]
+                        "steps", "ppgHr", "sleepState", "ppgWaveform", "ecgCandidate", "v18Aux"]
         XCTAssertEqual(Set(counts.keys), Set(expected),
-                       "key set must match Android's WhoopRepository.storageRowCounts exactly")
+                       "key set must match Android's WhoopRepository.storageRowCounts exactly (plus the "
+                       + "Swift-only ecgCandidate until its Kotlin twin lands)")
         for k in expected {
             XCTAssertEqual(counts[k], 0, "\(k) starts empty in a fresh store")
         }
