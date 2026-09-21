@@ -1091,6 +1091,34 @@ extension WhoopStore {
             try db.create(index: "idx_liftSet_session_ord", on: "liftSet",
                           columns: ["sessionId", "ord"], options: [.ifNotExists])
         }
+        // v47-ecg-candidate (#891): durable storage for the WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel.
+        //
+        // EXPLICITLY UNVALIDATED INSTRUMENTATION — the exact shape and wiring as `ppgWaveformSample` (v27):
+        // one row per (deviceId, ts), the record's samples packed into a compact little-endian BLOB
+        // (`WhoopStore.packEcgCandidateSamples`/`unpackEcgCandidateSamples`) instead of one scalar row per
+        // sample, and the SAME newest-N rolling retention swept amortised on insert (see
+        // `ecgCandidateRetentionRows`). Additive only, a NEW table, no existing row touched.
+        //
+        // This table is MANDATORY in the same change that adds v16 to `mappedWhoop5HistoricalVersions`:
+        // that addition takes v16 off the raw-archive path (`rejectedHistoricalRecords` archives only
+        // UNMAPPED layouts), so without a durable table the FIFO body is freed by the next trim ack and
+        // lost. NOT an ECG / heart rate / diagnosis; the sample rate and channel meaning are UNPROVEN. No
+        // analytic, UI, export, or gate reads these rows — like ppgWaveformSample, they exist purely so a
+        // future analysis can run over the ORIGINAL samples (project rule: instrumentation, never a score).
+        //
+        // KOTLIN ROOM TWIN PENDING: this fork is Apple-only. A future PR must add the matching Room
+        // migration + `ecgCandidateSample` entity (columns in field order deviceId/ts/samples, PK
+        // [deviceId, ts]) and the `EcgCandidateSample` / decoder / StreamBatch twins, then flip this
+        // table's schema_oracle.json entry from `ios_only` to `both`. Until then the shared oracle carries
+        // it as `ios_only` (Room does not create it).
+        migrator.registerMigration("v47-ecg-candidate") { db in
+            try db.create(table: "ecgCandidateSample", options: [.ifNotExists]) { t in
+                t.column("deviceId", .text).notNull()
+                t.column("ts", .integer).notNull()
+                t.column("samples", .blob).notNull()
+                t.primaryKey(["deviceId", "ts"])
+            }
+        }
         return migrator
     }
 }
