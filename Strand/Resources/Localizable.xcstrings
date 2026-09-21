@@ -244040,6 +244040,64 @@
           }
         }
       }
+    },
+    "The complete undecodable-record corpus (raw v16/v20/v21 frames) banked before ack, for building a layout field map. Read-only; never writes to the strap.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der vollständige Korpus nicht dekodierbarer Datensätze (rohe v16/v20/v21-Frames), vor dem Bestätigen gesichert, zum Erstellen einer Layout-Feldkarte. Schreibgeschützt; schreibt nie auf den Gurt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El corpus completo de registros no decodificables (frames v16/v20/v21 en bruto) guardado antes de la confirmación, para crear un mapa de campos del formato. Solo lectura; nunca escribe en la correa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le corpus complet des enregistrements non décodables (trames v16/v20/v21 brutes) archivé avant l'accusé de réception, pour construire une carte de champs du format. Lecture seule ; n'écrit jamais sur le bracelet."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O corpus completo de registos não descodificáveis (frames v16/v20/v21 em bruto) guardado antes da confirmação, para criar um mapa de campos do formato. Apenas leitura; nunca escreve na pulseira."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il corpus completo di record non decodificabili (frame v16/v20/v21 grezzi) archiviato prima dell'ack, per costruire una mappa dei campi del formato. Sola lettura; non scrive mai sul cinturino."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pełny korpus niedekodowalnych rekordów (surowe ramki v16/v20/v21) zapisany przed potwierdzeniem, do budowy mapy pól formatu. Tylko do odczytu; nigdy nie zapisuje na opasce."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полный корпус недекодируемых записей (сырые кадры v16/v20/v21), сохранённый до подтверждения, для построения карты полей формата. Только чтение; никогда не пишет на ремешок."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整的无法解码记录语料库（原始 v16/v20/v21 帧），在确认前已保存，用于构建格式字段图。只读；绝不写入表带。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整的無法解碼記錄語料庫（原始 v16/v20/v21 影格），在確認前已儲存，用於建立格式欄位圖。唯讀；絕不寫入錶帶。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
