@@ -806,11 +806,6 @@ extension WhoopStore {
         ("spo2", "spo2Sample"), ("skinTemp", "skinTempSample"), ("resp", "respSample"),
         ("gravity", "gravitySample"), ("steps", "stepSample"), ("ppgHr", "ppgHrSample"),
         ("sleepState", "sleepStateSample"), ("ppgWaveform", "ppgWaveformSample"),
-        // #891 v16 ECG-candidate (UNVALIDATED instrumentation): named in the footprint/heal alongside
-        // ppgWaveform so a table added here is counted, named in the breakdown, and healed. KOTLIN twin
-        // pending — Android's `WhoopRepository.storageRowCounts` does not carry this key yet, so this is a
-        // deliberate Swift-ahead divergence until the v16 Kotlin twin lands.
-        ("ecgCandidate", "ecgCandidateSample"),
         ("v18Aux", "v18AuxSample"),
     ]
 

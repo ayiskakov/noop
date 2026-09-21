@@ -65,11 +65,6 @@ public actor WhoopStore {
     /// batch commonly writes one table and not the other. See `StreamStore`.
     var ppgWaveformRowsSincePrune: [String: Int] = [:]
 
-    /// v16 ECG-candidate rows banked since its retention sweep last ran, PER DEVICE (#891) — same reason
-    /// as `ppgWaveformRowsSincePrune`: the sweep is per device, so a shared counter would let one strap
-    /// spend another's budget, and a batch commonly writes one blob table and not the other. See `StreamStore`.
-    var ecgCandidateRowsSincePrune: [String: Int] = [:]
-
     /// v18 aux rows banked since the retention sweep last ran, PER DEVICE — the sweep is per device too,
     /// so a shared counter would let one strap spend another's budget. See `StreamStore`.
     var v18AuxRowsSincePrune: [String: Int] = [:]
