@@ -20,6 +20,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "11.8.3",
+          "buildVersion": "413",
+          "date": "2026-09-21",
+          "localizedDescription": "NOOP 11.8.3. See the release notes for what changed.",
+          "downloadURL": "https://github.com/ayiskakov/noop/releases/download/v11.8.3/NOOP-ios-unsigned-v11.8.3.ipa",
+          "size": 21497035,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "11.8.2",
           "buildVersion": "410",
           "date": "2026-09-20",
@@ -1465,12 +1474,12 @@
           "NSMotionUsageDescription": "NOOP reads your iPhone's step count for a walking or running workout to show steps in the activity summary. It stays on your device. Nothing leaves it."
         }
       },
-      "version": "11.8.2",
-      "buildVersion": "410",
-      "versionDate": "2026-09-20",
-      "versionDescription": "NOOP 11.8.2. See the release notes for what changed.",
-      "downloadURL": "https://github.com/ayiskakov/noop/releases/download/v11.8.2/NOOP-ios-unsigned-v11.8.2.ipa",
-      "size": 21482181,
+      "version": "11.8.3",
+      "buildVersion": "413",
+      "versionDate": "2026-09-21",
+      "versionDescription": "NOOP 11.8.3. See the release notes for what changed.",
+      "downloadURL": "https://github.com/ayiskakov/noop/releases/download/v11.8.3/NOOP-ios-unsigned-v11.8.3.ipa",
+      "size": 21497035,
       "minOSVersion": "17.0"
     }
   ],
