@@ -1252,6 +1252,7 @@ private struct ActiveWorkoutLive: View {
 /// re-render only this card. Wrapped in the liquid frosted card style.
 private struct LiveLogCard: View {
     @EnvironmentObject private var live: LiveState
+    @EnvironmentObject private var model: AppModel
     @AppStorage(CardAppearancePrefs.opacityKey) private var cardOpacityPercent = CardAppearancePrefs.defaultPercent
     private var cardOpacity: Double { max(0, min(1, Double(cardOpacityPercent) / 100)) }
 
@@ -1318,8 +1319,14 @@ private struct LiveLogCard: View {
     }
 
     private func saveStrapLog() {
-        FileExport.exportText(live.exportableLogText(),
-                              suggestedName: FileExport.timestampedName("noop-strap-log", ext: "txt"))
+        Task {
+            // Settings (#507) and Test Centre fetch these extras before exporting; without them this
+            // site wrote a same-named file silently missing the "Strap & data" + funnel sections, so
+            // which button someone pressed changed what a triager received.
+            let extra = await DebugDataDiagnostics.dynamicLines(repo: model.repo)
+            FileExport.exportText(live.exportableLogText(extraHeaderLines: extra),
+                                  suggestedName: FileExport.timestampedName("noop-strap-log", ext: "txt"))
+        }
     }
 }
 
