@@ -50,6 +50,7 @@ struct TestCentreView: View {
     @AppStorage(PuffinExperiment.deepDataKey) private var deepDataEnabled = false
     @AppStorage(PuffinExperiment.broadcastHrKey) private var broadcastHrEnabled = false
     @AppStorage(PuffinExperiment.ecgRawDataKey) private var ecgRawDataEnabled = false
+    @AppStorage(PuffinExperiment.ecgKey) private var ecgEnabled = false
 
     /// The strap model the user last picked, the same key SettingsView's showFiveMGControls gate reads.
     @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
@@ -287,6 +288,19 @@ struct TestCentreView: View {
                     Text(result).font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Divider().overlay(StrandPalette.hairline)
+                // ECG capture opt-in — the switch that unlocks the hand-run probe on the Devices card.
+                // It was orphaned in dead `fiveMGCard` when the 5/MG controls moved here, so the raw-data
+                // gate below reached Test Centre but this one did not — leaving the whole ECG probe
+                // unreachable (the Devices menu gates on this key). Restored here beside its sibling.
+                // Turning it off also tells the strap to stop, so a stream can't be left running.
+                Toggle("WHOOP MG ECG capture (experimental)", isOn: $ecgEnabled)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                    .onChangeCompat(of: ecgEnabled) { on in if !on { model.ecgStopCapture(reportsResult: false) } }
+                Text("MG only. Unlocks a gated, hand-run probe on the Devices screen that asks the strap to start its ECG subsystem and logs whatever comes back — unvalidated protocol instrumentation, not a medical ECG. Turn on the passive trace below first for a complete byte-level capture to share.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Divider().overlay(StrandPalette.hairline)
                 Toggle("WHOOP MG ECG raw-data gate", isOn: $ecgRawDataEnabled)
