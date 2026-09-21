@@ -7,6 +7,15 @@ private struct RRBatchSecond: Hashable {
     let transport: Int
 }
 
+/// One line of the v16 ECG-candidate export (#891): the device, the strap-second, and the unsigned-16-bit
+/// MAX86176 FIFO 0x80-channel samples, serialised as one JSON object per `ecgCandidateSample` row. See
+/// `WhoopStore.ecgCandidateExportJSONL`. UNVALIDATED instrumentation — not an ECG/heart rate/diagnosis.
+private struct EcgCandidateExportLine: Encodable {
+    let deviceId: String
+    let ts: Int
+    let samples: [Int]
+}
+
 extension WhoopStore {
     /// Deterministic JSON for an event payload (sorted keys so the same payload always
     /// serializes byte-identically, important for the natural-key dedupe and parity).
@@ -831,6 +840,32 @@ extension WhoopStore {
 
     public func ecgCandidateCountForTest() async throws -> Int {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? 0 }
+    }
+
+    /// Newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891), one object per
+    /// strap-second: `{"deviceId":…,"ts":…,"samples":[u16,…]}`, ascending by (deviceId, ts). This is the
+    /// Test Centre export path for the UNVALIDATED v16 candidate — the iOS/macOS analogue of Android's raw
+    /// reject-archive export (on Apple v16 is decoded into this table, so it is NOT in the reject archive).
+    /// NOT an ECG / heart rate / diagnosis; the samples are raw unsigned-16-bit MAX86176 FIFO values with no
+    /// asserted scale. Empty string when the table has no rows. Streamed via a cursor and one small
+    /// per-row `JSONEncoder` (sorted keys, so the file diffs cleanly) so a large table does not build an
+    /// intermediate row array. Read-only; touches no strap.
+    public func ecgCandidateExportJSONL() async throws -> String {
+        try syncRead { db in
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.sortedKeys]
+            var out = ""
+            let cursor = try Row.fetchCursor(db, sql: """
+                SELECT deviceId, ts, samples FROM ecgCandidateSample ORDER BY deviceId, ts
+                """)
+            while let row = try cursor.next() {
+                let line = EcgCandidateExportLine(deviceId: row["deviceId"], ts: row["ts"],
+                                                  samples: WhoopStore.unpackEcgCandidateSamples(row["samples"]))
+                out += String(decoding: try enc.encode(line), as: UTF8.self)
+                out += "\n"
+            }
+            return out
+        }
     }
 
     public func deviceRowForTest(id: String) async throws -> (mac: String?, name: String?)? {

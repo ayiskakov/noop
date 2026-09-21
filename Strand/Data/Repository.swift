@@ -786,6 +786,15 @@ final class Repository: ObservableObject {
     /// Expose the shared store handle (used by the importer to persist mapped rows).
     func storeHandle() async -> WhoopStore? { await ensureStore() }
 
+    /// #891 Test Centre export: newline-delimited JSON of every decoded WHOOP 5/MG v16 ECG-candidate row.
+    /// EXPLICITLY UNVALIDATED instrumentation — not an ECG, heart rate, or diagnosis (see
+    /// `WhoopStore.ecgCandidateExportJSONL`). Empty string when there is nothing to export or the store
+    /// cannot be opened, so the caller can no-op rather than share an empty file.
+    func ecgCandidateExportJSONL() async -> String {
+        guard let store = await storeHandle() else { return "" }
+        return (try? await store.ecgCandidateExportJSONL()) ?? ""
+    }
+
     /// CAPTURE-D (#797): the on-device DATA VOLUME read FRESH from the STORE (never the `@Published`
     /// dashboard caches), for the Display & Performance test mode's `dataVolume` line. dbRows is the raw
     /// decoded-stream footprint; importedDays is the count of imported daily-metric rows under the active

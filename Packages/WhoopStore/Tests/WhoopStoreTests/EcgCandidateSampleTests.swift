@@ -77,6 +77,36 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(read, [EcgCandidateSample(ts: 500, samples: [40000, 12])])
     }
 
+    // MARK: - #891 Test Centre export
+
+    /// The export emits one JSON line per row, ordered by (deviceId, ts), with sorted keys and unsigned
+    /// samples — the format the app hands to the iOS share sheet / macOS save panel.
+    func testEcgCandidateExportJSONL() async throws {
+        let store = try await WhoopStore.inMemory()
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 100, samples: [60944, 1]),
+            EcgCandidateSample(ts: 101, samples: [65535]),
+        ]), deviceId: "dev-a")
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 50, samples: [7]),
+        ]), deviceId: "dev-b")
+        let jsonl = try await store.ecgCandidateExportJSONL()
+        let lines = jsonl.split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines, [
+            #"{"deviceId":"dev-a","samples":[60944,1],"ts":100}"#,
+            #"{"deviceId":"dev-a","samples":[65535],"ts":101}"#,
+            #"{"deviceId":"dev-b","samples":[7],"ts":50}"#,
+        ], "one sorted-key JSON object per row, ordered by (deviceId, ts), unsigned samples preserved")
+    }
+
+    /// A store with no candidate rows exports an empty string (the button then no-ops rather than
+    /// handing the share sheet an empty file).
+    func testEcgCandidateExportEmptyStoreIsEmptyString() async throws {
+        let store = try await WhoopStore.inMemory()
+        let jsonl = try await store.ecgCandidateExportJSONL()
+        XCTAssertTrue(jsonl.isEmpty)
+    }
+
     func testPackUnpackEcgCandidateSamplesRoundTripsUnsigned() {
         let samples = [0, 1, 32767, 32768, 65535, 60944, 57676]
         let packed = WhoopStore.packEcgCandidateSamples(samples)
