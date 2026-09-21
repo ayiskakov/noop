@@ -94,7 +94,7 @@ final class UnmappedHistoricalLayoutTests: XCTestCase {
 
     /// The four mapped versions ARE recognised as mapped (the other direction of the lockstep).
     func testMappedVersionsAreNotTreatedAsUnmapped() {
-        XCTAssertEqual(mappedWhoop5HistoricalVersions, [16, 18, 20, 21, 26])
+        XCTAssertEqual(mappedWhoop5HistoricalVersions, [18, 20, 21, 26])
         for v in mappedWhoop5HistoricalVersions {
             XCTAssertFalse(isUnmappedWhoop5HistoricalRecord(whoop5FrameWithVersion(UInt8(v))),
                            "v\(v) has a field map and must not be archived on layout grounds")

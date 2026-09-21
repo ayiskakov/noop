@@ -44,18 +44,6 @@ data class StreamBatch(
      */
     val ppgWaveform: List<PpgWaveformRow> = emptyList(),
     /**
-     * The RAW WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel samples (#891) — EXPLICITLY UNVALIDATED
-     * instrumentation, the twin of [ppgWaveform]. NOT an ECG / heart rate / diagnosis; channel meaning and
-     * sample rate are unproven. It is part of the shared cross-platform stream model (iOS decodes v16 into
-     * this and persists it in its own `ecgCandidateSample` table), but this platform does NOT decode v16
-     * yet: the Kotlin decoder + Room storage twin is a deliberate follow-up, so on Android this list is
-     * always empty and an offloaded v16 record is preserved by the raw reject-archive instead (v16 stays
-     * OUT of [MAPPED_WHOOP5_HISTORICAL_VERSIONS] here). Present on the model so the shared decoder/schema
-     * oracles stay byte-identical across platforms; `ecgCandidateSample` is pinned `ios_only` until the
-     * twin lands. Nothing reads it.
-     */
-    val ecgCandidate: List<EcgCandidateRow> = emptyList(),
-    /**
      * Every remaining 5/MG v18 per-second field the decoder produces and the extractor used to discard —
      * carried verbatim for a later census. Empty on a WHOOP 4.0 and on the live path. Nothing reads it.
      */
@@ -123,7 +111,7 @@ data class StreamBatch(
         get() = hr.isEmpty() && rr.isEmpty() && events.isEmpty() && battery.isEmpty() &&
             spo2.isEmpty() && skinTemp.isEmpty() && resp.isEmpty() && gravity.isEmpty() &&
             steps.isEmpty() && sleepState.isEmpty() && ppgHr.isEmpty() && ppgWaveform.isEmpty() &&
-            ecgCandidate.isEmpty() && v18Aux.isEmpty()
+            v18Aux.isEmpty()
 }
 
 /**
@@ -332,18 +320,6 @@ data class PpgWaveformRow(
     /** #2019: the absolute optical code [samples] are deltas from; null on a legacy row, whose absolute
      *  level is gone for good because a delta series cannot be inverted without it. */
     val baseCode: Long? = null,
-)
-/**
- * The RAW WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel samples for one strap-second (#891): [ts] the record's
- * wall-clock unix second, [samples] the raw UNSIGNED 16-bit big-endian FIFO values. EXPLICITLY UNVALIDATED
- * instrumentation, the twin of [PpgWaveformRow]: NOT an ECG / heart rate / diagnosis; sample rate and
- * channel meaning unproven. This platform does not decode v16 yet (see [StreamBatch.ecgCandidate]), so the
- * type exists for cross-platform model parity; the Kotlin decoder + Room `ecgCandidateSample` twin (packing
- * the samples to a little-endian BLOB) is a deliberate follow-up.
- */
-data class EcgCandidateRow(
-    val ts: Long,
-    val samples: List<Int>,
 )
 
 /** Count of rows ACTUALLY inserted per stream (mirrors WhoopStore.insert return tuple). */
