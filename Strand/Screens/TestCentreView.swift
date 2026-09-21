@@ -328,6 +328,23 @@ struct TestCentreView: View {
                 Text("Records frames that already arrive. It does not start sensors and can create large files. Use the export section below to save the trace with its strap log.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Divider().overlay(StrandPalette.hairline)
+                // Export the raw reject archive (rejected_history.jsonl): the complete, untruncated
+                // undecodable-record corpus (v16/v20/v21…) the offloader banks before ack. The strap log
+                // caps its hex dumps per connection, so this is the only way to get the FULL set off the
+                // device — the corpus a later layout field-map is built and validated against (#1992).
+                // Read-only: it shares the file NOOP already wrote; it never touches the strap.
+                NoopButton("Export raw reject archive…", systemImage: "square.and.arrow.up", kind: .secondary) {
+                    let url = RawHistoryArchive().fileURL
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        FileExport.exportFile(at: url,
+                                              suggestedName: FileExport.timestampedName("noop-reject-archive", ext: "jsonl"))
+                    }
+                }
+                Text("The complete undecodable-record corpus (raw v16/v20/v21 frames) banked before ack, for building a layout field map. Read-only; never writes to the strap.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
