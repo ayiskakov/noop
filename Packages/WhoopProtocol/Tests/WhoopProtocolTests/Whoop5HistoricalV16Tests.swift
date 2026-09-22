@@ -61,21 +61,73 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         let samples = try! XCTUnwrap(p["ecg_candidate"]?.intArrayValue,
                                      "a full v16 record must decode a non-empty ecg_candidate array")
         XCTAssertFalse(samples.isEmpty)
-        XCTAssertEqual(samples.count, 500)                              // 0x80-channel word count
+        XCTAssertEqual(samples.count, 500)                              // 0x80-class word count
         XCTAssertEqual(p["ecg_candidate_count"]?.intValue, 500)
-        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 7)       // 0xC0-channel word count
-        // The raw big-endian 16-bit samples, verbatim (0x83 tag → 0x80 channel; sample = byte1<<8|byte2).
+        // The record DECLARES its word count @32 (u16 LE) and the decoder honours it exactly.
+        XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 500,
+                       "the FIFO is length-prefixed; the stored sample count must equal the declared one")
+        // ZERO, not 7. The 7 an earlier revision reported were bytes of the TRAILING region being read as
+        // FIFO words; inside the correctly bounded FIFO there is no 0xC0-class word at all.
+        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 0)
+        // The raw big-endian 16-bit samples, verbatim (0x83 tag → 0x80 class; sample = byte1<<8|byte2).
         XCTAssertEqual(Array(samples.prefix(6)), [60944, 59816, 62200, 62250, 61898, 61607])
         XCTAssertEqual(samples.last, 57676)
         // Unsigned 16-bit: instrumentation only, no scale/sign asserted.
         XCTAssertTrue(samples.allSatisfy { $0 >= 0 && $0 <= 65535 })
     }
 
+    /// The FIFO must stop where the record says it stops. The body does NOT run to the payload limit: a
+    /// different, unidentified structure follows it (a count byte then 16-bit LITTLE-endian values), and
+    /// scanning 3-byte words to the end walks into it. That is not a cosmetic over-read — a trailing byte
+    /// pair whose alignment puts a high bit in the tag position is admitted as a SAMPLE, contaminating the
+    /// one stream this whole layout exists to preserve.
+    func testV16FifoStopsAtItsDeclaredLengthAndIgnoresTheTrailingRegion() {
+        let frame = bytes(fullHex)
+        let p = parseFrame(frame, family: .whoop5).parsed
+        let declared = try! XCTUnwrap(p["ecg_candidate_word_count"]?.intValue)
+        let samples = try! XCTUnwrap(p["ecg_candidate"]?.intArrayValue)
+
+        // The declared body ends well before the payload limit — the gap IS the trailing region.
+        let fifoEnd = 34 + declared * 3
+        let payloadLimit = frame.count - 4
+        XCTAssertEqual(fifoEnd, 1534)
+        XCTAssertLessThan(fifoEnd, payloadLimit,
+                          "fixture must actually HAVE a trailing region, or this proves nothing")
+
+        // Every stored sample must be reconstructible from a word inside [34, fifoEnd) — i.e. none of them
+        // came from beyond the declared FIFO.
+        var expected: [Int] = []
+        for off in stride(from: 34, to: fifoEnd, by: 3) where frame[off] & 0x80 != 0 {
+            expected.append((Int(frame[off + 1]) << 8) | Int(frame[off + 2]))
+        }
+        XCTAssertEqual(samples, expected)
+
+        // And the trailing region really does contain bytes a 3-byte scan would have taken: the `0xed`/
+        // `0xff` run. This is the exact byte pattern that produced the phantom "0xC0 channel".
+        let trailing = Array(frame[fifoEnd..<payloadLimit])
+        XCTAssertTrue(trailing.contains(0xed) && trailing.contains(0xff),
+                      "the trailing region must still hold the high-bit bytes an unbounded scan consumed")
+    }
+
     func testV16EmptyRecordHasNoEcgCandidate() {
         let p = parseFrame(bytes(emptyHex), family: .whoop5).parsed
-        XCTAssertNil(p["ecg_candidate"], "an all-zero-padding v16 record carries no 0x80-channel words")
+        XCTAssertNil(p["ecg_candidate"], "a v16 record declaring 0 FIFO words carries no samples")
         XCTAssertNil(p["ecg_candidate_count"])
-        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 0, "no 0xC0-channel words either")
+        XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 0, "the record declares an empty FIFO")
+        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 0, "no 0xC0-class words either")
+    }
+
+    /// A corrupt/oversized length must clamp to the payload, never read into the CRC trailer or past the
+    /// end of the frame. Built by overwriting the declared count with 0xFFFF on the real fixture.
+    func testV16OversizedDeclaredLengthIsClampedToThePayload() {
+        var frame = bytes(fullHex)
+        frame[32] = 0xFF
+        frame[33] = 0xFF                     // declares 65535 words = 196,605 bytes; the frame is 1584
+        let p = parseFrame(frame, family: .whoop5).parsed
+        XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 65535)
+        // It must not crash, and it must not invent more samples than the payload can hold.
+        let maxWords = ((frame.count - 4) - 34) / 3
+        XCTAssertLessThanOrEqual(p["ecg_candidate"]?.intArrayValue?.count ?? 0, maxWords)
     }
 
     // MARK: - v16 carries NO named signal — instrumentation only (decodesWithoutNamedSignal)

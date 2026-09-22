@@ -807,18 +807,30 @@ private func decodeWhoop5HistoricalV26(_ frame: [UInt8], fb: FieldBuilder, limit
 ///
 /// LAYOUT, established from 128 real v16 records (WHOOP 5/MG, fw 50.39.1.0). The record reuses the shared
 /// type-47 header — the monotonic u32 `record_index` @11 and the u32 `unix` second @15, verified
-/// monotonic/lockstep with v18/v20/v21/v26. The body from frame offset 31 is a MAX86176 FIFO of 3-byte
-/// words: `byte[0]` is a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` is a 16-bit
-/// BIG-ENDIAN sample = `(byte1 << 8) | byte2`. Words are classified by the tag's TOP TWO BITS
-/// (`tag & 0xC0`): the `0x80` channel is the dominant one and is stored, in wire order, as
-/// `ecg_candidate`; the `0xC0` channel's word count is recorded as `ecg_candidate_alt_count`. A `0x00`
-/// tag (high bit clear) is FIFO padding and is skipped. Per-record 0x80 word counts VARY widely (an
-/// empty record carries none, a full one ~500) — expected; the decoder extracts whatever is present.
+/// monotonic/lockstep with v18/v20/v21/v26. The FIFO is LENGTH-PREFIXED: @32 is a u16 LITTLE-ENDIAN count
+/// of 3-byte words and the words run from @34, so the FIFO occupies exactly `[34, 34 + 3*count)`. Each
+/// word is `byte[0]` = a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` = a 16-bit
+/// BIG-ENDIAN sample `(byte1 << 8) | byte2`. Words are classified by the tag's TOP TWO BITS (`tag & 0xC0`):
+/// the `0x80` class is stored, in wire order, as `ecg_candidate`; a `0xC0`-class word would be tallied into
+/// `ecg_candidate_alt_count`. Per-record word counts VARY widely (an empty record declares 0, a full one
+/// ~500) — expected; the decoder extracts exactly what the count declares.
+///
+/// TRAILING REGION — the reason the length prefix matters. The FIFO does NOT run to the end of the
+/// payload: a DIFFERENT structure follows it, and in the fixture below it reads cleanly as a count byte
+/// (`0x0b` = 11) followed by 11 + 11 values in 16-bit LITTLE-endian (`[63, 63, 62…]` then `[-19 × 11]`).
+/// Its meaning is UNIDENTIFIED and nothing here decodes it; it is named only so the next reader knows the
+/// bytes are accounted for. Scanning 3-byte words to the payload limit — as an earlier revision did —
+/// walks into this block and harvests whatever its bytes look like at 3-byte alignment: that is where the
+/// "~7 words/record of 0xC0 channel" came from. Those 7 were trailing bytes, not a channel; inside the
+/// correctly bounded FIFO both captured records contain ZERO 0xC0-class words. Worse than the bogus tally,
+/// an unbounded scan can admit a trailing byte pair as a SAMPLE whenever alignment puts a high bit in the
+/// tag position, silently contaminating the very stream this table exists to preserve.
 ///
 /// DEVIATION from the original field note (real captures, never invented offsets): the dominant tag BYTE
-/// observed is `0x83` (not a bare `0x80`) and the `0x80` channel is therefore the `tag & 0xC0 == 0x80`
-/// SIGNATURE, not an exact byte match; the `0xC0` channel appears ~7 words/record here. Only the header
-/// offsets (@11/@15) and the 3-byte-word/BE16 body framing are proven — no other byte is named.
+/// observed is `0x83` (not a bare `0x80`) and the `0x80` class is therefore the `tag & 0xC0 == 0x80`
+/// SIGNATURE, not an exact byte match. Proven here: the header offsets (@11/@15), the @32 word count and
+/// its @34 body (`34 + 3*500 = 1534` lands exactly on the trailing region in the full fixture, and the
+/// empty record declares 0), and the 3-byte-word/BE16 framing. No other byte is named.
 private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit: Int) {
     // record_index@11: the same monotonic lifetime per-record counter v18/v20/v21/v26 carry at @11
     // (+1 per record, independent of unix). @11 is the low byte of a u32 LE.
@@ -828,34 +840,45 @@ private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit
     if let unix = readU32(frame, 15, limit) {
         fb.add(15, 4, "unix", "time", value: .int(unix), note: "real unix seconds")
     }
-    // MAX86176 FIFO body from @31: 3-byte words, tag byte high bit set, BE16 sample in byte[1..2].
-    // Classify by (tag & 0xC0); collect the 0x80 channel as the UNVALIDATED candidate, count the 0xC0.
-    // `limit` already stops before the CRC32 trailer (payloadLimit), so the loop cannot read it.
+    // The FIFO is LENGTH-PREFIXED, and honouring that bound is what keeps the stream clean: @32 is a u16
+    // LE count of 3-byte words and the words themselves start @34, so the FIFO occupies exactly
+    // [34, 34 + 3*count) and something else entirely follows it (see the TRAILING REGION note above).
+    // Scanning to `limit` instead — as if the whole body were FIFO — walks the loop straight into that
+    // trailing block and harvests whatever its bytes happen to look like at 3-byte alignment.
+    guard let wordCount = readU16(frame, 32, limit) else { return }
+    fb.add(32, 2, "ecg_candidate_word_count", "meta", value: .int(wordCount),
+           note: "MAX86176 FIFO 3-byte-word count; the FIFO body is exactly this long")
+    // Clamp rather than trust: a corrupt length must not read past the payload into the CRC trailer.
+    let fifoStart = 34
+    let fifoEnd = min(fifoStart + wordCount * 3, limit)
     var samples: [Int] = []
     var altCount = 0
-    var off = 31
-    while off + 3 <= limit {
-        guard let tag = readU8(frame, off, limit) else { break }
+    var off = fifoStart
+    while off + 3 <= fifoEnd {
+        guard let tag = readU8(frame, off, fifoEnd) else { break }
         if tag & 0x80 != 0,
-           let hi = readU8(frame, off + 1, limit), let lo = readU8(frame, off + 2, limit) {
+           let hi = readU8(frame, off + 1, fifoEnd), let lo = readU8(frame, off + 2, fifoEnd) {
             let sample = (hi << 8) | lo          // 16-bit BIG-ENDIAN, unsigned (0…65535)
             // The guard above already required the high bit, so `tag & 0xC0` is 0x80 or 0xC0 and there is
-            // no third case to handle here — bit 0x40 alone separates the two channels.
+            // no third case to handle here — bit 0x40 alone separates the two classes.
             if tag & 0x40 == 0 { samples.append(sample) } else { altCount += 1 }
         }
         off += 3
     }
     if !samples.isEmpty {
-        // The RAW 0x80-channel FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
+        // The RAW 0x80-class FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
         // channel meaning and sample rate unproven (#891). Consumed only as durable instrumentation.
-        // The byte span is the whole FIFO body [31, limit): the 0x80 samples are scattered through it,
-        // interleaved with the 0xC0 channel and padding, so no tighter contiguous span exists.
-        fb.add(31, max(0, limit - 31), "ecg_candidate", "ecg", value: .intArray(samples),
-               note: "UNVALIDATED MAX86176 FIFO 0x80-channel samples (BE16); NOT an ECG/HR/diagnosis (#891)")
+        // The byte span is the FIFO body exactly — [34, fifoEnd) — not the rest of the record.
+        fb.add(fifoStart, max(0, fifoEnd - fifoStart), "ecg_candidate", "ecg", value: .intArray(samples),
+               note: "UNVALIDATED MAX86176 FIFO 0x80-class samples (BE16); NOT an ECG/HR/diagnosis (#891)")
         fb.parsed["ecg_candidate_count"] = .int(samples.count)
     }
-    // The 0xC0-channel WORD COUNT only — a derived tally spanning no single byte, so it rides `parsed`
-    // like v26's `ppg_sample_count`. No meaning is claimed for that channel; its samples are NOT stored.
+    // Tally of words in the FIFO whose tag is 0xC0-class rather than 0x80-class — a derived count spanning
+    // no single byte, so it rides `parsed` like v26's `ppg_sample_count`. It is 0 in every record captured
+    // so far, and that is the point of keeping it: if a real second class ever appears its words are
+    // counted here instead of being silently mixed into `ecg_candidate`. An earlier revision reported 7
+    // for the fixture below, which was not a channel at all — it was the trailing region being read as
+    // FIFO words. No meaning is claimed for the class; its samples are NOT stored.
     fb.parsed["ecg_candidate_alt_count"] = .int(altCount)
 }
 
