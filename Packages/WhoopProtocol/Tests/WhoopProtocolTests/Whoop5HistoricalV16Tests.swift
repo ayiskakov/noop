@@ -62,14 +62,16 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         let samples = try! XCTUnwrap(p["ecg_candidate"]?.intArrayValue,
                                      "a full v16 record must decode a non-empty ecg_candidate array")
         XCTAssertFalse(samples.isEmpty)
-        XCTAssertEqual(samples.count, 500)                              // 0x80-class word count
+        XCTAssertEqual(samples.count, 500)                              // every DECLARED sample
         XCTAssertEqual(p["ecg_candidate_count"]?.intValue, 500)
         // The record DECLARES its word count @32 (u16 LE) and the decoder honours it exactly.
         XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 500,
                        "the FIFO is length-prefixed; the stored sample count must equal the declared one")
-        // ZERO, not 7. The 7 an earlier revision reported were bytes of the TRAILING region being read as
-        // FIFO words; inside the correctly bounded FIFO there is no 0xC0-class word at all.
-        XCTAssertEqual(p["ecg_candidate_unexpected_tag_count"]?.intValue, 0)
+        // `ecg_candidate_unexpected_tag_count` is GONE, and its absence is the assertion. It counted
+        // every word whose top bits were not `0b10` as an anomaly — but those bits are two per-sample
+        // FLAGS, not a channel tag, so on a record carrying ordinary flags it reported hundreds of
+        // "unexpected tags" when nothing unexpected had happened. See `Whoop5EcgRawRecordTests`.
+        XCTAssertNil(p["ecg_candidate_unexpected_tag_count"])
         // The samples, verbatim: 18-bit two's-complement, so SIGNED. Read unsigned these were 60944,
         // 59816, … — the same bits, an interpretation that put a biosignal entirely above 57,000.
         XCTAssertEqual(Array(samples.prefix(6)), [-4592, -5720, -3336, -3286, -3638, -3929])
@@ -78,11 +80,13 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertTrue(samples.allSatisfy { $0 >= -131_072 && $0 <= 131_071 })
     }
 
-    /// The FIFO must stop where the record says it stops. The body does NOT run to the payload limit: a
-    /// different, unidentified structure follows it (a count byte then 16-bit LITTLE-endian values), and
-    /// scanning 3-byte words to the end walks into it. That is not a cosmetic over-read — a trailing byte
-    /// pair whose alignment puts a high bit in the tag position is admitted as a SAMPLE, contaminating the
-    /// one stream this whole layout exists to preserve.
+    /// The waveform must stop where the record says it stops. It does NOT run to the payload limit: the
+    /// LEAD-OFF DIAGNOSTICS follow it — a count byte @1534 then 11 fixed I-channel and 11 fixed Q-channel
+    /// halfwords, little-endian (`docs/PROTOCOL_ECG.md` §R16). Scanning 3-byte words to the end walks into
+    /// them. That is not a cosmetic over-read: a diagnostic byte pair whose alignment puts a high bit in
+    /// the flag position is admitted as a SAMPLE, contaminating the one stream this layout exists to
+    /// preserve. (An earlier revision called this region unidentified and inferred a phantom "second
+    /// channel" from it; the doc names it, and `Whoop5EcgRawRecord` decodes it.)
     func testV16FifoStopsAtItsDeclaredLengthAndIgnoresTheTrailingRegion() {
         let frame = bytes(fullHex)
         let p = parseFrame(frame, family: .whoop5).parsed
@@ -96,21 +100,27 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertLessThan(fifoEnd, payloadLimit,
                           "fixture must actually HAVE a trailing region, or this proves nothing")
 
-        // Every stored sample must be reconstructible from a word inside [34, fifoEnd) — i.e. none of them
-        // came from beyond the declared FIFO.
+        // Every stored sample must come from a word inside [34, fifoEnd) — and EVERY such word must be
+        // stored, in order, with no flag-based filtering. Note this reconstruction has no `where` clause:
+        // reproducing the old tag guard here is what let the guard and its test agree with each other
+        // while both disagreed with the wire.
         var expected: [Int] = []
-        for off in stride(from: 34, to: fifoEnd, by: 3)
-        where frame[off] & 0x80 != 0 && frame[off] & 0x7C == 0 {
+        for off in stride(from: 34, to: fifoEnd, by: 3) {
             let raw = (Int(frame[off] & 0x03) << 16) | (Int(frame[off + 1]) << 8) | Int(frame[off + 2])
             expected.append(raw >= 0x2_0000 ? raw - 0x4_0000 : raw)
         }
         XCTAssertEqual(samples, expected)
 
-        // And the trailing region really does contain bytes a 3-byte scan would have taken: the `0xed`/
-        // `0xff` run. This is the exact byte pattern that produced the phantom "0xC0 channel".
-        let trailing = Array(frame[fifoEnd..<payloadLimit])
-        XCTAssertTrue(trailing.contains(0xed) && trailing.contains(0xff),
-                      "the trailing region must still hold the high-bit bytes an unbounded scan consumed")
+        // And the lead-off region really does hold bytes a 3-byte scan would have taken as samples: the
+        // `0xed`/`0xff` run is the Q channel's negative halfwords, and it is the exact byte pattern that
+        // produced the phantom "second channel".
+        let leadOff = Array(frame[fifoEnd..<payloadLimit])
+        XCTAssertTrue(leadOff.contains(0xed) && leadOff.contains(0xff),
+                      "the lead-off region must still hold the high-bit bytes an unbounded scan consumed")
+        // Decoded properly rather than consumed: 10 entries per channel on this record.
+        XCTAssertEqual(p["ecg_lead_off_count"]?.intValue, 11)
+        XCTAssertEqual(p["ecg_lead_off_i"]?.intArrayValue?.count, 11)
+        XCTAssertEqual(p["ecg_lead_off_q"]?.intArrayValue?.count, 11)
     }
 
     func testV16EmptyRecordHasNoEcgCandidate() {
@@ -118,7 +128,10 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertNil(p["ecg_candidate"], "a v16 record declaring 0 FIFO words carries no samples")
         XCTAssertNil(p["ecg_candidate_count"])
         XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 0, "the record declares an empty FIFO")
-        XCTAssertEqual(p["ecg_candidate_unexpected_tag_count"]?.intValue, 0, "and no unaccounted-for tags")
+        XCTAssertNil(p["ecg_candidate_unexpected_tag_count"], "the superseded tally is gone")
+        // The lead-off count is published even here: "the slower array was empty" and "we did not look"
+        // are different facts, and only one of them is true.
+        XCTAssertEqual(p["ecg_lead_off_count"]?.intValue, 0)
     }
 
     /// SIGNEDNESS regression. The samples are 18-bit two's complement; reading them unsigned was the
@@ -140,17 +153,24 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertLessThan(samples.min()!, 0, "the capture genuinely goes negative")
     }
 
-    /// A corrupt/oversized length must clamp to the payload, never read into the CRC trailer or past the
-    /// end of the frame. Built by overwriting the declared count with 0xFFFF on the real fixture.
-    func testV16OversizedDeclaredLengthIsClampedToThePayload() {
+    /// A corrupt/oversized length must never read into the CRC trailer or past the end of the frame.
+    ///
+    /// It is QUARANTINED rather than clamped: `docs/PROTOCOL_ECG.md` requires a count above the 500-slot
+    /// capacity be treated as an anomaly and not silently truncated, because handing a caller 500
+    /// plausible samples out of a record that just contradicted its own header is worse than handing it
+    /// nothing. Built by overwriting the declared count with 0xFFFF on the real fixture.
+    func testV16OversizedDeclaredLengthIsQuarantined() {
         var frame = bytes(fullHex)
         frame[32] = 0xFF
         frame[33] = 0xFF                     // declares 65535 words = 196,605 bytes; the frame is 1584
         let p = parseFrame(frame, family: .whoop5).parsed
-        XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 65535)
-        // It must not crash, and it must not invent more samples than the payload can hold.
-        let maxWords = ((frame.count - 4) - 34) / 3
-        XCTAssertLessThanOrEqual(p["ecg_candidate"]?.intArrayValue?.count ?? 0, maxWords)
+        XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 65535,
+                       "the DECLARED count is still reported — that is the evidence of what went wrong")
+        XCTAssertNil(p["ecg_candidate"], "no samples are invented from a count the record cannot honour")
+        XCTAssertEqual(p["ecg_anomaly_waveform_count_over_capacity"]?.intValue, 65535)
+        // The lead-off region is independent and still decodes — it is exactly what a reader wants when
+        // the waveform is the part that went wrong.
+        XCTAssertEqual(p["ecg_lead_off_count"]?.intValue, 11)
     }
 
     // MARK: - v16 carries NO named signal — instrumentation only (decodesWithoutNamedSignal)
