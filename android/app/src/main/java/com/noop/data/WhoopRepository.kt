@@ -44,9 +44,9 @@ data class StreamBatch(
      */
     val ppgWaveform: List<PpgWaveformRow> = emptyList(),
     /**
-     * The RAW WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel samples (#891) — EXPLICITLY UNVALIDATED
-     * instrumentation, the twin of [ppgWaveform]. NOT an ECG / heart rate / diagnosis; channel meaning and
-     * sample rate are unproven. It is part of the shared cross-platform stream model (iOS decodes v16 into
+     * The RAW WHOOP 5/MG v16 MAX86176 FIFO samples (#891) — EXPLICITLY UNVALIDATED
+     * instrumentation, the twin of [ppgWaveform]. NOT an ECG / heart rate / diagnosis; the physical meaning
+     * of the signal and its sample rate are unproven. It is part of the shared cross-platform stream model (iOS decodes v16 into
      * this and persists it in its own `ecgCandidateSample` table), but this platform does NOT decode v16
      * yet: the Kotlin decoder + Room storage twin is a deliberate follow-up, so on Android this list is
      * always empty and an offloaded v16 record is preserved by the raw reject-archive instead (v16 stays
@@ -334,12 +334,13 @@ data class PpgWaveformRow(
     val baseCode: Long? = null,
 )
 /**
- * The RAW WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel samples for one strap-second (#891): [ts] the record's
- * wall-clock unix second, [samples] the raw UNSIGNED 16-bit big-endian FIFO values. EXPLICITLY UNVALIDATED
- * instrumentation, the twin of [PpgWaveformRow]: NOT an ECG / heart rate / diagnosis; sample rate and
- * channel meaning unproven. This platform does not decode v16 yet (see [StreamBatch.ecgCandidate]), so the
- * type exists for cross-platform model parity; the Kotlin decoder + Room `ecgCandidateSample` twin (packing
- * the samples to a little-endian BLOB) is a deliberate follow-up.
+ * The RAW WHOOP 5/MG v16 MAX86176 FIFO samples for one record (#891): [ts] the record's
+ * wall-clock unix second, [samples] the raw SIGNED 18-bit two's-complement big-endian FIFO values.
+ * EXPLICITLY UNVALIDATED instrumentation, the twin of [PpgWaveformRow]: NOT an ECG / heart rate /
+ * diagnosis; sample rate and physical meaning unproven. This platform does not decode v16 yet (see
+ * [StreamBatch.ecgCandidate]), so the type exists for cross-platform model parity; the Kotlin decoder +
+ * Room `ecgCandidateSample` twin (packing the samples to a little-endian i32 BLOB) is a deliberate
+ * follow-up.
  */
 data class EcgCandidateRow(
     val ts: Long,
