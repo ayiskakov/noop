@@ -121,6 +121,23 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
             let p = parseFrame(f, family: family)
             return !(p.ok && p.crcOK != false)
         }
+        // v16 MAX86176 FIFO (#891): skipped for the same reason as v26 above — `extractHistoricalStreams`
+        // stores the FIFO durably in its own stream (`Streams.ecgCandidate` / WhoopStore's
+        // `ecgCandidateSample`) — but bound to the PREMISE ITSELF, not to the version plus a clean verdict.
+        // Without this, a v16 record — mapped, but carrying no HR/gravity — would fall through to the
+        // decode-outcome screen below and be archived RAW at 1 Hz beside its durable stream (double storage).
+        //
+        // The premise is "a row WILL exist for this record", and a clean verdict is not that. The extraction
+        // banks a row only for a NON-EMPTY `ecg_candidate`, so an intact v16 record whose FIFO body is all
+        // padding decodes no samples and yields no row: skipping it on the verdict alone would leave it
+        // stored NOWHERE while the trim ack frees it moments later. Such records are real and common — the
+        // `emptyHex` fixture in `Whoop5HistoricalV16Tests` is one, captured from hardware. So test for the
+        // samples, which is the fact the skip actually depends on.
+        if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 16 {
+            let p = parseFrame(f, family: family)
+            let banksARow = p.parsed["ecg_candidate"]?.intArrayValue?.isEmpty == false
+            return !(p.ok && p.crcOK != false && banksARow)
+        }
         // UNMAPPED LAYOUT (5/MG) — archive UNCONDITIONALLY, whatever it decoded.
         //
         // The decode-outcome test below is the wrong question for a layout NOOP has no field map for.
@@ -292,6 +309,14 @@ public func extractHistoricalStreams(_ parsed: [ParsedFrame],
                 out.ppgWaveform.append(PpgWaveformSample(ts: ts, samples: samples,
                                                          burstIndex: p["burst_index"]?.intValue,
                                                          baseCode: p["ppg_base_code"]?.intValue))
+            }
+            // v16 MAX86176 FIFO 0x80-channel (#891): EXPLICITLY UNVALIDATED instrumentation, the twin of
+            // the ppg_waveform persist above. A v16 record carries no heart_rate/gravity/ppg_waveform, so
+            // it adds nothing to the branches below — the FIFO is banked here or it is lost, because adding
+            // v16 to `mappedWhoop5HistoricalVersions` took it off the raw-archive path. NOT an ECG / HR /
+            // diagnosis; nothing downstream scores this row.
+            if let samples = p["ecg_candidate"]?.intArrayValue, !samples.isEmpty {
+                out.ecgCandidate.append(EcgCandidateSample(ts: ts, samples: samples))
             }
             if let bpm = p["heart_rate"]?.intValue, bpm != 0 {  // skip startup hr=0
                 out.hr.append(HRSample(ts: ts, bpm: bpm))

@@ -253,6 +253,23 @@ struct TestCentreView: View {
                 Text("The complete undecodable-record corpus (raw v16/v20/v21 frames) banked before ack, for building a layout field map. Read-only; never writes to the strap.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Divider().overlay(StrandPalette.hairline)
+                // Export the decoded WHOOP 5/MG v16 ECG-candidate stream (#891). On Apple, v16 is DECODED
+                // into the `ecgCandidateSample` table, so — unlike Android, where it is raw-archived — it is
+                // NOT in the reject archive above; this button is its export. UNVALIDATED MAX86176 FIFO
+                // 0x80-channel samples: NOT an ECG, heart rate, or diagnosis. Read-only; never touches the strap.
+                NoopButton("Export ECG candidate (unvalidated)…", systemImage: "square.and.arrow.up", kind: .secondary) {
+                    Task {
+                        // Staged to a temp file by the store (the export is far too large to hold in
+                        // memory); `exportStagedFile` removes it once the panel / share sheet closes.
+                        guard let url = await model.repo.ecgCandidateExportFile() else { return }
+                        FileExport.exportStagedFile(at: url)
+                    }
+                }
+                Text("Decoded WHOOP 5/MG v16 samples — an UNVALIDATED MAX86176 sensor buffer, not an ECG, heart rate, or diagnosis — one JSON line per second, for offline analysis. Nothing appears until a v16 sync has landed. Read-only; never writes to the strap.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

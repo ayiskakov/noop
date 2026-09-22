@@ -87,6 +87,31 @@ enum FileExport {
         #endif
     }
 
+    /// Save / share a file WE staged (a streamed export written to `temporaryDirectory`), then remove it.
+    ///
+    /// The twin of `exportFile(at:)`, which deliberately does NOT delete its source because that source is
+    /// caller-owned and outlives the export. A staged file is a throwaway copy, so leaving it behind grows
+    /// `temporaryDirectory` by the size of the export on every tap — and these exports are large by nature
+    /// (the reason they are streamed to disk instead of held as a `String`).
+    @MainActor
+    static func exportStagedFile(at src: URL, suggestedName: String? = nil) {
+        #if os(macOS)
+        defer { try? FileManager.default.removeItem(at: src) }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedName ?? src.lastPathComponent
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        let fm = FileManager.default
+        do {
+            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+            try fm.copyItem(at: src, to: dest)
+        } catch { /* best-effort */ }
+        #else
+        guard FileManager.default.fileExists(atPath: src.path) else { return }
+        present(activityItems: [src], cleanup: [src])
+        #endif
+    }
+
     /// Export an existing file AND a block of text together as a matched pair (#510, raw capture plus the
     /// strap log that produced it). Now a 2-entry case of `exportBundle`: both ride in one `.zip` so a
     /// reporter saves them in a single gesture on every platform (the old macOS path opened two save

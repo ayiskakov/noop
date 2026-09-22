@@ -230,7 +230,8 @@ final class DecoderOracleTests: XCTestCase {
             "hr": s.hr.count, "rr": s.rr.count, "spo2": s.spo2.count, "skin_temp": s.skinTemp.count,
             "resp": s.resp.count, "gravity": s.gravity.count, "steps": s.steps.count,
             "sleep_state": s.sleepState.count, "ppg_hr": s.ppgHr.count,
-            "ppg_waveform": s.ppgWaveform.count, "v18_aux": s.v18Aux.count,
+            "ppg_waveform": s.ppgWaveform.count, "ecg_candidate": s.ecgCandidate.count,
+            "v18_aux": s.v18Aux.count,
             "events": s.events.count, "battery": s.battery.count,
         ]
     }
@@ -254,6 +255,8 @@ final class DecoderOracleTests: XCTestCase {
             "sleep_state": Streams(sleepState: [SleepStateSample(ts: 1, state: 2)]),
             "ppg_hr": Streams(ppgHr: [PpgHrSample(ts: 1, bpm: 60, conf: 0.5)]),
             "ppg_waveform": Streams(ppgWaveform: [PpgWaveformSample(ts: 1, samples: [1, 2])]),
+            // #891 UNVALIDATED v16 candidate: one row makes the batch non-empty like any other stream.
+            "ecg_candidate": Streams(ecgCandidate: [EcgCandidateSample(ts: 1, samples: [1, 2])]),
             // Carries a real slot value rather than a bare `ts`: `V18AuxSample.isEmpty` is "every slot is
             // nil", so an all-nil sample would still make the ARRAY non-empty and pass this check while
             // saying nothing about a row that carries data.

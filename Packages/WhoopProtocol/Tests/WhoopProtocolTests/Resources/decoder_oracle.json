@@ -94,6 +94,7 @@
       "sleep_state",
       "ppg_hr",
       "ppg_waveform",
+      "ecg_candidate",
       "v18_aux",
       "events",
       "battery"
@@ -346,6 +347,7 @@
           "ppg_hr": 0,
           "ppg_waveform": 0,
           "v18_aux": 0,
+          "ecg_candidate": 0,
           "events": 0,
           "battery": 0
         }
@@ -375,6 +377,7 @@
           "ppg_hr": 0,
           "ppg_waveform": 0,
           "v18_aux": 2,
+          "ecg_candidate": 0,
           "events": 0,
           "battery": 0
         }
@@ -403,6 +406,7 @@
           "ppg_hr": 0,
           "ppg_waveform": 0,
           "v18_aux": 1,
+          "ecg_candidate": 0,
           "events": 0,
           "battery": 0
         }
@@ -434,6 +438,7 @@
           "ppg_hr": 0,
           "ppg_waveform": 0,
           "v18_aux": 0,
+          "ecg_candidate": 0,
           "events": 0,
           "battery": 0
         }
@@ -463,6 +468,7 @@
           "ppg_hr": 0,
           "ppg_waveform": 0,
           "v18_aux": 1,
+          "ecg_candidate": 0,
           "events": 0,
           "battery": 0
         }
