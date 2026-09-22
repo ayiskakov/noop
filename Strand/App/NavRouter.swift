@@ -24,6 +24,8 @@ final class NavRouter: ObservableObject {
         case insightsHub
         case labBook
         case fusedRecord
+        /// Body Age + Pace of Aging, and the drivers behind them. Opened from the Health hub.
+        case healthspan
         case rhythm
         case trends
         case activeWorkout
@@ -73,6 +75,8 @@ final class NavRouter: ObservableObject {
     func openLabBook() { requestedDestination = .labBook }
     /// Open the "Your Data, Fused" multi-device record.
     func openFusedRecord() { requestedDestination = .fusedRecord }
+    /// Open the Healthspan screen (Body Age + Pace of Aging).
+    func openHealthspan() { requestedDestination = .healthspan }
     /// Open the experimental Rhythm visualization (self-gates on its own consent).
     func openRhythm() { requestedDestination = .rhythm }
     /// Open the Trends screen (where a "new data" reading deep-links).

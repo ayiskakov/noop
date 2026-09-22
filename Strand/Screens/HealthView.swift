@@ -1204,27 +1204,12 @@ private struct VitalitySection: View {
     @State private var bodyAge: Double?
     @State private var loaded = false
 
-    private var contributions: [VitalityEngine.Contribution] {
-        let last7 = repo.days.suffix(7)
-        let nights = last7.compactMap { $0.totalSleepMin }.map { Double($0) / 60.0 }.filter { $0 > 0 }
-        let hrvs = last7.compactMap { $0.avgHrv }
-        let rhrs = last7.compactMap { $0.restingHr }.map(Double.init)
-        let steps = last7.compactMap { $0.steps }.map(Double.init)
-        func mean(_ a: [Double]) -> Double? { a.isEmpty ? nil : a.reduce(0, +) / Double(a.count) }
-        // Aggregate EXACTLY as the stored headline does (IntelligenceEngine), so this "what's driving it"
-        // breakdown reconciles with the Vitality / Body Age number it explains rather than being recomputed
-        // on different statistics: resting HR + HRV are MEDIANED (robust to one outlier night), sleep +
-        // steps are MEANED. Using the mean for all four let a single bad RHR/HRV reading drift the breakdown
-        // out of step with the median-based headline (code review).
-        return VitalityEngine.contributions(.init(
-            chronoAge: Double(profile.age),
-            restingHR: rhrs.isEmpty ? nil : IntelligenceEngine.medianOf(rhrs),
-            sleepHours: mean(nights),
-            sleepConsistency: VitalityEngine.sleepConsistency(nightlyHours: nights),
-            rmssd: hrvs.isEmpty ? nil : IntelligenceEngine.medianOf(hrvs),
-            rmssdNorm: VitalityEngine.rmssdNorm(forAge: Double(profile.age)),
-            steps: mean(steps)))
-    }
+    /// The "what's driving it" inputs, from the ONE shared loader (`HealthspanDrivers.thisWeek`).
+    ///
+    /// This card used to assemble its own six-driver inputs here. That was already a second recipe for the
+    /// number beside it, and it broke outright when the engine grew to ten drivers: the card would have gone
+    /// on naming a "helping most" chosen from six, while the Body Age it sits under was computed from ten.
+    @State private var contributions: [VitalityEngine.Contribution] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
@@ -1320,6 +1305,8 @@ private struct VitalitySection: View {
     private func load() async {
         vitality = (await repo.exploreSeries(key: "vitality", source: "my-whoop")).last?.value
         bodyAge = (await repo.exploreSeries(key: "body_age", source: "my-whoop")).last?.value
+        contributions = await HealthspanDrivers.thisWeek(
+            repo: repo, age: profile.age, sex: profile.sex, heightCm: profile.heightCm)
         loaded = true
     }
 }
@@ -1570,6 +1557,9 @@ private struct HealthHubLinksSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Records & sources", overline: "On \(Platform.deviceNounPhrase)")
+            linkRow(title: String(localized: "Healthspan"),
+                    subtitle: String(localized: "Body Age, your pace of aging, and the habits behind both."),
+                    symbol: "figure.stand", tint: StrandPalette.chargeColor) { router.openHealthspan() }
             linkRow(title: String(localized: "Lab Book"),
                     subtitle: String(localized: "Keep your bloods, BP and body numbers private, on \(Platform.deviceNounPhrase)."),
                     symbol: "books.vertical.fill", tint: StrandPalette.metricCyan) { router.openLabBook() }
