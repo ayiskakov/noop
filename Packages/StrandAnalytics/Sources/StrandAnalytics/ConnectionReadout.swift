@@ -345,18 +345,40 @@ public enum ConnectionReadout {
     /// is the real signal and a healthy sync fills it.
     ///
     /// Battery is absent on purpose — it rides the standard 0x2A19 profile and banks with or without the
-    /// bond. `offloadSteps` is optional: a platform that cannot measure a stream omits it rather than
-    /// reporting a zero that reads as a fault. Counts are rows ACCEPTED. Pure, total and clamped.
-    /// Twin of the Kotlin formatter.
+    /// bond. Counts are rows ACCEPTED. Pure, total and clamped. Twin of the Kotlin formatter.
+    ///
+    /// EVERY OPTIONAL CHANNEL MEANS "NOT MEASURABLE HERE", NEVER ZERO. `offloadSteps` established this:
+    /// a platform that cannot measure a stream omits it rather than reporting a zero that reads as a
+    /// fault. `offloadResp` and `offloadSpo2` now follow it, because on a WHOOP 5/MG they were EXACTLY
+    /// that fault (#103). Both count 4.0-only tables: `respSample` is filled from `resp_rate_raw`, which
+    /// the v18 layout does not emit at all, and `spo2Sample` holds the v24 red/IR ADC channels a 5/MG
+    /// never sends. So every single 5/MG link printed
+    ///
+    ///     offload hr=3283 rr=44084 gravity=59690 resp=0 skinTemp=59690 spo2=0
+    ///       - nothing banked from the offload for: resp, spo2
+    ///
+    /// while that same offload banked 313,401 v18 aux rows. A constant dressed as a finding — the shape
+    /// this file's own doc comment warns about two paragraphs up, reappearing one channel over. It is not
+    /// a harmless one: a 5/MG owner read "nothing banked … for spo2" as NOOP not collecting their SpO₂,
+    /// which is the opposite of what the link did.
+    ///
+    /// `offloadV18Aux` is the channel that IS the 5/MG's evidence: the per-second v18 slot rows, which
+    /// carry the `@82` SpO2 candidate along with nineteen other fields. It is optional for the mirror
+    /// reason — a WHOOP 4.0 cannot produce it, so a 4.0 link omits it rather than reporting a zero.
+    /// Between them, each family now reports the channels it can actually fill and stays silent about
+    /// the ones it cannot, instead of one family permanently confessing to the other's absences.
     public static func linkBankedSummary(liveHr: Int, liveRr: Int, offloadChunks: Int,
                                          offloadHr: Int, offloadRr: Int, offloadGravity: Int,
-                                         offloadResp: Int, offloadSkinTemp: Int, offloadSpo2: Int,
-                                         offloadSteps: Int?) -> String {
+                                         offloadResp: Int?, offloadSkinTemp: Int, offloadSpo2: Int?,
+                                         offloadSteps: Int?, offloadV18Aux: Int? = nil) -> String {
         let live = "live hr=\(max(0, liveHr)) rr=\(max(0, liveRr))"
-        var raw: [(String, Int)] = [
-            ("hr", offloadHr), ("rr", offloadRr), ("gravity", offloadGravity), ("resp", offloadResp),
-            ("skinTemp", offloadSkinTemp), ("spo2", offloadSpo2),
-        ]
+        var raw: [(String, Int)] = [("hr", offloadHr), ("rr", offloadRr), ("gravity", offloadGravity)]
+        if let offloadResp { raw.append(("resp", offloadResp)) }
+        raw.append(("skinTemp", offloadSkinTemp))
+        if let offloadSpo2 { raw.append(("spo2", offloadSpo2)) }
+        // After the 4.0 channels, so a reader scanning the line meets the families in the order the
+        // record layouts came in rather than an arbitrary one.
+        if let offloadV18Aux { raw.append(("v18aux", offloadV18Aux)) }
         if let offloadSteps { raw.append(("steps", offloadSteps)) }
         let offload = raw.map { ($0.0, max(0, $0.1)) }
         let total = offload.reduce(0) { $0 + $1.1 }

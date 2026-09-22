@@ -65,8 +65,8 @@ final class BackfillerHexDumpBudgetTests: XCTestCase {
         @discardableResult
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
-                spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
-            (0, 0, 0, 0, 0, 0, 0, 0)
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
+            (0, 0, 0, 0, 0, 0, 0, 0, 0)
         }
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}
         func setCursor(_ name: String, _ value: Int) async throws {}

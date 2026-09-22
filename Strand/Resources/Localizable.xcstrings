@@ -248568,6 +248568,902 @@
           }
         }
       }
+    },
+    "SpO₂ estimate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SpO₂-Schätzung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SpO₂ estimate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimación de SpO₂"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimation SpO₂"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stima SpO₂"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szacunek SpO₂"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimativa de SpO₂"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценка SpO₂"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "血氧估算"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "血氧估算"
+          }
+        }
+      }
+    },
+    "Strap estimate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strap-Schätzung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strap estimate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimación de la banda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimation du bracelet"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stima della fascia"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szacunek opaski"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimativa da pulseira"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценка ремешка"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环估算"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環估算"
+          }
+        }
+      }
+    },
+    "This strap sends no calibrated SpO₂ over Bluetooth. Its own unverified estimate is on the “SpO₂ estimate” track; a WHOOP export or Health Connect import adds calibrated values.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Strap sendet kein kalibriertes SpO₂ über Bluetooth. Seine eigene, nicht verifizierte Schätzung liegt auf der Spur „SpO₂-Schätzung“; ein WHOOP-Export oder ein Health-Connect-Import ergänzt kalibrierte Werte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This strap sends no calibrated SpO₂ over Bluetooth. Its own unverified estimate is on the “SpO₂ estimate” track; a WHOOP export or Health Connect import adds calibrated values."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta banda no envía SpO₂ calibrada por Bluetooth. Su propia estimación sin verificar está en la pista «Estimación de SpO₂»; una exportación de WHOOP o una importación de Health Connect añade valores calibrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce bracelet n’envoie pas de SpO₂ calibrée via Bluetooth. Sa propre estimation non vérifiée se trouve sur la piste « Estimation SpO₂ » ; un export WHOOP ou un import Health Connect ajoute des valeurs calibrées."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa fascia non invia SpO₂ calibrata via Bluetooth. La sua stima non verificata è nella traccia «Stima SpO₂»; un’esportazione WHOOP o un’importazione da Health Connect aggiunge valori calibrati."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta opaska nie przesyła skalibrowanego SpO₂ przez Bluetooth. Jej własny, niezweryfikowany szacunek jest na ścieżce „Szacunek SpO₂”; eksport z WHOOP lub import z Health Connect doda skalibrowane wartości."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta pulseira não envia SpO₂ calibrada por Bluetooth. A sua própria estimativa não verificada está na faixa «Estimativa de SpO₂»; uma exportação da WHOOP ou uma importação do Health Connect acrescenta valores calibrados."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот ремешок не передаёт калиброванное SpO₂ по Bluetooth. Его собственная непроверенная оценка — на графике «Оценка SpO₂»; экспорт из WHOOP или импорт из Health Connect добавит калиброванные значения."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手环不通过蓝牙发送校准的血氧数据。它自己的未验证估算值在“血氧估算”轨道上；导入 WHOOP 导出文件或 Health Connect 数据可添加校准值。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手環不會透過藍牙傳送校準的血氧資料。它自己的未驗證估算值位於「血氧估算」軌道；匯入 WHOOP 匯出檔或 Health Connect 資料可加入校準值。"
+          }
+        }
+      }
+    },
+    "This strap sends no calibrated SpO₂ over Bluetooth. Import a WHOOP export or Health Connect to see it, or turn on the strap’s own unverified estimate in Settings → Experimental · Blood Oxygen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Strap sendet kein kalibriertes SpO₂ über Bluetooth. Importiere einen WHOOP-Export oder Health Connect, um es zu sehen, oder aktiviere die eigene, nicht verifizierte Schätzung des Straps unter Einstellungen → Experimentell · Blutsauerstoff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This strap sends no calibrated SpO₂ over Bluetooth. Import a WHOOP export or Health Connect to see it, or turn on the strap’s own unverified estimate in Settings → Experimental · Blood Oxygen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta banda no envía SpO₂ calibrada por Bluetooth. Importa una exportación de WHOOP o Health Connect para verla, o activa la estimación sin verificar de la banda en Ajustes → Experimental · Oxígeno en sangre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce bracelet n’envoie pas de SpO₂ calibrée via Bluetooth. Importez un export WHOOP ou Health Connect pour la voir, ou activez l’estimation non vérifiée du bracelet dans Paramètres → Expérimental · Oxygène sanguin."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa fascia non invia SpO₂ calibrata via Bluetooth. Importa un’esportazione WHOOP o Health Connect per vederla, oppure attiva la stima non verificata della fascia in Impostazioni → Sperimentale · Ossigeno nel sangue."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta opaska nie przesyła skalibrowanego SpO₂ przez Bluetooth. Zaimportuj eksport z WHOOP lub Health Connect, aby je zobaczyć, albo włącz niezweryfikowany szacunek opaski w Ustawieniach → Eksperymentalne · Tlen we krwi."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta pulseira não envia SpO₂ calibrada por Bluetooth. Importe uma exportação da WHOOP ou o Health Connect para a ver, ou active a estimativa não verificada da pulseira em Definições → Experimental · Oxigénio no sangue."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот ремешок не передаёт калиброванное SpO₂ по Bluetooth. Импортируйте экспорт из WHOOP или Health Connect, чтобы увидеть его, либо включите собственную непроверенную оценку ремешка в «Настройки → Экспериментальное · Кислород в крови»."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手环不通过蓝牙发送校准的血氧数据。导入 WHOOP 导出文件或 Health Connect 数据即可查看，或在“设置 → 实验性 · 血氧”中开启手环自己的未验证估算值。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手環不會透過藍牙傳送校準的血氧資料。匯入 WHOOP 匯出檔或 Health Connect 資料即可查看，或在「設定 → 實驗性 · 血氧」中開啟手環自己的未驗證估算值。"
+          }
+        }
+      }
+    },
+    "No SpO₂ estimate in this window. The strap reports it only while it is scoring a night, so it is normally empty outside sleep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine SpO₂-Schätzung in diesem Zeitraum. Das Strap meldet sie nur, während es eine Nacht auswertet — außerhalb des Schlafs ist sie daher normalerweise leer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No SpO₂ estimate in this window. The strap reports it only while it is scoring a night, so it is normally empty outside sleep."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay estimación de SpO₂ en este intervalo. La banda solo la informa mientras evalúa una noche, así que fuera del sueño suele estar vacía."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune estimation SpO₂ sur cette période. Le bracelet ne la transmet que pendant l’analyse d’une nuit : en dehors du sommeil, elle est donc normalement vide."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna stima SpO₂ in questo intervallo. La fascia la riporta solo mentre valuta una notte, quindi fuori dal sonno è normalmente vuota."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak szacunku SpO₂ w tym zakresie. Opaska podaje go tylko podczas oceniania nocy, więc poza snem jest zwykle pusty."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem estimativa de SpO₂ neste intervalo. A pulseira só a comunica enquanto avalia uma noite, pelo que fora do sono está normalmente vazia."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этом интервале нет оценки SpO₂. Ремешок сообщает её только во время оценки ночи, поэтому вне сна она обычно пуста."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此时间范围内没有血氧估算值。手环仅在评估夜间睡眠时上报该值，因此非睡眠时段通常为空。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此時間範圍內沒有血氧估算值。手環僅在評估夜間睡眠時回報該值，因此非睡眠時段通常為空。"
+          }
+        }
+      }
+    },
+    "in-band, this night": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "im Messbereich, diese Nacht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in-band, this night"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en rango, esta noche"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dans la plage, cette nuit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nell’intervallo, questa notte"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "w zakresie, tej nocy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no intervalo, esta noite"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "в диапазоне, за эту ночь"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本夜有效范围内"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本夜有效範圍內"
+          }
+        }
+      }
+    },
+    "Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Strap meldet diesen Wert jede Sekunde, während es eine Nacht auswertet. Es ist die eigene, nicht verifizierte Zahl des Armbands, keine kalibrierte Blutsauerstoffmessung — NOOP verwendet sie nie für Erholung oder einen anderen Score."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu banda informa este valor cada segundo mientras evalúa una noche. Es la cifra propia y sin verificar de la banda, no una medición calibrada de oxígeno en sangre, y NOOP nunca la usa para la recuperación ni para ninguna otra puntuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre bracelet transmet cette valeur chaque seconde pendant l’analyse d’une nuit. C’est le chiffre propre au bracelet, non vérifié, et non une mesure calibrée d’oxygène sanguin : NOOP ne l’utilise jamais pour la récupération ni pour aucun autre score."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua fascia riporta questo valore ogni secondo mentre valuta una notte. È il dato della fascia stessa, non verificato, non una misurazione calibrata dell’ossigeno nel sangue, e NOOP non lo usa mai per il recupero né per alcun altro punteggio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Twoja opaska podaje tę wartość co sekundę podczas oceniania nocy. To własna, niezweryfikowana liczba opaski, a nie skalibrowany pomiar tlenu we krwi — NOOP nigdy nie używa jej do regeneracji ani żadnego innego wyniku."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sua pulseira comunica este valor a cada segundo enquanto avalia uma noite. É o número próprio da pulseira, não verificado, e não uma medição calibrada de oxigénio no sangue — o NOOP nunca o usa na recuperação nem em qualquer outra pontuação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ремешок сообщает это значение каждую секунду, пока оценивает ночь. Это собственная непроверенная цифра ремешка, а не калиброванное измерение кислорода в крови, и NOOP никогда не использует её для восстановления или любой другой оценки."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环在评估夜间睡眠时每秒上报一次该值。这是手环自己的未验证数值，不是校准的血氧测量结果，NOOP 从不将其用于恢复度或任何其他评分。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環在評估夜間睡眠時每秒回報一次該值。這是手環自己的未驗證數值，不是校準的血氧測量結果，NOOP 從不將其用於恢復度或任何其他評分。"
+          }
+        }
+      }
+    },
+    "dipped below %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fiel unter %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dipped below %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bajó de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "est descendu sous %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "è scesa sotto %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "spadło poniżej %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desceu abaixo de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "опускалось ниже %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低於 %@"
+          }
+        }
+      }
+    },
+    "stayed above %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blieb über %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "stayed above %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se mantuvo por encima de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "est resté au-dessus de %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "è rimasta sopra %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "utrzymało się powyżej %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manteve-se acima de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "держалось выше %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终高于 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始終高於 %@"
+          }
+        }
+      }
+    },
+    "none below %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine unter %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none below %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ninguna por debajo de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aucune sous %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nessuna sotto %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "żadnego poniżej %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nenhuma abaixo de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет ниже %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无低于 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無低於 %@"
+          }
+        }
+      }
+    },
+    "momentary, below %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kurzzeitig, unter %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "momentary, below %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "momentánea, por debajo de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "momentanée, sous %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "momentanea, sotto %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chwilowo, poniżej %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "momentânea, abaixo de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "кратковременно, ниже %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瞬时，低于 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瞬時，低於 %@"
+          }
+        }
+      }
+    },
+    "%llds below %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds unter %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds below %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds por debajo de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds sous %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds sotto %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds poniżej %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds abaixo de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld с ниже %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 秒低于 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 秒低於 %@"
+          }
+        }
+      }
+    },
+    "Night of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nacht vom %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Night of %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noche del %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuit du %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notte del %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noc z %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noite de %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ночь %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的夜间"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的夜間"
+          }
+        }
+      }
+    },
+    "Dips": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einbrüche"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dips"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caídas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baisses"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cali"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spadki"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quedas"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снижения"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下降次数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下降次數"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

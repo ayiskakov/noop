@@ -11,7 +11,7 @@ protocol StoreWriting: AnyObject {
     @discardableResult
     func insert(_ streams: Streams, deviceId: String) async throws
         -> (hr: Int, rr: Int, events: Int, battery: Int,
-            spo2: Int, skinTemp: Int, resp: Int, gravity: Int)
+            spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int)
     func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws
 }
 extension WhoopStore: StoreWriting {}
@@ -115,7 +115,7 @@ final class Collector {
     /// The per-stream accepted-row counts `StreamStore.insert` returns, named so the closure that carries
     /// them is readable at both ends.
     typealias BankedCounts = (hr: Int, rr: Int, events: Int, battery: Int,
-                              spo2: Int, skinTemp: Int, resp: Int, gravity: Int)
+                              spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int)
 
     init(store: StoreWriting, deviceId: String,
          policy: CollectorPolicy = .default,

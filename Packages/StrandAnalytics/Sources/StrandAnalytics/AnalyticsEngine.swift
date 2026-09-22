@@ -1234,17 +1234,16 @@ public enum AnalyticsEngine {
     /// value in range is positive (70...100), so round-half-up and round-half-away-from-zero agree —
     /// no platform-divergence risk from the rounding rule itself. Byte-parity twin of the Kotlin
     /// `nightlySpo2CandidateMean`.
+    ///
+    /// DELEGATES to `nightlySpo2CandidateNight` (`Spo2CandidateNight.swift`) rather than counting the
+    /// readings a second time. The night's minimum and its below-threshold runs are now shown beside this
+    /// mean, and a mean resolved by its own loop could disagree with the stats printed next to it — which
+    /// is the failure AGENTS.md's "two readouts of one fact" rule is about. The returned pair is
+    /// unchanged: the same in-band gate, the same inclusive session bounds, the same rounding.
     public static func nightlySpo2CandidateMean(_ sessions: [SleepSession],
                                          aux: [V18AuxSample]) -> (mean: Int, samples: Int)? {
-        guard !sessions.isEmpty, !aux.isEmpty else { return nil }
-        var sum = 0, kept = 0
-        for a in aux {
-            guard let v = a.auxByte82, (70...100).contains(v) else { continue }
-            guard sessions.contains(where: { $0.start <= a.ts && a.ts <= $0.end }) else { continue }
-            sum += v; kept += 1
-        }
-        guard kept > 0 else { return nil }
-        return (mean: Int((Double(sum) / Double(kept)).rounded()), samples: kept)
+        guard let night = nightlySpo2CandidateNight(sessions, aux: aux) else { return nil }
+        return (mean: night.meanRounded, samples: night.samples)
     }
 
     /// The plausible range for a raw Oura `0x6F` SpO2 sample before the ceiling transform below.

@@ -1858,7 +1858,7 @@ final class Repository: ObservableObject {
     /// A metric the Deep Timeline can plot. HR is the always-present hero (adaptively downsampled);
     /// the rest are lower-frequency raw-sample streams shown where the strap offloaded them.
     enum TimelineMetric: String, CaseIterable, Identifiable, Sendable {
-        case hr, hrv, spo2, skinTemp, respiration, motion, bandSleepState
+        case hr, hrv, spo2, spo2Candidate, skinTemp, respiration, motion, bandSleepState
         var id: String { rawValue }
 
         /// User-facing pill label.
@@ -1870,6 +1870,13 @@ final class Repository: ObservableObject {
             // pill names what the chart actually plots.
             case .hrv: return String(localized: "Windowed rMSSD")
             case .spo2: return "SpO₂"
+            // #103: the 5/MG `@82` candidate, which is a DIFFERENT QUANTITY from the `.spo2` track above
+            // — that one plots the WHOOP 4.0 red/IR ratio proxy (unitless ~0–1), this one plots a
+            // percentage-shaped byte. They are two cases rather than one case with two sources precisely
+            // because a single "SpO₂" pill would put two incomparable signals, on two axes, under one
+            // label and one y-range. The title says "estimate" for the same reason every other candidate
+            // surface says "strap estimate (unverified)": it is not a validated calibration.
+            case .spo2Candidate: return String(localized: "SpO₂ estimate")
             case .skinTemp: return String(localized: "Skin Temp")
             case .respiration: return String(localized: "Respiration")
             case .motion: return String(localized: "Motion")
@@ -2076,6 +2083,7 @@ final class Repository: ObservableObject {
         }
     }
 
+
     /// Raw points for a non-HR timeline metric, mapped to display units (skin temp → °C DEVICE-FAMILY-AWARE
     /// via `skinTempCelsius`: 5/MG centidegrees (#156), WHOOP 4.0 v24 raw ADC (#938); HRV → per-RR
     /// instantaneous from RR ms; respiration/SpO₂/motion as the stored signal). Empty when the strap
@@ -2111,6 +2119,24 @@ final class Repository: ObservableObject {
             return await Task.detached(priority: .utility) {
                 s.compactMap { row in
                     Self.spo2TimelineValue(red: row.red, ir: row.ir).map { Self.timelinePoint(row.ts, $0) }
+                }
+            }.value
+        case .spo2Candidate:
+            // #103: the 5/MG `spo2_candidate_82` byte, plotted as the percentage-shaped value it looks
+            // like. Gated to the SAME in-band window the decoder and every statistic use
+            // (`AnalyticsEngine.spo2CandidateInBand`) rather than a local 70...100 literal — the gate is
+            // the whole reason a 0 or a 0x80 sentinel never reaches a chart as "82 %", so it is read from
+            // one place. Out-of-band seconds are DROPPED, not zeroed: a zero would draw a line down to
+            // the axis and read as a total desaturation, which is the most alarming thing this chart
+            // could invent.
+            let aux = (try? await store.v18AuxSamples(deviceId: source, from: from, to: to,
+                                                      limit: 200_000)) ?? []
+            return await Task.detached(priority: .utility) {
+                aux.compactMap { row in
+                    guard let v = row.auxByte82, AnalyticsEngine.spo2CandidateInBand.contains(v) else {
+                        return nil
+                    }
+                    return Self.timelinePoint(row.ts, Double(v))
                 }
             }.value
         case .skinTemp:

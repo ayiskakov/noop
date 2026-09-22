@@ -11,7 +11,7 @@ protocol BackfillStoreWriting: AnyObject {
     @discardableResult
     func insert(_ streams: Streams, deviceId: String) async throws
         -> (hr: Int, rr: Int, events: Int, battery: Int,
-            spo2: Int, skinTemp: Int, resp: Int, gravity: Int)
+            spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int)
     func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws
     func setCursor(_ name: String, _ value: Int) async throws
     func cursor(_ name: String) async throws -> Int?
@@ -52,7 +52,7 @@ final class Backfiller {
     /// The offload is the only path that banks gravity/resp/skinTemp/SpO2/steps, so a link summary
     /// without it cannot tell an unbonded strap — which defers backfill — from a healthy one.
     private let onBankedOffload: (_ counts: (hr: Int, rr: Int, events: Int, battery: Int,
-                                             spo2: Int, skinTemp: Int, resp: Int, gravity: Int)) -> Void
+                                             spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int)) -> Void
     private let extract: Extractor
     /// Research toggle. When false (DEFAULT) no raw frames are persisted — the chunk's
     /// decoded streams are still durable and the trim is still acked (decoded is the product of
@@ -278,7 +278,7 @@ final class Backfiller {
          ackTrim: @escaping (_ trim: UInt32, _ endData: [UInt8]) -> Void,
          onBankedOffload: @escaping (_ counts: (hr: Int, rr: Int, events: Int, battery: Int,
                                                 spo2: Int, skinTemp: Int, resp: Int,
-                                                gravity: Int)) -> Void = { _ in },
+                                                gravity: Int, v18Aux: Int)) -> Void = { _ in },
          enableRawCapture: Bool = false,
          log: ((String) -> Void)? = nil,
          rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily) -> Bool)? = nil,
@@ -394,8 +394,14 @@ final class Backfiller {
     /// skin-temp, resp, gravity — battery/events are housekeeping, not biometric history). `motion` =
     /// gravity rows (the sleep-critical signal). `nights` = the distinct day-keys (ts / 86400) the chunk's
     /// records covered. Summed across a session by finishChunk to drive the success summary line.
+    ///
+    /// `counts.v18Aux` is deliberately NOT summed into `rows` (#103). It is one packed row per
+    /// strap-second carrying twenty slots, so on a 5/MG it is larger than every other channel combined
+    /// and would swamp the "session persisted N rows" figure — the same number would mean one thing on a
+    /// 4.0 and another on a 5/MG, which is worse than leaving a channel out of a summary that never
+    /// claimed to be exhaustive. The link census reports it explicitly instead, per channel.
     nonisolated static func chunkTally(
-        counts: (hr: Int, rr: Int, events: Int, battery: Int, spo2: Int, skinTemp: Int, resp: Int, gravity: Int),
+        counts: (hr: Int, rr: Int, events: Int, battery: Int, spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int),
         timestamps: [Int]
     ) -> (rows: Int, motion: Int, nights: Set<Int>) {
         let rows = counts.hr + counts.rr + counts.spo2 + counts.skinTemp + counts.resp + counts.gravity
@@ -848,7 +854,7 @@ final class Backfiller {
             // Commit the decoded rows FIRST (durable). Doing this before the reject archive means a
             // rare insert failure — which returns and re-sends the whole chunk next session — can't
             // leave duplicate lines in the append-only reject archive.
-            let counts: (hr: Int, rr: Int, events: Int, battery: Int, spo2: Int, skinTemp: Int, resp: Int, gravity: Int)
+            let counts: (hr: Int, rr: Int, events: Int, battery: Int, spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int)
             // #1008/#1118: census the batch BEFORE it is stored — the only place the decoder's own
             // emission can be measured, since every existing R-R number is taken after the ON CONFLICT key
             // has already absorbed part of it.

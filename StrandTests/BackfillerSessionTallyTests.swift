@@ -12,9 +12,13 @@ final class BackfillerSessionTallyTests: XCTestCase {
     // rows = biometric streams only (HR, R-R, SpO2, skin-temp, resp, gravity) — battery/events are
     // housekeeping, NOT biometric history, so they must not inflate the count. motion = gravity.
     func testChunkTallySumsBiometricRowsAndGravityOnly() {
-        let counts = (hr: 10, rr: 4, events: 99, battery: 7, spo2: 3, skinTemp: 2, resp: 1, gravity: 5)
+        // #103: `v18Aux` is one packed row per strap-second and would swamp this figure on a 5/MG, so
+        // it is deliberately excluded like events/battery — a big number here proves that, not just a
+        // signature change.
+        let counts = (hr: 10, rr: 4, events: 99, battery: 7, spo2: 3, skinTemp: 2, resp: 1, gravity: 5,
+                      v18Aux: 86_400)
         let tally = Backfiller.chunkTally(counts: counts, timestamps: [])
-        XCTAssertEqual(tally.rows, 10 + 4 + 3 + 2 + 1 + 5)   // 25 — events(99)/battery(7) excluded
+        XCTAssertEqual(tally.rows, 10 + 4 + 3 + 2 + 1 + 5)   // 25 — events(99)/battery(7)/v18Aux excluded
         XCTAssertEqual(tally.motion, 5)
         XCTAssertTrue(tally.nights.isEmpty)
     }
@@ -25,7 +29,8 @@ final class BackfillerSessionTallyTests: XCTestCase {
         let day0 = 1_700_000_000
         let sameDay = day0 + 3_600
         let nextDay = day0 + 86_400
-        let tally = Backfiller.chunkTally(counts: (0, 0, 0, 0, 0, 0, 0, 0), timestamps: [day0, sameDay, nextDay])
+        let tally = Backfiller.chunkTally(counts: (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                                          timestamps: [day0, sameDay, nextDay])
         XCTAssertEqual(tally.nights, Set([day0 / 86_400, nextDay / 86_400]))
         XCTAssertEqual(tally.nights.count, 2)
     }
@@ -196,9 +201,10 @@ final class BackfillerSessionTallyTests: XCTestCase {
         @discardableResult
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
-                spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
             (streams.hr.count, streams.rr.count, 0, 0,
-             streams.spo2.count, streams.skinTemp.count, streams.resp.count, streams.gravity.count)
+             streams.spo2.count, streams.skinTemp.count, streams.resp.count, streams.gravity.count,
+             streams.v18Aux.count)
         }
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}
         func setCursor(_ name: String, _ value: Int) async throws {}
