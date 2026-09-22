@@ -32,7 +32,11 @@ final class EcgCandidateSampleTests: XCTestCase {
     func testEcgCandidateTableShape() async throws {
         let store = try await WhoopStore.inMemory()
         let cols = try await store.columnNamesForTest(table: "ecgCandidateSample")
-        XCTAssertEqual(Set(cols), ["deviceId", "ts", "samples"])
+        XCTAssertEqual(Set(cols), Set(["deviceId", "ts", "samples", "recordIndex", "declaredCount", "quality", "stateBits",
+                      "classifierResult", "classifierState", "progress", "leadOffCount", "contactMask",
+                      "sampleFlags", "leadOffI", "leadOffQ"]),
+                       "v49 widened the row from a waveform to a RECORD; a waveform stored without its "
+                       + "acquisition context preserves a signal nobody can later tell the conditions of")
     }
 
     func testEcgCandidateInsertRoundTripAndDedup() async throws {
@@ -43,7 +47,7 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(n1, 1)
         let read = try await store.ecgCandidateSamples(deviceId: "my-whoop",
                                                        from: 1_789_990_296, to: 1_789_990_296)
-        XCTAssertEqual(read, [EcgCandidateSample(ts: 1_789_990_296, samples: realSamples)],
+        XCTAssertEqual(read.map(\.samples), [realSamples],
                        "signed 18-bit samples must survive the round trip with their sign intact")
         // Idempotent re-insert, ON CONFLICT DO NOTHING (mirrors every other per-second stream's dedupe).
         _ = try await store.insert(streams, deviceId: "my-whoop")
@@ -66,7 +70,7 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(read.map(\.samples), [[1, 65534], [2, 65533], [3, 65532]])
 
         let other = try await store.ecgCandidateSamples(deviceId: "dev-b", from: base, to: base)
-        XCTAssertEqual(other, [EcgCandidateSample(ts: base, samples: [7])])
+        XCTAssertEqual(other.map(\.samples), [[7]])
     }
 
     /// A short/variable-length record round-trips exactly — the pack format is not fixed to a sample count.
@@ -75,7 +79,118 @@ final class EcgCandidateSampleTests: XCTestCase {
         _ = try await store.insert(
             Streams(ecgCandidate: [EcgCandidateSample(ts: 500, samples: [40000, 12])]), deviceId: "d")
         let read = try await store.ecgCandidateSamples(deviceId: "d", from: 500, to: 500)
-        XCTAssertEqual(read, [EcgCandidateSample(ts: 500, samples: [40000, 12])])
+        XCTAssertEqual(read.map(\.samples), [[40000, 12]])
+    }
+
+    // MARK: - v49: the whole R16 record round-trips
+
+    /// Every field the record carries must survive a write + read cycle. This is the test that would
+    /// have caught the superseded decoder: `declaredCount` and `samples.count` are stored SEPARATELY,
+    /// so a row that lost samples on the way in says so.
+    func testTheWholeR16RecordRoundTrips() async throws {
+        let store = try await WhoopStore.inMemory()
+        let record = EcgCandidateSample(
+            ts: 1_789_990_222,
+            samples: realSamples,
+            recordIndex: 29_868_863,
+            declaredCount: 10,
+            // Deliberately irregular, so a packing that silently reorders or pads shows up.
+            sampleFlags: [true, false, false, true, true, false, false, false, false, true],
+            contactFlags: [true, true, true, true, true, true, true, true, true, false],
+            quality: 3, stateBits: 8, classifierResult: 1, classifierState: 2, progress: 100,
+            leadOffCount: 10,
+            leadOffI: [63, 63, 63, 63, 63, 63, 63, 65, 376, 406],
+            leadOffQ: [-19, -19, -19, -19, -19, -18, -18, -16, 279, 291])
+        _ = try await store.insert(Streams(ecgCandidate: [record]), deviceId: "my-whoop")
+        let read = try await store.ecgCandidateSamples(deviceId: "my-whoop",
+                                                       from: 1_789_990_222, to: 1_789_990_222)
+        XCTAssertEqual(read, [record], "no field of the record may be dropped by the storage layer")
+        XCTAssertEqual(read.first?.samples.count, read.first?.declaredCount,
+                       "a cleanly decoded record stores exactly what it declared")
+    }
+
+    /// The bit-packed flag array needs its length supplied on the way out, because the packing rounds up
+    /// to a whole byte. Without that, a 10-flag array reads back as 16.
+    func testSampleFlagsAreBitPackedAndReadBackAtTheWaveformLength() {
+        let flags = [true, false, false, true, true, false, false, false, false, true]
+        let packed = WhoopStore.packEcgSampleFlags(flags)
+        XCTAssertEqual(packed.count, 2, "10 flags is 2 bytes, not 10 — this rides alongside the waveform")
+        XCTAssertEqual(WhoopStore.unpackEcgSampleFlags(packed, count: flags.count), flags)
+        XCTAssertEqual(WhoopStore.unpackEcgSampleFlags(packed, count: 16).count, 16,
+                       "asked for 16 it returns 16 — which is exactly why the caller passes the "
+                       + "WAVEFORM's length and never the blob's")
+        XCTAssertEqual(WhoopStore.unpackEcgSampleFlags(Data(), count: 0), [])
+        // A 500-sample record: 63 bytes against the waveform's 2,000.
+        XCTAssertEqual(WhoopStore.packEcgSampleFlags(Array(repeating: true, count: 500)).count, 63)
+    }
+
+    /// "Every group was out of contact" and "there was no contact stream at all" both pack to a mask of
+    /// 0. The count is what separates them, and it comes from `leadOffCount` rather than the mask.
+    func testAnAllZeroContactMaskIsNotTheSameAsNoContactStream() {
+        XCTAssertEqual(WhoopStore.unpackEcgContactMask(0, count: 10),
+                       Array(repeating: false, count: 10))
+        XCTAssertEqual(WhoopStore.unpackEcgContactMask(0, count: 0), [])
+        let mixed = [true, true, true, true, true, true, true, true, true, false]
+        XCTAssertEqual(WhoopStore.unpackEcgContactMask(WhoopStore.packEcgContactMask(mixed), count: 10),
+                       mixed)
+    }
+
+    func testLeadOffHalfwordsRoundTripWithTheirSign() {
+        let iq = [63, 0, -19, 406, -32768, 32767, 291]
+        let packed = WhoopStore.packEcgLeadOff(iq)
+        XCTAssertEqual(packed.count, iq.count * 2, "the wire width is i16 and so is the stored width")
+        XCTAssertEqual(WhoopStore.unpackEcgLeadOff(packed), iq)
+        XCTAssertEqual(WhoopStore.unpackEcgLeadOff(nil), [], "a NULL column is an absent array, not a crash")
+        var torn = packed; torn.append(0x01)
+        XCTAssertEqual(WhoopStore.unpackEcgLeadOff(torn), iq, "a trailing odd byte is dropped")
+    }
+
+    // MARK: - v49: the recording index reads without touching the waveform
+
+    func testTheRecordingIndexReportsCountsWithoutLoadingTheWaveform() async throws {
+        let store = try await WhoopStore.inMemory()
+        let wide = (0..<500).map { -8_000 + ($0 * 11) % 8_000 }
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 10, samples: wide, recordIndex: 100, declaredCount: 500,
+                               contactFlags: Array(repeating: true, count: 10),
+                               quality: 3, progress: 50, leadOffCount: 10),
+            EcgCandidateSample(ts: 11, samples: wide, recordIndex: 101, declaredCount: 500,
+                               contactFlags: Array(repeating: false, count: 10),
+                               quality: 1, progress: 53, leadOffCount: 10),
+        ]), deviceId: "dev-a")
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 5, samples: [1, 2, 3], recordIndex: 7, declaredCount: 3),
+        ]), deviceId: "dev-b")
+
+        // Across all devices by default — a re-paired strap gets a new id, and a recording made before
+        // that is still the same person's recording.
+        let all = try await store.ecgRecordingIndex()
+        XCTAssertEqual(all.map(\.ts), [10, 11, 5], "ordered by (deviceId, ts)")
+        XCTAssertEqual(all.map(\.deviceId), ["dev-a", "dev-a", "dev-b"])
+        XCTAssertEqual(all.map(\.recordIndex), [100, 101, 7])
+        // `storedCount` is computed in SQL from the blob's length, never by unpacking it.
+        XCTAssertEqual(all.map(\.storedCount), [500, 500, 3])
+        XCTAssertEqual(all.map(\.declaredCount), [500, 500, 3])
+        XCTAssertEqual(all.map(\.quality), [3, 1, 0])
+        XCTAssertEqual(all.map(\.progress), [50, 53, 0])
+        XCTAssertEqual(all[0].contactFlags, Array(repeating: true, count: 10))
+        XCTAssertEqual(all[1].contactFlags, Array(repeating: false, count: 10))
+        XCTAssertEqual(all[2].contactFlags, [], "no slower stream means no contact entries, not ten false ones")
+
+        let narrowed = try await store.ecgRecordingIndex(deviceId: "dev-b")
+        XCTAssertEqual(narrowed.map(\.ts), [5])
+    }
+
+    /// A row whose header could not be read stores a NULL index, and that must stay distinguishable from
+    /// a real index of 0 — which is why the column is nullable rather than defaulted.
+    func testAMissingRecordIndexReadsBackAsNilNotZero() async throws {
+        let store = try await WhoopStore.inMemory()
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 1, samples: [1], recordIndex: nil),
+            EcgCandidateSample(ts: 2, samples: [1], recordIndex: 0),
+        ]), deviceId: "d")
+        let idx = try await store.ecgRecordingIndex(deviceId: "d")
+        XCTAssertEqual(idx.map(\.recordIndex), [nil, 0])
     }
 
     // MARK: - v48: rows written under v47's unsigned i16 packing must not survive
@@ -117,14 +232,50 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(remaining, 0, "v47-format rows must be purged, not silently misread forever")
     }
 
-    /// v48 must leave the SCHEMA alone — it is a data repair, not a shape change. If it ever starts
-    /// altering the table, the Room twin's pending contract moves with it and nobody is told.
+    /// v48 left the SCHEMA alone — it was a data repair. v49 both repairs data AND widens the row, so
+    /// the shape is asserted at v48 specifically: if v48 ever starts altering the table, the Room twin's
+    /// pending contract moves with it and nobody is told.
     func testV48LeavesTheTableShapeUnchanged() async throws {
-        let store = try await WhoopStore.inMemory()
-        let cols = try await store.columnNamesForTest(table: "ecgCandidateSample")
+        let dbQueue = try DatabaseQueue()
+        try WhoopStore.makeMigrator().migrate(dbQueue, upTo: "v48-ecg-candidate-signed")
+        let cols = try await dbQueue.read { db in
+            try db.columns(in: "ecgCandidateSample").map(\.name)
+        }
         XCTAssertEqual(Set(cols), ["deviceId", "ts", "samples"])
-        let pk = try await store.primaryKeyColumns("ecgCandidateSample")
-        XCTAssertEqual(pk, ["deviceId", "ts"])
+    }
+
+    // MARK: - v49: rows written under the sample-dropping decoder must not survive
+
+    /// The v48→v49 hazard is worse than v47's, and in a way the schema again cannot see: v47 changed the
+    /// BLOB's encoding, v49 changes what the BLOB CONTAINS.
+    ///
+    /// A v48 row holds a SUBSET of its record's samples — the superseded decoder filtered the waveform by
+    /// each sample's flag bits, discarding 42.8 % of the captured corpus and storing 52 of 128 records as
+    /// nothing at all — packed contiguously with the gaps closed up. Such a row cannot be repaired (the
+    /// discarded samples are gone, and the survivors no longer carry where they were) and cannot be drawn
+    /// honestly (its timestamp still claims one second of data). Keeping it would put a distorted
+    /// waveform in front of the user with nothing to indicate the distortion.
+    func testV49PurgesRowsWrittenByTheSampleDroppingDecoder() async throws {
+        let dbQueue = try DatabaseQueue()
+        try WhoopStore.makeMigrator().migrate(dbQueue, upTo: "v48-ecg-candidate-signed")
+        // A v48-shaped row: correctly PACKED (i32 signed), but holding 300 of a 500-sample record —
+        // which is exactly why the encoding check that caught v47 cannot catch this one.
+        let lossy = WhoopStore.packEcgCandidateSamples((0..<300).map { $0 * 7 })
+        try await dbQueue.write { db in
+            try db.execute(sql: "INSERT INTO ecgCandidateSample (deviceId, ts, samples) VALUES (?, ?, ?)",
+                           arguments: ["my-whoop", 1_789_990_296, lossy])
+        }
+        // The hazard, demonstrated before the repair: the row unpacks perfectly. Nothing about it is
+        // detectably wrong, which is the entire problem.
+        XCTAssertEqual(WhoopStore.unpackEcgCandidateSamples(lossy).count, 300)
+
+        try WhoopStore.makeMigrator().migrate(dbQueue)
+
+        let remaining = try await dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? -1
+        }
+        XCTAssertEqual(remaining, 0,
+                       "a silently-incomplete waveform must not survive into the screen that draws it")
     }
 
     // MARK: - #891 Test Centre export
@@ -146,11 +297,14 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(rows, 3)
         let jsonl = try String(contentsOf: url, encoding: .utf8)
         let lines = jsonl.split(separator: "\n").map(String.init)
+        // One sorted-key JSON object per row, ordered by (deviceId, ts), NEGATIVE samples preserved.
+        // `declaredCount` ships beside `samples` so an offline analysis can check a record for loss
+        // without the database — the check that would have caught the superseded decoder.
         XCTAssertEqual(lines, [
-            #"{"deviceId":"dev-a","samples":[-4592,1],"ts":100}"#,
-            #"{"deviceId":"dev-a","samples":[-131072],"ts":101}"#,
-            #"{"deviceId":"dev-b","samples":[7],"ts":50}"#,
-        ], "one sorted-key JSON object per row, ordered by (deviceId, ts), NEGATIVE samples preserved")
+            #"{"classifierResult":0,"classifierState":0,"contactFlags":[],"declaredCount":2,"deviceId":"dev-a","leadOffCount":0,"leadOffI":[],"leadOffQ":[],"progress":0,"quality":0,"sampleFlags":[0,0],"samples":[-4592,1],"stateBits":0,"ts":100}"#,
+            #"{"classifierResult":0,"classifierState":0,"contactFlags":[],"declaredCount":1,"deviceId":"dev-a","leadOffCount":0,"leadOffI":[],"leadOffQ":[],"progress":0,"quality":0,"sampleFlags":[0],"samples":[-131072],"stateBits":0,"ts":101}"#,
+            #"{"classifierResult":0,"classifierState":0,"contactFlags":[],"declaredCount":1,"deviceId":"dev-b","leadOffCount":0,"leadOffI":[],"leadOffQ":[],"progress":0,"quality":0,"sampleFlags":[0],"samples":[7],"stateBits":0,"ts":50}"#,
+        ])
     }
 
     /// A store with no candidate rows writes no rows (the button then deletes the file and no-ops rather
@@ -213,7 +367,7 @@ final class EcgCandidateSampleTests: XCTestCase {
         try "stale contents from an earlier export".write(to: url, atomically: true, encoding: .utf8)
         _ = try await store.writeEcgCandidateExportJSONL(to: url)
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8),
-                       #"{"deviceId":"dev-a","samples":[7],"ts":1}"# + "\n")
+                       #"{"classifierResult":0,"classifierState":0,"contactFlags":[],"declaredCount":1,"deviceId":"dev-a","leadOffCount":0,"leadOffI":[],"leadOffQ":[],"progress":0,"quality":0,"sampleFlags":[0],"samples":[7],"stateBits":0,"ts":1}"# + "\n")
     }
 
     private static func tempExportURL() -> URL {
