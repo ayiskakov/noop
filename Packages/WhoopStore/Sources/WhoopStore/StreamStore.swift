@@ -7,6 +7,15 @@ private struct RRBatchSecond: Hashable {
     let transport: Int
 }
 
+/// One line of the v16 ECG-candidate export (#891): the device, the strap-second, and the unsigned-16-bit
+/// MAX86176 FIFO 0x80-channel samples, serialised as one JSON object per `ecgCandidateSample` row. See
+/// `WhoopStore.ecgCandidateExportJSONL`. UNVALIDATED instrumentation — not an ECG/heart rate/diagnosis.
+private struct EcgCandidateExportLine: Encodable {
+    let deviceId: String
+    let ts: Int
+    let samples: [Int]
+}
+
 extension WhoopStore {
     /// Deterministic JSON for an event payload (sorted keys so the same payload always
     /// serializes byte-identically, important for the natural-key dedupe and parity).
@@ -41,6 +50,37 @@ extension WhoopStore {
         while i + 1 < bytes.count {
             let u = UInt16(bytes[i]) | (UInt16(bytes[i + 1]) << 8)
             out.append(Int(Int16(bitPattern: u)))
+            i += 2
+        }
+        return out
+    }
+
+    /// Pack a decoded v16 MAX86176 FIFO candidate's samples as little-endian 16-bit values (2 bytes/
+    /// sample) — a single compact BLOB per (deviceId, ts) row (#891, v47), the twin of `packPpgSamples`.
+    ///
+    /// DEVIATION from `packPpgSamples`, deliberate: v16 candidate samples are UNSIGNED 16-bit big-endian
+    /// FIFO words (0…65535), where the v26 PPG waveform is SIGNED i16 AC deltas. The packed BYTES are
+    /// identical in layout (low byte, high byte), but `unpackEcgCandidateSamples` reads them back UNSIGNED
+    /// so the round trip preserves the 0…65535 domain rather than sign-flipping a value above 32767. Any
+    /// value is truncated to its low 16 bits (matching the wire format the decoder produced).
+    static func packEcgCandidateSamples(_ samples: [Int]) -> Data {
+        var buf = Data(capacity: samples.count * 2)
+        for s in samples {
+            let v = UInt16(truncatingIfNeeded: s)
+            buf.append(UInt8(truncatingIfNeeded: v))
+            buf.append(UInt8(truncatingIfNeeded: v >> 8))
+        }
+        return buf
+    }
+
+    /// Inverse of `packEcgCandidateSamples` — reads each pair back as an UNSIGNED 16-bit value (0…65535).
+    /// A trailing odd byte (a corrupt/truncated blob) is dropped rather than thrown, like `unpackPpgSamples`.
+    static func unpackEcgCandidateSamples(_ data: Data) -> [Int] {
+        let bytes = [UInt8](data)
+        var out = [Int](); out.reserveCapacity(bytes.count / 2)
+        var i = 0
+        while i + 1 < bytes.count {
+            out.append(Int(UInt16(bytes[i]) | (UInt16(bytes[i + 1]) << 8)))
             i += 2
         }
         return out
@@ -109,6 +149,28 @@ extension WhoopStore {
     /// above the cap indefinitely. `v18AuxPruneEveryRows` below has the identical property; a sweep forced
     /// once per session would close it for both, and belongs in a change that covers both.
     public static let ppgWaveformPruneEveryRows = 10_000
+
+    /// Rolling retention for the v47 ECG-candidate table (#891) — the same newest-N-rows SHAPE as
+    /// `ppgWaveformRetentionRows` and the same reasoning (bound the bytes of an UNVALIDATED blob table
+    /// nothing reads yet, never age-drop: a sporadic wearer's v16 seconds are spread thin, and an age cut
+    /// would empty the table for exactly the person a future analysis needs).
+    ///
+    /// The ROW COUNT is deliberately NOT copied from the ppg cap, because these rows are ~21x heavier and
+    /// a cap is a byte budget wearing a row count. A v26 ppg row holds 24 deltas (~48 B packed); a v16 row
+    /// holds ~500 FIFO samples (~1000 B packed), so ppg's 604,800 rows would be ~600 MB on device against
+    /// ppg's own ~29 MB. 86,400 = 24 x 3,600 keeps a FULL DAY of strap-seconds — a whole night's recording,
+    /// which is the working set a future analysis actually needs — inside ~86 MB. The KOTLIN twin is pending.
+    public static let ecgCandidateRetentionRows = 86_400
+
+    /// Rows to bank before sweeping `ecgCandidateSample` again — same amortisation as
+    /// `ppgWaveformPruneEveryRows`, and the same in-memory-per-instance caveat (a store fed only short
+    /// bursts between kills can drift above the cap; the sweep is the only thing enforcing retention here).
+    public static let ecgCandidatePruneEveryRows = 10_000
+
+    /// Buffer size at which a streamed export flushes to disk (#891). Big enough that a multi-GB export is
+    /// not one write syscall per row, small enough that peak memory is bounded regardless of table size —
+    /// the whole point of streaming the export rather than building it in memory.
+    static let exportFlushBytes = 256 * 1024
 
     /// v31 rolling retention for the v18 aux-slot table (twin of Kotlin `V18_AUX_RETENTION_ROWS`).
     ///
@@ -180,12 +242,15 @@ extension WhoopStore {
     func insert(_ streams: Streams, deviceId: String, v18AuxRetentionRows: Int,
                 v18AuxPruneEveryRows: Int,
                 ppgWaveformRetentionRows: Int = WhoopStore.ppgWaveformRetentionRows,
-                ppgWaveformPruneEveryRows: Int = WhoopStore.ppgWaveformPruneEveryRows) async throws
+                ppgWaveformPruneEveryRows: Int = WhoopStore.ppgWaveformPruneEveryRows,
+                ecgCandidateRetentionRows: Int = WhoopStore.ecgCandidateRetentionRows,
+                ecgCandidatePruneEveryRows: Int = WhoopStore.ecgCandidatePruneEveryRows) async throws
         -> (hr: Int, rr: Int, events: Int, battery: Int,
             spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
         // Banked rows, accumulated across batches so the sweep does not run on every one.
         var v18Written = 0
         var ppgWaveformWritten = 0
+        var ecgCandidateWritten = 0
         let result: (Int, Int, Int, Int, Int, Int, Int, Int) = try syncWrite { db in
             var hr = 0, rr = 0, ev = 0, bat = 0
             var spo2 = 0, skin = 0, resp = 0, grav = 0
@@ -392,6 +457,22 @@ extension WhoopStore {
                     ppgWaveformWritten += 1
                 }
             }
+            // RAW v16 MAX86176 FIFO 0x80-channel (#891) — EXPLICITLY UNVALIDATED instrumentation, persisted
+            // exactly like ppgWaveform above: persist-only (not in the 8-field return tuple), ON CONFLICT DO
+            // NOTHING keeps the first-seen candidate for a second, packed into one compact BLOB per row (see
+            // `packEcgCandidateSamples`). NOT an ECG / heart rate / diagnosis; nothing reads it into a score.
+            if !streams.ecgCandidate.isEmpty {
+                let stmt = try db.cachedStatement(sql: """
+                    INSERT INTO ecgCandidateSample (deviceId, ts, samples)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(deviceId, ts) DO NOTHING
+                    """)
+                for s in streams.ecgCandidate {
+                    try stmt.execute(arguments: [deviceId, s.ts,
+                                                 WhoopStore.packEcgCandidateSamples(s.samples)])
+                    ecgCandidateWritten += 1
+                }
+            }
             // Every remaining v18 slot (v31), one compact blob per strap-second. Persist-only, same as
             // steps/sleepState/ppgHr/ppgWaveform: not added to the 8-field return tuple. A sample whose
             // slots are all absent packs to empty and is SKIPPED rather than banking a meaningless row —
@@ -451,6 +532,23 @@ extension WhoopStore {
                        """, arguments: [deviceId, deviceId, ppgWaveformRetentionRows])
                }) != nil {
                 ppgWaveformRowsSincePrune[deviceId] = 0
+            }
+        }
+        // #891 rolling retention for the ECG-candidate blobs, amortised and best-effort on exactly the same
+        // terms as the ppg-waveform sweep above (see `ecgCandidateRetentionRows`): its own counter, its own
+        // transaction, and the DELETE scoped by deviceId so one strap's sweep never evicts another's rows.
+        if ecgCandidateWritten > 0 {
+            let banked = (ecgCandidateRowsSincePrune[deviceId] ?? 0) + ecgCandidateWritten
+            ecgCandidateRowsSincePrune[deviceId] = banked
+            if banked >= ecgCandidatePruneEveryRows,
+               (try? syncWrite { db in
+                   try db.execute(sql: """
+                       DELETE FROM ecgCandidateSample WHERE deviceId = ? AND ts < (
+                           SELECT MIN(ts) FROM (
+                               SELECT ts FROM ecgCandidateSample WHERE deviceId = ? ORDER BY ts DESC LIMIT ?))
+                       """, arguments: [deviceId, deviceId, ecgCandidateRetentionRows])
+               }) != nil {
+                ecgCandidateRowsSincePrune[deviceId] = 0
             }
         }
         return result
@@ -730,6 +828,76 @@ extension WhoopStore {
 
     public func ppgWaveformCountForTest() async throws -> Int {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ppgWaveformSample") ?? 0 }
+    }
+
+    /// The RAW v16 MAX86176 FIFO 0x80-channel samples (#891), one record per second, in `[from, to]` for
+    /// one device, ascending by ts. `samples` are the UNSIGNED 16-bit big-endian FIFO values the strap
+    /// sent, unpacked from the compact on-disk BLOB (`packEcgCandidateSamples`/`unpackEcgCandidateSamples`).
+    /// EXPLICITLY UNVALIDATED — NOT an ECG / heart rate / diagnosis. Empty on every strap/layout but 5/MG
+    /// v16. Twin of `ppgWaveformSamples`; nothing in production reads it (instrumentation only).
+    public func ecgCandidateSamples(deviceId: String, from: Int, to: Int, limit: Int = 200_000) async throws
+        -> [EcgCandidateSample] {
+        try syncRead { db in
+            try Row.fetchAll(db, sql: """
+                SELECT ts, samples FROM ecgCandidateSample
+                WHERE deviceId = ? AND ts >= ? AND ts <= ?
+                ORDER BY ts LIMIT ?
+                """, arguments: [deviceId, from, to, limit])
+                .map { EcgCandidateSample(ts: $0["ts"],
+                                          samples: WhoopStore.unpackEcgCandidateSamples($0["samples"])) }
+        }
+    }
+
+    public func ecgCandidateCountForTest() async throws -> Int {
+        try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? 0 }
+    }
+
+    /// Write newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891) to `url`,
+    /// one object per strap-second: `{"deviceId":…,"ts":…,"samples":[u16,…]}`, ascending by (deviceId, ts).
+    /// Returns the number of rows written — 0 leaves an empty file, so the caller can delete it and no-op
+    /// rather than share nothing. This is the Test Centre export path for the UNVALIDATED v16 candidate —
+    /// the iOS/macOS analogue of Android's raw reject-archive export (on Apple v16 is decoded into this
+    /// table, so it is NOT in the reject archive). NOT an ECG / heart rate / diagnosis; the samples are raw
+    /// unsigned-16-bit MAX86176 FIFO values with no asserted scale. Read-only; touches no strap.
+    ///
+    /// Writes to a FILE rather than returning a `String`, and that is load-bearing rather than stylistic:
+    /// a row holds ~500 samples, so a line is ~3 KB of JSON and a table at `ecgCandidateRetentionRows`
+    /// serialises to tens of GB. Accumulating that in memory (and handing it to a writer that copies it
+    /// again) is an out-of-memory kill on iOS, not a slow export. The cursor streams row-by-row into a
+    /// bounded buffer that is flushed every `exportFlushBytes`, so peak memory is the buffer plus one row
+    /// whatever the table holds. Sorted keys keep the file diffable.
+    public func writeEcgCandidateExportJSONL(to url: URL) async throws -> Int {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        guard fm.createFile(atPath: url.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        return try syncRead { db in
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.sortedKeys]
+            var buf = Data()
+            buf.reserveCapacity(WhoopStore.exportFlushBytes * 2)
+            var rows = 0
+            let cursor = try Row.fetchCursor(db, sql: """
+                SELECT deviceId, ts, samples FROM ecgCandidateSample ORDER BY deviceId, ts
+                """)
+            while let row = try cursor.next() {
+                let line = EcgCandidateExportLine(deviceId: row["deviceId"], ts: row["ts"],
+                                                  samples: WhoopStore.unpackEcgCandidateSamples(row["samples"]))
+                buf.append(try enc.encode(line))
+                buf.append(0x0A)          // "\n"
+                rows += 1
+                if buf.count >= WhoopStore.exportFlushBytes {
+                    try handle.write(contentsOf: buf)
+                    buf.removeAll(keepingCapacity: true)
+                }
+            }
+            if !buf.isEmpty { try handle.write(contentsOf: buf) }
+            return rows
+        }
     }
 
     public func deviceRowForTest(id: String) async throws -> (mac: String?, name: String?)? {

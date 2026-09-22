@@ -244098,6 +244098,64 @@
           }
         }
       }
+    },
+    "Decoded WHOOP 5/MG v16 samples — an UNVALIDATED MAX86176 sensor buffer, not an ECG, heart rate, or diagnosis — one JSON line per second, for offline analysis. Nothing appears until a v16 sync has landed. Read-only; never writes to the strap.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dekodierte WHOOP 5/MG v16-Samples — ein NICHT VALIDIERTER MAX86176-Sensorpuffer, kein EKG, keine Herzfrequenz und keine Diagnose — eine JSON-Zeile pro Sekunde, für die Offline-Analyse. Es erscheint nichts, bevor eine v16-Synchronisierung erfolgt ist. Schreibgeschützt; schreibt nie auf den Gurt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestras v16 descodificadas del WHOOP 5/MG: un búfer del sensor MAX86176 NO VALIDADO, no es un ECG, ni una frecuencia cardíaca, ni un diagnóstico; una línea JSON por segundo, para análisis sin conexión. No aparece nada hasta que se haya completado una sincronización v16. Solo lectura; nunca escribe en la correa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillons v16 décodés du WHOOP 5/MG — une mémoire tampon du capteur MAX86176 NON VALIDÉE, ni un ECG, ni une fréquence cardiaque, ni un diagnostic — une ligne JSON par seconde, pour une analyse hors ligne. Rien n'apparaît tant qu'une synchronisation v16 n'a pas eu lieu. Lecture seule ; n'écrit jamais sur le bracelet."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Campioni v16 decodificati del WHOOP 5/MG — un buffer del sensore MAX86176 NON CONVALIDATO, non un ECG, una frequenza cardiaca o una diagnosi — una riga JSON al secondo, per l'analisi offline. Non compare nulla finché non è avvenuta una sincronizzazione v16. Sola lettura; non scrive mai sul cinturino."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zdekodowane próbki v16 z WHOOP 5/MG — NIEZWERYFIKOWANY bufor czujnika MAX86176, nie EKG, nie tętno ani nie diagnoza — jedna linia JSON na sekundę, do analizy offline. Nic się nie pojawi, dopóki nie nastąpi synchronizacja v16. Tylko do odczytu; nigdy nie zapisuje na opasce."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amostras v16 descodificadas do WHOOP 5/MG — um buffer do sensor MAX86176 NÃO VALIDADO, não é um ECG, uma frequência cardíaca ou um diagnóstico — uma linha JSON por segundo, para análise offline. Não aparece nada até que tenha ocorrido uma sincronização v16. Apenas leitura; nunca escreve na pulseira."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Декодированные сэмплы v16 с WHOOP 5/MG — НЕПРОВЕРЕННЫЙ буфер датчика MAX86176, это не ЭКГ, не пульс и не диагноз — по одной строке JSON в секунду, для анализа офлайн. Ничего не появится, пока не пройдёт синхронизация v16. Только чтение; никогда не пишет на ремешок."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已解码的 WHOOP 5/MG v16 采样——未经验证的 MAX86176 传感器缓冲区，不是心电图、心率或诊断——每秒一行 JSON，用于离线分析。在 v16 同步完成前不会出现任何内容。只读；绝不写入表带。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已解碼的 WHOOP 5/MG v16 採樣——未經驗證的 MAX86176 感測器緩衝區，不是心電圖、心率或診斷——每秒一行 JSON，用於離線分析。在 v16 同步完成前不會出現任何內容。唯讀；絕不寫入錶帶。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

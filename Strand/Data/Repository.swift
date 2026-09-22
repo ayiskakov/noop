@@ -786,6 +786,29 @@ final class Repository: ObservableObject {
     /// Expose the shared store handle (used by the importer to persist mapped rows).
     func storeHandle() async -> WhoopStore? { await ensureStore() }
 
+    /// #891 Test Centre export: stage newline-delimited JSON of every decoded WHOOP 5/MG v16 ECG-candidate
+    /// row into a temporary file and return its URL, or nil when there is nothing to export (or the store
+    /// cannot be opened) so the caller no-ops rather than sharing an empty file. EXPLICITLY UNVALIDATED
+    /// instrumentation — not an ECG, heart rate, or diagnosis (see `WhoopStore.writeEcgCandidateExportJSONL`).
+    ///
+    /// Returns a FILE, not a `String`: at the retention cap this export is measured in GB, so materialising
+    /// it in memory to hand to a writer that copies it again is an out-of-memory kill on iOS. The caller
+    /// owns the staged file and must export it with `FileExport.exportStagedFile`, which removes it after.
+    func ecgCandidateExportFile() async -> URL? {
+        guard let store = await storeHandle() else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(FileExport.timestampedName("noop-ecg-candidate", ext: "jsonl"))
+        guard let rows = try? await store.writeEcgCandidateExportJSONL(to: url) else {
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        guard rows > 0 else {
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        return url
+    }
+
     /// CAPTURE-D (#797): the on-device DATA VOLUME read FRESH from the STORE (never the `@Published`
     /// dashboard caches), for the Display & Performance test mode's `dataVolume` line. dbRows is the raw
     /// decoded-stream footprint; importedDays is the count of imported daily-metric rows under the active

@@ -421,7 +421,16 @@ private func parseFrameWhoop5(_ frame: [UInt8], collectFields: Bool) -> ParsedFr
 /// this replaced was a record from an unmapped layout that happened to decode a plausible `unix` and
 /// `gravity_x`/`heart_rate` slipping past the archive filter, so its bytes were kept nowhere at all.
 /// `Whoop5HistoricalLayoutMapTests` pins the set against the decoder's actual behaviour.
-public let mappedWhoop5HistoricalVersions: Set<Int> = [18, 20, 21, 26]
+///
+/// v16 (#891) joins as INSTRUMENTATION only: it decodes a MAX86176 FIFO body into an EXPLICITLY
+/// UNVALIDATED `ecg_candidate` stream and emits none of heart_rate/gravity/ppg_waveform, so it
+/// classifies `decodesWithoutNamedSignal` exactly like v20/v21. Adding it here removes v16 from the
+/// UNMAPPED archive path (`rejectedHistoricalRecords` archives raw only for layouts OUTSIDE this set),
+/// which is why the v16 decoder MUST durably store its FIFO body in WhoopStore's `ecgCandidateSample`
+/// table — see `decodeWhoop5HistoricalV16`. `rejectedHistoricalRecords` also gains a v16 skip so an
+/// intact record is not double-archived beside its durable stream; that skip is bound to the record
+/// actually decoding SAMPLES, because a v16 record carrying none banks no row and must still be archived.
+public let mappedWhoop5HistoricalVersions: Set<Int> = [16, 18, 20, 21, 26]
 
 /// True when `frame` is a WHOOP 5/MG type-47 record whose layout version has NO field map — the
 /// records that reach the unmapped branch of `decodeWhoop5Historical` and are therefore never
@@ -460,6 +469,9 @@ private func decodeWhoop5Historical(_ frame: [UInt8], fb: FieldBuilder, payloadE
     switch version {
     case 26:
         decodeWhoop5HistoricalV26(frame, fb: fb, limit: limit)
+        return
+    case 16:
+        decodeWhoop5HistoricalV16(frame, fb: fb, limit: limit)
         return
     case 20, 21:
         decodeWhoop5HistoricalV2021(frame, fb: fb, version: version, payloadEnd: payloadEnd,
@@ -780,6 +792,94 @@ private func decodeWhoop5HistoricalV26(_ frame: [UInt8], fb: FieldBuilder, limit
             fb.add(off, 1, name, "raw", value: .int(v), note: "raw byte @\(off); meaning not pinned")
         }
     }
+}
+
+/// Decode a WHOOP 5/MG type-47 **version-16** record — a MAX86176 optical/electrical AFE FIFO buffer,
+/// surfaced ONLY as EXPLICITLY UNVALIDATED instrumentation (#891).
+///
+/// UNVALIDATED CANDIDATE; MAX86176 FIFO; NOT an ECG, NOT a heart rate, NOT a diagnosis. The sample rate,
+/// the physical meaning of each channel, and whether any channel is electrocardiography at all are ALL
+/// UNPROVEN. This decoder decodes + stores the bytes and asserts nothing about them. Nothing downstream
+/// may treat `ecg_candidate` as a validated signal, feed it a metric/gate (recovery/illness/HR), or label
+/// it ECG in the UI — it exists so a future analysis can run over the ORIGINAL samples (project rule:
+/// land unvalidated sensor work as instrumentation, never a score; see CLAUDE.md and the withdrawn
+/// #194 PPG->HR estimate).
+///
+/// LAYOUT, established from 128 real v16 records (WHOOP 5/MG, fw 50.39.1.0). The record reuses the shared
+/// type-47 header — the monotonic u32 `record_index` @11 and the u32 `unix` second @15, verified
+/// monotonic/lockstep with v18/v20/v21/v26. The FIFO is LENGTH-PREFIXED: @32 is a u16 LITTLE-ENDIAN count
+/// of 3-byte words and the words run from @34, so the FIFO occupies exactly `[34, 34 + 3*count)`. Each
+/// word is `byte[0]` = a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` = a 16-bit
+/// BIG-ENDIAN sample `(byte1 << 8) | byte2`. Words are classified by the tag's TOP TWO BITS (`tag & 0xC0`):
+/// the `0x80` class is stored, in wire order, as `ecg_candidate`; a `0xC0`-class word would be tallied into
+/// `ecg_candidate_alt_count`. Per-record word counts VARY widely (an empty record declares 0, a full one
+/// ~500) — expected; the decoder extracts exactly what the count declares.
+///
+/// TRAILING REGION — the reason the length prefix matters. The FIFO does NOT run to the end of the
+/// payload: a DIFFERENT structure follows it, and in the fixture below it reads cleanly as a count byte
+/// (`0x0b` = 11) followed by 11 + 11 values in 16-bit LITTLE-endian (`[63, 63, 62…]` then `[-19 × 11]`).
+/// Its meaning is UNIDENTIFIED and nothing here decodes it; it is named only so the next reader knows the
+/// bytes are accounted for. Scanning 3-byte words to the payload limit — as an earlier revision did —
+/// walks into this block and harvests whatever its bytes look like at 3-byte alignment: that is where the
+/// "~7 words/record of 0xC0 channel" came from. Those 7 were trailing bytes, not a channel; inside the
+/// correctly bounded FIFO both captured records contain ZERO 0xC0-class words. Worse than the bogus tally,
+/// an unbounded scan can admit a trailing byte pair as a SAMPLE whenever alignment puts a high bit in the
+/// tag position, silently contaminating the very stream this table exists to preserve.
+///
+/// DEVIATION from the original field note (real captures, never invented offsets): the dominant tag BYTE
+/// observed is `0x83` (not a bare `0x80`) and the `0x80` class is therefore the `tag & 0xC0 == 0x80`
+/// SIGNATURE, not an exact byte match. Proven here: the header offsets (@11/@15), the @32 word count and
+/// its @34 body (`34 + 3*500 = 1534` lands exactly on the trailing region in the full fixture, and the
+/// empty record declares 0), and the 3-byte-word/BE16 framing. No other byte is named.
+private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit: Int) {
+    // record_index@11: the same monotonic lifetime per-record counter v18/v20/v21/v26 carry at @11
+    // (+1 per record, independent of unix). @11 is the low byte of a u32 LE.
+    if let idx = readU32(frame, 11, limit) {
+        fb.add(11, 4, "record_index", "meta", value: .int(idx), note: "monotonic lifetime record index")
+    }
+    if let unix = readU32(frame, 15, limit) {
+        fb.add(15, 4, "unix", "time", value: .int(unix), note: "real unix seconds")
+    }
+    // The FIFO is LENGTH-PREFIXED, and honouring that bound is what keeps the stream clean: @32 is a u16
+    // LE count of 3-byte words and the words themselves start @34, so the FIFO occupies exactly
+    // [34, 34 + 3*count) and something else entirely follows it (see the TRAILING REGION note above).
+    // Scanning to `limit` instead — as if the whole body were FIFO — walks the loop straight into that
+    // trailing block and harvests whatever its bytes happen to look like at 3-byte alignment.
+    guard let wordCount = readU16(frame, 32, limit) else { return }
+    fb.add(32, 2, "ecg_candidate_word_count", "meta", value: .int(wordCount),
+           note: "MAX86176 FIFO 3-byte-word count; the FIFO body is exactly this long")
+    // Clamp rather than trust: a corrupt length must not read past the payload into the CRC trailer.
+    let fifoStart = 34
+    let fifoEnd = min(fifoStart + wordCount * 3, limit)
+    var samples: [Int] = []
+    var altCount = 0
+    var off = fifoStart
+    while off + 3 <= fifoEnd {
+        guard let tag = readU8(frame, off, fifoEnd) else { break }
+        if tag & 0x80 != 0,
+           let hi = readU8(frame, off + 1, fifoEnd), let lo = readU8(frame, off + 2, fifoEnd) {
+            let sample = (hi << 8) | lo          // 16-bit BIG-ENDIAN, unsigned (0…65535)
+            // The guard above already required the high bit, so `tag & 0xC0` is 0x80 or 0xC0 and there is
+            // no third case to handle here — bit 0x40 alone separates the two classes.
+            if tag & 0x40 == 0 { samples.append(sample) } else { altCount += 1 }
+        }
+        off += 3
+    }
+    if !samples.isEmpty {
+        // The RAW 0x80-class FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
+        // channel meaning and sample rate unproven (#891). Consumed only as durable instrumentation.
+        // The byte span is the FIFO body exactly — [34, fifoEnd) — not the rest of the record.
+        fb.add(fifoStart, max(0, fifoEnd - fifoStart), "ecg_candidate", "ecg", value: .intArray(samples),
+               note: "UNVALIDATED MAX86176 FIFO 0x80-class samples (BE16); NOT an ECG/HR/diagnosis (#891)")
+        fb.parsed["ecg_candidate_count"] = .int(samples.count)
+    }
+    // Tally of words in the FIFO whose tag is 0xC0-class rather than 0x80-class — a derived count spanning
+    // no single byte, so it rides `parsed` like v26's `ppg_sample_count`. It is 0 in every record captured
+    // so far, and that is the point of keeping it: if a real second class ever appears its words are
+    // counted here instead of being silently mixed into `ecg_candidate`. An earlier revision reported 7
+    // for the fixture below, which was not a channel at all — it was the trailing region being read as
+    // FIFO words. No meaning is claimed for the class; its samples are NOT stored.
+    fb.parsed["ecg_candidate_alt_count"] = .int(altCount)
 }
 
 /// Decode WHOOP 5.0 type-47 **version-20 / version-21** records — the bulk multi-channel sensor stream

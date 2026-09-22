@@ -399,6 +399,26 @@ public struct PpgWaveformSample: Equatable, Codable, Sendable {
     }
 }
 
+/// One WHOOP 5/MG v16 record's MAX86176 FIFO **0x80-channel** samples (#891), one record per second.
+///
+/// EXPLICITLY UNVALIDATED INSTRUMENTATION — mirrors `PpgWaveformSample` exactly (decode + store, never a
+/// score). `samples` are the raw 16-bit BIG-ENDIAN 0x80-channel FIFO values the strap sent (see
+/// `decodeWhoop5HistoricalV16`), UNSIGNED (0…65535), no invented scale. This is NOT an ECG, NOT a heart
+/// rate, NOT a diagnosis; the sample rate and the physical meaning of the channel are UNPROVEN. Persisted
+/// (and, in WhoopStore, its own `ecgCandidateSample` table) purely so a future analysis can run over the
+/// ORIGINAL samples — nothing reads it into any metric, gate, or UI. A record with no 0x80 words (an empty
+/// v16 record) produces no row.
+public struct EcgCandidateSample: Equatable, Codable, Sendable {
+    public let ts: Int          // wall-clock unix seconds (one record per second)
+    /// The record's 0x80-channel FIFO samples, in wire order — UNSIGNED 16-bit big-endian, verbatim from
+    /// `ecg_candidate`. Count VARIES per record (see the decoder); a full record carries ~500.
+    public let samples: [Int]
+    public init(ts: Int, samples: [Int]) {
+        self.ts = ts
+        self.samples = samples
+    }
+}
+
 /// One wire slot in the 5/MG v18 auxiliary-field record. The `rawValue` is the slot's bit position in
 /// the persisted presence bitmap, so it is a STORAGE CONTRACT: never reorder, renumber, or reuse a case.
 /// Appending a new case at the end is the only safe evolution (an old reader ignores a bit it has no case
@@ -616,6 +636,10 @@ public struct Streams: Equatable, Codable {
     /// samples `ppgHr` is derived FROM. Kept separate so a consumer that only wants the HR estimate
     /// never pays for the 24x-larger raw stream, and so the two can be persisted/pruned independently.
     public var ppgWaveform: [PpgWaveformSample]
+    /// The RAW v16 MAX86176 FIFO 0x80-channel samples (#891), one record per second — EXPLICITLY
+    /// UNVALIDATED instrumentation, twin of `ppgWaveform`. NOT an ECG / heart rate / diagnosis; channel
+    /// meaning and sample rate unproven. Empty on every strap/layout except 5/MG v16. Nothing scores it.
+    public var ecgCandidate: [EcgCandidateSample]
     /// Every remaining 5/MG v18 per-second field the decoder produces and this funnel used to discard —
     /// carried verbatim for a later census. Empty on WHOOP 4.0 and on the live path. Nothing reads it.
     public var v18Aux: [V18AuxSample]
@@ -741,12 +765,14 @@ public struct Streams: Equatable, Codable {
                 resp: [RespSample] = [], gravity: [GravitySample] = [],
                 steps: [StepSample] = [], sleepState: [SleepStateSample] = [],
                 ppgHr: [PpgHrSample] = [], ppgWaveform: [PpgWaveformSample] = [],
+                ecgCandidate: [EcgCandidateSample] = [],
                 v18Aux: [V18AuxSample] = [],
                 events: [WhoopEvent] = [], battery: [BatterySample] = []) {
         self.hr = hr; self.rr = rr
         self.spo2 = spo2; self.skinTemp = skinTemp; self.resp = resp; self.gravity = gravity
         self.steps = steps; self.sleepState = sleepState; self.ppgHr = ppgHr
         self.ppgWaveform = ppgWaveform
+        self.ecgCandidate = ecgCandidate
         self.v18Aux = v18Aux
         self.events = events; self.battery = battery
     }
@@ -757,7 +783,8 @@ public struct Streams: Equatable, Codable {
     public var isEmpty: Bool {
         hr.isEmpty && rr.isEmpty && spo2.isEmpty && skinTemp.isEmpty && resp.isEmpty
             && gravity.isEmpty && steps.isEmpty && sleepState.isEmpty && ppgHr.isEmpty
-            && ppgWaveform.isEmpty && v18Aux.isEmpty && events.isEmpty && battery.isEmpty
+            && ppgWaveform.isEmpty && ecgCandidate.isEmpty && v18Aux.isEmpty
+            && events.isEmpty && battery.isEmpty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -765,6 +792,7 @@ public struct Streams: Equatable, Codable {
         case sleepState = "sleep_state"
         case ppgHr = "ppg_hr"
         case ppgWaveform = "ppg_waveform"
+        case ecgCandidate = "ecg_candidate"
         case v18Aux = "v18_aux"
         case events, battery
     }
@@ -783,6 +811,7 @@ public struct Streams: Equatable, Codable {
         sleepState = try c.decodeIfPresent([SleepStateSample].self, forKey: .sleepState) ?? []
         ppgHr = try c.decodeIfPresent([PpgHrSample].self, forKey: .ppgHr) ?? []
         ppgWaveform = try c.decodeIfPresent([PpgWaveformSample].self, forKey: .ppgWaveform) ?? []
+        ecgCandidate = try c.decodeIfPresent([EcgCandidateSample].self, forKey: .ecgCandidate) ?? []
         v18Aux = try c.decodeIfPresent([V18AuxSample].self, forKey: .v18Aux) ?? []
         events = try c.decodeIfPresent([WhoopEvent].self, forKey: .events) ?? []
         battery = try c.decodeIfPresent([BatterySample].self, forKey: .battery) ?? []

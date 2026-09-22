@@ -151,6 +151,10 @@ public struct DeviceRegistryStore: Sendable {
         // "delete all of this device's data" leaves the raw waveform behind (the same privacy defect
         // this list exists to close).
         "ppgWaveformSample",
+        // v47-ecg-candidate (#891): the durable v16 MAX86176 FIFO 0x80-channel is deviceId-keyed like every
+        // per-second stream above, so "delete all of this device's data" must clear it too — else the raw
+        // (unvalidated) FIFO samples survive deletion, the same privacy defect this list exists to close.
+        "ecgCandidateSample",
         // v28-raw-imu (#423): the opt-in 5/MG raw-IMU offload capture is deviceId-keyed too — "delete all
         // of this device's data" must clear it, or the raw inertial samples survive deletion (same defect).
         // v31-deep-capture-channels: the banked 5/MG v18 auxiliary fields are deviceId-keyed per-second
