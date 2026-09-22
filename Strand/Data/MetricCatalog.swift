@@ -127,6 +127,19 @@ enum MetricCatalog {
         d("vo2max_est", String(localized: "VO₂ Max (estimated)"), "Heart", "", "my-whoop", "lungs", 1, true),
         d("vitality", String(localized: "Vitality"), "Heart", "", "my-whoop", "sparkles", 0, true),
         d("body_age", String(localized: "Body Age"), "Heart", "yrs", "my-whoop", "figure.stand", 0, false),
+        d("pace_of_aging", String(localized: "Pace of Aging"), "Heart", "x", "my-whoop", "speedometer", 2, false,
+          String(localized: "How fast your Body Age is moving: 1x is holding steady, below 1x is slowing.")),
+
+        // ── Healthspan activity drivers (computed on device)
+        // Deliberately NOT the imported `hr_zones13_min` / `hr_zones45_min` below, and not only because
+        // the moderate band differs (zones 2-3, not 1-3): these are WHOLE-DAY minutes binned from the
+        // day's own heart rate, while the imported pair is workout-scoped from a WHOOP CSV. Same-looking
+        // numbers measuring different spans belong under different keys, or a chart mixing the two would
+        // show a step where the source changed and call it a change in behaviour.
+        d("zone_min_2_3", String(localized: "Moderate Cardio"), "Effort", "min", "my-whoop", "figure.walk", 0, true,
+          String(localized: "Whole-day minutes in heart-rate zones 2-3.")),
+        d("zone_min_4_5", String(localized: "Vigorous Cardio"), "Effort", "min", "my-whoop", "figure.run", 0, true,
+          String(localized: "Whole-day minutes in heart-rate zones 4-5.")),
 
         // ── Charge (was Recovery)
         d("recovery", String(localized: "Charge"), "Charge", "%", "my-whoop", "heart.circle", 0, true,
