@@ -794,6 +794,42 @@ final class Repository: ObservableObject {
         return url
     }
 
+    /// #891 gated ECG review: every stored R16 record's INDEX fields, grouped into recordings.
+    ///
+    /// Reads the index projection, which never touches a waveform blob — a recording is ~64 rows of
+    /// ~2 KB and the table caps in the tens of thousands, so listing recordings from full rows would
+    /// load tens of megabytes of waveform to render a list of dates.
+    ///
+    /// Grouping runs PER DEVICE and the results are merged, because two straps' record-index spaces are
+    /// unrelated: grouping across them would join one strap's last record to another's next by index
+    /// coincidence. Spanning devices at all is deliberate — a remove+re-add gives the strap a fresh id
+    /// (#814), and a recording made before that is still the same person's recording.
+    ///
+    /// EXPLICITLY UNVALIDATED INSTRUMENTATION — not an ECG, heart rate or diagnosis.
+    func ecgRecordings() async -> [EcgStrip.Recording] {
+        guard let store = await ensureStore(),
+              let rows = try? await store.ecgRecordingIndex() else { return [] }
+        let byDevice = Dictionary(grouping: rows, by: \.deviceId)
+        let recordings = byDevice.flatMap { deviceId, deviceRows in
+            EcgStrip.group(deviceId: deviceId, records: deviceRows.map {
+                EcgStrip.RecordRef(ts: $0.ts, recordIndex: $0.recordIndex,
+                                   storedCount: $0.storedCount, declaredCount: $0.declaredCount,
+                                   quality: $0.quality, progress: $0.progress,
+                                   contactFlags: $0.contactFlags)
+            })
+        }
+        return recordings.sorted { $0.startTs > $1.startTs }
+    }
+
+    /// The records of ONE recording, waveform included — the heavy read, bounded to the recording the
+    /// user opened rather than to the table.
+    func ecgRecords(for recording: EcgStrip.Recording) async -> [EcgCandidateSample] {
+        guard let store = await ensureStore() else { return [] }
+        return (try? await store.ecgCandidateSamples(deviceId: recording.deviceId,
+                                                     from: recording.startTs,
+                                                     to: recording.endTs)) ?? []
+    }
+
     /// CAPTURE-D (#797): the on-device DATA VOLUME read FRESH from the STORE (never the `@Published`
     /// dashboard caches), for the Display & Performance test mode's `dataVolume` line. dbRows is the raw
     /// decoded-stream footprint; importedDays is the count of imported daily-metric rows under the active
