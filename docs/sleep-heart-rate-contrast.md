@@ -1,6 +1,6 @@
 # Sleep vs wake heart-rate contrast
 
-`SleepHeartRateContrast` (StrandAnalytics + `com.noop.analytics` twin) is a small, descriptive engine
+`SleepHeartRateContrast` (StrandAnalytics) is a small, descriptive engine
 that compares mean HR during an explicitly supplied **primary-sleep** window against mean HR during an
 explicitly supplied **wake** window. It is wellness context, not a clinical measure.
 
@@ -48,6 +48,6 @@ product surface should weigh cadence, represented duration, and coverage before 
 
 ## Status
 
-Pure engine with cross-platform parity tests. No consumer wires it in yet: something must build the
+Pure engine with golden-vector tests. No consumer wires it in yet: something must build the
 fixed-grid wake and primary-sleep HR windows before a result can be shown. That window-construction is
 deliberately out of scope here.

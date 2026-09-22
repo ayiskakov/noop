@@ -173,13 +173,6 @@ final class Repository: ObservableObject {
     /// save silently matches nothing.
     private var sleepOwnerIds: [String] { computedReadIds + importedReadIds }
 
-    /// True when the ACTIVE strap is an Oura ring, resolved from its registry id prefix against the canonical
-    /// brand table (`DeviceBrandCatalog.idPrefix`) rather than an ad-hoc "oura" literal. The device registry
-    /// mints every non-WHOOP id as "<idPrefix>-<uuid>", so the stored id's prefix IS its brand key. Read/UI
-    /// side only — it lets the sleep surfaces name an Oura night's provenance "Oura" (a ring-PROVIDED
-    /// hypnogram) instead of the generic "On-device", and flag the split as the ring's RAW on-device stages.
-    /// Not a stored value and never crosses `.noopbak`, so no Android twin is required.
-    var activeDeviceIsOura: Bool { DeviceBrandCatalog.isOura(deviceId) }
     private var store: WhoopStore?
 
     /// Daily metrics (recovery/strain/sleep/HRV/RHR…) over the recent window, oldest→newest.
@@ -698,15 +691,7 @@ final class Repository: ObservableObject {
     /// `deviceId` (and its computed sibling `deviceId + "-noop"`); these are the FIXED ids.
     static let whoopSource = "my-whoop"
     static let appleHealthSource = "apple-health"
-    static let healthConnectSource = "health-connect"
     static let activityFileSource = "activity-file"
-
-    /// Imported wearable-export sources whose DAILY aggregates (HRV / resting HR / sleep) can be scored
-    /// for a NOOP Charge/Rest on an import-only day, exactly like a live day (#823). These carry no raw HR
-    /// stream, so the source-only fold in IntelligenceEngine scores them from the daily aggregate vs the
-    /// person's own baseline. Matches `WearableBrand.sourceId` plus Health Connect (Android imports HC's
-    /// daily metrics under the strap source, but a sideloaded/standalone HC source id is covered too).
-    static let wearableImportSources = ["oura-import", "fitbit-import", "garmin-import", "oura-api", healthConnectSource]
 
     /// `yyyy-MM-dd` in the device's local zone, matching how `DailyMetric.day` is stored.
     // `nonisolated` so pure callers off the main actor (e.g. the extracted `SleepModel.build`) can key a
@@ -1719,12 +1704,7 @@ final class Repository: ObservableObject {
         guard inWindowGravity >= max(20, windowSeconds / 120) else { return nil }
         let hr = (try? await store.hrSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? []
         let rr = (try? await store.rrIntervals(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? []
-        // Same provenance refusal as the nightly scan (`IntelligenceEngine`): an Oura ring's respiration
-        // rows are its own per-window RATE stored as instrumentation, not the ~1 Hz raw ADC waveform this
-        // stager reads, so they never reach a re-stage either. See `OuraRespScale.forScoring`.
-        let resp = OuraRespScale.forScoring(
-            (try? await store.respSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? [],
-            deviceId: deviceId)
+        let resp = (try? await store.respSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? []
         // Read only when the refinement below might actually use it (see `useMotionAwareWake`) — a plain
         // read cost, but no point paying it on the (default) off path.
         let useMotionAwareWake = PuffinExperiment.motionAwareWakeEnabled
@@ -1819,7 +1799,7 @@ final class Repository: ObservableObject {
     /// A metric the Deep Timeline can plot. HR is the always-present hero (adaptively downsampled);
     /// the rest are lower-frequency raw-sample streams shown where the strap offloaded them.
     enum TimelineMetric: String, CaseIterable, Identifiable, Sendable {
-        case hr, hrv, spo2, skinTemp, respiration, motion, bandSleepState, ouraMovement
+        case hr, hrv, spo2, skinTemp, respiration, motion, bandSleepState
         var id: String { rawValue }
 
         /// User-facing pill label.
@@ -1839,11 +1819,6 @@ final class Repository: ObservableObject {
             // NOT a stage NOOP trusts as truth — the pill names it "Band Sleep State" so it can't be
             // mistaken for the derived stages.
             case .bandSleepState: return String(localized: "Band Sleep State")
-            // The Oura ring's OWN per-window motion: seconds of movement in each ~30 s window (0x47,
-            // OURA_MOTION events). An honest ACTIVITY signal — NOT gravity magnitude (the ring sends no
-            // continuous gravity) and NEVER a step count. Empty for a WHOOP strap. Labelled "Movement" so
-            // it can't be mistaken for the derived stages or for steps.
-            case .ouraMovement: return String(localized: "Movement")
             }
         }
     }
@@ -1886,19 +1861,11 @@ final class Repository: ObservableObject {
     }
 
     /// The plausible range for a SINGLE-CHANNEL SpO2 reading plotted as a percentage. Its ONLY job is to
-    /// exclude the mis-scaled `dc_raw` magnitudes (-1016 … 11,709,098), which it does by three orders of
-    /// magnitude. It is deliberately NOT a clamp to 100.
-    ///
-    /// ⚠️ WHY THE UPPER BOUND IS 110, AND WHY THAT IS A KNOWN OPEN QUESTION, NOT A JUSTIFIED CHOICE: on a
-    /// real Gen 3 capture the `0x6F` channel spans 81–106 and **47 % of its 22,516 samples read above
-    /// 100** (peak at 103–104). Those are genuinely `0x6F` — the sidecar's `unit` tag proves it, and only
-    /// 208 `dc_raw` rows land in that band — so they are not contamination. But real SpO2 CANNOT exceed
-    /// 100 %, and open_oura's own pipeline clamps its computed SpO2 to [85, 100]
-    /// (`docs/spo2-calibration.md`, tag `0x8b` path). So a smooth distribution peaking at 103–104 points
-    /// at an un-modelled offset/transform in NOOP's `0x6F` decode, NOT at real overshoot. Clamping here
-    /// would HIDE that discrepancy behind a flat line at 100; keeping the bound at 110 leaves it visible
-    /// while still excluding the mis-scaled channel. Revisit once the `0x6F` scale is pinned — see
-    /// OURA_PROTOCOL.md §6.5.
+    /// exclude mis-scaled perfusion magnitudes (one legacy corpus held -1016 … 11,709,098), which it does
+    /// by three orders of magnitude. It is deliberately NOT a clamp to 100: a reading a little above 100
+    /// is evidence of an un-modelled offset in whatever wrote it, and clamping would hide that behind a
+    /// flat line rather than leaving it visible. Only legacy rows from a source NOOP no longer supports
+    /// take this shape.
     ///
     /// Derived from `AnalyticsEngine.spo2SingleChannelPlausible` (the canonical bounds, queue 11a)
     /// rather than redefining them — same 50...110 range, kept in one place.
@@ -1907,25 +1874,22 @@ final class Repository: ObservableObject {
     /// One SpO2 sample → the value the Deep Timeline plots, or nil to skip the sample.
     ///
     /// TWO SOURCE SHAPES share this one table and metric:
-    /// - **Two-channel (WHOOP 4.0 v24)**: red AND IR optical ADCs. There is no calibrated % (#166), so the
-    ///   honest proxy is the unitless `red / ir` ratio — unchanged behaviour.
-    /// - **Single-channel (Oura ring)**: the ring reports ONE SpO2 channel, so `OuraStreamMapping` stores it
-    ///   in `red` and leaves `ir = 0` — an unread channel, never a fabricated second reading. The old code
-    ///   computed the ratio and dropped every `ir <= 0` row, which silently discarded **100 %** of an Oura
-    ///   ring's SpO2 (18,688 rows on the reporting device) and drew an empty chart with no explanation
-    ///   (the #623 "unsupported strap" notice only fires for the 5.0 family, so a ring got no notice either).
-    ///   For these the reading itself is the value: a real overnight capture (2026-08-01) shows the ring's
-    ///   `raw` channel clustering at 95–105, i.e. already a genuine %SpO2, not an ADC needing calibration.
+    /// - **Two-channel (WHOOP v24)**: red AND IR optical ADCs. There is no calibrated % (#166), so the
+    ///   honest proxy is the unitless `red / ir` ratio.
+    /// - **Single-channel**: one channel stored in `red` with `ir = 0` — an unread channel, never a
+    ///   fabricated second reading. Only legacy rows from a source NOOP no longer supports take this
+    ///   shape; they are still READ rather than dropped, because a row on disk outlives the code that
+    ///   wrote it and silently discarding it would draw an empty chart with no explanation.
     ///
-    /// RANGE GATE, single-channel only: the `unit` tag that distinguishes the ring's true-percentage `raw`
-    /// channel from its wildly different-scale `dc_raw` perfusion channel is NOT persisted (`spo2Sample`
-    /// stores only red/ir), so rows banked before that split was fixed are indistinguishable except by
-    /// magnitude — the reporting device holds values from -1016 to 11,709,098 alongside real ones. Gating
-    /// to `spo2SingleChannelPlausible` keeps every genuine reading and drops the mis-scaled ones, so one
-    /// legacy outlier cannot flatten the whole chart's y-axis. This is a DISPLAY gate on a metric that is
-    /// never scored; it changes no stored row, and the same idiom already guards temp (20–45 °C) and HR
-    /// (0–300 bpm) at their decoders. The two-channel ratio path is deliberately NOT gated (a ratio has no
-    /// comparable physiological range), so WHOOP output is byte-identical.
+    /// RANGE GATE, single-channel only: the `unit` tag that would distinguish a true-percentage channel
+    /// from a wildly different-scale perfusion channel is NOT persisted (`spo2Sample` stores only
+    /// red/ir), so such rows are indistinguishable except by magnitude — one reporting device held values
+    /// from -1016 to 11,709,098 alongside real ones. Gating to `spo2SingleChannelPlausible` keeps every
+    /// genuine reading and drops the mis-scaled ones, so one legacy outlier cannot flatten the whole
+    /// chart's y-axis. This is a DISPLAY gate on a metric that is never scored; it changes no stored row,
+    /// and the same idiom already guards temp (20–45 °C) and HR (0–300 bpm) at their decoders. The
+    /// two-channel ratio path is deliberately NOT gated (a ratio has no comparable physiological range),
+    /// so WHOOP output is byte-identical.
     nonisolated static func spo2TimelineValue(red: Int, ir: Int) -> Double? {
         guard ir <= 0 else { return Double(red) / Double(ir) }   // two-channel: unchanged ratio proxy
         let v = Double(red)
@@ -1978,9 +1942,8 @@ final class Repository: ObservableObject {
         // run here (each `timelineRawMetric` awaits the store actor); the dedup + sort + downsample over
         // the union is handed to a utility task so it runs OFF the main actor on a dense window. Mirrors
         // `restageFromRaw`.
-        // #938: resolve each source id's strap family ONCE (skin-temp raw→°C is family-specific: 5/MG
-        // centidegrees vs a 4.0 v24 raw ADC). Cheap registry snapshot; a positively-identified 4.0 maps to
-        // `.whoop4`, everything else (5/MG, imports, unknown) to `.whoop5` — the prior /100 behaviour.
+        // #938: resolve each source id's strap family ONCE (skin-temp raw→°C is stated per family). Cheap
+        // registry snapshot; everything (5/MG, imports, unknown) maps to `.whoop5` — the /100 behaviour.
         let familyById = Self.skinTempFamilies(store: store, ids: unionIds)
         var perId: [[TrendPoint]] = []
         for id in unionIds {
@@ -2015,10 +1978,10 @@ final class Repository: ObservableObject {
     ///
     /// Asks the canonical `DeviceFamily.isWhoop5Registry` (#171, #1086) rather than resolving a family and
     /// comparing, because the old shape — `forRegistryDevice(…) ?? .whoop5` — answered **yes** for a
-    /// positively non-WHOOP brand and handed an Oura ring WHOOP-5 copy that told it to look for an
-    /// estimate the ring cannot produce. Best-effort: no store / unreadable registry → `false`, i.e. the
-    /// generic empty copy, which is the safe direction (`strapHasEverProduced` already returns `true`
-    /// without a store, so this changes no behaviour for a WHOOP). Twin of Android's `FullDayChartScreen`.
+    /// positively non-WHOOP brand and handed a leftover non-WHOOP row WHOOP-5 copy that told it to look
+    /// for an estimate that device cannot produce. Best-effort: no store / unreadable registry → `false`,
+    /// i.e. the generic empty copy, which is the safe direction (`strapHasEverProduced` already returns
+    /// `true` without a store, so this changes no behaviour for a WHOOP).
     func activeStrapIsWhoop5() -> Bool {
         guard let store else { return false }
         let devices = (try? DeviceRegistryStore(dbQueue: store.registryWriter).all()) ?? []
@@ -2029,8 +1992,8 @@ final class Repository: ObservableObject {
     /// The active device's registry display name (nickname, else "Brand Model") for a screen that names
     /// the source of what it plots — the Deep Timeline's source row. `nil` when the active id has no
     /// registry row (the pre-registry seeded strap), so the caller keeps its legacy "My WHOOP" copy.
-    /// Reads the registry, not a brand string compare: an active Oura ring must read "Oura …", not the
-    /// hardcoded strap label it was shipped with. Twin of Android's `FullDayChartScreen` source pill.
+    /// Reads the registry, not a brand string compare, so a renamed or non-WHOOP row names itself rather
+    /// than the hardcoded strap label the screen was shipped with.
     func activeDeviceDisplayName() -> String? {
         guard let store else { return nil }
         let devices = (try? DeviceRegistryStore(dbQueue: store.registryWriter).all()) ?? []
@@ -2082,8 +2045,8 @@ final class Repository: ObservableObject {
                     .map { Self.timelinePoint($0.ts, $0.rmssd) }
             }.value
         case .spo2:
-            // Two-channel (WHOOP) → the honest raw red/IR ratio proxy; single-channel (Oura) → the reading
-            // itself. See `spo2TimelineValue(red:ir:)` for why, and for the range gate.
+            // Two-channel (WHOOP) → the honest raw red/IR ratio proxy; a legacy single-channel row → the
+            // reading itself. See `spo2TimelineValue(red:ir:)` for why, and for the range gate.
             let s = (try? await store.spo2Samples(deviceId: source, from: from, to: to, limit: 200_000)) ?? []
             // The up-to-200k-row conversion runs OFF the main actor; only the Sendable `s` rows cross in.
             return await Task.detached(priority: .utility) {
@@ -2094,17 +2057,14 @@ final class Repository: ObservableObject {
         case .skinTemp:
             let s = (try? await store.skinTempSamples(deviceId: source, from: from, to: to, limit: 200_000)) ?? []
             return await Task.detached(priority: .utility) {
-                // #938: family-aware raw→°C — 5/MG centidegrees (raw/100, #156), 4.0 v24 raw ADC map.
+                // #938: family-aware raw→°C — 5/MG centidegrees (raw/100, #156).
                 s.map { Self.timelinePoint($0.ts, skinTempCelsius(raw: $0.raw, family: family)) }
             }.value
         case .respiration:
-            // Two quantities share this table: a WHOOP's raw respiration ADC waveform (plotted verbatim,
-            // as before) and an Oura ring's own per-window RATE in milli-bpm (0x6A instrumentation), which
-            // is scaled back to breaths/min so the track reads as ~14–16 instead of ~14,375.
-            // `OuraRespScale` is the single place that mapping lives.
+            // The strap's raw respiration ADC waveform, plotted verbatim.
             let s = (try? await store.respSamples(deviceId: source, from: from, to: to, limit: 200_000)) ?? []
             return await Task.detached(priority: .utility) {
-                s.map { Self.timelinePoint($0.ts, OuraRespScale.displayValue(raw: $0.raw, deviceId: source)) }
+                s.map { Self.timelinePoint($0.ts, Double($0.raw)) }
             }.value
         case .motion:
             // Gravity vector magnitude as a coarse movement signal (1 g at rest).
@@ -2121,18 +2081,6 @@ final class Repository: ObservableObject {
             let s = (try? await store.sleepStateSamples(deviceId: source, from: from, to: to)) ?? []
             return await Task.detached(priority: .utility) {
                 s.map { Self.timelinePoint($0.ts, Double($0.state)) }
-            }.value
-        case .ouraMovement:
-            // The ring's OWN per-window motion from OURA_MOTION events (0x47, movement-gated): plot
-            // `motion_seconds` (0 when still, up to 31 s of movement in the ~30 s window). An honest
-            // activity track, NEVER scored and NEVER a step count; empty for a WHOOP strap (no such events).
-            let evs = (try? await store.events(deviceId: source, from: from, to: to, limit: 200_000)) ?? []
-            return await Task.detached(priority: .utility) {
-                evs.compactMap { e -> TrendPoint? in
-                    guard e.kind == OuraStreamMapping.motionEventKind,
-                          let ms = e.payload["motion_seconds"]?.intValue else { return nil }
-                    return Self.timelinePoint(e.ts, Double(ms))
-                }
             }.value
         }
     }
@@ -2340,11 +2288,6 @@ final class Repository: ObservableObject {
         }
         if preferredSource == appleHealthSource {
             var candidates = [MetricSourceCandidate(source: appleHealthSource, key: key)]
-            // Health Connect is an Apple-equivalent body-metric source (Android only , harmless no-op on
-            // iOS/Mac, which never write a "health-connect" series). Kept here so the resolver is
-            // byte-identical to Android's, where it makes a Health-Connect-only weight history resolve in
-            // Compare (#443). A real Apple export still wins per day; HC fills the rest.
-            candidates.append(MetricSourceCandidate(source: healthConnectSource, key: key))
             if noopComputedCanFillAppleMetric(key) {
                 candidates.append(MetricSourceCandidate(source: computedSource, key: key))
             }

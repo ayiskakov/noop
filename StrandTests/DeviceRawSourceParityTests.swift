@@ -31,9 +31,9 @@ final class DeviceRawSourceParityTests: XCTestCase {
     private func fixture() throws -> Fixture {
         let testFile = URL(fileURLWithPath: #filePath)
         let url = testFile.deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Tools/parity_cases/device_raw_sources.json")
+            .appendingPathComponent("StrandTests/Resources/device_raw_sources.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path),
-                      "Shared device-source parity fixture is missing; parity must fail closed")
+                      "The device-source oracle is missing; the gate must fail closed")
         return try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: url))
     }
 

@@ -1,10 +1,11 @@
 # NOOP — System Architecture
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It talks
-directly to the strap over Bluetooth Low Energy, stores everything on-device in SQLite (GRDB on Mac/iOS, Room on Android), and computes
-recovery, strain, HRV, and sleep locally. There is no WHOOP cloud, no account —
+NOOP is a standalone, fully **offline** companion app for WHOOP 5.0 and MG straps. It talks
+directly to the strap over Bluetooth Low Energy, stores everything on-device in SQLite (GRDB), and
+computes recovery, strain, HRV, and sleep locally. There is no WHOOP cloud, no account —
 the app interoperates with **your own device and your own data**. It can also import data you already
-own: WHOOP CSV exports and Apple Health exports.
+own: WHOOP CSV exports and Apple Health exports. A WHOOP 4.0 strap is recognised on the air and
+reported as detected-but-unsupported; NOOP does not connect to it.
 
 > **Not affiliated with WHOOP.** NOOP is an independent, interoperability project built on
 > community reverse-engineering of the strap's Bluetooth protocol. It is **not a medical device**
@@ -22,12 +23,12 @@ off-device.
 
 ```
                           ┌─────────────────────────────────────────────────────────┐
-   WHOOP strap (4.0/5.0)  │                     NOOP (on-device)                     │
+   WHOOP strap (5.0/MG)   │                     NOOP (on-device)                     │
    ────────────────────   │                                                          │
         BLE GATT           │   CoreBluetooth          WhoopProtocol (pure decode)    │
    ┌──────────────┐  notify│  ┌────────────┐  bytes  ┌──────────────────────────┐    │
    │ custom svc   ├────────┼─▶│ BLEManager │────────▶│ Reassembler              │    │
-   │ 6108…/fd4b…  │  write │  │ (CoreBT    │  frames │  → parseFrame            │    │
+   │ fd4b0001…    │  write │  │ (CoreBT    │  frames │  → parseFrame            │    │
    │ HR 0x2A37    │◀───────┼──│  delegate) │         │  → extract[Historical]…  │    │
    │ batt 0x2A19  │  cmds  │  └─────┬──────┘         └────────────┬─────────────┘    │
    └──────────────┘        │        │                             │ Streams          │
@@ -92,21 +93,22 @@ Strand/                         macOS SwiftUI app target (the reference implemen
 ├── MenuBar/                    glanceable menu-bar extra
 └── System/                     macOS integrations (lock screen, Shortcuts)
 
-Packages/                       Cross-platform Swift packages (iOS 16+ / macOS 13+)
+Packages/                       Shared Swift packages (iOS 16+ / macOS 13+)
 ├── WhoopProtocol/              BLE frame parsing, CRC, command/event/packet decode
 ├── WhoopStore/                 GRDB/SQLite persistence (actor)
 ├── StrandAnalytics/            HRV/recovery/strain/sleep/correlation math
-├── StrandImport/               WHOOP CSV + Apple Health importers
-└── StrandDesign/               SwiftUI design system (palette, components, charts)
+├── StrandImport/               WHOOP CSV + Apple Health importers (plus FIT/GPX/TCX and related)
+├── StrandDesign/               SwiftUI design system (palette, components, charts)
+└── NoopLocalAccess/            `noop-local-access` — read-only local data access CLI (macOS-only)
 
 Tools/Backfill/                 CLI offload/replay tool
 ```
 
-The app target (`Strand/`) is the **macOS reference implementation**. The same five packages back the
-**iOS** app (`StrandiOS/`, `StrandiOSShared/`, `StrandiOSWidgets/` — **build-from-source only**, no
-App Store/TestFlight; see [`IOS.md`](./IOS.md)) and the **Android** app (`android/`, Room/Kotlin). The
-packages already declare `.iOS(.v16)` and `.macOS(.v13)` and keep all UI-framework code behind
-`#if canImport(UIKit)` / `#if canImport(AppKit)` guards so the cores port unchanged.
+The app target (`Strand/`) is the **macOS reference implementation**. The same packages back the
+**iOS** app (`StrandiOS/`, `StrandiOSShared/`, `StrandiOSWidgets/` — **sideload / build from source**,
+no App Store/TestFlight; see [`IOS.md`](./IOS.md)). The packages declare `.iOS(.v16)` and
+`.macOS(.v13)` and keep all UI-framework code behind `#if canImport(UIKit)` / `#if canImport(AppKit)`
+guards so the cores compile unchanged under both targets.
 
 ---
 
@@ -130,24 +132,31 @@ StrandImport ───────▶ WhoopProtocol + WhoopStore + ZIPFoundation
 
 | Package | Responsibility | Key types / functions | Notable boundary |
 |---|---|---|---|
-| **WhoopProtocol** | The reverse-engineering core: turn raw BLE bytes into typed rows. Framing, CRC, fragment reassembly, schema-driven field decode, stream extraction, historical-chunk classification. | `Reassembler`, `verifyFrame`, `parseFrame` → `ParsedFrame`, `extractStreams`, `extractHistoricalStreams`, `classifyHistoricalMeta`, `Streams`, `DeviceFamily`, `crc8`/`crc16Modbus`/`crc32` | **No CoreBluetooth.** Exposes GATT UUIDs as `String`; the app wraps them in `CBUUID`. |
+| **WhoopProtocol** | The reverse-engineering core: turn raw BLE bytes into typed rows. Framing, CRC, fragment reassembly, schema-driven field decode, stream extraction, historical-chunk classification. | `Reassembler`, `verifyFrame`, `parseFrame` → `ParsedFrame`, `extractStreams`, `extractHistoricalStreams`, `classifyHistoricalMeta`, `Streams`, `DeviceFamily`, `WhoopGattServiceFamily`, `crc16Modbus`/`crc32` | **No CoreBluetooth.** Exposes GATT UUIDs as `String`; the app wraps them in `CBUUID`. |
 | **WhoopStore** | Durable on-device persistence built on GRDB/SQLite. Migrations, decoded streams, metric caches, generic metric series, raw outbox, cursors. | `actor WhoopStore`, `makeMigrator()`, `insert(_:deviceId:)`, `dailyMetrics`, `sleepSessions`, `metricSeries`, `pruneRaw`, `ClockRef`, `RawBatchMeta` | An **`actor`** — all writes/reads run off the main thread on its serial executor. |
 | **StrandAnalytics** | All physiological math, as pure functions over inputs. HRV, recovery, strain, sleep staging, workout detection, baselines, HR zones, correlation/comparison. | `AnalyticsEngine.analyzeDay(...)` → `DayResult`, `HRVAnalyzer`, `RecoveryScorer`, `StrainScorer`, `SleepStager`, `WorkoutDetector`, `Baselines`, `CorrelationEngine` | **Pure** — never touches the database. Produces `DailyMetric`/`CachedSleepSession` shapes for the store. |
 | **StrandImport** | Parse data the user already owns: WHOOP CSV exports and Apple Health exports (`export.xml`, streaming). | `ImportCoordinator.detectAndImport`, `WhoopExportImporter`, `AppleHealthImporter`, `AppleHealthAggregator` | **Parsing only** — returns normalized model arrays; the app maps them into the store. |
 | **StrandDesign** | The SwiftUI design system: palette, typography, motion, charts, components. | `StrandPalette`, `StrandCard`, `RecoveryRing`, `StrainGauge`, `Hypnogram`, `TrendChart`, `Sparkline`, `YearHeatStrip` | No data or protocol deps — pure presentation. |
 
-### Multi-generation protocol support
+### Hardware generation and the detected-but-unsupported path
 
-`WhoopProtocol` supports both strap generations through `DeviceFamily`:
+`WhoopProtocol` connects to exactly one strap generation. `DeviceFamily` has a single case,
+**`.whoop5`** — the "puffin" transport: `0xAA` SOF, `u16 LE` length, a **CRC16-Modbus** header check,
+a `CRC32` (zlib) payload trailer, and a set of packet types (e.g. `PUFFIN_COMMAND_RESPONSE` = 38,
+`PUFFIN_METADATA` = 56) that `canonicalTypeName(_:schema:)` aliases onto the base packet names
+inherited from the original reverse-engineering so they decode with one set of logic. The type is
+kept as an enum rather than collapsed away because every frame, capture and registry row still has to
+say *which* hardware it belongs to.
 
-- **`.whoop4`** — the original reverse-engineered protocol: `0xAA` SOF, `u16 LE` length, **CRC8**
-  (poly `0x07`) header check, `CRC32` (zlib) payload trailer.
-- **`.whoop5`** — the newer "puffin" transport: a format byte, **CRC16-Modbus** header check, and a
-  set of packet types (e.g. `PUFFIN_COMMAND_RESPONSE` = 38, `PUFFIN_METADATA` = 56) that
-  `canonicalTypeName(_:schema:)` aliases onto the 4.0 base names so they decode with the same logic.
+Advertisements are classified separately by `WhoopGattServiceFamily`. Only `.maverickGooseFD4B`
+(the `fd4b0001-…` service) is connectable; `.whoop4` (the `61080001-…` service) and the other known
+WHOOP service families are recognised so the scan can report a strap as **detected but unsupported**
+instead of silently ignoring it — NOOP never connects to or sends commands on those. The older
+WHOOP 4.0 CRC8 envelope survives only as a protocol reference in
+[`PROTOCOL_WHOOP4.md`](PROTOCOL_WHOOP4.md).
 
 `verifyFrame(_:family:)` and the `DeviceFamily` UUID/CLIENT_HELLO accessors are the single switch
-points between generations; everything downstream of `parseFrame` is generation-agnostic.
+points on hardware family; everything downstream of `parseFrame` is family-agnostic.
 
 ---
 
@@ -392,8 +401,9 @@ computed locally.
 
 NOOP's BLE protocol work builds on community reverse-engineering of the WHOOP straps:
 
-- **johnmiddleton12/my-whoop** — WHOOP 4.0 protocol.
-- **b-nnett/goose** — WHOOP 5.0 protocol.
+- **johnmiddleton12/my-whoop** — the original WHOOP 4.0 protocol work the framing and store model
+  descend from.
+- **b-nnett/goose** — WHOOP 5.0 / MG protocol.
 
 See [`ATTRIBUTION.md`](../ATTRIBUTION.md) for full credits and [`DISCLAIMER.md`](../DISCLAIMER.md) for
 the non-affiliation and not-a-medical-device notice.

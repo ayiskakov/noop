@@ -49,8 +49,11 @@ final class Whoop5RRTests: XCTestCase {
         }
     }
 
+    /// Codes 1-4 are RETIRED (a non-WHOOP source NOOP no longer supports) and must stay unclaimed, so
+    /// a row written under an old code is never reinterpreted as a WHOOP transport.
     func testTransportCodes() {
-        XCTAssertEqual(RRSourceChannel.allCases.map(\.rawValue), Array(1...7))
+        XCTAssertEqual(RRSourceChannel.allCases.map(\.rawValue), [5, 6, 7])
+        for retired in 1...4 { XCTAssertNil(RRSourceChannel(rawValue: retired)) }
     }
 
     /// The table below is the parity contract for the "this night cannot be scored" explanation. The

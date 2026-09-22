@@ -51,16 +51,4 @@ final class HistoricalLayoutSupportTests: XCTestCase {
                                     hasGravity: true, hasPpgWaveform: true), .unmapped)
     }
 
-    /// WHOOP 4.0 is judged by what it decoded, exactly as before: it has no dispatch set to ask, and every
-    /// layout it maps emits one of the three names.
-    func testWhoop4IsStillJudgedByWhatItDecoded() {
-        XCTAssertEqual(
-            historicalLayoutSupport(version: 19, family: .whoop4, hasHeartRate: false,
-                                    hasGravity: false, hasPpgWaveform: false), .unmapped)
-        for (hr, grav, ppg) in [(true, false, false), (false, true, false), (false, false, true)] {
-            XCTAssertEqual(
-                historicalLayoutSupport(version: 25, family: .whoop4, hasHeartRate: hr,
-                                        hasGravity: grav, hasPpgWaveform: ppg), .supported)
-        }
-    }
 }

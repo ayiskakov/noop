@@ -42,11 +42,5 @@
 	<string>NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your Mac. Nothing leaves your device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>NOOP records your route during an outdoor workout to show distance, pace, and a map. The route stays on your device. Nothing leaves it.</string>
-	<key>OURA_CLIENT_ID</key>
-	<string>$(OURA_CLIENT_ID)</string>
-	<key>OURA_CLIENT_SECRET</key>
-	<string>$(OURA_CLIENT_SECRET)</string>
-	<key>OURA_REDIRECT_URI</key>
-	<string>$(OURA_REDIRECT_URI)</string>
 </dict>
 </plist>

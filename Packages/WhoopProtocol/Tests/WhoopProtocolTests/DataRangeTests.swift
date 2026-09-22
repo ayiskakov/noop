@@ -28,9 +28,9 @@ final class DataRangeTests: XCTestCase {
     func testReadsRealWhoop4NewestAtByteOffset8() {
         // Three real captured frames → their true newest (offset-8 u32), all 2026-07-11 ~16:00.
         let expected: [(String, Int)] = [
-            ("aa100057305d22009968526a083900001d2e2263", 1_783_785_625), // 16:00:25
-            ("aa10005730612200a268526ab0290000e87d155d", 1_783_785_634), // 16:00:34
-            ("aa100057307c2200e768526a78760000c997138d", 1_783_785_703), // 16:01:43
+            ("aa0110000001e0d1305d22009968526a083900001d2e2263", 1_783_785_625), // 16:00:25
+            ("aa0110000001e0d130612200a268526ab0290000e87d155d", 1_783_785_634), // 16:00:34
+            ("aa0110000001e0d1307c2200e768526a78760000c997138d", 1_783_785_703), // 16:01:43
         ]
         for (h, ts) in expected {
             XCTAssertEqual(DataRange.newestUnix(from: hex(h), wallNowUnix: wallNow, futureSkewSeconds: skew48h),
@@ -65,7 +65,7 @@ final class DataRangeTests: XCTestCase {
     /// true newest at offset 8). An any-offset MIN would return it → a bogus deep backlog. The aligned grid
     /// skips it, so this frame (no distinct oldest word) → nil. Guards against a future "consistency" refactor.
     func testOldestAlignedScanSkipsTheSpuriousOffset6Straddle() {
-        XCTAssertNil(DataRange.oldestUnix(from: hex("aa100057305d22009968526a083900001d2e2263")))
+        XCTAssertNil(DataRange.oldestUnix(from: hex("aa0110000001e0d1305d22009968526a083900001d2e2263")))
     }
 
     func testOldestReadsAGridAlignedWord() {
@@ -173,7 +173,7 @@ final class DataRangeTests: XCTestCase {
     private func dataRangeReply(oldest: Int, newest: Int) -> [UInt8] {
         var payload = [UInt8]()
         for v in [oldest, newest] { for k in 0..<4 { payload.append(UInt8((v >> (8 * k)) & 0xFF)) } }
-        return frameFromPayload(payload, type: 0x24, seq: 1, cmd: getDataRangeOpcode)
+        return w5Frame(payload, type: 0x24, seq: 1, cmd: getDataRangeOpcode)
     }
 
     /// An intact reply is accepted, and it is the value the seam then applies as the reported window
@@ -181,9 +181,9 @@ final class DataRangeTests: XCTestCase {
     func testAnIntactDataRangeReplyIsAcceptedAndCarriesTheWindow() {
         let oldest = 1_750_000_000, newest = 1_780_000_000
         let f = dataRangeReply(oldest: oldest, newest: newest)
-        let p = parseFrame(f, family: .whoop4)
+        let p = parseFrame(f, family: .whoop5)
         XCTAssertTrue(p.ok, "precondition: the reply is intact")
-        XCTAssertTrue(DataRange.acceptsReply(f, cmdOff: 6, opcode: getDataRangeOpcode, verdictOK: p.ok))
+        XCTAssertTrue(DataRange.acceptsReply(f, cmdOff: 10, opcode: getDataRangeOpcode, verdictOK: p.ok))
         XCTAssertEqual(DataRange.newestUnix(from: f, wallNowUnix: 1_790_000_000, futureSkewSeconds: skew48h),
                        newest)
         XCTAssertEqual(DataRange.oldestUnix(from: f), oldest)
@@ -196,8 +196,8 @@ final class DataRangeTests: XCTestCase {
     func testABrokenDataRangeReplyMovesNeitherTheWindowNorThePlausibilityBounds() {
         let oldest = 1_750_000_000, newest = 1_780_000_000
         var bad = dataRangeReply(oldest: oldest, newest: newest)
-        bad[3] ^= 0xFF                                   // CRC-8 over the length field only
-        let p = parseFrame(bad, family: .whoop4)
+        bad[6] ^= 0xFF                                   // the CRC16 header word only
+        let p = parseFrame(bad, family: .whoop5)
         XCTAssertEqual(p.rejectReason, .headerChecksumMismatch)
         XCTAssertEqual(p.crcOK, true, "precondition: the payload CRC32 still verifies")
         XCTAssertEqual(DataRange.newestUnix(from: bad, wallNowUnix: 1_790_000_000, futureSkewSeconds: skew48h),
@@ -222,8 +222,8 @@ final class DataRangeTests: XCTestCase {
     /// The gate is per-reply, not per-connection: a frame carrying another opcode at `cmdOff` is not a
     /// data-range reply at all, however intact it is.
     func testAnotherOpcodeIsNotADataRangeReply() {
-        let other = frameFromPayload([0x00, 0x01, 0x02, 0x03], type: 0x24, seq: 1, cmd: 26)
-        XCTAssertTrue(parseFrame(other, family: .whoop4).ok)
+        let other = w5Frame([0x00, 0x01, 0x02, 0x03], type: 0x24, seq: 1, cmd: 26)
+        XCTAssertTrue(parseFrame(other, family: .whoop5).ok)
         XCTAssertFalse(DataRange.acceptsReply(other, cmdOff: 6, opcode: getDataRangeOpcode, verdictOK: true))
     }
 }

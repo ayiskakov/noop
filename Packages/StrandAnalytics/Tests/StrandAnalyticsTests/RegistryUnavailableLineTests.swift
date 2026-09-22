@@ -46,24 +46,4 @@ final class RegistryUnavailableLineTests: XCTestCase {
             "analyzeRecent registry=unavailable owner->my-whoop-2 skinTempScale->whoop5")
     }
 
-    /// The reason any of this matters, stated in the analytics rather than in prose: an unresolved family
-    /// is not a cosmetic mislabel. Same samples, same night, and the fallback scale produces NO reading.
-    ///
-    /// Values from the reported WHOOP 4.0 log: `raw p50=772`, worn gate 28–42 °C. Twin of the Kotlin
-    /// assertion in `OwnerSourceSkinTempScaleTest`.
-    func testTheFallbackScaleDropsAWhoop4NightEntirely() throws {
-        let start = 1_787_000_000
-        let sess = [SleepSession(start: start, end: start + 600, efficiency: 0.9,
-                                 stages: [], restingHR: 50, avgHRV: 60.0)]
-        let hrs = (0 ..< 600).map { HRSample(ts: start + $0, bpm: 55) }
-        let temps = (0 ..< 600).map { SkinTempSample(ts: start + $0, raw: 772) }
-
-        let correct = try XCTUnwrap(AnalyticsEngine.wornNightlySkinTempC(sess, hr: hrs, skinTemp: temps,
-                                                                        family: .whoop4),
-                                    "a WHOOP 4.0 night must yield a skin temperature")
-        XCTAssertTrue((28.0 ... 42.0).contains(correct), "expected a worn-range reading, got \(correct)")
-
-        XCTAssertNil(AnalyticsEngine.wornNightlySkinTempC(sess, hr: hrs, skinTemp: temps, family: .whoop5),
-                     "the WHOOP5 scale reads 772 as 7.72 °C and drops the whole night")
-    }
 }

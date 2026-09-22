@@ -12,7 +12,8 @@ import WhoopProtocol
 ///
 /// Format: newline-delimited JSON, one object per line, fsynced before returning so the bytes are
 /// durable BEFORE the trim ack deletes the strap's copy (the whole point):
-///   {"capturedAtMs":Double,"trim":Int,"family":"whoop4"|"whoop5","frameHex":String}
+///   {"capturedAtMs":Double,"trim":Int,"family":"whoop5","frameHex":String}
+/// (a line archived by an older build may carry a different `family`; it is read back verbatim)
 /// Frames carry sensor payloads, not identifiers — no serials/MACs land here. The companion Android
 /// archive uses the same record shape so one mapping toolchain reads both.
 struct RawHistoryArchive {

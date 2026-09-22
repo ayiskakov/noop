@@ -78,9 +78,14 @@ final class RawPhysiologyUnionTests: XCTestCase {
         repo.setStoreForTesting(store)
         let guarded = await repo.timelineSeries(metric: .hrv, from: base, to: base + 600, targetPoints: 600)
         XCTAssertTrue(guarded.points.isEmpty)
+        // …and RELABELLING the legacy row cannot lift the guard. `confirmedRegistryFamily` answers only
+        // for a POSITIVELY identified 5/MG, so a row carrying an older generation's label is unidentified,
+        // not confirmed-as-something-else. There is no longer any label that makes an ambiguous legacy
+        // night scorable, which is the honest outcome: nothing on that row attests what wrote it.
         try registry.setModel("my-whoop", model: "4.0")
-        let knownFour = await repo.timelineSeries(metric: .hrv, from: base, to: base + 600, targetPoints: 600)
-        XCTAssertFalse(knownFour.points.isEmpty)
+        let relabelled = await repo.timelineSeries(metric: .hrv, from: base, to: base + 600, targetPoints: 600)
+        XCTAssertTrue(relabelled.points.isEmpty,
+                      "an unsupported generation's label must not be read as a confirmation")
     }
 
     @MainActor
@@ -102,10 +107,11 @@ final class RawPhysiologyUnionTests: XCTestCase {
         repo.setStoreForTesting(store)
         var rows = await repo.rrIntervals(from: 0, to: 1000)
         XCTAssertEqual(rows.map(\.rrMs), [810, 900, 700, 900, 800, 850])
-        // A confirmed WHOOP 4 canonical history keeps its original millisecond policy.
+        // Relabelling the canonical row to an unsupported generation does NOT admit its unlabelled beats:
+        // that label confirms no family, so the row stays ambiguous and its 1024 ms beat stays excluded.
         try registry.setModel("my-whoop", model: "4.0")
         rows = await repo.rrIntervals(from: 0, to: 1000)
-        XCTAssertEqual(rows.first?.rrMs, 1024)
+        XCTAssertEqual(rows.map(\.rrMs), [810, 900, 700, 900, 800, 850])
     }
 
     @MainActor

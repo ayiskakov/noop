@@ -14,11 +14,6 @@ final class RejectedHistoryTests: XCTestCase {
         return out
     }
 
-    // A synthetic WHOOP 4.0 V24 type-47 record (HR=63) that decodes cleanly (from HistoricalV24Tests).
-    private let v24Hex =
-        "aa5a008e2f18000000000000f153650000000000003f0152030000000000000000dc053075" +
-        "000000cdcc4c3dcdcccc3d5a657e3f00000040cdcc4c3dcdcccc3d5a657e3f504668428403" +
-        "200364006400b80bb80b000000000000c25c1a88"
 
     // A real WHOOP 5/MG type-47 v18 record (HR present, decodes cleanly; from Whoop5HistoricalTests).
     private let whoop5V18Hex =
@@ -30,10 +25,6 @@ final class RejectedHistoryTests: XCTestCase {
 
     // MARK: - clean records are NOT rejected
 
-    func testDecodableWhoop4RecordNotRejected() {
-        let rejected = rejectedHistoricalRecords([bytes(v24Hex)], family: .whoop4)
-        XCTAssertTrue(rejected.isEmpty, "a cleanly-decoding type-47 record must not be flagged as lost")
-    }
 
     func testDecodableWhoop5RecordNotRejected() {
         let rejected = rejectedHistoricalRecords([bytes(whoop5V18Hex)], family: .whoop5)
@@ -42,16 +33,6 @@ final class RejectedHistoryTests: XCTestCase {
 
     // MARK: - undecodable records ARE rejected
 
-    func testCRCCorruptWhoop4RecordIsRejected() {
-        // Flip a payload byte so the CRC32 trailer mismatches (crcOK == false) but the type byte is
-        // still 47 — exactly the silent-loss case the guard exists to catch.
-        var bad = bytes(v24Hex)
-        bad[10] ^= 0xFF
-        let f = parseFrame(bad)
-        XCTAssertEqual(f.crcOK, false, "precondition: the corrupted frame must fail CRC")
-        let rejected = rejectedHistoricalRecords([bad], family: .whoop4)
-        XCTAssertEqual(rejected, [bad])
-    }
 
     func testCRCCorruptWhoop5RecordIsRejected() {
         var bad = bytes(whoop5V18Hex)
@@ -65,9 +46,9 @@ final class RejectedHistoryTests: XCTestCase {
 
     func testConsoleFrameExcluded() {
         // type-50 CONSOLE_LOGS is strap-side debug text — decodes to zero rows by design, never lost.
-        let console = frameFromPayload([0x01, 0x02, 0x03, 0x04], type: 50, seq: 0, cmd: 0)
-        XCTAssertEqual(console[4], 50)
-        XCTAssertTrue(rejectedHistoricalRecords([console], family: .whoop4).isEmpty)
+        let console = w5Frame([0x01, 0x02, 0x03, 0x04], type: 50, seq: 0, cmd: 0)
+        XCTAssertEqual(console[w5InnerStart], 50)
+        XCTAssertTrue(rejectedHistoricalRecords([console], family: .whoop5).isEmpty)
     }
 
     func testWhoop5V26PpgExcluded() {
@@ -104,39 +85,27 @@ final class RejectedHistoryTests: XCTestCase {
 
     func testNonHistoricalFrameExcluded() {
         // A REALTIME_DATA (type-40) frame is live, not offload — never a history-loss candidate.
-        let realtime = frameFromPayload([0x01, 0x02, 0x03], type: 40, seq: 0, cmd: 0)
-        XCTAssertTrue(rejectedHistoricalRecords([realtime], family: .whoop4).isEmpty)
+        let realtime = w5Frame([0x01, 0x02, 0x03], type: 40, seq: 0, cmd: 0)
+        XCTAssertTrue(rejectedHistoricalRecords([realtime], family: .whoop5).isEmpty)
     }
 
     func testTooShortFrameExcluded() {
-        XCTAssertTrue(rejectedHistoricalRecords([[0xAA, 0x01]], family: .whoop4).isEmpty)
+        XCTAssertTrue(rejectedHistoricalRecords([[0xAA, 0x01]], family: .whoop5).isEmpty)
         XCTAssertTrue(rejectedHistoricalRecords([[]], family: .whoop5).isEmpty)
     }
 
     // MARK: - mixed batch returns only the genuine losses, in order
 
     func testMixedBatchReturnsOnlyRejects() {
-        var bad = bytes(v24Hex); bad[10] ^= 0xFF   // undecodable
-        let good = bytes(v24Hex)                   // clean
-        let console = frameFromPayload([0x00], type: 50, seq: 0, cmd: 0)
-        let rejected = rejectedHistoricalRecords([good, bad, console], family: .whoop4)
+        var bad = bytes(whoop5V18Hex); bad[6] ^= 0xFF   // header checksum broken → undecodable
+        let good = bytes(whoop5V18Hex)                  // clean
+        let console = w5Frame([0x00], type: 50, seq: 0, cmd: 0)
+        let rejected = rejectedHistoricalRecords([good, bad, console], family: .whoop5)
         XCTAssertEqual(rejected, [bad])
     }
 
     // MARK: - D8: this reader runs the OTHER WAY ROUND — a negative verdict means ARCHIVE
 
-    /// Scenario "Beweissichernde Leser verlieren keine Rahmen / Rahmen mit kaputtem Header wird
-    /// gesichert statt verworfen". Before the change this frame passed as decodable and was archived
-    /// NOWHERE; the strap frees it on the next trim ack, so the archive is the only copy that can exist.
-    func testWhoop4RecordWithABrokenHeaderChecksumIsArchived() {
-        var bad = bytes(v24Hex)
-        bad[3] ^= 0xFF                                  // CRC-8 over the length field only
-        let p = parseFrame(bad)
-        XCTAssertEqual(p.crcOK, true, "precondition: the PAYLOAD CRC32 still verifies")
-        XCTAssertEqual(p.rejectReason, .headerChecksumMismatch)
-        XCTAssertEqual(rejectedHistoricalRecords([bad], family: .whoop4), [bad],
-                       "a frame we cannot trust is a frame we must keep the bytes of")
-    }
 
     func testWhoop5RecordWithABrokenHeaderChecksumIsArchived() {
         var bad = bytes(whoop5V18Hex)
@@ -146,51 +115,8 @@ final class RejectedHistoryTests: XCTestCase {
         XCTAssertEqual(rejectedHistoricalRecords([bad], family: .whoop5), [bad])
     }
 
-    func testWhoop4RecordWithTrailingBytesIsArchived() {
-        let bad = bytes(v24Hex) + [0x00]                // one byte past the frame's own end
-        XCTAssertEqual(parseFrame(bad).rejectReason, .lengthMismatch)
-        XCTAssertEqual(rejectedHistoricalRecords([bad], family: .whoop4), [bad])
-    }
 
-    func testWhoop4RecordWithATruncatedTrailerIsArchived() {
-        let bad = Array(bytes(v24Hex).dropLast(2))
-        XCTAssertEqual(parseFrame(bad).rejectReason, .lengthMismatch)
-        XCTAssertEqual(rejectedHistoricalRecords([bad], family: .whoop4), [bad])
-    }
 
-    /// Scenario "Bisher gesicherte Rahmen bleiben gesichert", over the real capture corpus.
-    ///
-    /// The pre-change reader is re-implemented here verbatim, with the one substitution the change
-    /// makes: its `ok` was a constant that meant "these bytes read as a frame", which is
-    /// `isParsable` today. Every frame it would have archived must still be archived. The direction
-    /// is asserted as a SUBSET, not as equality, because the new reader is expected to archive more.
-    func testNoCorpusFrameIsArchivedLessThanBefore() throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "frames", withExtension: "json"),
-                                "the WHOOP 4.0 capture corpus must be present")
-        struct HexOnly: Decodable { let hex: String }
-        let corpus = try JSONDecoder().decode([HexOnly].self, from: Data(contentsOf: url))
-            .map { bytes($0.hex) }
-        XCTAssertGreaterThan(corpus.count, 50, "precondition: a corpus worth calling a corpus")
-
-        // The pre-change predicate, for WHOOP 4.0.
-        func archivedBefore(_ f: [UInt8]) -> Bool {
-            guard f.count > 4, Int(f[4]) == 47 else { return false }
-            let p = parseFrame(f, family: .whoop4)
-            if !p.isParsable || p.crcOK == false { return true }
-            return p.parsed["unix"]?.intValue == nil
-                || (p.parsed["heart_rate"]?.intValue == nil && p.parsed["gravity_x"]?.doubleValue == nil)
-        }
-
-        let before = corpus.filter(archivedBefore)
-        let now = Set(rejectedHistoricalRecords(corpus, family: .whoop4).map { Data($0) })
-        for f in before {
-            XCTAssertTrue(now.contains(Data(f)),
-                          "a frame archived before this change must still be archived: \(f.prefix(8))")
-        }
-        // And nothing INTACT and decodable was dragged in: the corpus's clean records stay out.
-        let clean = corpus.filter { $0.count > 4 && Int($0[4]) == 47 && parseFrame($0).ok }
-        XCTAssertGreaterThan(clean.count, 0, "precondition: the corpus holds intact type-47 records")
-    }
 
     func testIsEmptyRecordFrameFlagsAllZeroPayloadOnly() {
         // A 104 B frame with header + CRC bytes set but the record payload (21..<count-4) all zero -> empty.

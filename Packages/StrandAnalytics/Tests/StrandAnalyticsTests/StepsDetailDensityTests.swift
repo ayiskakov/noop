@@ -7,7 +7,7 @@ final class StepsDetailDensityTests: XCTestCase {
         StepsDetailDensity.project
 
     private func loadOracle() throws -> [[String: Any]] {
-        let relative = "android/app/src/test/resources/steps_detail_density_oracle.json"
+        let relative = "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/oracles/steps_detail_density_oracle.json"
         var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         for _ in 0..<8 {
             let candidate = directory.appendingPathComponent(relative)
@@ -24,7 +24,7 @@ final class StepsDetailDensityTests: XCTestCase {
         throw CocoaError(.fileNoSuchFile)
     }
 
-    func testSwiftProjectorAssertsTheSharedAndroidFixture() throws {
+    func testProjectorAssertsTheCommittedFixture() throws {
         let cases = try loadOracle()
         XCTAssertEqual(cases.count, 11)
         XCTAssertEqual(Set(cases.compactMap { $0["range"] as? String }),

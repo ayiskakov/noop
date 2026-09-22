@@ -2,7 +2,6 @@ import SwiftUI
 import StrandDesign
 import StrandAnalytics   // ConnectionReadout - the #987 clock-latch / RTC-epoch readout parsers
 import WhoopStore
-import OuraProtocol
 import WhoopProtocol   // Whoop5Ecg.WristSelection — the MG ECG wrist-selection step
 
 // MARK: - Devices
@@ -59,8 +58,6 @@ private struct DevicesContent: View {
     @State private var deleteDataTarget: PairedDevice?
     @State private var forgetTarget: PairedDevice?
     @State private var rebootTarget: PairedDevice?
-    /// WHOOP 4.0 reboot probe (Test Centre → Connection, 4.0 only) — the device whose probe sheet is open.
-    @State private var probeTarget: PairedDevice?
     /// #592 extended-battery probe (Test Centre → Connection) — the device whose confirm dialog is open.
     @State private var batteryProbeTarget: PairedDevice?
     /// #690 body-location probe (Test Centre → Connection) — the device whose confirm dialog is open.
@@ -155,7 +152,7 @@ private struct DevicesContent: View {
                         ? String(localized: "1 paired")
                         : String(localized: "\(activeDevices.count) paired"))
             // #1300: a prominent switcher to flip which strap is active — the "switch, don't combine"
-            // option for a user with two straps (e.g. a 4.0 + a 5/MG). Shown only with 2+ straps, so it
+            // option for a user with two straps. Shown only with 2+ straps, so it
             // auto-collapses when one is forgotten. Reuses the existing active-strap confirmation.
             if activeDevices.count > 1 { strapSwitcher }
             ForEach(Array(activeDevices.enumerated()), id: \.element.id) { idx, device in
@@ -188,15 +185,13 @@ private struct DevicesContent: View {
                     pairingHint: device.status == .active ? live.pairingHint : nil,
                     // Reboot in flight + link currently down → "Reconnecting…" (#166).
                     isReconnecting: device.status == .active && live.rebootInProgress && !live.connected,
-                    // The live battery belongs to whichever device is ACTIVE + connected. A WHOOP, a
-                    // generic strap and an FTMS machine all funnel into live.batteryPct, but an Oura ring
-                    // does NOT: it reports its own charge, so an active ring row used to draw the strap's
-                    // stale number under the ring's name (#2075). Asked PER ROW rather than of the active
-                    // device, which is the stronger question and the one this loop can actually answer.
-                    liveBatteryPct: (device.status == .active && live.connected)
-                        ? LiveConsoleReadout.batteryPercent(
-                            activeIsWhoop: SourceCoordinator.isWhoop(device),
-                            whoopPct: live.batteryPct, ringPct: live.ouraBatteryPct)
+                    // The live battery belongs to whichever device is ACTIVE + connected, and only a WHOOP
+                    // reports one through live.batteryPct: a non-WHOOP active row must never draw the strap's
+                    // stale number under its own name (#2075). Asked PER ROW rather than of the active device,
+                    // which is the stronger question and the one this loop can actually answer. Rounded, like
+                    // the Live Console and the widget.
+                    liveBatteryPct: (device.status == .active && live.connected && SourceCoordinator.isWhoop(device))
+                        ? live.batteryPct.map { Int($0.rounded()) }
                         : nil,
                     liveBatteryMv: (device.status == .active && live.connected) ? live.batteryMv : nil,
                     // Firmware version for the ACTIVE strap. It's a STABLE property (NOOP can't change a
@@ -205,7 +200,7 @@ private struct DevicesContent: View {
                     // nil — mid-handshake, or a connection that hasn't re-read GET_HELLO/REPORT_VERSION_INFO
                     // yet this session. Without this the "· FW x" blanks out while actively connected. The
                     // persisted fallback is WHOOP-only: "noop.lastFirmware" is written solely from a WHOOP
-                    // handshake, so a non-WHOOP active device (Oura) must NOT inherit it. Single last-connected-
+                    // handshake, so a non-WHOOP active device must NOT inherit it. Single last-connected-
                     // strap key, so a not-yet-connected active strap can briefly show the other strap's build on
                     // a multi-WHOOP install until it republishes. Twin of Android.
                     // #1633 follow-up: resolve against THIS device, never the last strap to connect. The old
@@ -229,26 +224,16 @@ private struct DevicesContent: View {
                     onMakeActive: { switchTarget = device },
                     onRename: { renameDraft = device.nickname ?? device.displayName; renameTarget = device },
                     onRemove: { removeTarget = device },
-                    // Restart is offered only for a live-connected WHOOP that is NOT a 4.0: the strap-log
-                    // analysis on #275 showed no safe frame reboots a 4.0 (empty bodies are ignored; any
-                    // non-empty body just wedges the BLE link for ~7s, sensor stays on), so a 4.0 Restart
-                    // button could never work. 5.0/MG reboot on the production frame. nil otherwise.
+                    // Restart is offered only for a live-connected WHOOP; 5.0/MG reboot on the production
+                    // frame (#166). nil otherwise.
                     onReboot: (device.status == .active && live.connected
-                               && SourceCoordinator.isWhoop(device)
-                               && !model.ble.isWhoop4) ? { rebootTarget = device } : nil,
-                    // 4.0 reboot probe: only offered when Test Centre → Connection is on AND the live
-                    // strap is a WHOOP 4.0 (a 5.0 already reboots on the production frame). nil otherwise.
-                    onRebootProbe: (device.status == .active && live.connected
-                                    && SourceCoordinator.isWhoop(device)
-                                    && model.ble.isWhoop4
-                                    && TestCentre.active(.connection)) ? { probeTarget = device } : nil,
-                    // #592 extended-battery probe: read-only, BOTH families (the 4.0 is discriminating).
-                    // Same Test Centre → Connection gate as the reboot probe, minus the 4.0-only clause.
+                               && SourceCoordinator.isWhoop(device)) ? { rebootTarget = device } : nil,
+                    // #592 extended-battery probe: read-only. Test Centre → Connection gate.
                     onExtendedBatteryProbe: probeGate ? { batteryProbeTarget = device } : nil,
-                    // #690 body-location probe: read-only, both families. Same Test Centre → Connection gate.
+                    // #690 body-location probe: read-only. Same Test Centre → Connection gate.
                     onBodyLocationProbe: probeGate ? { bodyLocationProbeTarget = device } : nil,
-                    // #761 feature-flag ENUMERATION probe: read-only (names only, nothing written), both
-                    // families. Same Test Centre → Connection gate.
+                    // #761 feature-flag ENUMERATION probe: read-only (names only, nothing written). Same
+                    // Test Centre → Connection gate.
                     onFeatureFlagProbe: probeGate ? { featureFlagProbeTarget = device } : nil,
                     // Stop an offload already in flight. Offered ONLY while one is running on this
                     // strap — not a Test Centre probe but an ordinary escape hatch, because until now
@@ -334,20 +319,6 @@ private struct DevicesContent: View {
         } message: { device in
             Text("Restart \(device.displayName)? It disconnects for about 30 seconds while it reboots, then reconnects on its own. Your recorded data is kept.")
         }
-        // WHOOP 4.0 reboot probe (#235): only reachable with Test Centre → Connection on and a 4.0 connected.
-        // Tries each candidate frame one at a time so the strap log shows which one actually reboots.
-        .confirmationDialog("WHOOP 4.0 reboot probe",
-                            isPresented: Binding(get: { probeTarget != nil },
-                                                 set: { if !$0 { probeTarget = nil } }),
-                            titleVisibility: .visible,
-                            presenting: probeTarget) { _ in
-            ForEach(RebootProbeVariant.allCases, id: \.self) { variant in
-                Button(variant.menuLabel) { model.rebootProbe(variant); probeTarget = nil }
-            }
-            Button("Cancel", role: .cancel) { probeTarget = nil }
-        } message: { _ in
-            Text("The WHOOP 4.0 reboot frame isn't confirmed — a normal Restart is ignored (#235). Send each candidate and watch BOTH the strap log and the strap itself. “no disconnect within 12s” means the strap ignored the frame. A “link dropped” line means the frame reached the strap — but a dropped link alone isn't a reboot: a real reboot also switches the strap's sensor light off for a few seconds, so if the light stayed on it was just a dropped connection, not a reboot. Non-destructive — your data is kept. Please share the log so we can pin the real frame.")
-        }
         // #592 extended-battery opcode probe: read-only, dumps the strap's full raw reply so a capture
         // settles the disputed GET_EXTENDED_BATTERY_INFO number (98 vs an APK decompile's 87).
         .confirmationDialog("Battery-info probe (#592 RE)",
@@ -408,7 +379,7 @@ private struct DevicesContent: View {
         .confirmationDialog("Pick a new active strap",
                             isPresented: $pickNewActive,
                             titleVisibility: .visible) {
-            // I-1: import sources (Oura cloud import, file imports) are excluded — they're data
+            // I-1: import sources (file imports) are excluded — they're data
             // partitions, not live devices, and must never be offered as an active-strap candidate.
             ForEach(activatableDevices) { device in
                 Button(device.displayName) { registry.setActive(device.id) }
@@ -477,9 +448,9 @@ private struct DevicesContent: View {
     /// (invariant I2). Pairwise (the first two WHOOP straps). Reads each strap by its own `deviceId` —
     /// never the hardcoded `my-whoop` (see #1304).
     private func loadStrapCompare() async {
-        // WHOOP or Oura — the sources that bank comparable dailies. Cross-source (Oura vs WHOOP) is exactly
-        // what the fusion tolerances are for; a plain HR strap has no dailies and self-excludes below.
-        let comparable = activeDevices.filter { SourceCoordinator.isWhoop($0) || $0.id.hasPrefix("oura-") }
+        // WHOOP straps — the sources that bank comparable dailies; a plain HR strap has no dailies and
+        // self-excludes below.
+        let comparable = activeDevices.filter { SourceCoordinator.isWhoop($0) }
         guard comparable.count >= 2, let store = await model.repo.storeHandle() else { strapCompare = nil; return }
         let a = comparable[0], b = comparable[1]
         // Read both straps concurrently — the production store is a DatabasePool, so the two reads run in
@@ -767,13 +738,10 @@ private struct DeviceCard: View {
     /// Restart the strap (WHOOP-only, connected-only; confirmation-gated by the parent). nil for a
     /// non-WHOOP source or a device that isn't the live-connected one. (#166)
     var onReboot: (() -> Void)? = nil
-    /// WHOOP 4.0 reboot probe (Test Centre → Connection, 4.0 only). Non-nil only when the parent has
-    /// decided the probe applies (live-connected WHOOP 4.0 + Connection test mode on); nil otherwise. (#235)
-    var onRebootProbe: (() -> Void)? = nil
-    /// #592 extended-battery opcode probe (Test Centre → Connection, both WHOOP families). Read-only.
+    /// #592 extended-battery opcode probe (Test Centre → Connection). Read-only.
     var onExtendedBatteryProbe: (() -> Void)? = nil
     var onBodyLocationProbe: (() -> Void)? = nil
-    /// #761 feature-flag ENUMERATION probe (Test Centre → Connection, both WHOOP families). Read-only:
+    /// #761 feature-flag ENUMERATION probe (Test Centre → Connection). Read-only:
     /// it reads the flag NAMES the strap's firmware knows and writes nothing.
     var onFeatureFlagProbe: (() -> Void)? = nil
     var onAbortSync: (() -> Void)? = nil
@@ -810,19 +778,7 @@ private struct DeviceCard: View {
                             .foregroundStyle(StrandPalette.textSecondary)
                     }
                     Spacer()
-                    // Locally-adopted Oura is Beta: a non-dot Beta chip sits beside the usual state pill.
-                    if device.sourceKind == .oura {
-                        StatePill("Beta", tone: .warning, showsDot: false)
-                    }
                     statePill
-                }
-
-                // Honest local-takeover state row for an adopted Oura ring that is paired but not the
-                // active+connected source right now. States the single-owner reality plainly (if the ring
-                // was reset again or re-claimed in the Oura app, NOOP no longer owns it) without faking a
-                // live reading. Suppressed for the active+connected ring and for removed rings.
-                if device.sourceKind == .oura && !isLiveConnected && device.status == .paired {
-                    ouraLocalStateNote
                 }
 
                 // What this device CAPTURES — honest, per-model (not the generic stored set, which would
@@ -941,7 +897,7 @@ private struct DeviceCard: View {
 
     /// The card's primary tap action, or nil when there isn't one. A paired-but-not-active band → make it
     /// active; a removed band → re-add it as active. The active band and any card without those callbacks
-    /// have no whole-card tap (their controls live entirely in the ⋮ menu). I-1: an import source (Oura
+    /// have no whole-card tap (their controls live entirely in the ⋮ menu). I-1: an import source (file
     /// cloud import, file imports) never offers activation — it's a data partition, not a live device;
     /// making it "active" would demote whatever live device drives BLE routing + day-owner priority 0.
     private var primaryAction: (() -> Void)? {
@@ -1001,7 +957,7 @@ private struct DeviceCard: View {
     private var actionsMenu: some View {
         Menu {
             if device.status == .archived {
-                // I-1: a removed import source (e.g. Oura cloud import, archived on Disconnect) never
+                // I-1: a removed import source (archived on Disconnect) never
                 // offers "Make active" reactivation — it's a data partition, not a live device.
                 if let onReAdd, !device.isImportSource {
                     Button { onReAdd() } label: { Label("Make active", systemImage: "bolt.fill") }
@@ -1035,12 +991,7 @@ private struct DeviceCard: View {
                 if let onAbortSync {
                     Button { onAbortSync() } label: { Label("Stop sync", systemImage: "stop.circle") }
                 }
-                // 4.0 reboot probe (RE): only present when the parent passed a closure (Test Centre →
-                // Connection on + a live WHOOP 4.0). Finds the real reboot frame the 4.0 accepts (#235).
-                if let onRebootProbe {
-                    Button { onRebootProbe() } label: { Label("Reboot probe (4.0 RE)…", systemImage: "ladybug") }
-                }
-                // #592 extended-battery opcode probe (RE): read-only, both families. Test Centre → Connection.
+                // #592 extended-battery opcode probe (RE): read-only. Test Centre → Connection.
                 if let onExtendedBatteryProbe {
                     Button { onExtendedBatteryProbe() } label: { Label("Battery-info probe (#592 RE)…", systemImage: "ladybug") }
                 }
@@ -1085,9 +1036,7 @@ private struct DeviceCard: View {
     /// an Apple Watch reads as a watch; generic straps read as a heart-rate strap.
     private var icon: String {
         if device.sourceKind == .ftms { return "figure.run.treadmill" }
-        if device.sourceKind == .huami { return "waveform.path.ecg.rectangle" }
         if device.sourceKind == .liveAppleWatch { return "applewatch" }
-        if device.sourceKind == .oura { return "circle.circle" }
         return SourceCoordinator.isWhoop(device) ? "applewatch.side.right" : "heart.circle"
     }
 
@@ -1117,23 +1066,6 @@ private struct DeviceCard: View {
         if bondRefused { return String(localized: "Connected, but not paired") }
         if isLiveConnected { return String(localized: "Connected now") }
         return String(localized: "Last seen \(relativeAgo(TimeInterval(device.lastSeenAt)))")
-    }
-
-    /// Honest paired-but-not-connected note for a locally-adopted Oura ring. Amber heads-up, no fabricated
-    /// reading: re-states the single-owner reality so the user understands why a re-reset / Oura re-claim
-    /// would break NOOP's ownership.
-    private var ouraLocalStateNote: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "info.circle")
-                .font(StrandFont.caption)
-                .foregroundStyle(StrandPalette.statusWarning)
-                .frame(width: 14)
-                .accessibilityHidden(true)
-            Text("Paired locally. NOOP owns this ring while it holds the key. If you reset it again or set it up in the Oura app, NOOP no longer owns it and you would re-add it to take it over.")
-                .font(StrandFont.caption)
-                .foregroundStyle(StrandPalette.statusWarning)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 
     /// A battery SF Symbol matching the charge band (mirrors the menu-bar battery glyph buckets).
@@ -1176,36 +1108,6 @@ struct DeviceCapabilityProfile {
                 powers: String(localized: "Records a live machine workout, Effort-scored from HR when the machine reports it"),
                 footnote: String(localized: "Live machine data over Bluetooth FTMS. No sleep, recovery, skin temp or SpO₂. Effort needs the machine's heart rate; without it the session logs the machine metrics only."))
         }
-        // EXPERIMENTAL Huami device (Amazfit / Zepp / Mi Band): best-effort live HR only, honest about it.
-        if d.sourceKind == .huami {
-            return DeviceCapabilityProfile(
-                displayModel: String(localized: "\(d.brand) (experimental)"),
-                captures: String(localized: "Heart rate (live, best-effort)"),
-                powers: String(localized: "Powers the live console + Effort. No Charge, Rest or Sleep"),
-                footnote: String(localized: "Experimental: live heart rate where the band exposes it. Some bands need a pairing we can't do yet. NOOP will say so honestly and never show a made-up number. No sleep, recovery, skin temp, SpO₂ or steps."))
-        }
-        // EXPERIMENTAL locally-adopted Oura ring (gen 3/4/5). The gen is carried on `model` ("Oura Ring
-        // 3/4/5") and recovered with OuraRingGen.from(model:). NOOP reads the ring's OWN raw signals + open
-        // HRV/sleep-phase tags and computes its own Charge/Effort/Rest; it NEVER reads Oura's encrypted
-        // Readiness/Sleep scores, and claims NO absolute SpO₂ %. Estimates carry "*"; a signal it can't read
-        // stays "-". Per-gen copy and the canonical Beta caveat (spec
-        // docs/superpowers/specs/2026-06-29-oura-onboarding-ux.md s3/s4).
-        if d.sourceKind == .oura {
-            let gen = OuraRingGen.from(model: d.model)
-            // gen3/4 are verified-shape; gen5 ("newer") carries the least-proven caveat.
-            let newer = (gen == .gen5)
-            let captures = newer
-                ? String(localized: "Heart rate* · HRV* · Sleep* · Resting HR* · Skin temp* · Battery*")
-                : String(localized: "Heart rate · HRV* · Sleep · Resting HR · Skin temp* · Battery")
-            let powers = newer
-                ? String(localized: "Powers Effort now; Charge and Rest once enough nights and decode are confirmed")
-                : String(localized: "Powers Charge, Effort, Rest and Sleep")
-            return DeviceCapabilityProfile(
-                displayModel: String(localized: "\(gen.displayName) (Beta)"),
-                captures: captures,
-                powers: powers,
-                footnote: String(localized: "Beta. * is an on-device estimate. Skin temp is a trend versus your own baseline, and HRV needs you to be still. No Oura Readiness or SpO₂ percentage comes off the ring (import an Oura file for those)."))
-        }
         // Apple Watch (live HealthKit source). UNLIKE the WHOOP/strap branches, the watch's stored
         // capability `Set` is already the honest per-model trim (AppleWatchDevice only adds a metric
         // once real data for it arrives), so we read the labels straight off it. An older watch with
@@ -1235,7 +1137,7 @@ struct DeviceCapabilityProfile {
         }
         let whoopPowers = String(localized: "Powers Charge, Effort, Rest, Sleep + Health Monitor")
         let model = d.model.lowercased()
-        // WHOOP 5.0 / MG — adds a (raw) step count the 4.0 can't read over BLE.
+        // WHOOP 5.0 / MG — the supported strap.
         if model.contains("5") || model.contains("mg") {
             return DeviceCapabilityProfile(
                 displayModel: "WHOOP 5.0 / MG",
@@ -1243,13 +1145,14 @@ struct DeviceCapabilityProfile {
                 powers: whoopPowers,
                 footnote: String(localized: "* on-device estimate: skin temp is a nightly ±°C deviation, steps are a raw motion count (#78). No SpO₂ % off the strap; import a WHOOP CSV for a real %."))
         }
-        // WHOOP 4.0 — NOOP's primary band; no steps over BLE.
+        // WHOOP 4.0 — a registry row left by an earlier install. Detected on the air but not connectable
+        // in this build, so say so instead of describing a data path that does not exist here.
         if model.contains("4") {
             return DeviceCapabilityProfile(
                 displayModel: "WHOOP 4.0",
-                captures: String(localized: "Heart rate · HRV · Skin temp* · Resp rate* · Sleep · Strain · Battery"),
-                powers: whoopPowers,
-                footnote: String(localized: "* on-device estimate: skin temp is a nightly ±°C deviation (firmware-dependent); no steps over BLE on a 4.0. No SpO₂ % off the strap; import a WHOOP CSV for a real %."))
+                captures: String(localized: "Not supported by this build"),
+                powers: String(localized: "Nothing live. Stored history stays readable"),
+                footnote: String(localized: "NOOP recognises a WHOOP 4.0 but does not connect to it. Only WHOOP 5.0 and MG straps sync in this build."))
         }
         // Legacy / unknown WHOOP (the seeded device, model just "WHOOP") — show only the common-to-all set.
         return DeviceCapabilityProfile(
@@ -1741,27 +1644,15 @@ struct DeviceCardCatalog: View {
                      status: .paired, addedAt: 0, lastSeenAt: 0)
     }
 
-    /// A locally-adopted Oura ring (sourceKind `.oura`), built with mock data so the honest per-gen Beta
-    /// card renders deterministically WITHOUT a ring. `model` carries the gen ("Oura Ring 3/4/5").
-    static func oura(_ model: String, status: DeviceStatus = .paired) -> PairedDevice {
-        PairedDevice(id: "oura-demo-\(model)", brand: "Oura", model: model, nickname: nil,
-                     peripheralId: "00000000-0000-0000-0000-0000000000aa", sourceKind: .oura,
-                     capabilities: WhoopLiveCapabilities.metrics(forModel: "4.0"),
-                     status: status, addedAt: 0, lastSeenAt: 0)
-    }
-
     var body: some View {
         ScreenScaffold(title: "Devices",
                        subtitle: "What each band captures (and what NOOP uses it for).",
                        topBackground: liquidScaffoldSky()) {
             VStack(spacing: NoopMetrics.gap) {
-                DeviceCard(device: Self.dev("whoop-4d", "WHOOP", "4.0", Self.whoopCaps),
-                           isActive: true, isLiveConnected: true,
-                           onMakeActive: {}, onRename: {}, onRemove: nil)
                 DeviceCard(device: Self.dev("whoop-5d", "WHOOP", "5.0 MG",
                                             Self.whoopCaps.union([.steps])),
-                           isActive: false, isLiveConnected: false,
-                           onMakeActive: {}, onRename: {}, onRemove: {})
+                           isActive: true, isLiveConnected: true,
+                           onMakeActive: {}, onRename: {}, onRemove: nil)
                 // #221: a WHOOP 5/MG that's BLE-connected but whose encrypted bond was refused (#78) — no
                 // data flows despite the link being up. Renders the "Connected · not paired" pill + the
                 // self-service pairing guidance so this can be verified WITHOUT reproducing the bond
@@ -1777,34 +1668,6 @@ struct DeviceCardCatalog: View {
                 // Apple Watch, with an older-model trimmed set (no SpO₂ / wrist temp) so the honest
                 // capability read renders deterministically alongside the straps.
                 DeviceCard(device: Self.watch([.hr, .hrv, .sleep, .steps]),
-                           isActive: false, isLiveConnected: false,
-                           onMakeActive: {}, onRename: {}, onRemove: {})
-                // Locally-adopted Oura ring (Beta): per-gen honest capability copy + the Beta chip + the
-                // paired-but-not-connected local-state note, all without a ring on-wrist.
-                DeviceCard(device: Self.oura("Oura Ring 3"),
-                           isActive: false, isLiveConnected: false,
-                           onMakeActive: {}, onRename: {}, onRemove: {})
-            }
-        }
-    }
-}
-
-/// DEBUG-only: just the locally-adopted Oura device card, active + connected, so `--demo-screen ouradevice`
-/// can screenshot the Beta Oura card (battery + "Active · Live") WITHOUT a ring. Same file as `DeviceCard`
-/// so it can reach it. Stripped from Release.
-struct OuraDeviceDemoScreen: View {
-    var body: some View {
-        ScreenScaffold(title: "Devices",
-                       subtitle: "A locally-adopted Oura ring, in beta.",
-                       topBackground: liquidScaffoldSky()) {
-            VStack(spacing: NoopMetrics.gap) {
-                // Active + connected so the card shows "Active · Live" + a live battery readout.
-                DeviceCard(device: DeviceCardCatalog.oura("Oura Ring 3"),
-                           isActive: true, isLiveConnected: true, liveBatteryPct: 71,
-                           onMakeActive: {}, onRename: {}, onRemove: {})
-                // A second, paired-but-not-connected gen-4 ring so the honest local-state note + per-gen
-                // copy render in the same shot.
-                DeviceCard(device: DeviceCardCatalog.oura("Oura Ring 4"),
                            isActive: false, isLiveConnected: false,
                            onMakeActive: {}, onRename: {}, onRemove: {})
             }

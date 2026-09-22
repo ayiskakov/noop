@@ -238,7 +238,9 @@ final class IntelligenceRRSourceTests: XCTestCase {
         }
     }
 
-    func testNightlyScoringKeepsConfirmedWhoop4LegacyIntervalsAfterRePairing() async throws {
+    /// A registry row carrying an unsupported generation's label confirms NO family, so its unlabelled
+    /// beats stay out of scoring. Relabelling is not evidence: nothing on the row attests what wrote it.
+    func testNightlyScoringLeavesAnUnconfirmedLegacyRowUnscored() async throws {
         try await withPreferences {
             let store = try await WhoopStore.inMemory()
             let registry = DeviceRegistryStore(dbQueue: store.registryWriter)
@@ -261,10 +263,10 @@ final class IntelligenceRRSourceTests: XCTestCase {
             let rows = try await store.dailyMetrics(deviceId: canonical + "-noop",
                 from: input.day, to: input.day)
             let scored = try XCTUnwrap(rows.first)
-            XCTAssertGreaterThan(try XCTUnwrap(scored.avgHrv), 0)
-            XCTAssertNotNil(scored.recovery)
+            XCTAssertNil(scored.avgHrv,
+                         "unlabelled beats under an unconfirmed row must not reach the HRV score")
             let gap = try await showsLegacyGap(scored, store: store, owner: canonical)
-            XCTAssertFalse(gap, "WHOOP 4 legacy beats remain supported")
+            XCTAssertTrue(gap, "…and the night must SAY it withheld them, not go quiet")
         }
     }
 
@@ -317,10 +319,11 @@ final class IntelligenceRRSourceTests: XCTestCase {
             let guarded = await repo.selfHealEditedStages(from: start, to: start + duration)
             XCTAssertEqual(guarded.first?.stagesJSON, baseline,
                            "self-heal must not use unlabelled alias R-R even before active-ID adoption")
+            // Relabelling to an unsupported generation confirms nothing, so the guard still holds.
             try register(registry, canonicalModel: "4.0")
-            let confirmedFour = await repo.selfHealEditedStages(from: start, to: start + duration)
-            XCTAssertNotEqual(confirmedFour.first?.stagesJSON, baseline,
-                              "the fixture must expose R-R-dependent staging, retained for confirmed WHOOP 4")
+            let relabelled = await repo.selfHealEditedStages(from: start, to: start + duration)
+            XCTAssertEqual(relabelled.first?.stagesJSON, baseline,
+                           "an unsupported generation's label must not be read as a confirmation")
         }
     }
 }

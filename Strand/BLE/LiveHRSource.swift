@@ -24,10 +24,8 @@ protocol LiveHRSource: AnyObject {
     func stop()
 }
 
-// The four shipped sources already expose exactly `scan()` / `connect(_:)` / `stop()`, so conformance is
+// The shipped sources already expose exactly `scan()` / `connect(_:)` / `stop()`, so conformance is
 // a pure declaration with no logic change (Swift's retroactive-conformance analogue of Android adding
 // `: LiveHrSource` + `override` to each class).
 extension StandardHRSource: LiveHRSource {}
-extension HuamiHRSource: LiveHRSource {}
 extension FTMSSource: LiveHRSource {}
-extension OuraLiveSource: LiveHRSource {}

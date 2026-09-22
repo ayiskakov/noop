@@ -75,12 +75,6 @@
 	<string>NOOP transcribes your question on-device so you can ask the coach out loud instead of typing. Audio never leaves your iPhone.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
-	<key>OURA_CLIENT_ID</key>
-	<string>$(OURA_CLIENT_ID)</string>
-	<key>OURA_CLIENT_SECRET</key>
-	<string>$(OURA_CLIENT_SECRET)</string>
-	<key>OURA_REDIRECT_URI</key>
-	<string>$(OURA_REDIRECT_URI)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

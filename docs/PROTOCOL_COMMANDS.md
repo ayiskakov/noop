@@ -237,6 +237,9 @@ nor a familiar enum name is a basis for probing a replacement.
 
 ## WHOOP 4
 
+> **Protocol reference only.** NOOP no longer connects to a WHOOP 4.0; "sent by NOOP" below records
+> the retired WHOOP 4.0 client, not current behaviour.
+
 The wire command byte is at frame offset 6 in a type-35 WHOOP 4 inner record.
 Requests below exclude the outer envelope. Observed compatibility behavior is not
 promoted to version-specific firmware support. Response offsets and result caveats are in the
@@ -245,7 +248,7 @@ promoted to version-specific firmware support. Response offsets and result cavea
 | ID | WHOOP 4 request/body | Response, effect and lifecycle | Validation and limit |
 |---:|---|---|---|
 | 1, 2, 4, 5 | no request documented | No observation is recorded for this version. | **U · outside the documented 41.17.6.0 command set.** |
-| 3 | `00` off / `01` on in a request form observed in use | Sent by NOOP; no proprietary type-40 transition has been observed for this version. The standard BLE Heart Rate Service is separate. | **P / U · implemented outside the documented 41.17.6.0 command set.** |
+| 3 | `00` off / `01` on in a request form observed in use | Formerly sent by NOOP's WHOOP 4.0 client; no proprietary type-40 transition has been observed for this version. The standard BLE Heart Rate Service is separate. | **P / U · implemented outside the documented 41.17.6.0 command set.** |
 | 7 | empty or legacy default | The 68-byte response body has revision 1 at offset 0, four Harvard `u32le` version components at 1, four Boylston components at 17, then 35 not-yet-named bytes. | **S · documented for 41.17.6.0.** |
 | 10 | request forms observed in use: `seconds:u32le` plus four or five zeros | On some devices one of the two SET_CLOCK forms was observed to latch; read back to confirm. | **O / U · observed outside the documented 41.17.6.0 command set.** |
 | 11 | request forms observed in use: empty or `00` | Use the form accepted by the device and read back the clock rather than inferring it from write acknowledgement. | **O / U · observed outside the documented 41.17.6.0 command set.** |
@@ -253,21 +256,21 @@ promoted to version-specific firmware support. Response offsets and result cavea
 | 20 | `00` | Aborts an open offload without acknowledging or trimming its uncommitted chunk. | **O / U · observed working in device captures on 41.17.6.0, outside the documented command set.** Restart position remains unresolved. |
 | 22 | `00` | Starts asynchronous type-47 historical delivery; a response is not the data stream. | **O / U · observed working in device captures on 41.17.6.0, outside the documented command set.** Type-47 delivery was observed. |
 | 23 | `01` plus exact eight-byte `HISTORY_END` block | Consumer ACK after durable commit; may permit history reclamation. | **O / U · observed working in device captures on 41.17.6.0, outside the documented command set.** `HISTORY_END` acknowledgement was observed; never reconstruct the opaque second word. |
-| 26 | `00` or empty | Final charge value is `u16le / 10` percent; also used as the confirmed connection write. | **S · observed in device captures; supported by NOOP.** Validate result and body length before use. |
+| 26 | `00` or empty | Final charge value is `u16le / 10` percent; also used as the confirmed connection write. | **S · observed in device captures; formerly sent by NOOP's WHOOP 4.0 client.** Validate result and body length before use. |
 | 29 | no semantic fields; empty, `00` and `01` are equivalent | Returns result 1 without a body; a reboot follows. | **S · documented for 41.17.6.0.** One device observation showed no visible reboot, so the physical effect is not yet confirmed. |
 | 32 | no semantic fields; empty, `00` and `01` are equivalent | Returns result 1 without a body; a power cycle follows (distinct from 29). | **S · documented for 41.17.6.0.** The physical effect remains separate from response acceptance. |
 | 34 | `00` | Responses may advance response sequence while echoing one request origin. | **S · observed in device captures.** The body is not the 65-byte 50.42.1.0 layout. |
 | 35 | `00` | The 131-byte body has a 10-byte serial field at body offset 14 (nine serial bytes plus NUL) and 54 bytes of key and signature material at 24. | **S · documented for this version; observed in device captures.** Sensitive material must never be exposed. |
 | 63 | `00` off / `01` on | Controls the type-43 R10/R11 realtime output; 82 is not an alias. | **S · observed in device captures.** WHOOP 5/MG 50.42.1.0 returns result 3 for this ID. |
 | 66 | `01 \|\| epoch_seconds:u32le \|\| subseconds:u16le` | Arms a WHOOP 4 alarm; storage acknowledgement and physical wake are separate. Working observed requests appended two zero bytes that are not evaluated. | **S · documented for 41.17.6.0; observed in device captures.** A seven-byte request was acknowledged without vibration; the semantic distinction is the subsecond field, not a longer body contract. |
-| 67 | `[01]` | Reads legacy alarm state. | **S · observed in device captures; supported by NOOP.** Failure/readback variants are not exhaustive. |
-| 68 | `[01]` | Starts immediate legacy alarm/haptic execution. | **S · observed in device captures; supported by NOOP.** Acceptance is not motor-movement proof. |
-| 69 | `[01]` | Disables the legacy alarm, distinct from stopping an active haptic. | **S · observed in device captures; supported by NOOP.** Readback and reboot persistence remain bounded. |
+| 67 | `[01]` | Reads legacy alarm state. | **S · observed in device captures; formerly sent by NOOP's WHOOP 4.0 client.** Failure/readback variants are not exhaustive. |
+| 68 | `[01]` | Starts immediate legacy alarm/haptic execution. | **S · observed in device captures; formerly sent by NOOP's WHOOP 4.0 client.** Acceptance is not motor-movement proof. |
+| 69 | `[01]` | Disables the legacy alarm, distinct from stopping an active haptic. | **S · observed in device captures; formerly sent by NOOP's WHOOP 4.0 client.** Readback and reboot persistence remain bounded. |
 | 76 | `00` | Reads the Harvard advertising name. | **S · documented for 41.17.6.0.** Complete response-field validation remains incomplete. |
 | 77 | two reserved bytes, then a 16-byte name field | The first name byte must be nonzero; the last field byte is forced to NUL, leaving at most 15 name bytes. Bytes are not validated as UTF-8. | **S · documented for 41.17.6.0.** Visibility after a write is not yet confirmed in device captures. |
 | 79 | five-byte preset request | Runs a legacy preset haptic pattern. | **S · observed in device captures.** Not the WHOOP 5/MG revision-1 12-byte notification pattern. |
-| 81 | `[01]` | Starts WHOOP 4 raw-data output, separate from stream 63. | **S · supported by NOOP; effect not yet confirmed.** |
-| 82 | `[01]` | Stops raw-data output; does not select R10/R11 stream 63. | **S · supported by NOOP; effect not yet confirmed.** Full sensor shutdown is not established. |
+| 81 | `[01]` | Starts WHOOP 4 raw-data output, separate from stream 63. | **S · formerly sent by NOOP's WHOOP 4.0 client; effect not yet confirmed.** |
+| 82 | `[01]` | Stops raw-data output; does not select R10/R11 stream 63. | **S · formerly sent by NOOP's WHOOP 4.0 client; effect not yet confirmed.** Full sensor shutdown is not established. |
 | 84 | legacy read request | Response fields are revision/location/confidence/status. | **S · observed in device captures.** Do not substitute the 50.42.1.0 fixed cached-status placeholders. |
 | 96 | `revision_or_legacy:u8 \|\| period:u16le \|\| duration:u16le` | Enables high-frequency sync; period is at least 60 seconds and duration is at most 28,800 seconds. Returns result 1 without a body. | **S · documented for 41.17.6.0.** Event 97 reports enabled state. |
 | 97 | no semantic request fields | Disables high-frequency sync and returns result 1 without a body. | **S · documented for 41.17.6.0.** Event 98 reports disabled state. |

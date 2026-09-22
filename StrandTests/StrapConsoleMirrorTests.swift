@@ -23,15 +23,14 @@ final class StrapConsoleMirrorTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Both offload branches must mirror the console, or one family goes silent mid-sync — which is the
-    /// exact shape of the original defect, just per-family instead of everywhere.
-    func testBothOffloadBranchesMirrorTheStrapConsole() throws {
+    /// The offload branch must mirror the console, or the strap goes silent mid-sync — which is the
+    /// exact shape of the original defect.
+    func testTheOffloadBranchMirrorsTheStrapConsole() throws {
         let src = try bleManagerSource()
         let calls = src.components(separatedBy: "router.mirrorStrapConsoleIfPresent(frame: frame)").count - 1
-        XCTAssertEqual(calls, 2,
-                       "expected the console carve-out in BOTH offload branches (WHOOP4 + 5/MG); "
-                       + "found \(calls). Without it the strap's narration is dropped for that family "
-                       + "during exactly the sync it describes.")
+        XCTAssertEqual(calls, 1,
+                       "expected the console carve-out in the offload branch; found \(calls). Without it "
+                       + "the strap's narration is dropped during exactly the sync it describes.")
     }
 
     /// The carve-out has to sit INSIDE the offload branch, beside the gesture one. If it drifted out to

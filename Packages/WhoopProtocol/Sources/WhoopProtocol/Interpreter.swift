@@ -168,89 +168,6 @@ final class FieldBuilder {
     }
 }
 
-/// Parse one complete WHOOP 4.0 frame.
-///
-/// `collectFields` (D#742) defaults to FALSE, the decode-only fast path: the flat `parsed` dict
-/// (and every other property except `fields`) is byte-identical, but the annotated `fields` array
-/// with its per-field `raw` hex stays empty. The live ingest path (FrameRouter / Collector /
-/// Backfiller / extractStreams) reads only `parsed`, so on a 1Hz+ stream or an offload burst the
-/// per-field metadata was pure allocation waste. Pass `true` on inspector/diagnostic surfaces
-/// (whoop-decode, field-asserting tests) that actually read `fields`.
-public func parseFrame(_ frame: [UInt8], collectFields: Bool = false) -> ParsedFrame {
-    // D#969: only build the whole-frame hex when a consumer will read it. The live ingest fast path
-    // (collectFields:false) never reads `rawHex` — only inspector/diagnostic surfaces (whoop-decode,
-    // PuffinCapture, field-asserting tests) do — so on a 1Hz stream or an offload burst this skips a
-    // per-byte `String(format:)` allocation pass whose result was discarded.
-    let rawHex = collectFields ? frame.map { String(format: "%02x", $0) }.joined() : ""
-    let check = verifyFrame(frame)
-    // Below the family minimum there is no inner record at all — every offset a field would use
-    // lands in the checksum trailer — so nothing is decoded, not even a packet type.
-    if frame.count < FrameLimits.whoop4MinimumFrameBytes || frame[0] != 0xAA {
-        return ParsedFrame(ok: false, typeName: "INVALID/FRAGMENT", seq: nil, cmdName: nil,
-                           crcOK: nil, lenBytes: frame.count, rawHex: rawHex,
-                           fields: [], parsed: [:], rejectReason: check.reason)
-    }
-
-    let schema = loadSchema()
-    let length = check.length
-    let crcOK = check.crc32OK
-    // D7: named inner fields come only from payload bytes. On WHOOP 4.0 the CRC32 trailer starts at
-    // the declared length.
-    let limit = payloadLimit(frame, trailerStart: length)
-
-    let t = Int(frame[4])
-    let typeName = schema.typeName(t)
-    let seq = readU8(frame, 5, limit)
-
-    let fb = FieldBuilder(frame, collectFields: collectFields)
-    // envelope
-    fb.add(0, 1, "SOF", "frame", value: .string("0xAA"))
-    fb.add(1, 2, "length", "frame", value: length.map { .int($0) })
-    fb.add(3, 1, "crc8", "frame", value: .string(String(format: "0x%02X", frame[3])))
-    fb.add(4, 1, "packet_type", "frame", value: .string(typeName))
-    if let seq = seq { fb.add(5, 1, "seq", "frame", value: .int(seq)) }
-
-    let spec = schema.packet(forType: t)
-    if spec == nil {
-        fb.add(6, 1, "cmd", "cmd", value: readU8(frame, 6, limit).map { .int($0) })
-        if let length = length { fb.region(7, length, "payload", "unknown") }
-    } else {
-        // static fields from schema
-        for fld in spec!.fields {
-            guard let dtype = fld.dtype else { continue }
-            guard let val = readDType(frame, fld.off, dtype, limit) else { continue }
-            let value: ParsedValue
-            if let enumKey = fld.`enum` {
-                value = .string(schema.enumName(enumKey, val))
-            } else {
-                value = .int(val)
-            }
-            fb.add(fld.off, fld.len, fld.name, fld.cat, value: value, note: fld.note)
-        }
-        // per-type post-hook for irregular fields (populated in PostHooks.swift by B7)
-        if let postName = spec!.post, let hook = postHooks[postName] {
-            hook(fb, frame, length, schema)
-        }
-    }
-
-    // crc32 trailer field
-    if let length = length, length + 4 <= frame.count {
-        let crcVal = UInt32(frame[length]) | (UInt32(frame[length + 1]) << 8)
-            | (UInt32(frame[length + 2]) << 16) | (UInt32(frame[length + 3]) << 24)
-        fb.add(length, 4, "crc32", "frame", value: .string(String(format: "0x%08X", crcVal)),
-               note: check.crc32OK == true ? "OK" : "MISMATCH")
-    }
-
-    let cmdByte = readU8(frame, 6, limit) ?? 0
-    let cmdName = (t == 35 || t == 36) ? schema.enumName("CommandNumber", cmdByte) : nil
-
-    // `ok` is the verifier's full verdict, not a constant: the fields above stay decoded so an
-    // inspector can still read a broken frame, but no consumer may mistake that for integrity.
-    return ParsedFrame(ok: check.ok, typeName: typeName, seq: seq, cmdName: cmdName,
-                       crcOK: crcOK, lenBytes: frame.count, rawHex: rawHex,
-                       fields: fb.fields, parsed: fb.parsed, rejectReason: check.reason)
-}
-
 /// #47: the packet type NAME only — NO CRC verify, NO FieldBuilder — for hot-path pre-filters that just
 /// need a frame's TYPE (e.g. "is this an EVENT?") before deciding whether to pay a full `parseFrame`. On a
 /// multi-minute offload of thousands of type-47 records that only ever act on rare EVENT frames, this skips
@@ -268,10 +185,6 @@ public func frameTypeName(_ frame: [UInt8], family: DeviceFamily) -> String? {
     guard frame.first == 0xAA else { return nil }
     let schema = loadSchema()
     switch family {
-    case .whoop4:
-        // parseFrame's INVALID guard.
-        guard frame.count >= FrameLimits.whoop4MinimumFrameBytes else { return nil }
-        return schema.typeName(Int(frame[4]))
     case .whoop5:
         // parseFrameWhoop5's INVALID guard.
         guard frame.count >= FrameLimits.whoop5MinimumFrameBytes else { return nil }
@@ -281,18 +194,19 @@ public func frameTypeName(_ frame: [UInt8], family: DeviceFamily) -> String? {
 
 /// Family-aware frame parsing.
 ///
-/// `whoop4` behaves EXACTLY like the no-family `parseFrame(_:)` above (back-compat). `whoop5`
-/// parses the Whoop 5.0 envelope (see `verifyFrame(_:family:)` for the layout): the SOF/length/
+/// Parses the Whoop 5.0 envelope (see `verifyFrame(_:family:)` for the layout): the SOF/length/
 /// header-CRC live in the first 8 bytes, the inner `[type][seq][cmd][data…]` starts at offset 8,
 /// and the 4-byte CRC32 trailer closes the frame. "Puffin" types 38/56 are aliased onto their base
 /// names (COMMAND_RESPONSE / METADATA) via `canonicalTypeName`.
 ///
-/// `collectFields` follows `parseFrame(_:collectFields:)` exactly (D#742): default FALSE is the
-/// decode-only fast path with an identical `parsed` dict and an empty `fields` array.
+/// `collectFields` (D#742) defaults to FALSE, the decode-only fast path: the flat `parsed` dict (and
+/// every other property except `fields`) is byte-identical, but the annotated `fields` array with its
+/// per-field `raw` hex stays empty. The live ingest path (FrameRouter / Collector / Backfiller /
+/// extractStreams) reads only `parsed`, so on a 1Hz+ stream or an offload burst the per-field metadata
+/// was pure allocation waste. Pass `true` on inspector/diagnostic surfaces (whoop-decode,
+/// field-asserting tests) that actually read `fields`.
 public func parseFrame(_ frame: [UInt8], family: DeviceFamily, collectFields: Bool = false) -> ParsedFrame {
     switch family {
-    case .whoop4:
-        return parseFrame(frame, collectFields: collectFields)
     case .whoop5:
         return parseFrameWhoop5(frame, collectFields: collectFields)
     }
@@ -1042,7 +956,3 @@ private func hexFrameSlice(_ f: [UInt8], _ start: Int, _ end: Int) -> String {
     return f[start..<end].map { String(format: "%02x", $0) }.joined()
 }
 
-// Post-hook registry (populated in PostHooks.swift by Task B7).
-// name -> (FieldBuilder, frame, length, schema) -> Void
-typealias PostHook = (FieldBuilder, [UInt8], Int?, Schema) -> Void
-var postHooks: [String: PostHook] = [:]

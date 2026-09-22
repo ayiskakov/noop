@@ -72,24 +72,6 @@ public enum SkinTempBackfill {
         return sessions.filter { $0.end >= dayStart && $0.end < dayEnd }
     }
 
-    /// Rule 3: the WHOOP 4.0 anchor MUST come from the current scoring window. If no per-device anchor
-    /// could be learned (too few in-band samples), DECLINE the night — do NOT fall back to the global
-    /// 826 anchor. A re-learned anchor puts backfilled nights on a different offset from the stored
-    /// ones and the chart plots two scales as one line.
-    ///
-    /// Returns the anchor to use, or nil to decline. For a 5/MG (`.whoop5`) the anchor is always nil
-    /// and the night proceeds (centidegree path, no anchor).
-    public static func resolveAnchor(family: DeviceFamily, windowAnchorRaw: Double?) -> Double? {
-        switch family {
-        case .whoop4:
-            // No anchor ⇒ decline. The global 826 is NOT a fallback here (rule 3).
-            return windowAnchorRaw
-        case .whoop5:
-            // Centidegree path: no anchor, no decline on anchor grounds.
-            return nil
-        }
-    }
-
     /// Compute one night's backfill absolute, applying all three rules. Pure + deterministic; the
     /// walker supplies the raw inputs and writes the result.
     ///
@@ -99,19 +81,13 @@ public enum SkinTempBackfill {
     ///     filters to this day's by end timestamp.
     ///   - hr: HR samples for the night's window.
     ///   - skinTemp: raw skin-temp samples for the night's window.
-    ///   - family: the device family that wrote the owner's skin-temp rows (`.whoop4` vs `.whoop5`).
-    ///   - windowAnchorRaw: the per-device WHOOP 4.0 anchor learned from the CURRENT scoring window
-    ///     (rule 3). nil for a 5/MG or when the current window couldn't learn one.
-    ///   - dayStart: the LOCAL-midnight unix seconds for `candidate.day`.
-    ///   - wornToleranceSec: the worn-gate timestamp tolerance (0 for WHOOP, >0 for Oura).
-    /// - Returns: the nightly mean (°C) or nil with a decline reason.
+    ///   - family: the device family that wrote the owner's skin-temp rows.
     public static func computeNight(
         candidate: NightCandidate,
         sessions: [SleepSession],
         hr: [HRSample],
         skinTemp: [SkinTempSample],
         family: DeviceFamily,
-        windowAnchorRaw: Double?,
         dayStart: Int,
         wornToleranceSec: Int = 0
     ) -> NightResult {
@@ -121,17 +97,11 @@ public enum SkinTempBackfill {
             return NightResult(day: candidate.day, skinTempC: nil,
                                declineReason: "no sleep session ends on this day")
         }
-        // Rule 3: the WHOOP 4.0 anchor comes from the current window. No anchor ⇒ decline.
-        let anchor = resolveAnchor(family: family, windowAnchorRaw: windowAnchorRaw)
-        if family == .whoop4 && anchor == nil {
-            return NightResult(day: candidate.day, skinTempC: nil,
-                               declineReason: "no per-device 4.0 anchor from the current window (rule 3: decline, not global fallback)")
-        }
         // Run the SAME funnel the scoring pass uses — identical inputs, identical result, no second
         // derivation that could disagree.
         let diag = AnalyticsEngine.skinTempFunnel(
             matched, hr: hr, skinTemp: skinTemp, family: family,
-            anchorRaw: anchor, wornToleranceSec: wornToleranceSec)
+            wornToleranceSec: wornToleranceSec)
         if let mean = diag.mean {
             return NightResult(day: candidate.day, skinTempC: mean)
         }

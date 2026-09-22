@@ -395,8 +395,11 @@ struct BackfillContinuation {
     ///    forward by exactly that gap once it clears `histStaleClockThresholdSec` (1 day) — a strap off
     ///    the wrist for a weekend would land its next backfill on the wrong days.
     ///
-    /// Pure so the Kotlin twin (`WhoopBleClient.derivesClockCorrelation`) can assert the same rule.
-    static func derivesClockCorrelation(_ family: DeviceFamily) -> Bool { family == .whoop4 }
+    /// `family` is carried so the rule names the hardware it applies to rather than assuming it.
+    static func derivesClockCorrelation(_ family: DeviceFamily) -> Bool {
+        _ = family
+        return false
+    }
 
     /// #1012: is the strap-reported "newest banked record" FUTURE-dated beyond the skew allowance — more
     /// than `futureSkewSeconds` past the wall clock? The strap's clock is then almost certainly set in the
@@ -528,17 +531,15 @@ struct ContinuousHrvSchedule {
 public final class BLEManager: NSObject, ObservableObject {
 
     // MARK: GATT UUIDs (authoritative, from FINDINGS.md)
-    static let customService   = CBUUID(string: "61080001-8d6d-82b8-614a-1c8cb0f8dcc6")
     static let whoop5Service   = CBUUID(string: "fd4b0001-cce1-4033-93ce-002d5875f58a") // WHOOP 5.0 / MG
-    static let cmdWriteChar    = CBUUID(string: "61080002-8d6d-82b8-614a-1c8cb0f8dcc6") // CMD → strap
-    static let cmdNotifyChar   = CBUUID(string: "61080003-8d6d-82b8-614a-1c8cb0f8dcc6") // responses
-    static let eventNotifyChar = CBUUID(string: "61080004-8d6d-82b8-614a-1c8cb0f8dcc6") // events
-    static let dataNotifyChar  = CBUUID(string: "61080005-8d6d-82b8-614a-1c8cb0f8dcc6") // data (frag)
     // WHOOP 5.0 / MG ("puffin") characteristics under the fd4b service. EXPERIMENTAL — see the
     // whoop5 connect path in didDiscoverCharacteristics. fd4b0002 takes the static CLIENT_HELLO.
     static let whoop5CmdWriteChar = CBUUID(string: "fd4b0002-cce1-4033-93ce-002d5875f58a")
+    /// fd4b0003 — the RESPONSES channel: every COMMAND_RESPONSE the strap sends arrives here, which is
+    /// why `connectSettled` waits on this one confirming subscribed rather than on any notify char.
+    static let whoop5CmdNotifyChar = CBUUID(string: "fd4b0003-cce1-4033-93ce-002d5875f58a")
     static let whoop5NotifyChars: [CBUUID] = [
-        CBUUID(string: "fd4b0003-cce1-4033-93ce-002d5875f58a"),
+        whoop5CmdNotifyChar,
         CBUUID(string: "fd4b0004-cce1-4033-93ce-002d5875f58a"),
         CBUUID(string: "fd4b0005-cce1-4033-93ce-002d5875f58a"),
         CBUUID(string: "fd4b0007-cce1-4033-93ce-002d5875f58a"),
@@ -1007,9 +1008,6 @@ public final class BLEManager: NSObject, ObservableObject {
     /// strap disarmed — without making every connect emit a DISABLE_ALARM for the majority who never
     /// armed one. Cleared once a disarm actually reaches the strap.
     private(set) var disarmPending = false
-    private var cmdNotifyCharacteristic: CBCharacteristic?
-    private var eventNotifyCharacteristic: CBCharacteristic?
-    private var dataNotifyCharacteristic: CBCharacteristic?
     private var heartRateCharacteristic: CBCharacteristic?
     private var batteryCharacteristic: CBCharacteristic?
     /// #520 DIS: remembered at discovery, READ post-bond — and since #1635 also on a SUPPRESSED link that
@@ -1031,23 +1029,6 @@ public final class BLEManager: NSObject, ObservableObject {
     /// number rather than an independently chosen one: this read can cost the link, so the two platforms
     /// should not be probing at different moments when a field capture has to explain a drop.
     static let unbondedDisReadDelay: TimeInterval = 3.0
-    /// #1193: the WHOOP 4.0 strap serial from `GET_HELLO_HARVARD`, once it has been seen TWICE.
-    ///
-    /// The withholding rule itself lives in `RepeatedSerialGate`, beside the decoder, where it is unit
-    /// tested; this pair is just the manager's view of its outcome.
-    ///
-    /// The 5/MG adopts its DIS serial on first read, because `0x2A25` is a spec-defined field that means
-    /// one thing. The 4.0 offset is not that: it was read off a single capture, so "the 9-char alnum run
-    /// at offset 14" is a strong inference rather than a documented field. If that run turned out to be
-    /// per-session rather than per-strap, adopting it immediately would mint a NEW id on every connect and
-    /// migrate the history each time — strictly worse than the duplicate row this exists to prevent.
-    ///
-    /// So a value must repeat before it is trusted. Two hellos carrying the same run cannot both be a
-    /// fresh per-session token, which is the only failure mode that would do real damage. The cost is that
-    /// a 4.0 adopts one connect later than a 5/MG; the benefit is that the destructive failure cannot
-    /// happen at all. Deliberately NOT reset on disconnect — the two sightings are meant to span connects.
-    private var harvardSerialGate = RepeatedSerialGate()
-    private var harvardSerialConfirmed: String?
 
     private var disSerial: String?
     private var disHwRev: String?
@@ -1101,7 +1082,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// hammer Bluetooth (vs the disconnect path's flat 3s, which is fine for an already-bonded drop).
     private var failedConnectAttempts = 0
 
-    // MARK: - Standing-connect reconnect regime (#1413 — twin of OuraLiveSource's #1286 fix)
+    // MARK: - Standing-connect reconnect regime (#1413)
     //
     // The old reconnect armed a `DispatchQueue.main.asyncAfter` backoff, which does not fire in a suspended
     // app AND — the real damage — left NOTHING outstanding with CoreBluetooth after a failed connect, so iOS
@@ -1131,7 +1112,7 @@ public final class BLEManager: NSObject, ObservableObject {
     private var standingConnectAt: Date?
 
     /// What to do after an involuntary drop or a failed connect. Pure so the policy is unit-testable with no
-    /// CoreBluetooth (`BLEManagerReconnectPolicyTests`). Twin of `OuraLiveSource.ReconnectStep`.
+    /// CoreBluetooth (`BLEManagerReconnectPolicyTests`).
     enum ReconnectStep: Equatable, Sendable {
         case standingConnect
         case standingConnectAfter(delay: TimeInterval)
@@ -1174,7 +1155,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Hand the reconnect to CoreBluetooth: `central.connect` has NO timeout, so it stays outstanding and iOS
     /// wakes the app when the strap advertises again, including while SUSPENDED — the whole point. Same call
     /// `connectFromSystem`'s targeted path already makes: no new outbound command, nothing written to the
-    /// strap, so the BLE safety contract is unaffected. Twin of `OuraLiveSource.issueStandingConnect`.
+    /// strap, so the BLE safety contract is unaffected.
     private func issueStandingConnect(whilePausedForBondLoop: Bool = false) {
         guard whoopConnectAllowed("standing-connect") else { return }
         guard !intentionalDisconnect else { return }
@@ -1269,10 +1250,6 @@ public final class BLEManager: NSObject, ObservableObject {
     /// isn't. Mirrors the Android `LiveState.whoop5Detected` signal the equivalent screen reads.
     var isWhoop5: Bool { selectedModel.deviceFamily == .whoop5 }
 
-    /// True when the selected/connected strap is a WHOOP 4.0. Read-only window onto the private
-    /// `selectedModel`, used to gate the 4.0-only reboot probe (Test Centre → Connection) in the UI.
-    var isWhoop4: Bool { selectedModel.deviceFamily == .whoop4 }
-
     /// The 5-generation hardware variant resolved from the strap's Device Information Service (#520).
     /// `.unknown` until a DIS string lands — and `.unknown` is NOT MG, so an MG-only capability stays
     /// off until the hardware actually attests to itself.
@@ -1361,7 +1338,6 @@ public final class BLEManager: NSObject, ObservableObject {
         #endif
         // Strap-as-clock: an incoming EVENT packet kicks a rate-limited catch-up sync.
         router.onSyncTrigger = { [weak self] in self?.requestSync(.strap) }
-        router.onStrapSerial = { [weak self] serial in self?.noteHarvardSerial(serial) }   // #1193
         // #78 hole-4: a paused-for-bond-loop strap gets one bounded salvage attempt per app-foreground.
         installForegroundSalvageProbe()
     }
@@ -1561,7 +1537,6 @@ public final class BLEManager: NSObject, ObservableObject {
         #endif
         // Strap-as-clock: an incoming EVENT packet kicks a rate-limited catch-up sync.
         router.onSyncTrigger = { [weak self] in self?.requestSync(.strap) }
-        router.onStrapSerial = { [weak self] serial in self?.noteHarvardSerial(serial) }   // #1193
         // #78 hole-4: a paused-for-bond-loop strap gets one bounded salvage attempt per app-foreground.
         installForegroundSalvageProbe()
     }
@@ -2389,12 +2364,7 @@ public final class BLEManager: NSObject, ObservableObject {
                 return
             }
             log("→ \(command.label) payload=\(hex(puffinPayload)) (puffin\(cmdNote))")
-            return
         }
-        seq = seq &+ 1
-        let frame = command.frame(seq: seq, payload: payload)
-        p.writeValue(Data(frame), for: ch, type: writeType)
-        log("→ \(command.label) payload=\(hex(payload))")
     }
 
     /// Point the Collector's live decode at the selected family. For a 5/MG, also install an identity
@@ -2411,7 +2381,7 @@ public final class BLEManager: NSObject, ObservableObject {
             let now = Int(Date().timeIntervalSince1970)
             collector?.clockRef = ClockRef(device: now, wall: now)
         } else {
-            collector?.clockRef = clockRef   // the WHOOP4 correlation, nil until GET_CLOCK lands
+            collector?.clockRef = clockRef   // nil: no supported family derives a correlation
         }
     }
 
@@ -2423,11 +2393,6 @@ public final class BLEManager: NSObject, ObservableObject {
     public func refreshBattery() {
         guard state.connected, let p = peripheral, p.state == .connected else {
             log("refreshBattery ignored — not connected")
-            return
-        }
-
-        if selectedModel.deviceFamily == .whoop4 {
-            send(.getBatteryLevel, payload: [0x00])
             return
         }
 
@@ -2465,32 +2430,9 @@ public final class BLEManager: NSObject, ObservableObject {
     /// flag, kick the strap with sendHistoricalData, and arm the idle timeout.
     @discardableResult
     private func beginBackfill() -> Bool {
-        // #1598: this whole block is WHOOP 4.0 ONLY. A 5/MG has no GET_CLOCK correlation to chase —
-        // identity is its correct decode — and deriving one from the Data Range would misdate its
+        // #1598: there is no GET_CLOCK correlation to chase. A 5/MG's records carry real-unix seconds,
+        // identity is its correct decode, and deriving a correlation from the Data Range would misdate its
         // history. See BackfillContinuation.derivesClockCorrelation for why.
-        if BackfillContinuation.derivesClockCorrelation(selectedModel.deviceFamily) {
-            // #700: if backfill is about to start and we STILL have no clock correlation, re-send
-            // GET_CLOCK. The strap may have silently dropped the first response (observed on a reporter's
-            // WHOOP 4.0 — GET_CLOCK sent, no reply, entire session decodes under IDENTITY fallback, all
-            // rows land on the current day). Capped at 3 retries to avoid flooding.
-            if clockRef == nil && clockRetries < 3 {
-                clockRetries += 1
-                log("Clock: no correlation yet — re-sending GET_CLOCK (retry \(clockRetries)/3)")
-                send(.getClock, payload: [])
-                send(.getClock, payload: [0x00])
-            } else if clockRef == nil, let newest = strapNewestTs {
-                // #700 fallback: GET_CLOCK never responded even after retries. Derive a rough correlation
-                // from the Data Range's newest-banked timestamp (already parsed, always answered). The
-                // offset is approximate (the newest record could be minutes old) but vastly better than
-                // identity (offset 0), which mis-dates entire nights.
-                let wall = Int(Date().timeIntervalSince1970)
-                let ref = ClockRef(device: newest, wall: wall)
-                clockRef = ref
-                collector?.clockRef = ref
-                backfiller?.clockRef = ref
-                log("Clock: GET_CLOCK unresponsive — derived rough correlation from Data Range (device=\(newest) wall=\(wall), offset \(wall - newest)s)")
-            }
-        }
         // Never offload before the connect handshake has run: a racing foreground/restore trigger
         // firing SEND_HISTORICAL ahead of hello/SET_CLOCK was part of the storm that stopped serving.
         guard connectHandshakeDone else {
@@ -2834,15 +2776,12 @@ public final class BLEManager: NSObject, ObservableObject {
                 let wallNowUnix = Int(Date().timeIntervalSince1970)
                 // Read the field ONCE: it feeds both the log line and the banner below, and they must not
                 // disagree about whether the strap is stale.
-                // WHOOP4 only, explicitly, on BOTH platforms. Redundant here today - `strapNewestTs` is
-                // only assigned when `feedsSync` (#695), which is WHOOP4 - but stated so a later widening
-                // of feedsSync cannot make this fire where the Android twin does not. A 5/MG that cannot
-                // offload has no business being told it stopped saving to flash.
-                let staleNewest: Int? = selectedModel.deviceFamily == .whoop4
-                    ? strapNewestTs.flatMap {
-                        Backfiller.isStaleNewestRecord(newestUnix: $0, wallNowUnix: wallNowUnix) ? $0 : nil
-                    }
-                    : nil
+                // `strapNewestTs` is only assigned when `feedsSync` (#695), which 5/MG does not set, so
+                // this stays nil today. Kept as the one place the rule lives: a strap that cannot offload
+                // has no business being told it stopped saving to flash.
+                let staleNewest: Int? = strapNewestTs.flatMap {
+                    Backfiller.isStaleNewestRecord(newestUnix: $0, wallNowUnix: wallNowUnix) ? $0 : nil
+                }
                 if let newest = staleNewest {
                     log(Backfiller.staleRecordLine(newestUnix: newest, wallNowUnix: wallNowUnix))
                 }
@@ -3318,14 +3257,13 @@ public final class BLEManager: NSObject, ObservableObject {
     /// We arm (TOGGLE_REALTIME_HR 1) / disarm (TOGGLE_REALTIME_HR 0) ONLY on the
     /// false↔true edge of that derived want — so a Live screen closing while the preference still wants
     /// it does NOT disarm, and turning the preference off with no screen open DOES disarm. The toggle only
-    /// reaches the strap once it's a WHOOP4 (custom channels open immediately) or a bonded 5/MG (puffin
-    /// framing); otherwise the want is remembered and the post-bond branch arms it. Mirrors the Android
-    /// `reconcileRealtime`.
+    /// reaches the strap once the link is BONDED (puffin framing needs it); otherwise the want is
+    /// remembered and the post-bond branch arms it.
     private func reconcileRealtime() {
         let want = screenWantsRealtime || continuousCaptureWantsNow()
         wantsRealtime = want   // keep-alive + post-bond arm-on-connect read this derived value
         guard want != realtimeArmed else { return }                      // no edge — nothing to send
-        guard selectedModel.deviceFamily == .whoop4 || state.bonded else { return }   // can't reach the strap yet
+        guard state.bonded else { return }   // can't reach the strap yet
         realtimeArmed = want
         send(.toggleRealtimeHR, payload: [want ? 0x01 : 0x00])
     }
@@ -3571,7 +3509,7 @@ public final class BLEManager: NSObject, ObservableObject {
             let resultCode: Int? = frame.count > 12 ? Int(frame[12]) : nil
             r22DisableRun?.noteWriteAck(resultCode: resultCode, for: step)
         } else {
-            switch DeviceConfigReadProbe.parse(frame: frame, family: isWhoop5 ? .whoop5 : .whoop4,
+            switch DeviceConfigReadProbe.parse(frame: frame, family: .whoop5,
                                                expecting: step.opcode) {
             case .success(let r): r22DisableRun?.noteReadBack(r, for: step)
             case .failure(let f): r22DisableRun?.noteReadFailure(f, for: step)
@@ -3665,7 +3603,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The 121 read-back — the ONLY thing that decides the verdict. Routed here from the frame router.
     private func handleBroadcastHrGateReadBack(_ frame: [UInt8], isWhoop5: Bool) {
         guard broadcastHrGateReport != nil else { return }
-        let family: DeviceFamily = isWhoop5 ? .whoop5 : .whoop4
+        _ = isWhoop5
+        let family: DeviceFamily = .whoop5
         switch DeviceConfigReadProbe.parse(frame: frame, family: family,
                                            expecting: DeviceConfigWriteGate.getDeviceConfigValueCmd) {
         case .success(let r): broadcastHrGateReport?.noteReadBack(r)
@@ -3751,7 +3690,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The 121 read-back — the ONLY thing that decides the verdict. Routed here from the frame router.
     private func handleEcgGateReadBack(_ frame: [UInt8], isWhoop5: Bool) {
         guard ecgGateReport != nil else { return }
-        let family: DeviceFamily = isWhoop5 ? .whoop5 : .whoop4
+        _ = isWhoop5
+        let family: DeviceFamily = .whoop5
         switch DeviceConfigReadProbe.parse(frame: frame, family: family,
                                            expecting: DeviceConfigWriteGate.getDeviceConfigValueCmd) {
         case .success(let r): ecgGateReport?.noteReadBack(r)
@@ -3760,70 +3700,13 @@ public final class BLEManager: NSObject, ObservableObject {
         finishEcgGateWrite()
     }
 
-    /// Read the strap's current BLE advertising name (WHOOP 4.0 / Harvard). The reply lands as a
-    /// GET_ADVERTISING_NAME COMMAND_RESPONSE and FrameRouter publishes it to `LiveState.advertisingName`.
-    /// Also sent automatically in the connect handshake; this is the manual refresh the Settings card
-    /// fires after a rename. No-op on a 5/MG (the Harvard name command isn't part of its framing).
-    public func requestAdvertisingName() {
-        guard selectedModel.deviceFamily == .whoop4 else {
-            log("Strap name: WHOOP 4.0 only — ignored on a 5/MG."); return
-        }
-        guard state.connected else { log("Strap name: not connected — ignored."); return }
-        send(.getAdvertisingNameHarvard, payload: [0x00])
-    }
-
-    /// Rename the strap's BLE advertising name (WHOOP 4.0 / Harvard) via SET_ADVERTISING_NAME (cmd 77).
-    /// Writes `[0x00,0x00] + UTF-8 name + [0x00]` (see `WhoopCommand.advertisingNamePayload`) over the
-    /// confirmed command channel; the strap reboots to apply, so the new name appears on the next connect
-    /// (the connect handshake re-reads it). The result ack is surfaced via `LiveState.renameStatus`.
-    /// WHOOP 4.0 only — a 5/MG uses puffin framing and a different device-config path. Reversible.
-    public func renameStrap(_ rawName: String) {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard selectedModel.deviceFamily == .whoop4 else {
-            state.renameStatus = "Renaming is WHOOP 4.0 only."
-            log("Strap rename: WHOOP 4.0 only — ignored on a 5/MG."); return
-        }
-        guard state.connected, state.bonded else {
-            state.renameStatus = "Connect and pair your strap first."
-            log("Strap rename: connect + bond first — ignored."); return
-        }
-        guard !name.isEmpty else {
-            state.renameStatus = "Enter a name first."; return
-        }
-        state.renameStatus = "Renaming…"
-        send(.setAdvertisingNameHarvard,
-             payload: WhoopCommand.advertisingNamePayload(name),
-             writeType: .withResponse)
-        // #2337: through `logSafeDeviceName`, never raw. This name is USER-CHOSEN, so it is the one
-        // string in the rename path that can carry a person's name, and strap logs get attached to public
-        // issues. The redactor masks MACs, WHOOP serials and hex dumps, none of which this is, so it would
-        // go out verbatim. The scan path already routes the very same value through the helper
-        // ("Discovered \(safeName)"), which made this the one place the same data was handled two ways.
-        log("Strap rename: wrote advertising name=\(LiveState.logSafeDeviceName(name))")
-        // Re-read shortly after so the card reflects the change if the strap applies it without dropping
-        // the link; if it reboots instead, the connect handshake re-reads the name on reconnect anyway.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(2)) { [weak self] in
-            self?.requestAdvertisingName()
-        }
-        // Timeout so the card can't hang on "Renaming…" forever. Some WHOOP 4.0 firmware never returns the
-        // SET_ADVERTISING_NAME COMMAND_RESPONSE that clears this status (it just reboots, or swallows the
-        // command) — the reporter on #428 sat on a permanent "Renaming…". If nothing has updated the status
-        // by now, surface an honest fallback instead of an endless spinner. A real ack or the reconnect
-        // re-read overwrites this the moment it arrives.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(8)) { [weak self] in
-            guard let self, self.state.renameStatus == "Renaming…" else { return }
-            self.state.renameStatus = "Rename sent - reconnect your strap to confirm the new name."
-            self.log("Strap rename: no ack within 8s — firmware may apply it on reboot/reconnect.")
-        }
-    }
-
     // MARK: Reboot (user-initiated, confirmation-gated) — see docs/PROTOCOL.md "Destructive commands"
 
     /// Monotonic timestamp of the last user-requested reboot, or nil. Set when `rebootStrap()` sends the
     /// command; consumed by `didDisconnectPeripheral` (to log how long the link stayed up = the strap acting
     /// on the reboot) and by the connect handshake (to log the reconnect round-trip). Cleared on reconnect
     /// or by the no-disconnect timeout. The whole point is a self-contained strap-log trail for a reboot,
-    /// so a "restart did nothing" report — especially on the unverified 5/MG framing — is triageable.
+    /// so a "restart did nothing" report is triageable.
     private var rebootRequestedAt: DispatchTime?
     private var rebootTimeoutWork: DispatchWorkItem?
     private var rebootSettleWork: DispatchWorkItem?
@@ -3843,30 +3726,17 @@ public final class BLEManager: NSObject, ObservableObject {
     /// to a connected + bonded strap; user-initiated and confirmation-gated at the call site (DevicesView).
     ///
     /// Emits a full debug trail to the strap log so a reboot is diagnosable end to end:
-    ///   `reboot: request …`  — family / firmware / link state at send time
-    ///   `reboot: sent …`     — opcode, framing (harvard-crc8 vs puffin-crc16), payload, seq
+    ///   `reboot: request …`  — firmware / link state at send time
+    ///   `reboot: sent …`     — opcode, framing (puffin-crc16), payload, seq
     ///   `reboot: strap acked result=0x…` — the COMMAND_RESPONSE (FrameRouter), the accept/reject signal
     ///                                        that caught 5/MG haptics rejection (result=0x03)
     ///   `reboot: link dropped …` — didDisconnectPeripheral, proves the strap acted
-    ///   `reboot: no disconnect within …` — strap ignored it (esp. an unverified 5/MG frame)
+    ///   `reboot: no disconnect within …` — strap ignored it
     ///   `reboot: reconnected …` — the connect handshake, round-trip complete
     public func rebootStrap() {
         // Production Restart: opcode 29 REBOOT_STRAP, empty body per the official app's builder
-        // (rh0.C45476d0). Confirmed on WHOOP 5.0 (#227); ignored on 4.0 (#235 — see rebootProbe).
-        sendRebootFrame(command: .rebootStrap, payload: [], probe: nil)
-    }
-
-    /// Send one candidate reboot frame from the WHOOP 4.0 reboot probe (Test Centre → Connection).
-    /// WHOOP 4.0 only — a 5.0 already reboots on the production frame (#227), so there is nothing to
-    /// probe there. Reuses the full reboot watchdog/trail, so the strap log shows whether THIS candidate
-    /// dropped the link (`reboot: link dropped …` = it worked) or was ignored (`reboot: no disconnect
-    /// within 12s …`). Confirmation-gated at the call site (DevicesView). See `RebootProbeVariant`.
-    public func rebootProbe(_ variant: RebootProbeVariant) {
-        guard selectedModel.deviceFamily == .whoop4 else {
-            log("reboot: probe is WHOOP 4.0 only — ignored (family=\(selectedModel.deviceFamily))")
-            return
-        }
-        sendRebootFrame(command: variant.command, payload: variant.payload, probe: variant)
+        // (rh0.C45476d0). Confirmed on WHOOP 5.0 (#227).
+        sendRebootFrame(command: .rebootStrap, payload: [])
     }
 
     /// #592: sentinel value of `LiveState.extendedBatteryProbe` between sending the probe and its reply
@@ -3966,7 +3836,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// cursor, not an index) until the strap's own end marker. NOTHING is written: no `SET_FF_VALUE(120)`,
     /// no `SET_DEVICE_CONFIG_VALUE(119)`, no value of any kind — this writes command frames purely to read,
     /// exactly like the Oura `spo2_status` / `realsteps_status` probes NOOP already ships
-    /// (`Packages/OuraProtocol/…/Commands.swift`). `GET_FF_VALUE(128)` is deliberately NOT sent (its reply's
+    ///. `GET_FF_VALUE(128)` is deliberately NOT sent (its reply's
     /// value field is reported unreliable — see `FeatureFlagProbe`).
     ///
     /// The strap's own key list is the direct evidence #103 lacks: if a 5/MG names no oxygen-related flag,
@@ -4052,7 +3922,7 @@ public final class BLEManager: NSObject, ObservableObject {
     ///
     /// NOTHING is written: no `SET_FF_VALUE(120)`, no `SET_DEVICE_CONFIG_VALUE(119)`, no value of any
     /// kind — this writes command frames purely to read, exactly like the Oura `spo2_status` /
-    /// `realsteps_status` probes NOOP already ships (`Packages/OuraProtocol/…/Commands.swift`).
+    /// `realsteps_status` probes NOOP already ships.
     ///
     /// **Both target opcodes may simply be unimplemented.** The probe spends one round-trip per verb
     /// establishing that before it does anything else, and a clean "neither verb is served" is a useful
@@ -4144,7 +4014,8 @@ public final class BLEManager: NSObject, ObservableObject {
     private func handleDeviceConfigProbeResponse(_ frame: [UInt8], isWhoop5: Bool) {
         guard deviceConfigReport != nil, let step = deviceConfigAwaiting else { return }
         deviceConfigAwaiting = nil
-        let family: DeviceFamily = isWhoop5 ? .whoop5 : .whoop4
+        _ = isWhoop5
+        let family: DeviceFamily = .whoop5
         switch DeviceConfigReadProbe.parse(frame: frame, family: family, expecting: step.opcode) {
         case .success(let r): deviceConfigReport?.noteReply(r, for: step)
         case .failure(let f): deviceConfigReport?.noteFailure(f, for: step)
@@ -4158,7 +4029,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// being decoded.
     private func handleFeatureFlagProbeResponse(_ frame: [UInt8], isWhoop5: Bool) {
         guard featureFlagReport != nil, let awaiting = featureFlagAwaiting else { return }
-        let family: DeviceFamily = isWhoop5 ? .whoop5 : .whoop4
+        _ = isWhoop5
+        let family: DeviceFamily = .whoop5
         featureFlagAwaiting = nil
         if awaiting == WhoopCommand.startFeatureFlagKeyExchange.rawValue {
             switch FeatureFlagProbe.parseStart(frame: frame, family: family) {
@@ -4489,10 +4361,8 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
-    /// Shared reboot send + debug trail + watchdog, used by both the production `rebootStrap()` and the
-    /// 4.0 `rebootProbe(_:)`. `probe == nil` is the normal restart; a non-nil variant is a probe attempt
-    /// (its `logTag` is stamped first so the strap log correlates the attempt with what the strap did).
-    private func sendRebootFrame(command: WhoopCommand, payload: [UInt8], probe: RebootProbeVariant?) {
+    /// Shared reboot send + debug trail + watchdog behind the production `rebootStrap()`.
+    private func sendRebootFrame(command: WhoopCommand, payload: [UInt8]) {
         let family = selectedModel.deviceFamily
         guard state.connected, state.bonded, let p = peripheral, p.state == .connected else {
             log("reboot: connect + bond first — ignored (connected=\(state.connected) bonded=\(state.bonded))")
@@ -4504,10 +4374,9 @@ public final class BLEManager: NSObject, ObservableObject {
         // The logged opcode is always the command's on-wire value — never a separate field that could
         // disagree with the bytes actually sent.
         let opcode = Int(command.rawValue)
-        let framing = family == .whoop5 ? "puffin-crc16 (verified on 5.0 fw 50.40.1.0)" : "harvard-crc8 (UNVERIFIED on 4.0)"
+        let framing = "puffin-crc16 (verified on 5.0 fw 50.40.1.0)"
         let fw = state.strapFirmware ?? "unknown"
         let payloadDesc = payload.isEmpty ? "empty" : payload.map { String(format: "%02x", $0) }.joined()
-        if let probe { log("reboot: PROBE \(probe.logTag) — trying an unconfirmed WHOOP 4.0 reboot frame (#235)") }
         log("reboot: request family=\(family) fw=\(fw) connected=true bonded=true")
         log("reboot: sent opcode=\(opcode) framing=\(framing) payload=\(payloadDesc) writeType=withResponse")
         // .withResponse so the write itself is acknowledged at the ATT layer before the strap drops the link.
@@ -4524,7 +4393,8 @@ public final class BLEManager: NSObject, ObservableObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.rebootRequestedAt != nil, self.state.connected else { return }
             self.log("reboot: no disconnect within 12s — strap may have ignored the command"
-                     + (self.selectedModel.deviceFamily == .whoop5 ? " (5/MG reboot is verified on 5.0 fw 50.40.1.0; if your firmware differs, please share this log on #166)" : " (the WHOOP 4.0 reboot frame is NOT confirmed yet — please share this log on #235)"))
+                     + " (5/MG reboot is verified on 5.0 fw 50.40.1.0; if your firmware differs,"
+                     + " please share this log on #166)")
             self.clearRebootState()
         }
         rebootTimeoutWork = work
@@ -4555,8 +4425,7 @@ public final class BLEManager: NSObject, ObservableObject {
         let s = BLEManager.keepAliveIntervalSeconds
         let t = DispatchSource.makeTimerSource(queue: .main)
         // Kept EXACT (no leeway): this tick isn't just a liveness check — `keepAliveFire` re-arms the
-        // WHOOP 4 realtime burst (R10/R11) and re-subscribes notifications every cycle so streaming can't
-        // lapse. Coalescing it up to a few seconds late risks a brief realtime-stream gap, for a battery
+        // notification subscriptions every cycle so streaming can't lapse. Coalescing it up to a few seconds late risks a brief realtime-stream gap, for a battery
         // gain that rounds to nothing on a 30 s timer. The real coalescing win is the offload timer's 60 s
         // leeway (#1052), which is genuinely loose because the strap banks to flash between syncs.
         t.schedule(deadline: .now() + .seconds(s), repeating: .seconds(s))
@@ -4650,48 +4519,10 @@ public final class BLEManager: NSObject, ObservableObject {
             }
         }
         reconcileRealtime()   // recomputes wantsRealtime from the fresh predicate; toggles only on an edge
-        // The command pings below are WHOOP4-framed; a 5/MG link drops them at the send() guard, so
-        // skip them for 5/MG (it keeps the experimental strap log clean — re-subscribe + the 120s
-        // bounce above are what keep a 5/MG link healthy).
-        guard selectedModel.deviceFamily == .whoop4 else { return }
-        // Never re-arm the heavy R10/R11 burst once the marginal-radio fallback has tripped (#80) — that
-        // would just re-trigger the drop the keep-alive is meant to prevent. 0x2A37 keeps the HR flowing.
-        if wantsRealtime && !standardHRFallback {
-            realtimeArmed = true   // keep reconcileRealtime()'s edge tracking in sync with the re-arm
-            send(.sendR10R11Realtime, payload: [0x01])
-            send(.toggleRealtimeHR, payload: [0x01])
-        }   // re-arm so it can't lapse
-        keepAliveTick += 1
-        // #battery: ~60 s normally, ~30 s while charging (see `batteryPollDue`).
-        //
-        // WHOOP 4.0 ONLY (#1948). Both commands this block used to send are refused on a 5/MG before they
-        // leave the app: the send allowlist has no clause for `.getBatteryLevel` at all, and admits
-        // `.getBatteryPackInfo` only while a user-initiated probe is in flight. Two dead sends and two
-        // skip lines per tick, under a comment claiming the pack "rides the SAME cadence as the strap's
-        // own gauge". It never rode anything.
-        //
-        // Removing them cannot change what a 5/MG receives, and that is the whole argument: the allowlist
-        // refused both before they reached the peripheral, so no reading ever depended on either. Do not
-        // reach for a subtler one. An earlier draft here argued that the `didBond` letting this tick run
-        // had already driven the 0x2A19 read a few lines above, which is wrong twice over —
-        // `keepAliveMayRun` also admits a `bonded && .whoop5` tick with `didBond` false, and
-        // `enableLiveNotifications` is separately gated on `didBond`, so on a #1635 strap the tick fires
-        // and that read does not.
-        //
-        // #1953 closed that divergence: the unbonded 5/MG battery read now fires from the keep-alive tick
-        // itself (above the `guard didBond` line), on the SAME throttle `enableLiveNotifications` uses, so
-        // an unbonded 5/MG gets a periodic battery read on iOS at the same ~60 s cadence Android does. The
-        // pack's charge comes from the pushed pack-info event (109) on both, that flag's only writer since
-        // #1945.
-        //
-        // This leaves opcode 151 with NO sender on iOS, which is the state `FrameRouter` already records
-        // for its own decoder ("nothing sent the command, so the decoder had no caller"). Android keeps a
-        // user-initiated probe for it; there is no iOS twin of that, so asking a 5/MG whether it answers
-        // 151 at all is an Android-side question today.
-        if selectedModel.deviceFamily != .whoop5,
-           BLEManager.batteryPollDue(tick: keepAliveTick, charging: state.charging == true) {
-            send(.getBatteryLevel, payload: [])
-        }
+        // The command pings this tick used to send were WHOOP4-framed; the send allowlist refuses every
+        // one of them on a 5/MG before they leave the app, so nothing is pinged here. Re-subscribe plus
+        // the 120 s bounce above are what keep the link healthy, and the unbonded battery read fires
+        // above the `guard didBond` line on the same ~60 s throttle Android uses (#1953).
     }
 
     private func startBackfillTimer() {
@@ -4839,9 +4670,6 @@ public final class BLEManager: NSObject, ObservableObject {
 
     private func resetCharacteristics() {
         cmdCharacteristic = nil
-        cmdNotifyCharacteristic = nil
-        eventNotifyCharacteristic = nil
-        dataNotifyCharacteristic = nil
         heartRateCharacteristic = nil
         batteryCharacteristic = nil
         disSerialCharacteristic = nil
@@ -4878,18 +4706,10 @@ public final class BLEManager: NSObject, ObservableObject {
             withServices: diagnosticServices,
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
-        guard allowFallback else { return }
-        let fallback = model.fallbackScanModel
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.central.isScanning, !self.state.connected else { return }
-            self.log("No \(model.displayName) found yet — trying \(fallback.displayName)")
-            self.startScan(for: fallback, allowFallback: true)
-        }
-        scanFallbackWorkItem = work
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + BLEManager.scanFallbackDelaySeconds,
-            execute: work
-        )
+        // NOOP supports one strap family, so there is no other service to rotate onto when a scan finds
+        // nothing. `allowFallback` is kept on the signature because callers still say whether a rotation
+        // would be welcome; today the answer is that there is nowhere to rotate to.
+        _ = allowFallback
     }
 
     /// Human-readable `CBPeripheralState`, so a strap log says what the peripheral actually was at
@@ -4935,13 +4755,8 @@ public final class BLEManager: NSObject, ObservableObject {
 
     private func enableLiveNotifications(reason: String) {
         guard let p = peripheral, p.state == .connected else { return }
-        let chars = [
-            cmdNotifyCharacteristic,
-            eventNotifyCharacteristic,
-            dataNotifyCharacteristic,
-            heartRateCharacteristic,
-            batteryCharacteristic,
-        ].compactMap { $0 }
+        let chars = ([heartRateCharacteristic, batteryCharacteristic].compactMap { $0 }
+                     + whoop5NotifyCharacteristics)
         // #613: normally skip already-notifying chars (requestNotify would just log "already active" on
         // every keep-alive tick). On a restored session also pass them through so requestNotify can force a
         // real re-subscribe on the inherited-but-dead subscriptions.
@@ -4957,26 +4772,23 @@ public final class BLEManager: NSObject, ObservableObject {
         // every cycle — matching the Android twin's `keepAliveTick % 2 == 0` ~60 s cadence and the
         // BatteryEstimator's 600 s same-% throttle (a 30 s poll was 20× finer than the estimator uses).
         // The first read of a connection (`lastBatteryReadAt == nil`, reset on disconnect) always fires,
-        // so the post-bond / CLIENT_HELLO-ack callers still seed the reading promptly. 4.0 is EXCLUDED —
-        // its 0x2A19 is a stub constant 100 (real value = GET_BATTERY_LEVEL; re-reading the stub would
-        // revert the true reading, #77). The 600 s same-% throttle in LiveState guards the estimator.
+        // so the post-bond / CLIENT_HELLO-ack callers still seed the reading promptly. The 600 s same-%
+        // throttle in LiveState guards the estimator.
         if let b = batteryCharacteristic, b.properties.contains(.read),
-           selectedModel.deviceFamily != .whoop4,
            BLEManager.shouldPollWhoop5Battery(lastReadAt: lastBatteryReadAt,
                                               charging: state.charging == true) {
             p.readValue(for: b)
             lastBatteryReadAt = Date()
         }
-        // #520 DIS identity read — same post-bond reasoning as the #490 battery read above: on a 5/MG the
-        // link must be encrypted first. Gated to 5/MG (a 4.0 issues NO new reads, exactly like the battery
-        // re-read excludes it) and fired ONCE per connection: serial + hardware revision are immutable, so
+        // #520 DIS identity read — same post-bond reasoning as the #490 battery read above: the link must
+        // be encrypted first. Fired ONCE per connection: serial + hardware revision are immutable, so
         // unlike the battery they are never re-polled on the keep-alive tick.
         // NOTE: `disRead` is set only once a read is actually ISSUED — never merely because this ran.
         // `enableLiveNotifications` fires from several callers (CLIENT_HELLO-ack, post-bond, keep-alive),
         // and the earliest can land before DIS discovery has completed. Setting the flag unconditionally
         // would burn the one-shot on a call where the characteristics were still nil, and the variant
         // would never resolve. Leaving it unset lets a later caller (the keep-alive tick) pick it up.
-        if !disRead, selectedModel.deviceFamily != .whoop4,
+        if !disRead,
            let serialChar = disSerialCharacteristic, serialChar.properties.contains(.read) {
             disRead = true
             p.readValue(for: serialChar)
@@ -5073,35 +4885,15 @@ public final class BLEManager: NSObject, ObservableObject {
         adoptWhoopSerialIdentity()
     }
 
-    /// The serial this pairing may adopt: the 5/MG's DIS read, or a 4.0's twice-seen hello serial.
-    private var adoptableSerial: String? { disSerial ?? harvardSerialConfirmed }
-
-    /// #1193: a 4.0 hello serial arrived. Adopt only on the SECOND sighting of the same value — see
-    /// `harvardSerialCandidate` for why a single sighting is not enough to act on destructively.
-    private func noteHarvardSerial(_ serial: String) {
-        // Do NOT advance the gate before the store exists. The gate confirms EXACTLY ONCE, so a
-        // confirmation raised while `adoptWhoopSerialIdentity` would bail is not deferred, it is lost for
-        // the lifetime of the process — every later sighting returns nil because the value is already
-        // confirmed. The 5/MG path survives the same hazard only because it re-offers its DIS serial on
-        // every connect; a once-only gate has no such second chance, so it must not consume a sighting it
-        // cannot act on. Kotlin twin guards its own missing dependency the same way.
-        guard registryStore != nil else { return }
-        guard let confirmed = harvardSerialGate.offer(serial) else { return }
-        harvardSerialConfirmed = confirmed
-        adoptWhoopSerialIdentity()
-    }
+    /// The serial this pairing may adopt: the strap's DIS read.
+    private var adoptableSerial: String? { disSerial }
 
     /// #1303: the 5/MG DIS read hands us the strap's OWN serial, so re-point this pairing from its
     /// transient CoreBluetooth-UUID id onto a stable `whoop-<serial>` id — through the SAME generic
     /// migration the ring already uses (`adoptSerialIdentity`, #771), so a re-pair or factory reset stops
     /// forking one physical strap into a second row and orphaning its history (#1193).
     ///
-    /// A WHOOP 4.0 reaches this by a different road. It exposes no DIS serial (the read above is gated
-    /// `!= .whoop4`), so its serial comes from the `GET_HELLO_HARVARD` response instead — see
-    /// `Whoop4HelloSerial` for the offset and `noteHarvardSerial` for why a 4.0 waits for a second
-    /// sighting before adopting where a 5/MG adopts on the first read (#1193).
-    ///
-    /// Deferred to the next main-loop turn, mirroring `adoptOuraSerial`: adoption re-points the ACTIVE
+    /// Deferred to the next main-loop turn: adoption re-points the ACTIVE
     /// device, and the observers that react tear down and rebuild the very connection this callback is
     /// running inside, so the current BLE callback must return first. Idempotent — after the first
     /// adoption the id already equals the serial id, so every later reconnect costs one string compare and
@@ -5138,7 +4930,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The strap's own DIS attestation is ground truth (a WHOOP 4.0 never attests a 5AM/5AG serial). When
     /// it positively identifies a 5-generation strap but the active registry row still resolves to WHOOP
     /// 4.0 — a wrong Add-Device pick, or a legacy "4.0" row — correct the model so the Devices display and
-    /// the `forRegistryModel`-driven skin-temp raw→°C scale (#938) stop treating a 5.0 as a 4.0. Extends the
+    /// the skin-temp raw→°C scale (#938) stop treating a 5.0 as an older generation. Extends the
     /// #716 stamp (which only fixed the "WHOOP" placeholder). ONE-DIRECTIONAL: attestation can only upgrade
     /// 4.0→5.0, never the reverse, and once corrected the guard below no longer matches, so it self-limits.
     private func reconcileModelFromAttestation(_ variant: Whoop5Variant) {
@@ -5174,8 +4966,11 @@ public final class BLEManager: NSObject, ObservableObject {
                 + " and none carries this strap's id, so it cannot be attributed")
             return
         }
-        guard DeviceFamily.forRegistryDevice(model: attesting.model, brand: attesting.brand) == .whoop4
-        else { return }
+        // A legacy row that says "WHOOP 4.0" (or the generation-less "WHOOP") no longer resolves to a
+        // family of its own — `DeviceFamily` has one case — so the guard is on the STORED LABEL, which is
+        // what the Devices screen actually displays. Already-correct rows fall out here, so this
+        // self-limits exactly as the family compare did.
+        guard attesting.model != "WHOOP 5.0 / MG" else { return }
         try? rs.setModel(attesting.id, model: "WHOOP 5.0 / MG")
         log("Corrected device model \"\(attesting.model ?? "nil")\" → \"WHOOP 5.0 / MG\" from DIS attestation (variant=\(variant.label))")
     }
@@ -5644,11 +5439,11 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
                 connectable: (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true))
         }
         // #716: the seeded "my-whoop" device has model "WHOOP" (no generation). Once a live scan
-        // confirms which service family the strap advertises, stamp the correct model so
-        // forRegistryModel returns the right DeviceFamily (fixes skin-temp ADC scale + display).
+        // confirms the strap advertises the supported service, stamp the concrete model so the Devices
+        // screen names the hardware instead of a generation-less placeholder.
         if !modelStamped, let rs = registryStore,
            let stale = try? rs.all().first(where: { $0.status == .active && $0.model == "WHOOP" }) {
-            let correct = selectedModel == .whoop4 ? "WHOOP 4.0" : "WHOOP 5.0 / MG"
+            let correct = WhoopModel.whoop5mg.rawValue
             try? rs.setModel(stale.id, model: correct)
             log("Updated device model from \"WHOOP\" to \"\(correct)\" (#716)")
             modelStamped = true
@@ -6239,10 +6034,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         p.delegate = self
         resetCharacteristics()
         // Re-derive the inbound-decode family from the persisted model. connect()/startScan() set the
-        // reassembler + router family, but NEITHER runs on the restore path — so without this a restored
-        // WHOOP 5/MG would decode its puffin notify frames with the default .whoop4 framing (different
-        // length offset + constant), producing corrupt/empty data for the whole unattended session until
-        // the user manually taps connect.
+        // reassembler + router family, but NEITHER runs on the restore path, so it is set here too rather
+        // than left to whatever the last session happened to leave behind.
         selectedModel = .persisted
         reassembler = Reassembler(family: selectedModel.deviceFamily)
         router.family = selectedModel.deviceFamily
@@ -6352,15 +6145,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // once here rather than inside the loop so a strap exposing both services can't thrash the pref.
         if services.contains(where: { $0.uuid == BLEManager.whoop5Service }) {
             persistSelectedModel(.whoop5mg)
-        } else if services.contains(where: { $0.uuid == BLEManager.customService }) {
-            persistSelectedModel(.whoop4)
         }
         for s in services {
             switch s.uuid {
-            case BLEManager.customService:
-                peripheral.discoverCharacteristics(
-                    [BLEManager.cmdWriteChar, BLEManager.cmdNotifyChar,
-                     BLEManager.eventNotifyChar, BLEManager.dataNotifyChar], for: s)
             case BLEManager.heartRateService:
                 peripheral.discoverCharacteristics([BLEManager.heartRateChar], for: s)
             case BLEManager.batteryService:
@@ -6416,14 +6203,6 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         }
         for c in chars {
             switch c.uuid {
-            case BLEManager.cmdWriteChar:
-                cmdCharacteristic = c
-                // THE BONDING TRICK: one confirmed write triggers just-works bonding.
-                // GET_BATTERY_LEVEL is benign and what the Mac prototype uses.
-                seq = seq &+ 1
-                let bondFrame = WhoopCommand.getBatteryLevel.frame(seq: seq, payload: [0x00])
-                log("Bonding: confirmed write GET_BATTERY_LEVEL to 61080002")
-                peripheral.writeValue(Data(bondFrame), for: c, type: .withResponse)
             case BLEManager.whoop5CmdWriteChar:
                 // EXPERIMENTAL WHOOP 5.0/MG: a 5/MG strap starts a session with the static CLIENT_HELLO
                 // frame, not the WHOOP4 confirmed-write bond. We write it UNacknowledged (it is a
@@ -6464,15 +6243,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 }
                 // The realtime-HR stream is armed POST-bond (in didWriteValueFor / startRealtime) with
                 // puffin framing — not here. Writing it pre-bond on an unauthenticated link did nothing.
-            case BLEManager.cmdNotifyChar,
-                 BLEManager.eventNotifyChar,
-                 BLEManager.dataNotifyChar,
-                 BLEManager.heartRateChar,
+            case BLEManager.heartRateChar,
                  BLEManager.batteryChar:
                 switch c.uuid {
-                case BLEManager.cmdNotifyChar: cmdNotifyCharacteristic = c
-                case BLEManager.eventNotifyChar: eventNotifyCharacteristic = c
-                case BLEManager.dataNotifyChar: dataNotifyCharacteristic = c
                 case BLEManager.heartRateChar: heartRateCharacteristic = c
                 case BLEManager.batteryChar:
                     batteryCharacteristic = c
@@ -6716,10 +6489,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         if !didBond {
             didBond = true
             state.bonded = true
-            state.encryptedBond = true   // WHOOP 4 confirmed-write bond is always genuine — #69
+            state.encryptedBond = true   // a confirmed-write bond is always genuine — #69
             bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
             noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
-            emitConnectionBondState("encryptedBond family=whoop4 (confirmed write acked)")
+            emitConnectionBondState("encryptedBond (confirmed write acked)")
             log("BONDED (confirmed write acknowledged) — custom channels should now flow")
         }
         // Run the connect handshake EXACTLY ONCE per connection. didWriteValueFor re-fires on EVERY
@@ -6739,13 +6512,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // (PHASE A = 50 records; PHASE B high-freq = 0). We still exchange hello to mirror WHOOP exactly.
         send(.getHelloHarvard)
         send(.getAdvertisingNameHarvard)
-        // One-shot firmware-version read for the Devices card. These are read-only commands (not
-        // firmware-load opcodes); send the one this family answers and let the other be ignored. The
-        // reply decodes to fw_harvard (4.0) / fw_version (5/MG) and FrameRouter posts it to LiveState.
-        switch selectedModel.deviceFamily {
-        case .whoop4: send(.reportVersionInfo)
-        case .whoop5: send(.getHello)
-        }
+        // One-shot firmware-version read for the Devices card. Read-only (not a firmware-load opcode);
+        // the reply decodes to fw_version and FrameRouter posts it to LiveState.
+        send(.getHello)
         sendSetClockBothForms()
         if clockRef == nil && !clockRequested {
             clockRequested = true
@@ -6828,29 +6597,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
          0, 0, 0, 0]
     }
 
-    /// SET_CLOCK(10) payload — the legacy 9-byte form `[seconds u32 LE][5 zero]` required by WHOOP 4
-    /// fw 41.17.x, which ignores the 8-byte form. On a strap whose RTC was stuck in the past, days of
-    /// 8-byte sends drew no response; the 9-byte form was ack'd (COMMAND_RESPONSE cmd 10), the clock
-    /// latched and ticked, and the strap resumed banking history to flash (#120). On newer firmware
-    /// this form is ack'd but NOT latched, so sending it after the 8-byte form is a no-op there — both
-    /// forms carry the same seconds, so whichever one latches sets the same time.
-    static func setClockPayloadLegacy(now: UInt32 = UInt32(Date().timeIntervalSince1970)) -> [UInt8] {
-        [UInt8(now & 0xFF), UInt8((now >> 8) & 0xFF),
-         UInt8((now >> 16) & 0xFF), UInt8((now >> 24) & 0xFF),
-         0, 0, 0, 0, 0]
-    }
 
     /// Send SET_CLOCK in every payload form the WHOOP 4 firmware family is known to accept (8-byte for
     /// newer firmware, 9-byte for 41.17.x — each a no-op on the other). Both carry the same `now`, so
-    /// double-latching is harmless. WHOOP 5/MG keeps its single hardware-validated 8-byte send (its
-    /// connect path calls setClockPayload() directly; the 9-byte form is unverified on that family), so
-    /// the legacy form is gated to WHOOP 4. (#120)
+    /// double-latching is harmless. WHOOP 5/MG sends only its hardware-validated 8-byte form — the
+    /// 9-byte legacy form is unverified on this family, so it is never sent. (#120)
     func sendSetClockBothForms() {
         let now = UInt32(Date().timeIntervalSince1970)
         send(.setClock, payload: BLEManager.setClockPayload(now: now))
-        if selectedModel.deviceFamily == .whoop4 {
-            send(.setClock, payload: BLEManager.setClockPayloadLegacy(now: now))
-        }
     }
 
     /// Newest plausible-unix marker in a GET_DATA_RANGE COMMAND_RESPONSE = the strap's newest stored
@@ -7006,7 +6760,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // frame including ones no branch consumes - the epitaph must answer "did anything arrive at all".
         inboundFrames += 1
         inboundBytes += bytes.count
-        if characteristic.uuid == BLEManager.cmdNotifyChar { cmdChannelFrames += 1 }
+        if characteristic.uuid == BLEManager.whoop5CmdNotifyChar { cmdChannelFrames += 1 }
 
         switch characteristic.uuid {
         case BLEManager.heartRateChar:
@@ -7024,10 +6778,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 startKeepAlive()
             }
         case BLEManager.batteryChar:
-            // 0x2A19 = percent — 5/MG ONLY. The WHOOP 4.0's 0x2A19 is a stub constant 100 (real value =
-            // GET_BATTERY_LEVEL response, u16/10) and it's subscribed, so an unsolicited stub
-            // notification was reverting the true reading back to 100% (#77).
-            if selectedModel.deviceFamily != .whoop4, let pct = bytes.first {
+            // 0x2A19 = percent.
+            if let pct = bytes.first {
                 state.setBattery(Double(pct))
             }
         case BLEManager.disSerialChar:
@@ -7070,142 +6822,16 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             let v = String(decoding: bytes, as: UTF8.self)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespacesAndNewlines))
             if !v.isEmpty { log("DIS: \(characteristic.uuid.uuidString) = \(v)") }
-        case BLEManager.dataNotifyChar,
-             BLEManager.cmdNotifyChar,
-             BLEManager.eventNotifyChar:
-            // Reassemble (no-op for already-complete frames) then route each complete frame.
-            // A byte run whose declared total is below the family minimum is dropped INSIDE the
-            // reassembler and reaches no parser and no archive, so its monotonic drop count is folded
-            // into the connection's reject tally right after the feed that may have grown it —
-            // otherwise it would disappear without trace.
-            let completedFrames = reassembler.feed(bytes)
-            router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
-            for frame in completedFrames {
-                if backfilling, BLEManager.isOffloadFrame(frame, family: .whoop4) {
-                    // Historical replay is bulk sync traffic, not live UI traffic. Feed it only to
-                    // the Backfiller; parsing every record through FrameRouter updates SwiftUI for
-                    // no user-visible benefit and can make the app feel hung during long offloads.
-                    // …but the CONNECTION'S REJECT TALLY must still see it (D3): the router is what
-                    // counts rejections, and skipping it left the one counter the hardware run's abort
-                    // criterion reads blind in exactly the traffic where an emptied-then-acked section
-                    // is a permanent loss. The verdict is formed once here, from the verifier, and
-                    // handed to the counter — no parse on this path, which is why it was skipped.
-                    router.noteOffloadFrameVerdict(verifyFrame(frame, family: .whoop4))
-                    armBackfillTimeout()
-                    routeBackfillFrame(frame)
-                    // …but a REAL-TIME physical gesture (double-tap / wrist) must still fire even mid-
-                    // offload (#69). Gated on ts≈now so replayed historical EVENTs (old ts) are ignored.
-                    router.dispatchLiveGestureIfFresh(frame: frame, now: strapClockNow)
-                    // …and the strap's own console narration, which it emits precisely DURING a sync.
-                    router.mirrorStrapConsoleIfPresent(frame: frame)
-                    continue
-                }
-                // #47: decode this live WHOOP4 frame ONCE here and thread the result to every consumer
-                // (router / clock-correlation / collector) instead of each re-parsing it — steady-state
-                // drops 2→1 parse per frame, pre-clock 3→1. This is the WHOOP4 custom-notify case (5/MG has
-                // its own case), so parse with `.whoop4` explicitly — the same family this loop already uses
-                // for isOffloadFrame, and byte-identical to all three original parses (router.family /
-                // collector.family / the no-family clock parse all resolve to .whoop4 here; a DEBUG assert in
-                // the router + collector re-checks the invariant).
-                let parsed = parseFrame(frame, family: .whoop4)
-                router.handle(parsed: parsed, frame: frame)       // live/UI path
-                //
-                // WHAT IS AND IS NOT GATED BELOW (standing risk, recorded rather than fixed here).
-                //
-                // Everything from here on branches on a RAW BYTE COMPARE of the command opcode, before
-                // any integrity verdict. That is deliberate and unchanged by the frame-integrity work:
-                // the six state-driving consumers are gated (router, history-metadata classifier, both
-                // extractors, clock correlation, and the data-range reply below), and this change does
-                // not claim "every frame consumer".
-                //
-                // Of the probe replies dispatched here, these verify before reading a field, inside
-                // their own decoder: the feature-flag probe and the device-config READ probe (both
-                // through `verifyFrame` in WhoopProtocol), the R22 read-back and the ECG/Broadcast-HR
-                // gate READ-BACKS (through the same probe parser), and the 5/MG ECG probe.
-                //
-                // These do NOT, and stay that way for now — none drives live state or the offload:
-                //   • the extended-battery probe (#592) and the body-location probe (#690): each reads
-                //     the reply's bytes, states a finding about the strap in the Devices dialog, and
-                //     persists its payload hex to UserDefaults for the next capture diff;
-                //   • the WRITE-ACK branches (R22 disable, ECG gate, Broadcast-HR gate), which read a
-                //     result code straight out of the frame for their transcripts.
-                // The exposure is a diagnostic that asserts something the strap never said — a real
-                // violation of "a diagnostic may only assert what it can attribute", but a reading, not
-                // a data path. Hardening them is a scope decision, not this change's.
-                //
-                // #592: the read-only extended-battery probe's COMMAND_RESPONSE — format + publish it for the
-                // Devices dialog (raw hex + payload triage + capture diff). Sibling of the #451 dump below.
-                if frame.count > 6, frame[6] == WhoopCommand.getExtendedBatteryInfo.rawValue {
-                    handleExtendedBatteryProbeResponse(frame, isWhoop5: false)
-                }
-                // #690: the read-only body-location probe's COMMAND_RESPONSE (in-flight-guarded inside).
-                if frame.count > 6, frame[6] == WhoopCommand.getBodyLocationAndStatus.rawValue {
-                    handleBodyLocationProbeResponse(frame, isWhoop5: false)
-                }
-                // #761: a reply to the read-only feature-flag enumeration (117/118) — in-flight-guarded
-                // inside, so this is a byte compare on every other frame.
-                if frame.count > 6, frame[6] == WhoopCommand.startFeatureFlagKeyExchange.rawValue
-                    || frame[6] == WhoopCommand.sendNextFeatureFlag.rawValue {
-                    handleFeatureFlagProbeResponse(frame, isWhoop5: false)
-                }
-                // #103: a reply to the read-only device-config READ probe (121/128) — in-flight-guarded
-                // inside, so this is a byte compare on every other frame. The COMMAND_RESPONSE type gate
-                // (@4 on 4.0) is checked HERE as well as in the parser: a data frame that happens to
-                // carry 121/128 at the cmd offset would otherwise abort a live walk with an envelope
-                // failure instead of being ignored.
-                if frame.count > 6, frame[4] == 0x24, DeviceConfigReadProbe.isReadOnlyOpcode(frame[6]) {
-                    handleDeviceConfigProbeResponse(frame, isWhoop5: false)
-                }
-                // #695: WHOOP4 data-range reply — cmd byte @6. The 5/MG reply (puffin envelope, cmd @10) is
-                // handled in the 5/MG case below; both call handleDataRangeResponse so 5/MG now gets the same
-                // newest/oldest window (strapNewestTs / #547 backfill gate) + diagnostics it previously missed.
-                //
-                // GATED ON THE FULL VERDICT, unlike the probe replies above, because this one has OFFLOAD
-                // effect: the newest/oldest words it yields become the plausibility window every drained
-                // record is checked against (#547). A damaged reply that narrows that window makes the
-                // real records of the same sync fall through it — the section then persists nothing, and
-                // is acknowledged anyway, which is the same permanent loss the integrity gate exists to
-                // stop. `parsed` is the single parse from the seam above; this costs one Bool, no reparse.
-                // The decision itself lives in `DataRange.acceptsReply` so a WhoopProtocol test can hold
-                // it — nothing compiles this seam, so a gate written only here is a gate nothing pins.
-                if DataRange.acceptsReply(frame, cmdOff: 6, opcode: WhoopCommand.getDataRange.rawValue,
-                                          verdictOK: parsed.ok) {
-                    handleDataRangeResponse(frame, cmdOff: 6, feedsSync: true)
-                }
-                // Clock correlation runs in both live and backfill modes. Once established it
-                // unblocks both the Collector (live path) and the Backfiller (chunk decoding).
-                if clockRef == nil {
-                    // #47: reuse the single decode above (byte-identical for WHOOP4) instead of re-parsing.
-                    if let ref = ClockCorrelation.clockRef(from: parsed, wall: Int(Date().timeIntervalSince1970)) {
-                        clockRef = ref
-                        collector?.clockRef = ref                  // unblocks buffered persistence
-                        backfiller?.clockRef = ref                 // unblocks historical chunk decode
-                        log("Clock correlated: device=\(ref.device) wall=\(ref.wall)\(clockRetries > 0 ? " (after retry \(clockRetries))" : "")")
-                        // Conditional SET_CLOCK (mirrors WHOOP): only when the strap RTC has drifted /
-                        // is frozen — not blindly every connect. Offload doesn't depend on this (it uses
-                        // clockRef for decoding); SET_CLOCK only keeps FUTURE logging timestamps sane.
-                        if ClockPolicy.shouldSetClock(deviceClock: ref.device, wallNow: ref.wall) {
-                            log("Clock drift detected — issuing SET_CLOCK")
-                            sendSetClockBothForms()
-                        }
-                    }
-                }
-                if !backfilling {
-                    // Live path: synchronous ingest preserves delegate arrival order. #47: thread the
-                    // single parse so the collector's flush doesn't re-decode the batch.
-                    collector?.ingest(frame: frame, parsed: parsed)
-                }
-            }
         default:
-            // EXPERIMENTAL WHOOP 5.0/MG puffin notify chars (fd4b0003/0004/0005/0007): reassemble with
-            // the family-aware reassembler and route through the family-aware FrameRouter so the UI
-            // reflects arriving frames. The historical offload uses the WHOOP4 backfill machinery
-            // (family-aware), and live puffin frames are now persisted too — see below. (Clock: the
+            // WHOOP 5.0/MG puffin notify chars (fd4b0003/0004/0005/0007): reassemble with the
+            // family-aware reassembler and route through the family-aware FrameRouter so the UI
+            // reflects arriving frames. The historical offload uses the shared backfill machinery,
+            // and live puffin frames are persisted too — see below. (Clock: the
             // Collector runs an identity ref for 5/MG via configureCollectorFamily, since live puffin
             // timestamps are already real-unix seconds.) Live HR/battery still also come from the
             // standard 0x2A37 / 0x2A19 profiles handled above.
             if BLEManager.whoop5NotifyChars.contains(characteristic.uuid) {
-                // Same fold as the WHOOP 4.0 path above: byte runs dropped below the family minimum.
+                // Byte runs dropped below the family minimum still reach the reject tally.
                 let completedFrames = reassembler.feed(bytes)
                 router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
                 for frame in completedFrames {
@@ -7330,11 +6956,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("Notify enable failed for \(characteristic.uuid): \(error.localizedDescription)")
         } else {
             log("Notify \(characteristic.isNotifying ? "active" : "off") \(characteristic.uuid)")
-            // #34: the cmd-notify channel carries GET_ALARM_TIME's (and every other COMMAND_RESPONSE's)
-            // reply. Once IT confirms subscribed, check whether the handshake side of connectSettled is
-            // also done — this is the "notify confirmed" half arriving AFTER the handshake body, the
-            // ordering a v8.6.2 strap log showed actually happens.
-            if characteristic === cmdNotifyCharacteristic, characteristic.isNotifying {
+            // #34: the cmd-notify channel (fd4b0003) carries every COMMAND_RESPONSE's reply. Once IT
+            // confirms subscribed, check whether the handshake side of connectSettled is also done — this
+            // is the "notify confirmed" half arriving AFTER the handshake body, the ordering a v8.6.2
+            // strap log showed actually happens.
+            if characteristic.uuid == BLEManager.whoop5CmdNotifyChar, characteristic.isNotifying {
                 cmdNotifyConfirmedActive = true
                 maybeSignalConnectSettled()
             }

@@ -3,8 +3,8 @@ import Foundation
 // ImportTrace.swift - pure line formatters + the live-readout parser for the Import & Data Ingest
 // test mode (Test Centre domain `.dataImport`, wire id "import").
 //
-// These own the line SHAPE; the app-target import handlers (WhoopImporter / AppleHealthImport /
-// XiaomiImporter / WearableImporter, driven from AppModel) own the live emit and gate every call behind
+// These own the line SHAPE; the app-target import handlers (WhoopImporter / AppleHealthImport,
+// driven from AppModel) own the live emit and gate every call behind
 // TestCentre.active(.dataImport), routing each line through LiveState.append(log:domain:.dataImport).
 // When the mode is off, none of these is ever called, so the import path pays nothing.
 //

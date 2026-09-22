@@ -3,25 +3,15 @@ import XCTest
 
 /// #103: the read-only device-config read probe's allowlist, request shape, parse and plan contract.
 ///
-/// Fixtures are SYNTHETIC and built with real CRCs by the two helpers below (the WHOOP 4.0 harvard
+/// Fixtures are SYNTHETIC and built with real CRCs by the two helpers below (the WHOOP 5/MG harvard
 /// envelope and the 5/MG puffin envelope). No strap has ever answered opcode 121 or 128 in this
 /// project's hands — establishing whether one does is what the probe is for — so these tests pin the
 /// decode, the plan and the report, including every "the verb is not implemented" path the BLE handler
 /// must survive.
 final class DeviceConfigReadProbeTests: XCTestCase {
 
-    // MARK: - Frame builders (mirror the two envelopes verifyFrame(_:family:) validates)
+    // MARK: - Frame builder (mirrors the envelope verifyFrame(_:family:) validates)
 
-    /// WHOOP 4.0 COMMAND_RESPONSE: [0xAA][len u16 LE][crc8(len)][type=36][seq][cmd][payload…][crc32 LE].
-    private func whoop4Response(cmd: UInt8, payload: [UInt8], seq: UInt8 = 1) -> [UInt8] {
-        let inner: [UInt8] = [36, seq, cmd] + payload
-        let length = UInt16(inner.count + 4)
-        let lenBytes: [UInt8] = [UInt8(length & 0xFF), UInt8(length >> 8)]
-        var frame: [UInt8] = [0xAA] + lenBytes + [crc8(lenBytes)] + inner
-        let c = crc32(inner)
-        frame += [UInt8(c & 0xFF), UInt8((c >> 8) & 0xFF), UInt8((c >> 16) & 0xFF), UInt8((c >> 24) & 0xFF)]
-        return frame
-    }
 
     /// WHOOP 5/MG COMMAND_RESPONSE in the puffin envelope: type @8, seq @9, cmd @10, record from @11.
     private func whoop5Response(cmd: UInt8, payload: [UInt8], seq: UInt8 = 1) -> [UInt8] {
@@ -64,7 +54,6 @@ final class DeviceConfigReadProbeTests: XCTestCase {
         XCTAssertEqual(Set(flagReads.map(\.key)), Set(keys))
         XCTAssertEqual(report.steps, 21, "one read per flag plus the existing device-config discovery")
         XCTAssertEqual(flagKeys.count, 16, "the write sequence must not inherit read-only discoveries")
-        XCTAssertEqual(DeviceConfigReadProbe.knownFlagKeys(for: .whoop4), flagKeys)
         XCTAssertTrue(report.render().contains("includes names observed in strap enumeration"))
         XCTAssertFalse(report.render().contains("names NOOP already writes; values never read before"))
     }
@@ -141,14 +130,6 @@ final class DeviceConfigReadProbeTests: XCTestCase {
         XCTAssertEqual(r.echoOffset(of: "enable_r22_packets"), 1)
     }
 
-    func testParseOnWhoop4LeavesTheResultCodeUnlabelled() {
-        let frame = whoop4Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
-        guard case .success(let r) = DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121) else {
-            return XCTFail("expected a decoded reply")
-        }
-        XCTAssertNil(r.resultCode, "the result byte's meaning is only established on 5/MG")
-        XCTAssertEqual(r.value(for: "k"), 0x31)
-    }
 
     func testUnsupportedResultIsRecognised() {
         let frame = whoop5Response(cmd: 121, payload: payload(result: 3, record: [0x00, 0x00, 0x00]))
@@ -247,15 +228,16 @@ final class DeviceConfigReadProbeTests: XCTestCase {
         XCTAssertNil(r.value(for: "enable_spo2"), "a substring match is not a name field")
     }
 
-    /// On WHOOP 4.0, where the envelope adds no padding, a record that ends at the name field yields no
+    /// On WHOOP 5/MG, where the envelope adds no padding, a record that ends at the name field yields no
     /// value at all. (On 5/MG the puffin envelope pads the inner payload to a 4-byte boundary, so the
     /// same record would carry up to three trailing NULs that are envelope padding, not data — which is
     /// why `value(for:)` is only ever read as "the byte after the echoed field", never as "the last byte".)
     func testValueIsNotClaimedWhenTheRecordStopsAtTheNameField() {
         var field = [UInt8](repeating: 0, count: 32)
         for (i, b) in Array("enable_spo2".utf8).enumerated() { field[i] = b }
-        let frame = whoop4Response(cmd: 121, payload: payload(result: 1, record: field))
-        guard case .success(let r) = DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121) else {
+        // Unpadded: the record stops EXACTLY at the name field, which is the case under test.
+        let frame = w5Frame(payload(result: 1, record: field), type: 36, seq: 1, cmd: 121)
+        guard case .success(let r) = DeviceConfigReadProbe.parse(frame: frame, family: .whoop5, expecting: 121) else {
             return XCTFail("expected a decoded reply")
         }
         XCTAssertEqual(r.echoOffset(of: "enable_spo2"), 0)
@@ -265,36 +247,33 @@ final class DeviceConfigReadProbeTests: XCTestCase {
     // MARK: - Failure paths (the handler must survive every one)
 
     func testBadCRCIsRejected() {
-        var frame = whoop4Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
+        var frame = whoop5Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
         frame[frame.count - 1] ^= 0xFF          // corrupt the CRC32 trailer
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121), .failure(.crc))
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop5, expecting: 121), .failure(.crc))
 
         var five = whoop5Response(cmd: 128, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
         five[7] ^= 0xFF                          // corrupt the CRC16 header
         XCTAssertEqual(DeviceConfigReadProbe.parse(frame: five, family: .whoop5, expecting: 128), .failure(.crc))
 
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: [], family: .whoop4, expecting: 121), .failure(.crc))
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: [], family: .whoop5, expecting: 121), .failure(.crc))
     }
 
     func testWrongCommandAndWrongTypeAreRejected() {
-        let frame = whoop4Response(cmd: 128, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121),
+        let frame = whoop5Response(cmd: 128, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop5, expecting: 121),
                        .failure(.wrongCommand))
 
         // Same bytes, but the packet type is COMMAND (35) rather than COMMAND_RESPONSE (36).
-        let inner: [UInt8] = [35, 1, 121] + payload(result: 1, record: [0x01, 0x02])
-        let length = UInt16(inner.count + 4)
-        let lenBytes: [UInt8] = [UInt8(length & 0xFF), UInt8(length >> 8)]
-        var wrong: [UInt8] = [0xAA] + lenBytes + [crc8(lenBytes)] + inner
-        let c = crc32(inner)
-        wrong += [UInt8(c & 0xFF), UInt8((c >> 8) & 0xFF), UInt8((c >> 16) & 0xFF), UInt8((c >> 24) & 0xFF)]
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: wrong, family: .whoop4, expecting: 121),
+        let wrong = w5Frame(payload(result: 1, record: [0x01, 0x02]), type: 35, seq: 1, cmd: 121)
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: wrong, family: .whoop5, expecting: 121),
                        .failure(.envelope))
     }
 
     func testTruncatedRecordIsRejected() {
-        let header = whoop4Response(cmd: 121, payload: [0x0A, 0x01])
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: header, family: .whoop4, expecting: 121),
+        // w5Frame, not whoop5Response: the strap pads a real record to a 4-byte boundary, and padding
+        // a fixture whose SHORTNESS is the thing under test would make it parse.
+        let header = w5Frame([0x0A, 0x01], type: 36, seq: 1, cmd: 121)
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: header, family: .whoop5, expecting: 121),
                        .failure(.truncated))
     }
 
@@ -458,7 +437,7 @@ final class DeviceConfigReadProbeTests: XCTestCase {
 
     func testThePlanIsCappedEvenWithAnAbsurdKeyList() {
         let many = (0..<500).map { "key_\($0)" }
-        var report = DeviceConfigReadProbeReport(family: .whoop4, knownFlagKeys: many, candidateKeys: many)
+        var report = DeviceConfigReadProbeReport(family: .whoop5, knownFlagKeys: many, candidateKeys: many)
         var seen = 0
         while let step = report.nextStep() {
             seen += 1
@@ -605,23 +584,23 @@ final class DeviceConfigReadProbeTests: XCTestCase {
         }
         XCTAssertEqual(r.value(for: "enable_r22_packets"), 0x32)
 
-        let four = whoop4Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
-        XCTAssertEqual(verifyFrame(four, family: .whoop4).reason, .none)
-        guard case .success = DeviceConfigReadProbe.parse(frame: four, family: .whoop4, expecting: 121) else {
+        let four = whoop5Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
+        XCTAssertEqual(verifyFrame(four, family: .whoop5).reason, .none)
+        guard case .success = DeviceConfigReadProbe.parse(frame: four, family: .whoop5, expecting: 121) else {
             return XCTFail("the 4.0 useful path must still decode")
         }
     }
 
     func testAReplyWithTrailingBytesIsRefusedNotRead() {
-        let frame = whoop4Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31))) + [0x00]
-        XCTAssertEqual(verifyFrame(frame, family: .whoop4).reason, .lengthMismatch)
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121), .failure(.crc))
+        let frame = whoop5Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31))) + [0x00]
+        XCTAssertEqual(verifyFrame(frame, family: .whoop5).reason, .lengthMismatch)
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop5, expecting: 121), .failure(.crc))
     }
 
     func testAReplyWithABrokenHeaderChecksumIsRefusedNotRead() {
-        var frame = whoop4Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
-        frame[3] ^= 0xFF
-        XCTAssertEqual(verifyFrame(frame, family: .whoop4).crc32OK, true, "the payload CRC32 still verifies")
-        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop4, expecting: 121), .failure(.crc))
+        var frame = whoop5Response(cmd: 121, payload: payload(result: 1, record: echoRecord("k", value: 0x31)))
+        frame[6] ^= 0xFF
+        XCTAssertEqual(verifyFrame(frame, family: .whoop5).crc32OK, true, "the payload CRC32 still verifies")
+        XCTAssertEqual(DeviceConfigReadProbe.parse(frame: frame, family: .whoop5, expecting: 121), .failure(.crc))
     }
 }

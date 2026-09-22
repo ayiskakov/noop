@@ -15,71 +15,23 @@ enum TestBundleAssembler {
     /// The redaction stamp written into meta.json so a maintainer knows the whole-bundle scrub ran.
     static let redactionVersion = "v2"
 
-    /// The bundle's hard byte cap (spec section 5.4; under GitHub's 25 MB attachment limit). Shared by
-    /// `capEntries` (what finally ships) and `ouraDiagnosticEntries` (how much it is worth reading), so the
-    /// read ceiling can never drift above the budget it feeds.
+    /// The bundle's hard byte cap (spec section 5.4; under GitHub's 25 MB attachment limit).
     static let defaultCapBytes = 20 * 1024 * 1024
 
-    /// The Oura Diagnostics-dir sidecar kinds the bundle attaches — the SINGLE source of truth
-    /// `normalizedOuraEntryName`/`ouraDiagnosticEntries`/`trimmableNames`/`ouraSidecarNames` all derive
-    /// from, so a new dump writer (`Strand/BLE/Oura*Dump.swift`) needs exactly one line added here to be
-    /// picked up everywhere instead of silently missing the export bundle. (Landed after `cva-ppg` and
-    /// `real-steps` shipped their writers but not their kind entry — both wrote real files on-device that
-    /// the bundler's hardcoded 3-kind list then dropped from every export.)
-    static let ouraSidecarKinds: [String] = ["raw", "ibihr", "activity", "cva-ppg", "motion", "real-steps"]
-
     /// The bundle files that may be trimmed to fit the cap (newest-tail kept). The strap-log tail and
-    /// meta.json are already bounded, so only these raw research streams can blow the budget: the WHOOP
-    /// frame capture plus the Oura ring's Tier-B JSONL sidecars (raw notifications / IBI-HR / activity MET /
-    /// CVA-PPG / motion / real-steps). Everything NOT listed here is kept whole and its bytes are reserved
-    /// before the trimmable group is given the remainder. NORMALIZED entry names (ring id dropped).
-    static let trimmableNames: Set<String> = Set(["raw-capture.jsonl"] + ouraSidecarKinds.map { "oura-\($0).jsonl" })
-
-    /// #572 follow-up: the Oura Tier-B sidecars carry the ring id in a `"deviceId"` JSON field. The
-    /// whole-bundle UUID scrub (`LiveState.redactPii`) masks it only when it is a CANONICAL dashed
-    /// `uuidString`; a dashless or truncated id would leak verbatim into a bundle the user shares. For these
-    /// sidecars we ALSO mask the `deviceId` VALUE by field name — format-independent, so any id shape is
-    /// covered, and (unlike broadening the UUID regex to dashless hex) it CANNOT touch the raw `hex` capture
-    /// field, which a greedier rule would shred. Scoped to the sidecars so a non-PII logical `deviceId`
-    /// (e.g. "my-whoop") elsewhere in the bundle stays readable. NORMALIZED names (ring id already dropped).
-    static let ouraSidecarNames: Set<String> = Set(ouraSidecarKinds.map { "oura-\($0).jsonl" })
-
-    /// `oura-raw.jsonl` is the ONE sidecar whose payload is nothing but hex (`OuraRawDumpLine.encode`) —
-    /// `oura-ibihr.jsonl`/`oura-activity.jsonl` encode DECODED numeric fields, so `LiveState.redactHexDump`'s
-    /// byte-run heuristic below never sees a hex blob long enough to false-positive on. Only `raw` needs the
-    /// exemption `redactEntries` applies via this set.
-    private static let rawHexSidecarNames: Set<String> = ["oura-raw.jsonl"]
+    /// meta.json are already bounded, so only the raw research stream (the WHOOP frame capture) can blow
+    /// the budget. Everything NOT listed here is kept whole and its bytes are reserved before the
+    /// trimmable group is given the remainder.
+    static let trimmableNames: Set<String> = ["raw-capture.jsonl"]
 
     /// Re-run the redaction sink over every entry. Text entries are decoded as UTF-8, scrubbed via the same
     /// LiveState.redactPii used by the live sink, and re-encoded. A non-UTF-8 entry (none today) passes
     /// through untouched rather than risk corrupting binary. meta.json and report.txt have no PII shapes so
     /// they pass through byte-identical; raw-capture is where the embedded serials live.
-    ///
-    /// `oura-raw.jsonl` skips the `redactPii` sweep entirely (see `rawHexSidecarNames`) — its `hex` field is
-    /// the ring's UNDECODED TLV bytes, and `redactPii`'s `redactHexDump` helper (built for #1833: a WHOOP
-    /// serial hiding as ASCII inside a hex-dumped console line) decodes hex back to bytes and masks any 9+
-    /// byte run that spells alnum ASCII starting with a letter. Every Oura record is nothing but such runs,
-    /// so that heuristic fires on ordinary sensor bytes and on the `0x43`/`0x61` debug-text channel (ASCII by
-    /// design) — found 2026-09-11 via a real user capture: 38 of 3112 lines had bytes silently replaced with
-    /// `•` placeholders that are not even valid hex, breaking any offline tool that reframes the file. The
-    /// actual identity leak this heuristic was hoped to also catch here — the ring's SERIAL, arriving in
-    /// plain digits via a `0x18`/`0x19` GetProductInfo reply — is invisible to it anyway (no letter in an
-    /// all-numeric run), and is instead filtered at the SOURCE by `OuraLiveSource.rawDumpBytes` before the
-    /// frame ever reaches this file. The `deviceId` field mask below still runs unconditionally, so the one
-    /// piece of identity `oura-raw.jsonl`'s JSON envelope carries is still scrubbed.
     static func redactEntries(_ entries: [FileExport.BundleEntry]) -> [FileExport.BundleEntry] {
         entries.map { entry in
             guard let text = String(data: entry.data, encoding: .utf8) else { return entry }
-            var scrubbed = rawHexSidecarNames.contains(entry.name) ? text : LiveState.redactPii(text)
-            // #572 follow-up: field-aware deviceId mask for the Oura sidecars (see `ouraSidecarNames`). Runs
-            // AFTER redactPii, so it catches a non-canonical id that the dash-anchored UUID rule misses; on an
-            // already-canonical id redactPii turned into `<device>`, this is a no-op. Key-anchored to
-            // "deviceId", so it never touches the raw `hex` field. `[^"]*` stops at the value's closing quote.
-            if ouraSidecarNames.contains(entry.name) {
-                scrubbed = scrubbed.replacingOccurrences(
-                    of: "(\"deviceId\"\\s*:\\s*\")[^\"]*(\")",
-                    with: "$1<device>$2", options: .regularExpression)
-            }
+            let scrubbed = LiveState.redactPii(text)
             return FileExport.BundleEntry(name: entry.name, data: Data(scrubbed.utf8))
         }
     }
@@ -113,10 +65,9 @@ enum TestBundleAssembler {
             guard entry.data.count > share else { return entry }
             truncated = true
             // Keep the tail (most recent): the last `share` bytes, then snap forward to the next full
-            // JSONL line. A raw byte-count tail can (and in production did - a real export shipped
-            // oura-cva-ppg.jsonl/oura-real-steps.jsonl/oura-motion.jsonl each with a corrupted first
-            // line) land mid-record; every trimmable name is newline-delimited JSONL, so dropping the
-            // partial line at the front keeps every kept line honest.
+            // JSONL line. A raw byte-count tail can (and in production did) land mid-record; every
+            // trimmable name is newline-delimited JSONL, so dropping the partial line at the front keeps
+            // every kept line honest.
             return FileExport.BundleEntry(name: entry.name,
                                           data: Self.trimToLineBoundary(entry.data.suffix(share)))
         }
@@ -128,15 +79,12 @@ enum TestBundleAssembler {
     /// what it needs so the surplus rolls forward to the larger ones. Integer floor keeps the sum at or under
     /// `budget`, so the bundle can never breach the cap. Pure; `sizes` order does not affect the result.
     ///
-    /// WHY NOT PROPORTIONAL-TO-SIZE (the original rule): it hands the budget to the BULKIEST stream, and for
-    /// these sidecars bulk is close to inversely correlated with diagnostic value. Measured on a real export
-    /// (`noop-master-iOS-v9.3.1-260809-0716.zip`, six trimmable sidecars over a 20,863,648-byte budget):
-    /// `oura-spo2.jsonl` — a per-sample dump whose values are also in the SQLite the same bundle ships —
-    /// took **53.9 %**, while `oura-raw.jsonl` got **1.9 %** (388,064 bytes: 8 min 43 s of an 8.4 h night).
-    /// The raw sidecar is the UNDECODED wire bytes, the one file in the bundle from which a protocol fact can
-    /// be re-derived independently of our own decoder, so starving it costs a night of verification that
-    /// nothing else can supply. Under this rule the ~3.47 MB fair share keeps it whole and the surplus goes
-    /// where it is merely bulk. Same 20 MB bundle, no editorial ranking of the streams.
+    /// WHY NOT PROPORTIONAL-TO-SIZE (the original rule): it hands the budget to the BULKIEST stream, and
+    /// bulk is close to inversely correlated with diagnostic value — a per-sample dump whose values are also
+    /// in the SQLite the same bundle ships once took over half the budget while the undecoded raw capture,
+    /// the one file from which a protocol fact can be re-derived independently of our own decoder, got 2 %.
+    /// Under this rule a small stream is kept whole and the surplus goes where it is merely bulk. Same
+    /// 20 MB bundle, no editorial ranking of the streams.
     static func fairAllowances(sizes: [(name: String, bytes: Int)], budget: Int) -> [String: Int] {
         // Smallest-first, name-tiebroken so the result is deterministic regardless of input order.
         let ordered = sizes.sorted { $0.bytes != $1.bytes ? $0.bytes < $1.bytes : $0.name < $1.name }
@@ -212,15 +160,10 @@ enum TestBundleAssembler {
         // #2117: both universal lines ride every export, appended in a fixed order so two reports from
         // the same strap diff cleanly. Either may be absent (no range reported yet; a device the WHOOP 5
         // unit policy does not govern), and an absent line is simply omitted rather than stubbed, so a
-        // WHOOP 4 report is byte-unchanged by this existing.
-        // #2252: the ring-epoch line is derived from the SAME sidecar entries the bundle already collects
-        // below, so this reads nothing new off disk and cannot fail on a device that never used a ring:
-        // no sidecars, no rows, no line. Hoisted above `universalLines` only so the line can join them.
-        let ouraDiagnostics = ouraDiagnosticEntries()
+        // report without either is byte-unchanged by this existing.
         let universalLines = [
             universalClockDriftLine(range: live.strapRange),
             universalRRTransportLine(transport: live.rrTransport),
-            universalOuraRingEpochLine(entries: ouraDiagnostics),
         ].compactMap { $0 }
         let reportText = universalLines.isEmpty
             ? baseReport
@@ -258,22 +201,12 @@ enum TestBundleAssembler {
         let crash: FileExport.BundleEntry? = crashLogURL()
             .flatMap { fileEntry(at: $0, name: "last-crash.txt") }
 
-        // 1e. Oura ring diagnostics: the Tier-B JSONL sidecars (raw notifications / IBI-HR / activity MET)
-        //     the ring writes to <App Support>/OpenWhoop/Diagnostics whenever it connects. Attached WHEN
-        //     PRESENT — exactly like raw-capture.jsonl, NOT behind a test domain: they cut across Sleep /
-        //     HRV / Connection / Sources, and file presence is the honest gate (no ring used → no files →
-        //     nothing attached, so an Experimental ring needs no separate brand check here). They are TEXT
-        //     (JSON lines) whose only PII is the ring UUID inside each line, which the redactEntries pass
-        //     below masks to <device>; the ENTRY name is normalized (id dropped) since redaction never
-        //     touches names. Trimmed to the cap alongside raw-capture via `trimmableNames`.
-        // (collected above, so the ring-epoch universal line could be derived from it)
-
-        // 2. Redact the TEXT files (report.txt, raw-capture.jsonl, last-crash.txt, oura-*.jsonl), then cap. The screenshot
+        // 2. Redact the TEXT files (report.txt, raw-capture.jsonl, last-crash.txt), then cap. The screenshot
         //    is included in the cap input (NOT the redact input) so its bytes COUNT against the 20 MB cap:
         //    capEntries budgets raw-capture as capBytes - (everything else), so a large/retina PNG shrinks
         //    the raw-capture tail rather than breaching the cap. Only raw-capture is trimmed; report.txt and
         //    last-crash are bounded and the PNG is kept whole.
-        let textEntries = [reportEntry] + (rawCapture.map { [$0] } ?? []) + (crash.map { [$0] } ?? []) + ouraDiagnostics
+        let textEntries = [reportEntry] + (rawCapture.map { [$0] } ?? []) + (crash.map { [$0] } ?? [])
         let redacted = redactEntries(textEntries)
         let (capped, truncated) = capEntries(redacted + (shot.map { [$0] } ?? []))
         var entries = capped
@@ -340,69 +273,6 @@ enum TestBundleAssembler {
     /// score. nil when nothing has been resolved this session, or for a device the policy does not govern.
     /// The judgement is `UniversalTrace.rrTransportLine`, shared byte for byte with Android; this is the
     /// hand-off.
-    /// #2252: one `[universal]` line when the Oura sidecars disagree about where the ring's clock started,
-    /// or nil when they agree, which is the healthy case and the common one.
-    ///
-    /// The ticks×10 defect (#2239) filed whole sessions in the past, and the store keeps no ring-time, so
-    /// nothing in it can say which rows those were. The decoded sidecars keep both axes, so the epoch each
-    /// row implies (`utc - ringTs/10`) separates a mis-anchored session from an honest one. Derived from the
-    /// entries the bundle already collected rather than re-reading the directory: a ring that was never used
-    /// contributes no files, so the line is simply absent.
-    ///
-    /// `oura-raw.jsonl` has no `ringTs` and contributes nothing, which is correct; it is undecoded bytes.
-    ///
-    /// DESCRIBES, does not classify: a ring that genuinely restarted also starts a new epoch, and the
-    /// reader has the registration date this code does not.
-    static func universalOuraRingEpochLine(entries: [FileExport.BundleEntry]) -> String? {
-        // `oura-raw.jsonl` is skipped by NAME rather than left to fall out of the parse: it is the
-        // undecoded byte capture, it carries no `ringTs` by construction (`OuraRawDumpLine` encodes
-        // deviceId/utc/bytes and nothing else), and it is routinely the LARGEST sidecar. Scanning it
-        // costs a full pass over the biggest file in the bundle to find a field that cannot be there.
-        // Every other kind stays eligible, so a sidecar that does carry ring-times still contributes
-        // even if it is one this build does not know about.
-        let rows = entries
-            .filter { $0.name.hasPrefix("oura-") && $0.name != "oura-raw.jsonl" }
-            .flatMap { ouraSidecarRows(String(decoding: $0.data, as: UTF8.self)) }
-        guard !rows.isEmpty else { return nil }
-        return OuraRingEpochScan.summaryLine(OuraRingEpochScan.cluster(rows))
-    }
-
-    /// Pull `(ringTs, utc)` out of a decoded Oura sidecar's JSONL text.
-    ///
-    /// App-layer rather than beside `OuraRingEpochScan` in WhoopStore, which is where the epoch
-    /// MATHEMATICS lives and is kept in lockstep with Android. Reading these files is not shared work:
-    /// Android's own `TestBundleAssembler` collects no Oura sidecars, so a twin of this would be dead code
-    /// on that side, and dead code in a twin is worse than platform-local parsing that can be twinned the
-    /// day Android grows the same surface.
-    ///
-    /// Scans for the two fields rather than decoding each line as JSON: the sidecars are megabytes of
-    /// hand-built objects, and a line that is truncated or from an unknown schema is skipped rather than
-    /// failing the whole read. A sidecar's last line is routinely a partial write. `oura-raw.jsonl` has no
-    /// `ringTs` at all and so contributes nothing, which is correct: it is undecoded bytes.
-    static func ouraSidecarRows(_ text: String) -> [(ringTs: UInt32, utc: Int)] {
-        var out: [(ringTs: UInt32, utc: Int)] = []
-        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let rt = ouraSidecarInt("ringTs", in: line), let utc = ouraSidecarInt("utc", in: line),
-                  rt > 0, rt <= Int(UInt32.max) else { continue }
-            out.append((UInt32(rt), utc))
-        }
-        return out
-    }
-
-    /// The integer value of `"name":<digits>` in `line`, or nil. Matches the QUOTED key so a field whose
-    /// name contains another ("utc" inside "utcOffset") cannot be read as it.
-    static func ouraSidecarInt(_ name: String, in line: Substring) -> Int? {
-        guard let keyRange = line.range(of: "\"\(name)\":") else { return nil }
-        var digits = ""
-        var i = keyRange.upperBound
-        if i < line.endIndex, line[i] == "-" { digits.append("-"); i = line.index(after: i) }
-        while i < line.endIndex, line[i].isNumber {
-            digits.append(line[i])
-            i = line.index(after: i)
-        }
-        return Int(digits)
-    }
-
     static func universalRRTransportLine(transport: LiveState.RRTransport?) -> String? {
         guard let transport else { return nil }
         return UniversalTrace.rrTransportLine(strictWhoop5: transport.strictWhoop5,
@@ -433,84 +303,6 @@ enum TestBundleAssembler {
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url) else { return nil }
         return FileExport.BundleEntry(name: name, data: data)
-    }
-
-    /// The `OpenWhoop/Diagnostics` directory the Oura dumps write into, mirroring the dumps' own resolver
-    /// (`OuraRawDump.resolveURL` et al.): Application Support + `OpenWhoop/Diagnostics`. Read-only — never
-    /// creates the directory (a bundle build must not have side effects), so it returns nil when nothing has
-    /// ever been captured. iOS and macOS both resolve Application Support here.
-    static func ouraDiagnosticsDir() -> URL? {
-        guard let base = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                                      appropriateFor: nil, create: false) else { return nil }
-        return base.appendingPathComponent("OpenWhoop/Diagnostics", isDirectory: true)
-    }
-
-    /// Map a diagnostics filename to a NORMALIZED bundle entry name that drops the ring id, or nil when the
-    /// file is not one of the Oura sidecars in `ouraSidecarKinds`. `oura-<type>-<ringId>.jsonl` →
-    /// `oura-<type>.jsonl`, which (a) keeps the ring id out of the bundle's filenames (redaction scrubs
-    /// content, never names) and (b) lands on the `trimmableNames` set so the cap can trim it.
-    ///
-    /// A ROLLED GENERATION (`oura-<type>-<ringId>.jsonl.<n>`, written by `OuraRawDump`'s session ring) maps
-    /// to the SAME normalized name on purpose — `ouraDiagnosticEntries` merges the generations behind that
-    /// one name rather than choosing between them. Before generations were recognised at all, the `.jsonl`
-    /// suffix test rejected every one of them and the bundle could only ever ship the live file — which on
-    /// 2026-08-10 was a 30-second morning session while the night's 4 MB sat in a generation the export
-    /// never looked at.
-    ///
-    /// Thin wrapper over `WhoopStore.OuraSidecarGenerations`, where the rule is pure and unit-tested under
-    /// `swift test`; this file is app-target Swift that no default CI job compiles.
-    static func normalizedOuraEntryName(forFile filename: String) -> String? {
-        guard let hit = OuraSidecarGenerations.classify(filename: filename, kinds: ouraSidecarKinds)
-        else { return nil }
-        return OuraSidecarGenerations.entryName(kind: hit.kind)
-    }
-
-    /// Gather the Oura ring's Tier-B JSONL sidecars as bundle entries, normalized names and RAW bytes (the
-    /// caller redacts + caps). Enumerates the Diagnostics dir rather than reconstructing per-ring filenames,
-    /// so it needs no active-ring id and picks up whatever was captured.
-    ///
-    /// Several files map to one entry name — the live session plus its rolled generations, and (rarely) two
-    /// rings that wrote the same kind. We **concatenate them oldest → newest** rather than choosing one, so
-    /// that the cap's existing keep-the-tail trim decides what ships. `OuraSidecarGenerations.mergePlan`
-    /// holds that rule, pure and unit-tested; see its doc comment for the measured export that motivated it.
-    ///
-    /// ⚠️ THIS REPLACES `largest-wins`, which was not a buggy pick but the wrong criterion: the wake drain
-    /// flushes the night's whole bank at once, so the biggest generation is whichever session drained most
-    /// — routinely not the one holding the night. It cost 11 of 31 nights in the `Sleep Nights` corpus.
-    ///
-    /// Reads are bounded by `capBytes`: an entry can never keep more than the whole bundle cap, so pulling
-    /// older generations past that point would be wasted memory. A kind whose newest file already fills the
-    /// cap therefore reads exactly one file, as it did before.
-    ///
-    /// `directory` is injectable so the merge is testable against a temp dir laid out like a real ring;
-    /// production passes nil and gets `<Application Support>/OpenWhoop/Diagnostics`.
-    static func ouraDiagnosticEntries(capBytes: Int = defaultCapBytes,
-                                      directory: URL? = nil) -> [FileExport.BundleEntry] {
-        guard let dir = directory ?? ouraDiagnosticsDir(),
-              let files = try? FileManager.default.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.fileSizeKey])
-        else { return [] }
-        let sizes: [(name: String, bytes: Int)] = files.map { url in
-            // Size from the directory entry, so planning never reads a file it will not ship.
-            let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            return (url.lastPathComponent, bytes)
-        }
-        let plans = OuraSidecarGenerations.mergePlan(files: sizes, kinds: ouraSidecarKinds,
-                                                     ceilingBytes: capBytes)
-        return plans.compactMap { plan in
-            var merged = Data()
-            for filename in plan.files {
-                guard let part = try? Data(contentsOf: dir.appendingPathComponent(filename)),
-                      !part.isEmpty else { continue }
-                // Every sidecar is newline-delimited JSONL. A file whose last write did not end in a
-                // newline would otherwise splice its final record onto the next generation's first one,
-                // producing a line that parses as neither. Cheap to guarantee, silent to get wrong.
-                if let last = merged.last, last != 0x0A { merged.append(0x0A) }
-                merged.append(part)
-            }
-            guard !merged.isEmpty else { return nil }
-            return FileExport.BundleEntry(name: plan.entryName, data: merged)
-        }
     }
 
     /// The on-disk path a crash report would live at, when a crash handler is wired. There is no producer

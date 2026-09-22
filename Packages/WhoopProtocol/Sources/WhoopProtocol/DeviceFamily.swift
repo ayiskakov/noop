@@ -2,29 +2,25 @@ import Foundation
 
 /// Which Whoop hardware generation a connection / capture belongs to.
 ///
+/// NOOP supports exactly one: WHOOP 5.0 / MG. The type is kept (rather than collapsed away) because
+/// every frame, capture and registry row still has to say WHICH hardware it belongs to — a WHOOP 4.0
+/// strap is still *recognised* on the air (`WhoopGattServiceFamily.whoop4`), it is simply not
+/// connectable, and a reader that finds `.whoop5` on a row knows that was asserted rather than assumed.
+///
 /// This package is platform-pure: it never imports CoreBluetooth. The app layer is responsible
 /// for turning the UUID *strings* exposed here into `CBUUID` values. Keeping CBUUID out of this
 /// module lets the protocol code run on any platform (and in CLI tools / tests) unchanged.
 public enum DeviceFamily: String, Sendable, CaseIterable {
-    /// Whoop 4.0 — 0x07 CRC8 header check.
-    case whoop4
     /// Whoop 5.0 / MG — CRC16-Modbus header check, "puffin" packet types.
     case whoop5
 }
 
-/// Which checksum guards the frame header for a given device family.
-public enum HeaderCRCKind: String, Sendable, CaseIterable {
-    /// CRC8 (poly 0x07) over the two declared-length bytes — Whoop 4.0.
-    case crc8
-    /// CRC16-Modbus (poly 0xA001, init 0xFFFF, reflected) over the header prefix — Whoop 5.0.
-    case crc16Modbus
-}
-
 /// WHOOP custom GATT service families visible in advertisements.
 ///
-/// Only `.whoop4` and `.maverickGooseFD4B` are connectable in NOOP today. The other services are
-/// protocol facts from reverse engineering and are diagnostic-only until their connection framing is
-/// mapped and hardware-tested. `.puffin1150` is intentionally qualified because NOOP already uses
+/// Only `.maverickGooseFD4B` is connectable in NOOP. The other services are protocol facts from
+/// reverse engineering and are diagnostic-only: `.whoop4` is the WHOOP 4.0 service, recognised so a
+/// 4.0 strap is reported as detected-but-unsupported instead of silently ignored; the rest have no
+/// mapped connection framing. `.puffin1150` is intentionally qualified because NOOP already uses
 /// "puffin" for the fd4b/Maverick-Goose packet framing.
 public enum WhoopGattServiceFamily: String, Sendable, CaseIterable {
     case whoop4
@@ -55,8 +51,10 @@ public enum WhoopGattServiceFamily: String, Sendable, CaseIterable {
 
     public var characteristicUUIDStrings: [String] {
         switch self {
-        case .whoop4: return DeviceFamily.whoop4.characteristicUUIDStrings
         case .maverickGooseFD4B: return DeviceFamily.whoop5.characteristicUUIDStrings
+        case .whoop4:
+            return Self.unsupportedCharacteristicUUIDStrings(
+                prefix: "6108", suffix: "8d6d-82b8-614a-1c8cb0f8dcc6")
         case .puffin1150:
             return Self.unsupportedCharacteristicUUIDStrings(
                 prefix: "1150", suffix: "6215-11ee-8c99-0242ac120002")
@@ -71,9 +69,8 @@ public enum WhoopGattServiceFamily: String, Sendable, CaseIterable {
 
     public var connectableDeviceFamily: DeviceFamily? {
         switch self {
-        case .whoop4: return .whoop4
         case .maverickGooseFD4B: return .whoop5
-        case .puffin1150, .monument, .symphony: return nil
+        case .whoop4, .puffin1150, .monument, .symphony: return nil
         }
     }
 
@@ -135,137 +132,75 @@ public func whoopGattScanDecision(
 }
 
 public extension DeviceFamily {
-    /// Positive registry evidence for unit/source decisions. Legacy "WHOOP" identifies no generation.
-    /// Unlike `forRegistryModel`, this must never infer WHOOP 5 from an unspecified model.
+    /// Positive registry evidence for unit/source decisions. Returns nil unless the row POSITIVELY
+    /// identifies a 5.0/MG WHOOP: the legacy "WHOOP" label predates the wizard and was written
+    /// identically for every generation, so it identifies none, and a non-WHOOP brand identifies none
+    /// either. Callers that need a concrete family for an unidentified row coalesce this themselves.
     static func confirmedRegistryFamily(model: String?, brand: String?) -> DeviceFamily? {
         if let brand, !brand.isEmpty, brand.caseInsensitiveCompare("WHOOP") != .orderedSame { return nil }
         switch model?.lowercased() {
-        case "4.0", "whoop 4.0": return .whoop4
         case "5.0", "5.0 mg", "whoop 5.0", "whoop 5.0 / mg", "mg", "whoop5": return .whoop5
         default: return nil
         }
     }
 
-    /// Resolve a device-registry `model` label to the strap family that wrote its rows (#171).
+    /// Brand-aware family resolution (#1086). Returns `nil` for a positively non-WHOOP brand (e.g. a
+    /// legacy "Oura" or "Apple" row left over from an older install) — `DeviceFamily` cannot represent
+    /// "not a WHOOP", and letting such a device fall through to `.whoop5` is exactly the #171 mistake
+    /// (a family question answered by a fall-through rather than by evidence). The row already carries
+    /// the answer in `PairedDevice.brand`.
     ///
-    /// The registry holds several historical spellings for the same hardware: the Add-Device wizard
-    /// stores bare "4.0" / "5.0 MG", other paths match the full picker labels ("WHOOP 4.0" /
-    /// "WHOOP 5.0 / MG"), and the legacy seeded "my-whoop" row stores just "WHOOP". Matching any
-    /// single spelling silently misses the others (#171), so this is the ONE place allowed to
-    /// interpret registry model labels.
-    ///
-    /// "WHOOP" predates the wizard and was written identically for 4.0 and 5/MG installs, so it
-    /// carries no family information; it keeps the prior `.whoop5` fallback, as do nil/unknown
-    /// labels (non-WHOOP imports whose skin temp is already °C) — only a positively-identified 4.0
-    /// changes scale (#938). Mirrors the Kotlin `DeviceFamily.forRegistryModel`.
-    static func forRegistryModel(_ model: String?) -> DeviceFamily {
-        switch model {
-        case "4.0", "WHOOP 4.0": return .whoop4
-        default: return .whoop5
-        }
-    }
-
-    /// Brand-aware family resolution (#1086). Returns `nil` for a positively non-WHOOP brand (e.g.
-    /// "Oura", "Apple") — `DeviceFamily` has only `.whoop4`/`.whoop5`, so it cannot represent "not a
-    /// WHOOP", and letting such a device fall through to `.whoop5` is exactly the #171 mistake (a family
-    /// question answered by a fall-through rather than by evidence). The row already carries the answer:
-    /// `PairedDevice.brand` is set from `DeviceBrandCatalog`.
-    ///
-    /// A nil/empty brand or the legacy "WHOOP" label (written identically for 4.0 and 5/MG) carries no
-    /// non-WHOOP signal, so it defers to `forRegistryModel`. Callers that need a concrete family for a
-    /// non-WHOOP device (e.g. the skin-temp raw→°C scale, where a non-WHOOP reading shares the non-4.0
-    /// branch) coalesce the nil to `.whoop5`, matching the prior behaviour exactly. Mirrors the Kotlin
-    /// `DeviceFamily.forRegistryDevice`.
+    /// A nil/empty brand carries no non-WHOOP signal, so it resolves to the one supported family.
+    /// Callers that need a concrete family for a non-WHOOP device coalesce the nil to `.whoop5`,
+    /// matching the prior behaviour exactly.
     static func forRegistryDevice(model: String?, brand: String?) -> DeviceFamily? {
         if let brand, !brand.isEmpty, brand.caseInsensitiveCompare("WHOOP") != .orderedSame {
             return nil
         }
-        return forRegistryModel(model)
+        return .whoop5
     }
 
     /// Is this registry row positively a 5.0/MG-family WHOOP? For callers asking a YES/NO *identity*
     /// question rather than needing a concrete family to compute with.
     ///
     /// The distinction matters because the two kinds of caller must treat `forRegistryDevice`'s `nil`
-    /// oppositely, and only one of them may coalesce it:
+    /// oppositely, and only one of them may coalesce it: a caller that needs a concrete family for
+    /// arithmetic may default to `.whoop5`, while `?? .whoop5` on an IDENTITY question answers **yes**
+    /// for a leftover non-WHOOP row — the #171 fall-through wearing #1086's clothes, where the brand
+    /// said "not a WHOOP" and the coalesce threw that evidence away.
     ///
-    ///   - **Needs a concrete family** (the skin-temp raw→°C scale): a non-WHOOP reading genuinely shares
-    ///     the non-4.0 branch, so `?? .whoop5` picks the right arithmetic and preserves prior behaviour.
-    ///   - **Asks "is it a 5/MG?"** (this): `?? .whoop5` answers **yes** for an Oura ring, which is the
-    ///     #171 fall-through mistake wearing #1086's clothes — the brand said "not a WHOOP" and the
-    ///     coalesce threw that evidence away.
-    ///
-    /// Exists so the second kind cannot be written as `forRegistryDevice(…) ?? .whoop5 == .whoop5`, which
-    /// reads plausible and is wrong. Mirrors the Kotlin `DeviceFamily.isWhoop5Registry`.
+    /// Exists so the second kind cannot be written as `forRegistryDevice(…) ?? .whoop5 == .whoop5`,
+    /// which reads plausible and is wrong.
     static func isWhoop5Registry(model: String?, brand: String?) -> Bool {
         forRegistryDevice(model: model, brand: brand) == .whoop5
     }
 
-    /// The header-CRC algorithm this family uses. This is the single switch that the family-aware
-    /// `verifyFrame`/`parseFrame` overloads branch on; the payload CRC32 is identical for both.
-    var headerCRCKind: HeaderCRCKind {
-        switch self {
-        case .whoop4: return .crc8
-        case .whoop5: return .crc16Modbus
-        }
-    }
-
     /// Primary GATT service UUID *string* for this family (lowercase, as advertised).
     /// The app layer wraps this in `CBUUID(string:)`.
-    var serviceUUIDString: String {
-        switch self {
-        case .whoop4: return "61080001-8d6d-82b8-614a-1c8cb0f8dcc6"
-        case .whoop5: return "fd4b0001-cce1-4033-93ce-002d5875f58a"
-        }
-    }
+    var serviceUUIDString: String { "fd4b0001-cce1-4033-93ce-002d5875f58a" }
 
     /// Characteristic UUID *strings* this family uses, in stable ascending order.
-    ///
-    /// Whoop 4.0 exposes 0002…0005 under the 6108 service. Whoop 5.0 adds an extra 0007
-    /// characteristic under the fd4b service. These are plain strings (no CBUUID) on purpose.
+    /// Plain strings (no CBUUID) on purpose.
     var characteristicUUIDStrings: [String] {
-        switch self {
-        case .whoop4:
-            return [
-                "61080002-8d6d-82b8-614a-1c8cb0f8dcc6",
-                "61080003-8d6d-82b8-614a-1c8cb0f8dcc6",
-                "61080004-8d6d-82b8-614a-1c8cb0f8dcc6",
-                "61080005-8d6d-82b8-614a-1c8cb0f8dcc6",
-            ]
-        case .whoop5:
-            return [
-                "fd4b0002-cce1-4033-93ce-002d5875f58a",
-                "fd4b0003-cce1-4033-93ce-002d5875f58a",
-                "fd4b0004-cce1-4033-93ce-002d5875f58a",
-                "fd4b0005-cce1-4033-93ce-002d5875f58a",
-                "fd4b0007-cce1-4033-93ce-002d5875f58a",
-            ]
-        }
+        [
+            "fd4b0002-cce1-4033-93ce-002d5875f58a",
+            "fd4b0003-cce1-4033-93ce-002d5875f58a",
+            "fd4b0004-cce1-4033-93ce-002d5875f58a",
+            "fd4b0005-cce1-4033-93ce-002d5875f58a",
+            "fd4b0007-cce1-4033-93ce-002d5875f58a",
+        ]
     }
 
-    /// The command/write characteristic UUID *string* for this family (the …0002 endpoint that
-    /// CLIENT_HELLO and command frames are written to).
-    var commandCharacteristicUUIDString: String {
-        switch self {
-        case .whoop4: return "61080002-8d6d-82b8-614a-1c8cb0f8dcc6"
-        case .whoop5: return "fd4b0002-cce1-4033-93ce-002d5875f58a"
-        }
-    }
+    /// The command/write characteristic UUID *string* (the …0002 endpoint that CLIENT_HELLO and
+    /// command frames are written to).
+    var commandCharacteristicUUIDString: String { "fd4b0002-cce1-4033-93ce-002d5875f58a" }
 
-    /// Static CLIENT_HELLO frame this family writes immediately after GATT discovery to start a
-    /// session. `nil` for families that do not use a fixed hello.
+    /// Static CLIENT_HELLO frame written immediately after GATT discovery to start a session.
     ///
-    /// The Whoop 5.0 hello is a fully-formed type-35 (COMMAND) frame with CRC16-Modbus header and
-    /// CRC32 payload trailer. Transcribed verbatim from the Goose reverse-engineering
+    /// A fully-formed type-35 (COMMAND) frame with CRC16-Modbus header and CRC32 payload trailer.
+    /// Transcribed verbatim from the Goose reverse-engineering
     /// (`GooseHello.clientHelloFrameHex` = "aa0108000001e67123019101363e5c8d").
-    var clientHello: [UInt8]? {
-        switch self {
-        case .whoop4:
-            return nil
-        case .whoop5:
-            return DeviceFamily.whoop5ClientHello
-        }
-    }
+    var clientHello: [UInt8]? { DeviceFamily.whoop5ClientHello }
 
     /// Whoop 5.0 CLIENT_HELLO bytes (16 bytes). Exposed as a named constant for test/debug use.
     static let whoop5ClientHello: [UInt8] = [

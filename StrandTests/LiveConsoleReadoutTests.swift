@@ -39,86 +39,50 @@ final class LiveConsoleReadoutTests: XCTestCase {
 
     func testBrandMatchingIsCaseInsensitive() {
         XCTAssertTrue(LiveConsoleReadout.activeIsWhoop(devices: [device("w1", "whoop")], activeId: "w1"))
-        XCTAssertFalse(LiveConsoleReadout.activeIsWhoop(devices: [device("o1", "OURA")], activeId: "o1"))
+        XCTAssertFalse(LiveConsoleReadout.activeIsWhoop(devices: [device("p1", "Polar")], activeId: "p1"))
     }
 
-    // MARK: - activeIsOura (#2305)
-
-    func testAnOuraActiveDeviceIsARing() {
-        let rows = [device("my-whoop", "WHOOP"), device("oura-123", "Oura")]
-        XCTAssertTrue(LiveConsoleReadout.activeIsOura(devices: rows, activeId: "oura-123"))
-        XCTAssertFalse(LiveConsoleReadout.activeIsOura(devices: rows, activeId: "my-whoop"))
-    }
-
-    func testAnUnresolvableActiveDeviceIsNotARing() {
-        // The opposite default to activeIsWhoop: a ring-only affordance must not appear for a device the
-        // registry cannot name — there would be nothing for "Reconnect ring" to reach.
-        XCTAssertFalse(LiveConsoleReadout.activeIsOura(devices: [], activeId: nil))
-        XCTAssertFalse(LiveConsoleReadout.activeIsOura(devices: [], activeId: "oura-123"))
-    }
-
-    func testAThirdBrandIsNeitherWhoopNorRing() {
-        let rows = [device("polar-1", "Polar")]
-        XCTAssertFalse(LiveConsoleReadout.activeIsWhoop(devices: rows, activeId: "polar-1"))
-        XCTAssertFalse(LiveConsoleReadout.activeIsOura(devices: rows, activeId: "polar-1"))
-    }
-
-    func testRingBrandMatchingIsCaseInsensitive() {
-        XCTAssertTrue(LiveConsoleReadout.activeIsOura(devices: [device("o1", "OURA")], activeId: "o1"))
-        XCTAssertTrue(LiveConsoleReadout.activeIsOura(devices: [device("o2", "oura")], activeId: "o2"))
-    }
 
     // MARK: - batteryPercent
 
     func testAWhoopActiveDeviceShowsTheStrapCharge() {
-        XCTAssertEqual(
-            LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.4, ringPct: 93), 72)
+        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.4), 72)
     }
 
     /// ROUNDS, it does not truncate. The surfaces this seam replaced disagreed: Devices and the widget
     /// rounded, the Live Console truncated. Folding them onto a truncating seam would have quietly moved
     /// five readouts down by a point, which is the kind of change nobody reports and everyone notices.
     func testTheChargeIsRoundedNotTruncated() {
-        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.6, ringPct: nil), 73)
-        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.4, ringPct: nil), 72)
-        // The exact half goes up, matching Kotlin's Math.round over a positive percentage.
-        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.5, ringPct: nil), 73)
-        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 99.7, ringPct: nil), 100)
+        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.6), 73)
+        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.4), 72)
+        // The exact half goes up.
+        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 72.5), 73)
+        XCTAssertEqual(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: 99.7), 100)
     }
 
-    func testARingActiveDeviceShowsTheRingCharge() {
-        // The reported numbers exactly: ring 93, strap 72.40, console showed 72.
-        XCTAssertEqual(
-            LiveConsoleReadout.batteryPercent(activeIsWhoop: false, whoopPct: 72.4, ringPct: 93), 93)
+    /// The heart of #2075. A non-WHOOP active device shows NOTHING rather than the strap's charge:
+    /// the strap's number under another device's name is a confident lie, and is the bug.
+    func testANonWhoopActiveDeviceNeverFallsBackToTheStrapCharge() {
+        XCTAssertNil(LiveConsoleReadout.batteryPercent(activeIsWhoop: false, whoopPct: 72.4))
     }
 
-    func testARingActiveDeviceNeverFallsBackToTheStrapCharge() {
-        // The heart of it. Nothing is the honest answer; the strap's number under the ring's name is a
-        // confident lie, and is the bug.
-        XCTAssertNil(
-            LiveConsoleReadout.batteryPercent(activeIsWhoop: false, whoopPct: 72.4, ringPct: nil))
-    }
-
-    /// The Devices list asks this PER ROW rather than of the active
-    /// device, which is the stronger question there because the row itself is in hand. Composed here so
-    /// the two halves are pinned together the way the screen actually uses them.
-    /// Calls `SourceIdentity.isWhoop` directly, where the screens call `SourceCoordinator.isWhoop`.
-    /// That wrapper is main-actor isolated, so a synchronous test cannot reach it, and it delegates to
-    /// this verbatim with no logic of its own — so the behaviour under test is the same one.
-    func testARingRowShowsTheRingChargeEvenWhenTheStrapReportedOne() {
-        let ring = device("oura-123", "Oura")
+    /// The Devices list asks this PER ROW rather than of the active device, which is the stronger
+    /// question there because the row itself is in hand. Composed here so the two halves are pinned
+    /// together the way the screen actually uses them. Calls `SourceIdentity.isWhoop` directly, where
+    /// the screens call `SourceCoordinator.isWhoop`; that wrapper is main-actor isolated, so a
+    /// synchronous test cannot reach it, and it delegates to this verbatim with no logic of its own.
+    func testAStrapRowShowsTheStrapChargeAndANonWhoopRowShowsNothing() {
         let strap = device("my-whoop", "WHOOP")
-        XCTAssertEqual(
-            LiveConsoleReadout.batteryPercent(activeIsWhoop: SourceIdentity.isWhoop(ring),
-                                              whoopPct: 72.4, ringPct: 93), 93)
+        let other = device("strap-123", "Polar")
         XCTAssertEqual(
             LiveConsoleReadout.batteryPercent(activeIsWhoop: SourceIdentity.isWhoop(strap),
-                                              whoopPct: 72.4, ringPct: 93), 72)
+                                              whoopPct: 72.4), 72)
+        XCTAssertNil(
+            LiveConsoleReadout.batteryPercent(activeIsWhoop: SourceIdentity.isWhoop(other),
+                                              whoopPct: 72.4))
     }
 
-    func testAWhoopActiveDeviceIgnoresAnyRingCharge() {
-        // Symmetry: a ring that reported earlier must not leak into a strap's readout either.
-        XCTAssertNil(
-            LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: nil, ringPct: 93))
+    func testAStrapThatHasReportedNothingShowsNothing() {
+        XCTAssertNil(LiveConsoleReadout.batteryPercent(activeIsWhoop: true, whoopPct: nil))
     }
 }

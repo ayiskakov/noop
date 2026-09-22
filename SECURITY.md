@@ -11,12 +11,8 @@ What remains is local or explicitly user-configured:
 - **File imports** — WHOOP CSV exports and Apple Health ZIP files you choose to open.
 - **AI Coach (optional, off by default)** — sends a compact summary only when asked,
   with credentials you supply, to the provider you choose.
-- **Self-hosted push (Experimental, Android, off by default)** — sends versioned batches
-  one way to a user-owned endpoint after offload; it never reads records back and never
-  participates in strap sync. A receiver can only narrow the fixed stream registry it accepts.
-  See [`docs/PUSH_PROTOCOL.md`](docs/PUSH_PROTOCOL.md).
-- **Oura history import (compile-time optional)** — pulls from Oura using a developer
-  application and grant supplied by the user; it is absent from default builds.
+- **Update check (on by default, switchable off)** — an unauthenticated `GET` of one public
+  GitHub releases URL; it carries no identifier and installs nothing.
 
 A useful security report is one that lets data leave the device without the corresponding opt-in,
 lets a malicious strap or crafted import file corrupt the database or run code, or

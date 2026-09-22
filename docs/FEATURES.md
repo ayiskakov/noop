@@ -6,9 +6,10 @@ directly with the strap over Bluetooth Low Energy — **no WHOOP account, no
 cloud** — stores everything on-device in SQLite, imports your WHOOP and Apple Health exports,
 and computes its own daily scores locally — **Charge** (recovery), **Effort** (strain) and **Rest**
 (sleep), an energy economy you wake with, spend, and rebuild — alongside HRV and the raw signals.
-These are honest approximations from published methods, **not WHOOP's scores**. The macOS app (in `Strand/`) is the
-reference implementation (installable via the Homebrew cask); Android (in `android/`) is a full,
-shipped app (sideload the `.apk`); and iOS ships as an **unsigned `.ipa` you sideload** with
+These are honest approximations from published methods, **not WHOOP's scores**. NOOP supports the
+**WHOOP 5.0 and MG** straps; a WHOOP 4.0 is recognised on the air and reported as detected but
+unsupported. The macOS app (in `Strand/`) is the
+reference implementation (installable via the Homebrew cask), and iOS ships as an **unsigned `.ipa` you sideload** with
 AltStore/SideStore — signed on your own iPhone with your own free Apple ID, so there's no App
 Store or developer account and NOOP stays anonymous (see [docs/IOS.md](IOS.md); you can still
 build it yourself in Xcode). It shares NOOP's analysis code, so its results match
@@ -25,7 +26,7 @@ NOOP is built on community interoperability and protocol-documentation work, wit
 
 | Project | Contribution |
 | --- | --- |
-| [`johnmiddleton12/my-whoop`](https://github.com/johnmiddleton12/my-whoop) | WHOOP 4.0 BLE protocol — framing, commands, decoding |
+| [`johnmiddleton12/my-whoop`](https://github.com/johnmiddleton12/my-whoop) | Original WHOOP BLE protocol work — commands, record decoding (its 4.0 envelope is no longer implemented here) |
 | [`b-nnett/goose`](https://github.com/b-nnett/goose) | WHOOP 5.0 / MG BLE protocol |
 | [`groue/GRDB.swift`](https://github.com/groue/GRDB.swift) | On-device SQLite persistence |
 
@@ -104,9 +105,7 @@ The home dashboard (`TodayView.swift`, titled "Control Center"). A tight, gaples
   **wake with Charge**, **spend it as Effort**, and **rebuild it with Rest**.
 - **Key Metrics** — a uniform tile grid, each with a 14-day sparkline: Charge, Effort
   (of 100), Rest (hours + efficiency), HRV, Resting HR, Blood Oxygen, Respiratory,
-  Steps (on-device only for WHOOP 5/MG; on a 4.0, NOOP shows your imported Apple Health /
-  Health Connect steps, because it can't yet read steps off the 4.0 strap over Bluetooth —
-  the 4.0 itself does count steps in the official WHOOP app — and approximate),
+  Steps (read off the 5/MG strap on-device, or from imported Apple Health steps — approximate),
   Weight, Calories. WHOOP metrics come from the `my-whoop` source; Steps/Weight/Calories/
   Respiratory pull from `apple-health`. Sparse series (e.g. weight) fall back to all history so
   a tile never shows empty when data exists.
@@ -167,7 +166,7 @@ your breath with a felt cue and watch your HRV respond in real time.
 - Modes **Resonance** and **Calm me** stay on the existing mode strip.
 
 Pure schedule math lives in `Packages/StrandAnalytics` (`BreathProtocol` / `BreathProtocolCatalog` /
-`BreathProtocolPlayer`) with a Kotlin twin under `com.noop.analytics` — golden-vector tested.
+`BreathProtocolPlayer`) — golden-vector tested.
 
 Technique list and timing hints are inspired by publicly documented ANS breath protocols (including
 [Ultrahuman's ANS breath protocols blog](https://www.ultrahuman.com/blog/harness-the-power-of-breath-protocols-for-your-autonomic-nervous-system/));
@@ -390,7 +389,8 @@ a single reading is shown as a "Latest reading" value rather than an empty chart
 
 ### WHOOP Export (CSV)
 Import your full WHOOP history — recovery, strain, sleep, workouts — from a WHOOP data export
-(`.zip` or unzipped folder). Works for WHOOP 4.0, 5.0 and MG. Get one from
+(`.zip` or unzipped folder). The export format is the same for every strap generation, so a
+history that began on a WHOOP 4.0 imports too. Get one from
 *app.whoop.com → Data Management*. NOOP reports the records imported and the date span, and shows
 how many days and sleeps are stored.
 
@@ -491,9 +491,8 @@ HRV down ≥20%, skin temp up ≥0.6 °C, respiration up — a banner appears on
 
 On a banner transition from clear to raised, NOOP also posts a **system notification** (at most
 once per local day) so the warning reaches you when the window is closed. The toggle lives in
-**Automations → Illness early-warning**. The defaults differ by platform on purpose: macOS is
-**opt-in** (off by default — enabling it triggers the notification-permission prompt), while
-Android is **opt-out** (on by default — the watch has always run there). Needs at least 14 days
+**Automations → Illness early-warning**. It is **opt-in** (off by default — enabling it triggers
+the notification-permission prompt). Needs at least 14 days
 of history. On-device and approximate — informational only, **not** a diagnosis.
 
 ---

@@ -4,7 +4,6 @@ import WhoopProtocol
 import WhoopStore
 import StrandAnalytics
 import StrandImport
-import OuraProtocol
 #if os(iOS)
 import UserNotifications
 #endif
@@ -13,7 +12,6 @@ import UserNotifications
 enum DataSourceImportKind {
     case whoop
     case appleHealth
-    case xiaomi
 }
 
 /// Root app state: owns the live BLE connection state and the CoreBluetooth engine.
@@ -169,14 +167,11 @@ final class AppModel: ObservableObject {
     @Published var whoopImportSummary: String?
     /// Last Apple Health import result surfaced in the Apple Health card.
     @Published var appleHealthImportSummary: String?
-    /// Last Xiaomi / Mi Band import result surfaced in the Mi Band card.
-    @Published var xiaomiImportSummary: String?
     /// Typed failure flags per source , the summary's warning styling reads these instead of
     /// substring-matching the human-readable message (which misses errors like "Couldn't open
     /// the local store."). Surfaced on both the Data Sources cards and the onboarding import step.
     @Published var whoopImportFailed = false
     @Published var appleHealthImportFailed = false
-    @Published var xiaomiImportFailed = false
     /// A decoded Health Shortcut import waiting for explicit user confirmation before it writes rows.
     @Published var pendingShortcutHealthImport: ShortcutHealthImport.PendingImport?
 
@@ -193,7 +188,6 @@ final class AppModel: ObservableObject {
         switch source {
         case .whoop: return whoopImportFailed
         case .appleHealth: return appleHealthImportFailed
-        case .xiaomi: return xiaomiImportFailed
         }
     }
 
@@ -612,7 +606,6 @@ final class AppModel: ObservableObject {
             registry?.setActive(serialId)
         }
         self.sourceCoordinator = coordinator
-        bindOuraFeatureStatusMirror()
         // #814 READ SPINE (HIGH-1): drive the read side off the registry's `activeDeviceId` for the WHOLE
         // session, exactly as SourceCoordinator drives the WRITE side off the SAME publisher. A Devices-
         // screen switch/remove/re-add calls `registry.setActive` DIRECTLY (NOT through `registerDevice`), so
@@ -1099,16 +1092,13 @@ final class AppModel: ObservableObject {
     func scan(model: WhoopModel? = nil) {
         let chosen = model
             ?? UserDefaults.standard.string(forKey: "selectedWhoopModel").flatMap(WhoopModel.init(rawValue:))
-            ?? .whoop4
+            ?? .whoop5mg
         ble.connect(model: chosen)
     }
     func disconnect() { ble.disconnect() }
     /// Restart the connected strap (user-initiated, confirmation-gated in DevicesView). Non-destructive —
     /// the strap keeps its data and re-advertises after boot; NOOP auto-reconnects. See BLEManager.rebootStrap().
     func rebootStrap() { ble.rebootStrap() }
-    /// Send one WHOOP 4.0 reboot-probe candidate (Test Centre → Connection, 4.0 only). Confirmation-gated
-    /// in DevicesView; finds the real 4.0 reboot frame when the production one is ignored (#235).
-    func rebootProbe(_ variant: RebootProbeVariant) { ble.rebootProbe(variant) }
 
     /// #592 read-only extended-battery opcode probe (Devices → strap menu, Test Centre → Connection gated).
     func probeExtendedBatteryInfo() { ble.probeExtendedBatteryInfo() }
@@ -1243,99 +1233,6 @@ final class AppModel: ObservableObject {
         }
     }
     #endif
-
-    // MARK: - Oura adopt (factory-reset-and-adopt)
-
-    /// The live adopt outcome of the active Oura ring, mirrored off the coordinator's live `OuraLiveSource`
-    /// so the Add-device wizard can drive its "Taking over your ring" step to success or an honest Failed
-    /// WITHOUT reaching into the BLE layer. nil when no Oura source is live or no adopt is in flight. PARITY:
-    /// the Android wizard observes the same coarse outcome to leave its Adopting step.
-    @Published private(set) var ouraAdoptPhase: OuraLiveSource.AdoptPhase = .idle
-    /// The active Oura ring's honest needs-pairing message (mirrored off the live source), surfaced verbatim
-    /// on the wizard's Failed step. nil when the ring is fine or no Oura source is live.
-    @Published private(set) var ouraNeedsPairing: String?
-    /// Combine subscriptions mirroring the live Oura source's `adoptPhase` / `needsPairing` into the two
-    /// published properties above. Re-bound whenever the active Oura source changes.
-    private var ouraAdoptCancellables = Set<AnyCancellable>()
-
-    /// The most recent `feature status` read-back per feature id (0x04 SpO2, 0x0b real-steps, 0x03
-    /// exercise-HR, 0x0d CVA-PPG), mirrored off the live Oura source so Test Centre's enable/disable
-    /// rows can show the ring's own current state instead of being log-only. Bound once, right after
-    /// `sourceCoordinator` is set (below) — unlike `ouraAdoptPhase` above, this isn't scoped to the
-    /// adopt wizard, so it needs to be live for any paired ring, not just one mid-adopt.
-    @Published private(set) var ouraFeatureStatuses: [Int: OuraFeatureStatus] = [:]
-    private var ouraFeatureStatusCancellable: AnyCancellable?
-
-    /// The live ring's link phase (`disconnected` / `connecting` / `authenticating` / `authenticated`),
-    /// mirrored off the live Oura source for the Live console's ring status and reconnect affordance
-    /// (#2305). `.disconnected` when no ring source is live. Bound beside the feature-status mirror.
-    @Published private(set) var ouraLinkPhase: OuraLiveSource.LinkPhase = .disconnected
-    private var ouraLinkPhaseCancellable: AnyCancellable?
-
-    /// (Re)bind the feature-status and link-phase mirrors to whichever `OuraLiveSource` the coordinator
-    /// has live, and every later swap — same `flatMap`-over-`$ouraSource` shape as `bindOuraAdoptMirror`
-    /// below.
-    private func bindOuraFeatureStatusMirror() {
-        guard let coordinator = sourceCoordinator else { return }
-        ouraFeatureStatusCancellable = coordinator.$ouraSource
-            .flatMap { source -> AnyPublisher<[Int: OuraFeatureStatus], Never> in
-                source?.$featureStatuses.eraseToAnyPublisher()
-                    ?? Just([:]).eraseToAnyPublisher()
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.ouraFeatureStatuses = $0 }
-        ouraLinkPhaseCancellable = coordinator.$ouraSource
-            .flatMap { source -> AnyPublisher<OuraLiveSource.LinkPhase, Never> in
-                source?.$linkPhase.eraseToAnyPublisher()
-                    ?? Just(.disconnected).eraseToAnyPublisher()
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.ouraLinkPhase = $0 }
-    }
-
-    /// Reconnect the active ring on the user's request from the Live console (#2305). Routed through the
-    /// coordinator so it can only ever reach the ring that is the live source.
-    func reconnectOuraRing() {
-        sourceCoordinator?.reconnectActiveRing()
-    }
-
-    /// Take over a factory-reset Oura ring: grant the coordinator explicit adopt consent for THIS ring (so
-    /// its live session may run the one-time key install, s3.2), register it active (which starts that live
-    /// session), then begin mirroring its adopt outcome for the wizard. The irreversible-consent gate has
-    /// ALREADY been passed in the wizard (the consent tick + the "Take over this ring?" confirm); this is the
-    /// commit. Never prompts to make-active (the takeover IS the user's new active source).
-    func adoptOuraRing(_ device: PairedDevice) {
-        sourceCoordinator?.requestOuraAdopt(deviceId: device.id)
-        // Reset the mirror so a previous attempt's outcome never leaks into this one.
-        ouraAdoptPhase = .idle
-        ouraNeedsPairing = nil
-        registerDevice(device, makeActive: true)
-        bindOuraAdoptMirror()
-    }
-
-    /// (Re)bind the adopt-outcome mirror to whichever `OuraLiveSource` the coordinator has live now and on
-    /// every later swap. `flatMap` switches to the current source's `adoptPhase` (defaulting to `.idle` when
-    /// there is no source), so the published value always tracks the live source without leaking subscriptions.
-    private func bindOuraAdoptMirror() {
-        ouraAdoptCancellables.removeAll()
-        guard let coordinator = sourceCoordinator else { return }
-        coordinator.$ouraSource
-            .flatMap { source -> AnyPublisher<OuraLiveSource.AdoptPhase, Never> in
-                source?.$adoptPhase.eraseToAnyPublisher()
-                    ?? Just(.idle).eraseToAnyPublisher()
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.ouraAdoptPhase = $0 }
-            .store(in: &ouraAdoptCancellables)
-        coordinator.$ouraSource
-            .flatMap { source -> AnyPublisher<String?, Never> in
-                source?.$needsPairing.eraseToAnyPublisher()
-                    ?? Just(nil).eraseToAnyPublisher()
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.ouraNeedsPairing = $0 }
-            .store(in: &ouraAdoptCancellables)
-    }
 
     /// How many on-screen surfaces currently want the realtime HR stream (the Live tab and the
     /// in-exercise LiveWorkoutView, which can be open at the same time , the workout sheet sits over
@@ -2052,39 +1949,6 @@ final class AppModel: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: Self.cycleAwarenessHiddenKey) }
     }
 
-    /// #polar-debug: whether a connecting Polar strap logs the model NOOP identifies it as (+ its PMD/HRV
-    /// capability summary) to the strap log. Default off; the Test Centre only exposes the toggle when a
-    /// Polar strap is paired. Diagnostic-only — nothing gates behaviour on it. Twin of Android
-    /// `NoopPrefs.KEY_POLAR_DEBUG_LOGGING`.
-    static let polarDebugLoggingKey = "noopPolarDebugLogging"
-    var polarDebugLogging: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.polarDebugLoggingKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.polarDebugLoggingKey) }
-    }
-
-    /// #1284 residual 3 (EXPERIMENTAL, default OFF): generation-side 0x49-onset keying for Oura sleep. When
-    /// on, an Oura hypnogram persist keys its startTs on the rounded 0x49 onset (the stable per-night anchor)
-    /// and a completeness guard suppresses/replaces a duplicate re-serve BEFORE it is banked — closing the
-    /// window where the wrong night shows until the next analyze pass. Off = the shipped end-anchored persist.
-    /// A hardware-validation toggle (Test Centre); no effect for a user with no Oura ring.
-    static let ouraOnsetKeyingKey = "noopOuraOnsetKeying"
-    var ouraOnsetKeying: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.ouraOnsetKeyingKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.ouraOnsetKeyingKey) }
-    }
-
-    /// Oura packed-notification A/B (EXPERIMENTAL, default OFF): send the official app's SetNotification
-    /// mask `1c 01 ff` at the next connect instead of NOOP's `3f`. The ring packs ~10 packets per
-    /// notification for the official app (9x the drain throughput) and NOOP's session never gets that
-    /// shape; the mask is the first candidate switch (OURA_PROTOCOL.md s2.3). Read once per connect, so
-    /// turning it off restores `3f` on the next session — nothing persists on the ring. Readout: the
-    /// `-> notify_all(ff)` line and the raw sidecar's notification-size histogram. Test Centre only.
-    static let ouraNotifyMaskFullKey = "noopOuraNotifyMaskFull"
-    var ouraNotifyMaskFull: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.ouraNotifyMaskFullKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.ouraNotifyMaskFullKey) }
-    }
-
     /// Recompute the v5 skin-temp suite snapshots (cycle phase + body clock) from the current history.
     /// Called from the analytics pass and when the cycle opt-in flips. Honest-nil throughout: cycle is
     /// nil unless opted in; circadian is nil unless a usable activity profile exists.
@@ -2198,7 +2062,6 @@ final class AppModel: ObservableObject {
             (.whoopImport, deviceId),
             (.noopComputed, deviceId + "-noop"),
             (.appleHealth, appleDeviceId),
-            (.xiaomiBand, FusionSource.xiaomiBand.rawValue),
         ]
 
         let now = Date()
@@ -2371,37 +2234,6 @@ final class AppModel: ObservableObject {
 
     /// Import an Apple Health export (export.zip) , streams + aggregates per-day into the store
     /// under the `apple-health` source, then refreshes. Large exports take ~1–2 minutes.
-    func importXiaomi(url: URL) {
-        beginImport(.xiaomi)
-        Task {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            do {
-                guard let store = await repo.storeHandle() else {
-                    finishImport(.xiaomi, summary: "Couldn't open the local store.", failed: true)
-                    return
-                }
-                let local = try await Self.materializeForImport(url)
-                defer { local.cleanup() }
-                emitImportFileMeta(kind: .xiaomiBand, url: local.url)
-                let summary = try await XiaomiImporter.importExport(url: local.url, into: store,
-                                                                    trace: importTraceSink())
-                try? await store.checkpointWAL()   // reclaim the WAL a bulk import grew (#590)
-                await repo.refresh()
-                let span: String
-                if let a = summary.earliest, let b = summary.latest {
-                    let f = DateFormatter(); f.dateFormat = "MMM yyyy"
-                    span = " · \(f.string(from: a))-\(f.string(from: b))"
-                } else { span = "" }
-                let days = summary.countsByCategory["days"] ?? 0
-                let sleeps = summary.countsByCategory["sleepSessions"] ?? 0
-                finishImport(.xiaomi, summary: "Imported \(days) days · \(sleeps) sleeps\(span)")
-            } catch {
-                finishImport(.xiaomi, summary: "Import failed: \(error)", failed: true)
-            }
-        }
-    }
-
     func importAppleHealth(url: URL) {
         beginImport(.appleHealth)
         // FIX 2(c): run the parse+writes at `.utility` so a large Apple Health import yields to UI
@@ -2591,9 +2423,6 @@ final class AppModel: ObservableObject {
         case .appleHealth:
             appleHealthImportSummary = nil
             appleHealthImportFailed = false
-        case .xiaomi:
-            xiaomiImportSummary = nil
-            xiaomiImportFailed = false
         }
     }
 
@@ -2606,9 +2435,6 @@ final class AppModel: ObservableObject {
         case .appleHealth:
             appleHealthImportSummary = summary
             appleHealthImportFailed = failed
-        case .xiaomi:
-            xiaomiImportSummary = summary
-            xiaomiImportFailed = failed
         }
         activeImportSource = nil
     }

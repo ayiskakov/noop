@@ -16,7 +16,6 @@ body:
         Many "bugs" are expected behaviour or a known limit. **Please check these before filing — it's the fastest way to an answer:**
         - **[FAQ](https://github.com/ryanbr/noop/blob/main/docs/FAQ.md)** — live HR, recovery/sleep, steps, importing, privacy, updates.
         - **[WHOOP 5.0 / MG status](https://github.com/ryanbr/noop/wiki/WHOOP-5.0-and-MG-Status)** — SpO₂, steps, recovery/sleep on the newer straps (the most common topic).
-        - **[Oura ring support](https://github.com/ryanbr/noop/blob/main/README.md#oura-ring-support)** — experimental; what a ring can and cannot give NOOP (Sleep and Strain but no Recovery on a ring-only day, no HRV or respiratory rate, live HR is partial).
         - **[Troubleshooting](https://github.com/ryanbr/noop/wiki/Troubleshooting)** — pairing, "syncs but no data", generic HR straps.
 
         ---
@@ -38,7 +37,6 @@ body:
       label: Platform
       options:
         - macOS
-        - Android
         - iOS
     validations:
       required: true
@@ -46,22 +44,21 @@ body:
     id: os_version
     attributes:
       label: OS version
-      description: e.g. macOS 14.5 · Android 15 · iOS 18.5
+      description: e.g. macOS 14.5 · iOS 18.5
     validations:
       required: true
   - type: dropdown
     id: strap
     attributes:
-      label: WHOOP strap / Oura ring model
-      description: The model NOOP shows on the Devices screen for the device this report is about.
+      label: WHOOP strap model
+      description: >-
+        The model NOOP shows on the Devices screen for the strap this report is about. NOOP supports
+        the WHOOP 5.0 and MG only; a WHOOP 4.0 is detected but unsupported, so a 4.0 report is a
+        request to reconsider scope, not a bug.
       options:
-        - WHOOP 4.0
         - WHOOP 5.0
         - WHOOP MG
-        - Oura Ring 3 (Gen3)
-        - Oura Ring 4
-        - Oura Ring 5
-        - No strap or ring — imported data only
+        - No strap — imported data only
         - Not sure
     validations:
       required: true
@@ -73,14 +70,10 @@ body:
       description: Tick all that apply.
       options:
         - Live Bluetooth (WHOOP strap connected)
-        - Live Bluetooth (Oura ring connected)
+        - Live Bluetooth (standard HR strap or FTMS machine)
+        - Apple Watch via HealthKit
         - WHOOP CSV export import
         - Apple Health import
-        - Health Connect import
-        - Oura import
-        - Fitbit import
-        - Garmin import
-        - Xiaomi import
         - FIT / GPX / TCX import
     validations:
       required: true
@@ -153,7 +146,7 @@ body:
           required: true
         - label: I checked the [Troubleshooting guide](https://github.com/ryanbr/noop/wiki/Troubleshooting) — especially "history syncs but no data" (most often the strap isn't banking history to flash; charge it to 100% and reconnect).
           required: true
-        - label: I checked the [FAQ](https://github.com/ryanbr/noop/blob/main/docs/FAQ.md) and — if I'm on a WHOOP 5.0 / MG — the [5.0/MG status page](https://github.com/ryanbr/noop/wiki/WHOOP-5.0-and-MG-Status), or — if I'm on an Oura ring — the [Oura ring support](https://github.com/ryanbr/noop/blob/main/README.md#oura-ring-support) table, and this isn't an already-known limit (e.g. SpO₂, recovery/sleep on the 5/MG, or no Recovery / HRV on a ring-only day).
+        - label: I checked the [FAQ](https://github.com/ryanbr/noop/blob/main/docs/FAQ.md) and — if I'm on a WHOOP 5.0 / MG — the [5.0/MG status page](https://github.com/ryanbr/noop/wiki/WHOOP-5.0-and-MG-Status), and this isn't an already-known limit (e.g. SpO₂, recovery/sleep on the 5/MG).
           required: true
         - label: I've left out anything personal (strap serial, account email, raw export).
           required: true

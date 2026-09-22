@@ -17,7 +17,7 @@ and the migration history that produced the current schema.
 
 The persistence layer is the `WhoopStore` Swift package
 (`Packages/WhoopStore`), built on [GRDB](https://github.com/groue/GRDB.swift) over SQLite. Like
-every package in the repo, it declares both platforms — `.iOS(.v16)` and `.macOS(.v13)`
+every package in the repo, it declares both Apple platforms — `.iOS(.v16)` and `.macOS(.v13)`
 (`Packages/WhoopStore/Package.swift`) — and is UI-framework agnostic, so the same schema and
 storage code back both the macOS app and the iOS app (the latter build-from-source only — see
 `docs/IOS.md`).
@@ -64,15 +64,15 @@ thread) through the `syncRead` / `syncWrite` helpers. `WhoopStoreInfo.schemaVers
 separate, manually-maintained constant (currently `18`) that has lagged the real migration
 history for a while and should not be read as the schema's true version. The migrator itself
 (`makeMigrator()`, below) is the source of truth for what tables/columns exist, and has run
-through **v25** (`v25-oura-raw` — the Oura raw-payload archive, the newest addition; see
-below).
+well past **v25** (`v25-oura-raw`, the raw-payload archive of the since-removed Oura history
+import — retained as a legacy table; see below).
 
 ---
 
 ## Schema at a glance
 
 The schema falls into five groups (this section predates, and undercounts, everything added
-after v9 — see the schema-version note above; the Oura raw archive below is the one
+after v9 — see the schema-version note above; the legacy `ouraRaw` archive below is the one
 post-v9 addition currently documented here):
 
 | Group | Tables | Origin |
@@ -82,7 +82,7 @@ post-v9 addition currently documented here):
 | **Raw outbox** (transient) | `rawBatch` | Compressed raw BLE frames, prunable |
 | **Bookkeeping** | `cursors` | Highwater / read cursors |
 | **Metric caches** | `sleepSession`, `dailyMetric`, `journal`, `workout`, `appleDaily`, `metricSeries`, `scoreInputProvenance` | Derived metrics + their input-provider provenance + CSV / Apple-Health imports |
-| **Oura raw archive** (durable, v25) | `ouraRaw` | Verbatim Oura API payloads behind the opt-in cloud import — see below |
+| **Legacy raw archive** (v25) | `ouraRaw` | Verbatim API payloads written by the removed Oura history import; no writer remains — see below |
 
 All timestamp columns named `ts`, `startTs`, `endTs`, `capturedAt`, etc. are **unix seconds**
 (integers). Day-keyed cache tables use a `day` text column in `YYYY-MM-DD` form and compare it
@@ -160,8 +160,8 @@ re-decoding overlapping frames (the common case during BLE backfill) never dupli
 `Reads.swift` and follow a uniform shape: `WHERE deviceId = ? AND ts >= ? AND ts <= ? ORDER BY ts
 ASC LIMIT ?`.
 
-> The biometric stream structs carry a constant `unit` field (`"raw_adc"` / `"g"`) for JSON
-> parity with golden fixtures, but `unit` is **not** a database column — only the numeric fields
+> The biometric stream structs carry a constant `unit` field (`"raw_adc"` / `"g"`) so their JSON
+> matches the golden fixtures, but `unit` is **not** a database column — only the numeric fields
 > below are persisted.
 
 ### `hrSample` *(v1)* — heart rate
@@ -208,15 +208,13 @@ Two properties of `ord` a consumer has to know:
 - **Pre-v30 rows have `ord` NULL.** The order was never recorded and cannot be backfilled. SQLite
   sorts NULL first in ASC, so an all-legacy second ties on `ord` and falls through to the old
   `(rrMs, seq)` order — i.e. existing data reads back exactly as before, with the #823 bias intact.
-  No `COALESCE`, no sentinel. Room and GRDB agree here because both are SQLite.
+  No `COALESCE`, no sentinel.
 - **`ord` is batch-local.** A second split across two live flushes restarts `ord` at 0, and
   `ON CONFLICT DO NOTHING` keeps whichever row landed first, so that second also falls back to
   magnitude order. The historical offload path delivers a second atomically and is unaffected.
 
-`ord` is a sort key only. The two platforms differ in whether they carry it back: Swift selects
-`ts, rrMs`, so `ord` is excluded, while `WhoopDao.rrIntervals` is `SELECT *` and Room materialises it
-into every returned `RrInterval` (`Entities.kt`, `val ord: Int? = null`). No consumer reads its value
-on either platform.
+`ord` is a sort key only. The RR reads select `ts, rrMs`, so `ord` is never carried back and no
+consumer reads its value.
 
 ### `event` *(v1)* — strap events
 
@@ -507,46 +505,36 @@ legacy scores without a row have unknown provenance and the UI omits their provi
 
 ---
 
-## Oura raw-payload archive
+## Legacy raw-payload archive (`ouraRaw`)
 
 This section documents the one table added after this document's v9 baseline (see the
-schema-version note above): the lossless backstop behind the opt-in Oura history import
-(off by default; user-initiated OAuth backfill — `docs/PRIVACY_SECURITY.md` §1.1b). It is
-**not** a metric cache like the tables above — it stores verbatim API responses, not decoded
-values, so any field Oura returns can be re-derived later without re-fetching.
+schema-version note above). It was the lossless backstop behind a since-removed, opt-in
+cloud history import for a device brand NOOP no longer supports. Migrations are never
+mutated or removed, so the table stays in the schema; **no code path writes or reads it any
+more**, and a database that never ran that import holds zero rows in it.
 
 ### `ouraRaw` *(v25)*
 
-One row per fetched PAGE of an Oura API endpoint response — not one row per Oura document; a
-single page's `data` array can carry many documents (`OuraRawStore.swift`, `struct OuraRawRow`).
-Written by `OuraSyncCoordinator.fetchRaw(_:dateParam:)` in the app target (`Strand/Oura/`).
-Natural key `(deviceId, endpoint, documentId)`. Migration `v25-oura-raw`
+One row per fetched PAGE of an API endpoint response. Natural key
+`(deviceId, endpoint, documentId)`. Migration `v25-oura-raw`
 (`Packages/WhoopStore/Sources/WhoopStore/Database.swift`) — additive only, a new table, no
 existing row touched.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `deviceId` | TEXT NOT NULL | Part of PK. `"oura-api"` for the live cloud-import lane. |
-| `endpoint` | TEXT NOT NULL | Part of PK. Oura endpoint name, e.g. `"sleep"`, `"daily_readiness"`, `"heartrate"`. |
-| `documentId` | TEXT NOT NULL | Part of PK. A SYNTHESIZED page key, `"<endpoint>-<startDate>-<pageIndex>"` (`startDate` is the backfill window's start date, `pageIndex` the fetched page's 0-based position) — never Oura's own document `id`, for any endpoint. |
-| `day` | TEXT | `YYYY-MM-DD`, nullable. Currently always NULL — the coordinator never sets it. Reserved for a future per-document (rather than per-page) keying scheme. |
-| `payloadJSON` | TEXT NOT NULL | Verbatim JSON body of the fetched page (the raw HTTP response, including its `data` array of documents) — losslessness holds at the page level, not the individual-document level. |
+| `deviceId` | TEXT NOT NULL | Part of PK. The removed import lane wrote `"oura-api"`. |
+| `endpoint` | TEXT NOT NULL | Part of PK. Endpoint name of the fetched page. |
+| `documentId` | TEXT NOT NULL | Part of PK. A synthesized page key, `"<endpoint>-<startDate>-<pageIndex>"`. |
+| `day` | TEXT | `YYYY-MM-DD`, nullable; the removed writer always left it NULL. |
+| `payloadJSON` | TEXT NOT NULL | Verbatim JSON body of the fetched page. |
 | `fetchedAt` | INTEGER NOT NULL | Unix seconds. |
 
-**Primary key:** `(deviceId, endpoint, documentId)`. `upsertOuraRaw(...)` is idempotent on this
-key via `ON CONFLICT(...) DO UPDATE` — re-pulling the SAME window (same `startDate`, so the same
-`pageIndex` synthesizes the same `documentId`) overwrites that page's `day`/`payloadJSON`/
-`fetchedAt` in place rather than duplicating.
+**Index** — `idx_ouraRaw_device_endpoint_day` on `(deviceId, endpoint, day)`.
 
-**Index** — `idx_ouraRaw_device_endpoint_day` on `(deviceId, endpoint, day)`, so per-endpoint
-reads (`ouraRaw(deviceId:endpoint:)`) scan `(deviceId, endpoint)` and walk `day` in order
-without a table scan.
-
-**Not covered by `deleteAllData(deviceId:)`.** Unlike the metric-cache tables above, `ouraRaw`
-is not in `DeviceRegistryStore.deviceScopedTables`, so the general per-device wipe skips it by
-construction. Disconnecting Oura calls the dedicated `deleteOuraRaw(deviceId:)` alongside
-`deleteAllData(deviceId:)` (`Strand/Oura/OuraConnectModel.swift`) so the raw archive is purged
-too, not left behind.
+**Covered by `deleteAllData(deviceId:)`.** `ouraRaw` is listed in
+`DeviceRegistryStore.deviceScopedTables`, so the general per-device wipe clears any rows a
+legacy database still carries; `DeviceRegistryStoreTests` asserts that list covers every
+deviceId-keyed table.
 
 ---
 
@@ -556,7 +544,7 @@ too, not left behind.
 | --- | --- | --- | --- |
 | *(implicit PK)* | every table above | (its natural key) | Dedupe + primary lookup. |
 | `idx_metricSeries_device_key_day` | `metricSeries` | `deviceId, key, day` | Index-only per-metric range reads. |
-| `idx_ouraRaw_device_endpoint_day` | `ouraRaw` | `deviceId, endpoint, day` | Index-only per-endpoint range reads. |
+| `idx_ouraRaw_device_endpoint_day` | `ouraRaw` | `deviceId, endpoint, day` | Legacy table (v25); no reader remains. |
 
 Every other table relies on its primary-key index; the decoded-stream and date-range reads are all
 served by the `(deviceId, ts)` / `(deviceId, day)` / `(deviceId, startTs)` primary keys.
@@ -568,8 +556,9 @@ served by the `(deviceId, ts)` / `(deviceId, day)` / `(deviceId, startTs)` prima
 NOOP's strap interoperability is built on community reverse-engineering work, which it credits and
 builds upon:
 
-- **WHOOP 4.0 protocol** — [`johnmiddleton12/my-whoop`](https://github.com/johnmiddleton12/my-whoop)
-- **WHOOP 5.0 protocol** — [`b-nnett/goose`](https://github.com/b-nnett/goose)
+- **Original WHOOP BLE protocol work** (the WHOOP 4.0 generation NOOP no longer connects to; its
+  command and record conventions carried over) — [`johnmiddleton12/my-whoop`](https://github.com/johnmiddleton12/my-whoop)
+- **WHOOP 5.0 / MG protocol** — [`b-nnett/goose`](https://github.com/b-nnett/goose)
 
 The frame parsing, CRC, and command/event/packet decode that feed the decoded-stream tables above
 live in the `WhoopProtocol` package; persistence is `WhoopStore`; the local recovery / strain /

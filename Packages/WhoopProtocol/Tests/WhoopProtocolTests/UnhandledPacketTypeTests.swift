@@ -101,21 +101,14 @@ final class UnhandledPacketTypeTests: XCTestCase {
     /// but that is a fact about the parser, and a fact the census depends on belongs in a test rather than
     /// in my reading of it. The Kotlin twin builds real bytes throughout; this is the Swift equivalent.
     func testRealFrameOfAnUnmappedTypeReachesTheCensus() {
-        // WHOOP 4.0 envelope: [AA][len lo][len hi][crc8(len)] + inner + crc32(inner). Type byte leads the
-        // inner record, so this is a well-formed frame of a type the schema does not name.
-        let inner: [UInt8] = [99, 0x11, 0x00]
-        // The length field covers the inner record PLUS the 4-byte CRC32 trailer, not the record alone —
-        // get it wrong and the parser cannot locate the trailer, so `crcOK` comes back nil rather than
-        // true and the frame is malformed in a way that still counts. Same convention as
-        // Whoop4ResponseResultTests ([0xAA, 7, 0, 0] for a 3-byte inner).
-        var frame: [UInt8] = [0xAA, UInt8(inner.count + 4), 0, 0]
-        frame[3] = crc8(Array(frame[1..<3]))
-        frame += inner
-        let c32 = crc32(inner)
-        frame += [UInt8(c32 & 0xFF), UInt8((c32 >> 8) & 0xFF),
-                  UInt8((c32 >> 16) & 0xFF), UInt8((c32 >> 24) & 0xFF)]
+        // A well-formed WHOOP 5 frame whose inner type (99) the schema does not name. The declared
+        // length covers the inner record PLUS the 4-byte CRC32 trailer, not the record alone — get it
+        // wrong and the parser cannot locate the trailer, so `crcOK` comes back nil rather than true
+        // and the frame is malformed in a way that still counts. `w5Frame` gets that right by
+        // construction.
+        let frame = w5Frame([], type: 99, seq: 0x11, cmd: 0x00)
 
-        let parsed = parseFrame(frame)
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertTrue(parsed.ok, "an unmapped type must still parse, or the census is unreachable")
         XCTAssertEqual(parsed.crcOK, true)
         XCTAssertEqual(parsed.typeName, "type99")

@@ -44,13 +44,4 @@ final class Whoop5RealtimeTests: XCTestCase {
         XCTAssertEqual(hr?.off, 16)
     }
 
-    func testWhoop4RealtimeIsUnaffected() {
-        // The 4.0 path must still decode at its original offsets (heart_rate@12) — no +4 there.
-        // A real 4.0 REALTIME_DATA frame from the parity fixtures: hr=60, rr=[1000].
-        let f = parseFrame(bytes("aa1800ff28000f3de10100003c01e8030000000000000000c64efbea"),
-                           family: .whoop4, collectFields: true)
-        XCTAssertEqual(f.typeName, "REALTIME_DATA")
-        XCTAssertEqual(f.parsed["heart_rate"]?.intValue, 60)
-        XCTAssertEqual(f.fields.first { $0.name == "heart_rate" }?.off, 12)
-    }
 }

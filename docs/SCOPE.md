@@ -1,6 +1,6 @@
 # Scope & non-goals
 
-NOOP exists to give you **your own strap data, offline and on-device**. That mission sets hard limits
+NOOP exists to give you **your own WHOOP 5.0 / MG strap data, offline and on-device**, on macOS and iOS. That mission sets hard limits
 on what belongs in the app. This page names the WHOOP-app features that stay **out of scope** — and the
 local equivalents that stay **in scope** — so a parity proposal has a standing answer before a PR is
 opened. It does not change the constraints stated in [AGENTS.md](../AGENTS.md), the
@@ -63,8 +63,9 @@ and configures. It remains in scope only while all of these boundaries hold:
 
 This is automated export, not restore or two-way sync. A NOOP-operated receiver, accounts, server
 read-back, remote writes, or making app behaviour depend on endpoint availability remain out of
-scope. The feature stays Experimental until its Android background behaviour is proven quiet and
-reliable in real-world use.
+scope. No push client currently ships in this repository; [`PUSH_PROTOCOL.md`](PUSH_PROTOCOL.md) is the
+wire contract any future client must implement, and it would stay Experimental until its background
+behaviour is proven quiet and reliable in real-world use.
 
 ## Proposing a scope change
 

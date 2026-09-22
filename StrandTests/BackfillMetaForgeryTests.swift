@@ -37,7 +37,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
     /// A protocol-correct WHOOP 4.0 HISTORY_END (METADATA, meta_type 2) carrying unix + trim cursor.
     private func historyEndFrame(unix: UInt32 = 1_700_000_000, trim: UInt32 = 70_476) -> [UInt8] {
-        frameFromPayload(le32(unix) + [0, 0] + le32(0) + le32(trim), type: 49, seq: 0, cmd: 2)
+        w5Frame(le32(unix) + [0, 0] + le32(0) + le32(trim), type: 49, seq: 0, cmd: 2)
     }
 
     /// Collects every trim acknowledgement the Backfiller issues. `@MainActor` because `Backfiller` is.
@@ -50,7 +50,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
     @MainActor func testAnIntactHistoryEndAcknowledgesTheTrim() async {
         var acked: [UInt32] = []
         let backfiller = makeBackfiller { acked.append($0) }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         await backfiller.ingest(historyEndFrame())
         XCTAssertEqual(acked, [70_476], "control: a real HISTORY_END must still advance the offload")
     }
@@ -59,8 +59,8 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
     @MainActor func testAHistoryEndWithABrokenHeaderChecksumAcknowledgesNothing() async {
         var frame = historyEndFrame()
-        frame[3] ^= 0xFF                                   // CRC-8 over the length field only
-        let parsed = parseFrame(frame, family: .whoop4)
+        frame[6] ^= 0xFF                                   // the CRC-16 header checksum only
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertEqual(parsed.crcOK, true, "precondition: the payload CRC32 still verifies")
         XCTAssertEqual(parsed.parsed["meta_type"], .string("HISTORY_END(2)"),
                        "precondition: it still decodes as a history end")
@@ -69,7 +69,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
         var acked: [UInt32] = []
         let backfiller = makeBackfiller { acked.append($0) }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         await backfiller.ingest(frame)
         XCTAssertTrue(acked.isEmpty,
                       "acking on this frame frees records the strap would then delete, got \(acked)")
@@ -77,38 +77,39 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
     @MainActor func testAHistoryEndWithADeclaredLengthBelowTheMinimumAcknowledgesNothing() async {
         var frame = historyEndFrame()
-        frame[1] = 6; frame[2] = 0                         // declared 6 → total 10, under the 11-byte floor
-        frame[3] = crc8(frame, 1, 3)                       // with a CORRECT checksum for that word
-        XCTAssertEqual(parseFrame(frame, family: .whoop4).rejectReason, .belowMinimumLength)
+        frame[2] = 4; frame[3] = 0                         // declared 4 → total 12, under the 13-byte floor
+        let c16 = crc16Modbus(Array(frame[0..<6]))         // with a CORRECT checksum for that word
+        frame[6] = UInt8(c16 & 0xFF); frame[7] = UInt8((c16 >> 8) & 0xFF)
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).rejectReason, .belowMinimumLength)
 
         var acked: [UInt32] = []
         let backfiller = makeBackfiller { acked.append($0) }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         await backfiller.ingest(frame)
         XCTAssertTrue(acked.isEmpty, "got \(acked)")
     }
 
     @MainActor func testAHistoryEndWithATruncatedTrailerAcknowledgesNothing() async {
         let frame = Array(historyEndFrame().dropLast(2))
-        let parsed = parseFrame(frame, family: .whoop4)
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertEqual(parsed.rejectReason, .lengthMismatch)
         XCTAssertEqual(parsed.parsed["meta_type"], .string("HISTORY_END(2)"),
                        "precondition: without the gate this frame WOULD read as a history end")
 
         var acked: [UInt32] = []
         let backfiller = makeBackfiller { acked.append($0) }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         await backfiller.ingest(frame)
         XCTAssertTrue(acked.isEmpty, "got \(acked)")
     }
 
     @MainActor func testAHistoryEndWithTrailingBytesAcknowledgesNothing() async {
         let frame = historyEndFrame() + [0x00, 0x00]
-        XCTAssertEqual(parseFrame(frame, family: .whoop4).rejectReason, .lengthMismatch)
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).rejectReason, .lengthMismatch)
 
         var acked: [UInt32] = []
         let backfiller = makeBackfiller { acked.append($0) }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         await backfiller.ingest(frame)
         XCTAssertTrue(acked.isEmpty, "got \(acked)")
     }
@@ -116,28 +117,28 @@ final class BackfillMetaForgeryTests: XCTestCase {
     /// The other half of the forgery: HISTORY_COMPLETE ends the whole offload. A damaged one must not
     /// close a session that is still mid-flight.
     @MainActor func testADamagedHistoryCompleteDoesNotEndTheOffload() async {
-        var complete = frameFromPayload([], type: 49, seq: 0, cmd: 3)
-        complete[3] ^= 0xFF
-        XCTAssertEqual(parseFrame(complete, family: .whoop4).parsed["meta_type"],
+        var complete = w5Frame([], type: 49, seq: 0, cmd: 3)
+        complete[6] ^= 0xFF
+        XCTAssertEqual(parseFrame(complete, family: .whoop5).parsed["meta_type"],
                        .string("HISTORY_COMPLETE(3)"), "precondition: it still decodes as complete")
 
         let backfiller = makeBackfiller { _ in }
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         XCTAssertTrue(backfiller.isBackfilling, "precondition: the session is open")
         await backfiller.ingest(complete)
         XCTAssertTrue(backfiller.isBackfilling, "a damaged HISTORY_COMPLETE must not close the session")
 
         // Control: the same frame INTACT does close it, so the gate is what made the difference.
         let control = makeBackfiller { _ in }
-        control.begin(family: .whoop4)
-        await control.ingest(frameFromPayload([], type: 49, seq: 0, cmd: 3))
+        control.begin(family: .whoop5)
+        await control.ingest(w5Frame([], type: 49, seq: 0, cmd: 3))
         XCTAssertFalse(control.isBackfilling)
     }
 
     // MARK: - the acknowledgement block is EXEMPT from the payload bound (D7, decision 4)
 
     /// The eight bytes the trim acknowledgement mirrors back to the strap reach INTO the CRC32 trailer
-    /// by design: on the real 25-byte HISTORY_END the trailer starts at 21 and the block runs 17…25.
+    /// by design: on the real 29-byte HISTORY_END the trailer starts at 25 and the block runs 21…29.
     /// It is an opaque echo, not a decoded field, so the payload bound that now clamps every named
     /// field must not touch it.
     ///
@@ -147,16 +148,16 @@ final class BackfillMetaForgeryTests: XCTestCase {
     /// either it refuses the acknowledgement and the offload stops, or it trims on an altered block.
     /// Both outcomes are the permanent data loss this whole change exists to prevent, arriving through
     /// the fix rather than the bug.
-    @MainActor func testTheWhoop4AcknowledgementBlockIsEightBytesAndReachesIntoTheTrailer() {
+    @MainActor func testTheAcknowledgementBlockIsEightBytesAndReachesIntoTheTrailer() {
         let frame = historyEndFrame()
-        XCTAssertEqual(frame.count, 25, "precondition: the real HISTORY_END size the exemption is about")
-        let declared = Int(frame[1]) | (Int(frame[2]) << 8)
-        XCTAssertEqual(declared, 21, "precondition: the CRC32 trailer starts at 21")
+        XCTAssertEqual(frame.count, 29, "precondition: the real HISTORY_END size the exemption is about")
+        let declared = Int(frame[2]) | (Int(frame[3]) << 8)
+        XCTAssertEqual(declared + 8, frame.count, "precondition: declLen + 8 is the whole frame")
 
-        let endData = Backfiller.endData(from: frame, family: .whoop4)
+        let endData = Backfiller.endData(from: frame, family: .whoop5)
         XCTAssertEqual(endData?.count, 8, "eight bytes, not the four a trailer clamp would leave")
-        XCTAssertEqual(endData, Array(frame[17..<25]), "…and exactly the bytes at 17…25, unaltered")
-        XCTAssertNotEqual(endData, Array(frame[17..<21]) + [0, 0, 0, 0],
+        XCTAssertEqual(endData, Array(frame[21..<29]), "…and exactly the bytes at 21…29, unaltered")
+        XCTAssertNotEqual(endData, Array(frame[21..<25]) + [0, 0, 0, 0],
                           "a clamped-then-padded block is not the same echo")
     }
 
@@ -174,7 +175,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
     /// The guard the exemption does keep: a frame too short to hold the block yields nil rather than a
     /// short read. Not-enough-bytes is a different answer from four-bytes-because-we-clamped.
     @MainActor func testAFrameTooShortForTheBlockYieldsNilRatherThanAShortRead() {
-        XCTAssertNil(Backfiller.endData(from: frameFromPayload([], type: 49, seq: 0, cmd: 2),
-                                        family: .whoop4))
+        XCTAssertNil(Backfiller.endData(from: w5Frame([], type: 49, seq: 0, cmd: 2),
+                                        family: .whoop5))
     }
 }

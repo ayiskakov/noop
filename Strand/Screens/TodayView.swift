@@ -341,8 +341,6 @@ struct TodayView: View {
     @State private var firstScorableRRDay: String?
 
     /// Distinct days + sleep sessions imported from a Mi Band (Mi Fitness), for the Data Sources row.
-    @State private var xiaomiDays = 0
-    @State private var xiaomiSleeps = 0
 
     // The Rest SCORE (0–100) for the logical day, IntelligenceEngine's Rest composite, written to the
     // `sleep_performance` metric series (imported export wins, computed strap fills). The Key-Metrics
@@ -929,8 +927,6 @@ struct TodayView: View {
         // Localize the non-brand source names here rather than exposing the analytics layer's
         // intentionally locale-free wire/display vocabulary on Home.
         switch FusionSource(rawValue: rawSource) {
-        case .healthConnect: return "Health Connect"
-        case .xiaomiBand:    return "Mi Band"
         case .nutritionCsv:  return String(localized: "Nutrition")
         case .localCache:    return String(localized: "Cached")
         case .whoopImport:   return Self.whoopBrandName
@@ -987,11 +983,6 @@ struct TodayView: View {
         let source = sourceId.lowercased()
         switch source {
         case Repository.appleHealthSource: return "Apple Watch"
-        case Repository.healthConnectSource: return "Health Connect"
-        case "oura-import", "oura-api": return "Oura"
-        case "fitbit-import": return "Fitbit"
-        case "garmin-import": return "Garmin"
-        case "xiaomi-band": return "Mi Band"
         case Repository.activityFileSource: return String(localized: "Workout files")
         default: break
         }
@@ -2790,9 +2781,8 @@ struct TodayView: View {
             // (computed "-noop" rows write spo2Pct = nil), so this card agrees with the Key Metrics tile
             // (`d?.spo2Pct ?? carriedVital(perField: lastSpo2Day)`). Mirrors the Android dashboardCardValue.
             // #103/queue-11a: when no calibrated spo2Pct exists AND the experimental toggle is ON, fall
-            // back to the spo2_candidate sparkline tail (WHOOP `spo2_candidate_82` or Oura ceiling@100
-            // `0x6F`, device-conditional — see IntelligenceEngine) so the card shows a strap-estimate
-            // (unverified) number instead of "—".
+            // back to the spo2_candidate sparkline tail (WHOOP `spo2_candidate_82`, see
+            // IntelligenceEngine) so the card shows a strap-estimate (unverified) number instead of "—".
             let calibrated = (d?.spo2Pct ?? lastVitalsDay?.spo2Pct ?? lastSpo2Day?.spo2Pct)
             if let v = calibrated { return String(format: "%.0f%%", locale: AppLanguage.activeLocale, v) }
             if PuffinExperiment.spo2CandidateDisplayEnabled, let tail = sparks["spo2_candidate"]?.last {
@@ -3206,7 +3196,7 @@ struct TodayView: View {
     /// baseline (mirrors the recovery seed gate), the insight then falls back to the state word.
     ///
     /// STOPGAP (#696): NOOP mixes HRV measurement methods on the shared `avgHrv` field,     /// strap/WHOOP-CSV HRV is RMSSD (~20-100 ms) while Apple-Health-imported HRV is SDNN
-    /// (~100-200 ms). With no method awareness, an SDNN reading (e.g. an Oura ring's 176 ms)
+    /// (~100-200 ms). With no method awareness, an SDNN reading (e.g. an imported 176 ms)
     /// compared against an RMSSD baseline (~57 ms) yields a physiologically-impossible delta
     /// (+209%) and renders the alarming "210% over baseline" headline. Genuine night-to-night
     /// HRV variation essentially never exceeds ~±80-100%, so a magnitude beyond that is almost
@@ -4077,13 +4067,11 @@ struct TodayView: View {
                                     prior: { $0.spo2Pct }, perField: lastSpo2Day,
                                     format: { String(format: "%.0f%%", locale: AppLanguage.activeLocale, $0) })
             // #103/queue-11a: SpO₂ candidate fallback. When spo2Pct is nil AND the experimental toggle is
-            // ON, surface the device's own nightly candidate mean — WHOOP's `spo2_candidate_82` V18Aux
-            // byte, or an Oura ring's ceiling@100 `0x6F` mean (device-conditional, see
-            // IntelligenceEngine) — as a "strap estimate (unverified)" so the tile shows a number instead
-            // of "—". Neither candidate is a validated calibration (WHOOP: split cross-device evidence,
-            // corr +0.99 on 8 nights but 2 nights moved opposite on the original device; Oura: n=3
-            // full-tier same-night comparisons as of 2026-08-22, OURA_PROTOCOL.md §6.5.0), so both ship
-            // behind this one default-off toggle and neither is ever written to `spo2Pct` (CLAUDE.md
+            // ON, surface the strap's own nightly candidate mean — WHOOP's `spo2_candidate_82` V18Aux
+            // byte (see IntelligenceEngine) — as a "strap estimate (unverified)" so the tile shows a
+            // number instead of "—". The candidate is not a validated calibration (split cross-device
+            // evidence, corr +0.99 on 8 nights but 2 nights moved opposite on the original device), so it
+            // ships behind this one default-off toggle and is never written to `spo2Pct` (CLAUDE.md
             // derived-biosignal rule). The sparkline switches to the candidate trend when the fallback is
             // active. When the toggle is ON but NO candidate data exists (no in-band reading for this
             // owner's device, or the engine hasn't re-scored yet), show "toggle ON · no estimate yet" so
@@ -4301,16 +4289,6 @@ struct TodayView: View {
                             detail: localizedCountPair(localizedDayCount(appleDays.count),
                                                        localizedWorkoutCount(workouts.filter { WorkoutSource.isAppleHealth($0.source) }.count))
                         )
-                        if xiaomiDays > 0 {
-                            Divider().overlay(StrandPalette.hairline)
-                            sourceRow(
-                                badge: "Mi Band",
-                                tint: StrandPalette.metricAmber,
-                                present: true,
-                                detail: localizedCountPair(localizedDayCount(xiaomiDays),
-                                                           localizedSleepCount(xiaomiSleeps))
-                            )
-                        }
                         strapBatteryRow
                         Divider().overlay(StrandPalette.hairline)
                         strapSyncRow
@@ -4349,8 +4327,7 @@ struct TodayView: View {
                 HStack(spacing: 8) {
                     Text(Self.syncedFromSummary(
                         hasWhoop: !repo.days.isEmpty,
-                        hasApple: !appleDays.isEmpty,
-                        hasXiaomi: xiaomiDays > 0))
+                        hasApple: !appleDays.isEmpty))
                         .font(StrandFont.subhead)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .lineLimit(1)
@@ -4370,14 +4347,13 @@ struct TodayView: View {
     }
 
     /// PURE: the "Synced from: …" summary string for the collapsed footer (S5). Names the sources with
-    /// data using the audience-facing words ("WHOOP", "Apple Watch" for Apple Health, "Mi Band"); "No
+    /// data using the audience-facing words ("WHOOP", "Apple Watch" for Apple Health); "No
     /// sources yet" when nothing is banked. Unit-testable so the collapsed copy can't drift. The expanded
     /// card still uses the existing per-source rows, so the Apple-Health provenance footer is unchanged.
-    static func syncedFromSummary(hasWhoop: Bool, hasApple: Bool, hasXiaomi: Bool) -> String {
+    static func syncedFromSummary(hasWhoop: Bool, hasApple: Bool) -> String {
         var names: [String] = []
         if hasWhoop { names.append("WHOOP") }
         if hasApple { names.append("Apple Watch") }
-        if hasXiaomi { names.append("Mi Band") }
         guard !names.isEmpty else { return String(localized: "No sources yet") }
         return String(localized: "Synced from: \(names.joined(separator: ", "))")
     }
@@ -4469,23 +4445,13 @@ struct TodayView: View {
     ///
     /// #1523: a partial sample-day count is not equivalent to a working calibration. WHOOP 5.0 records feed
     /// the same motion-volume fitter, so a 5.0 can accumulate sample days before any coefficient exists.
-    /// Letting that counter activate the gate showed the 4.0-only calibration prompt on a strap that reports
-    /// steps natively. Only an actual coefficient is evidence that the profile should keep the estimate path.
+    /// Letting that counter activate the gate showed the calibration prompt on a strap that reports steps
+    /// natively. Only an actual coefficient is evidence that the profile should keep the estimate path.
     ///
-    /// Read off the persisted selection rather than through `BLEManager.isWhoop4`: `TodayView` holds no
-    /// `AppModel`, and `BLEManager` writes this same key whenever the model changes
-    /// (`BLEManager.persistSelectedModel`), so the stored value is the same answer without the dependency.
-    ///
-    /// The family term requires the key to have actually been SET. It is written by
-    /// `BLEManager.persistSelectedModel` the moment a strap is identified, so every real 4.0 owner has one
-    /// and #1491's intent is untouched — what it excludes is the user who has never paired anything, whose
-    /// unset key used to read as a 4.0 through the default and earn them a prompt to calibrate a strap
-    /// nobody has seen. Android's twin has always required the key (`?: return null` in
-    /// `stepsCalibrationPrompt`); this is the Apple side matching it — the two halves of #1512 disagreed
-    /// about the unset case from the day it landed.
-    ///
-    /// [hasDayData] stays as the second guard: it is what keeps the prompt off a date with nothing scored
-    /// on it, which is a different question from whether a strap is known.
+    /// Read off the persisted selection: `TodayView` holds no `AppModel`, and `BLEManager` writes this
+    /// same key whenever the model changes (`BLEManager.persistSelectedModel`), so the stored value is the
+    /// same answer without the dependency. A positively identified strap never sees the prompt; only a
+    /// legacy coefficient (calibrated on an earlier strap generation) keeps the estimate path alive.
     private func stepsPipelineActive(hasDayData: Bool) -> Bool {
         Self.stepsPipelineActive(
             selectedModelRaw: selectedWhoopModelRaw,
@@ -4502,32 +4468,17 @@ struct TodayView: View {
                                     calibrationCoefficient: Double,
                                     manualCoefficient: Double,
                                     calibrationSampleDays: Int) -> Bool {
-        // Optional-chained deliberately: an unset (or unparseable) key is NOT a 4.0. The key only ever
-        // holds a `WhoopModel` rawValue, so nil here means "no strap has been identified", not "4.0".
-        let family = WhoopModel(rawValue: selectedModelRaw)?.deviceFamily
-        // #1523 follow-up: a POSITIVELY identified 5/MG never sees this, whatever calibration state the
-        // profile carries from an earlier strap. #1579 stopped a partial sample-day count activating the
-        // affordance but left the coefficient paths able to, and those are profile-global — so a user who
-        // calibrated a 4.0 and then moved to a 5.0 still got the 4.0 prompt on any day the 5.0 logged no
-        // steps and no estimate existed. That is the same complaint #1523 opened, on a narrower trigger.
-        //
-        // The justification for the coefficient paths was preserving estimate behaviour across that
-        // migration, but this gate does not control the estimate: `estSteps` comes from `stepsEstByDay`
-        // and is computed independently. All this gate decides is whether a BLANK tile offers to
-        // calibrate — and a strap that reports steps natively has nothing to calibrate.
-        //
-        // Android has been immune by construction all along: `stepsCalibrationPrompt` returns early on
-        // `model != WhoopModel.WHOOP4.name` before reading any calibration state — and this is written the
-        // same way round, "positively identified and NOT a 4.0", rather than "is a 5". Those are the same
-        // set today because `WhoopModel` has exactly two cases, but they stop being the same the moment a
-        // third is added, and the version that would then be wrong is the one naming a specific family.
-        if let family, family != .whoop4 { return false }
-        // The coefficient paths stay for everything else, and are NOT redundant with the family check: a
-        // legacy 4.0 owner whose `selectedWhoopModel` was never written still has a coefficient, and
-        // dropping these would silently take the gear away from them.
-        return (family == .whoop4 && hasDayData)
-            || calibrationCoefficient > 0
-            || manualCoefficient > 0
+        // Optional-chained deliberately: the key only ever holds a `WhoopModel` rawValue, so nil here means
+        // "no strap has been identified". #1523 follow-up: a POSITIVELY identified 5/MG never sees this,
+        // whatever calibration state the profile carries from an earlier strap — this gate does not control
+        // the estimate (`estSteps` comes from `stepsEstByDay`, computed independently); all it decides is
+        // whether a BLANK tile offers to calibrate, and a strap that reports steps natively has nothing to
+        // calibrate.
+        if WhoopModel(rawValue: selectedModelRaw)?.deviceFamily != nil { return false }
+        // The coefficient paths stay for the unidentified case: a legacy owner whose `selectedWhoopModel`
+        // was never written still has a coefficient, and dropping these would silently take the gear away
+        // from them. `hasDayData` is what keeps the prompt off a date with nothing scored on it.
+        return hasDayData && (calibrationCoefficient > 0 || manualCoefficient > 0)
     }
 
     /// #589, the honest one-liner for a blank, not-yet-calibrated Steps tile: how many more days the
@@ -4712,11 +4663,10 @@ struct TodayView: View {
         async let hrvSpark           = sparkValues("hrv", source: "my-whoop", window: 14)
         async let rhrSpark           = sparkValues("rhr", source: "my-whoop", window: 14)
         async let spo2Spark          = sparkValues("spo2", source: "my-whoop", window: 14)
-        // #103/queue-11a: SpO₂ candidate nightly mean — WHOOP `spo2_candidate_82`, or an Oura owner's
-        // ceiling@100 `0x6F` mean (device-conditional, see IntelligenceEngine). Read via `exploreSeries`
-        // so the computed "-noop" metricSeries backs the trend; "my-whoop" here is the generic "active
-        // strap" sentinel `exploreSeries` resolves through `computedReadIds`, not a WHOOP-only filter, so
-        // this already picks up an Oura ring's own computed id with no further change. Empty when the
+        // #103/queue-11a: SpO₂ candidate nightly mean — WHOOP `spo2_candidate_82` (see
+        // IntelligenceEngine). Read via `exploreSeries` so the computed "-noop" metricSeries backs the
+        // trend; "my-whoop" here is the generic "active strap" sentinel `exploreSeries` resolves through
+        // `computedReadIds`, not a WHOOP-only filter. Empty when the
         // toggle is OFF (the engine writes nothing) or the owner has no in-band reading. Used as a
         // fallback for the Blood Oxygen tile when `spo2Pct` is nil, labelled "strap estimate (unverified)".
         async let spo2CandidateSpark = sparkValuesExplore("spo2_candidate", source: "my-whoop", window: 14)
@@ -4753,16 +4703,14 @@ struct TodayView: View {
         sparks["weight"]      = await weightSpark
         sparks["active_kcal"] = await activeKcalSpark
 
-        // Steps ESTIMATE per day (WHOOP 4.0 motion → calibrated steps), the Mi-Band series, workout +
-        // Apple-daily rows, and the three "your cards" series, all history-wide (none depends on the
+        // Steps ESTIMATE per day (strap motion → calibrated steps), workout + Apple-daily rows, and the
+        // three "your cards" series, all history-wide (none depends on the
         // selected day) and mutually independent (distinct keys/sources). Fire them concurrently with
         // `async let`, then await each where its result is first used, same data, same derivations, same
         // assignment order as before. (The Rest score + provenance resolves moved to loadDayScoped, #755.)
         async let stepsEstSeriesA    = repo.exploreSeries(key: "steps_est", source: "my-whoop")
         async let workoutsA          = repo.workoutRows()
         async let appleDaysA         = repo.appleDailyRows()
-        async let xStepsA            = repo.series(key: "steps", source: "xiaomi-band")
-        async let xSleepA            = repo.series(key: "sleep_total_min", source: "xiaomi-band")
         // #753: the pinned Stress card must read its number the SAME way StressView (the detail page) does,
         // not off the merged stress series' last row. StressView builds `StressModel(days: repo.days,
         // stored:)` and shows `model.score`, which PREFERS today's stored stress row but otherwise DERIVES
@@ -4788,10 +4736,6 @@ struct TodayView: View {
 
         workouts = await workoutsA
         appleDays = await appleDaysA
-        // Mi Band (Mi Fitness import), distinct days across its representative metric keys.
-        let xSteps = await xStepsA
-        let xSleep = await xSleepA
-        xiaomiDays = Set(xSteps.map(\.day) + xSleep.map(\.day)).count
         // Your cards (#582 / Design Reset): Stress / Fitness age / Vitality for the pinned home cards.
         // #753: Stress mirrors StressView. `StressModel(days:stored:).score` is TODAY's score (stored row
         // preferred, else derived off the live RHR/HRV baseline), so the pinned card never lags the detail
@@ -4805,10 +4749,6 @@ struct TodayView: View {
         // feature is on, so a disabled feature does zero work and the card stays hidden.
         await reloadHydration()
         await reloadRRUnitPolicy()
-        if let store = await repo.storeHandle() {
-            let farFuture = Int(Date.distantFuture.timeIntervalSince1970)
-            xiaomiSleeps = ((try? await store.sleepSessions(deviceId: "xiaomi-band", from: 0, to: farFuture, limit: 4000))?.count) ?? 0
-        }
         // #849: snapshot everything just computed onto the long-lived `repo`, keyed by the seq we loaded for,
         // so a later re-mount with unchanged data restores it in-memory instead of re-running this pass.
         // Note the Rest-tile spark (`sparks["sleep_performance"]`) is written by loadDayScoped, which always
@@ -4823,8 +4763,6 @@ struct TodayView: View {
             stepsEstByDay: stepsEstByDay,
             workouts: workouts,
             appleDays: appleDays,
-            xiaomiDays: xiaomiDays,
-            xiaomiSleeps: xiaomiSleeps,
             stressToday: stressToday,
             fitnessAgeToday: fitnessAgeToday,
             vo2maxToday: vo2maxToday,
@@ -4842,8 +4780,6 @@ struct TodayView: View {
         stepsEstByDay = c.stepsEstByDay
         workouts = c.workouts
         appleDays = c.appleDays
-        xiaomiDays = c.xiaomiDays
-        xiaomiSleeps = c.xiaomiSleeps
         stressToday = c.stressToday
         fitnessAgeToday = c.fitnessAgeToday
         vo2maxToday = c.vo2maxToday
@@ -5513,8 +5449,6 @@ struct TodayHistoryWideCache {
     let stepsEstByDay: [String: Int]
     let workouts: [WorkoutRow]
     let appleDays: [AppleDaily]
-    let xiaomiDays: Int
-    let xiaomiSleeps: Int
     let stressToday: Double?
     let fitnessAgeToday: Double?
     let vo2maxToday: Double?

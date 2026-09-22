@@ -9,31 +9,32 @@ final class FrameDiagnosticsTests: XCTestCase {
 
     private func hex(_ s: String) -> [UInt8] { FrameIntegrityTests.hex(s) }
 
-    /// A real WHOOP 4.0 REALTIME_DATA frame with ONLY its header checksum broken: the class that
-    /// passed every gate before this change.
+    /// A valid WHOOP 5 frame with ONLY its CRC16 header checksum broken: the class that passed every
+    /// gate before this change. The payload CRC32 is left intact, so a diagnostic that smears one
+    /// failure over both is visible here.
     private func headerBroken() -> [UInt8] {
-        var f = hex(FrameIntegrityTests.w4Valid)
-        f[3] ^= 0xFF
+        var f = hex(FrameIntegrityTests.w5Valid)
+        f[6] ^= 0xFF
         return f
     }
 
     // MARK: - parseability is not integrity
 
     func testARejectedFrameKeepsItsPacketType() {
-        let p = parseFrame(headerBroken())
+        let p = parseFrame(headerBroken(), family: .whoop5)
         XCTAssertFalse(p.ok)
         XCTAssertTrue(p.isParsable, "the decoder read this frame; only the envelope failed")
-        XCTAssertEqual(p.typeName, "REALTIME_DATA")
+        XCTAssertEqual(p.typeName, "COMMAND_RESPONSE")
     }
 
     func testAByteRunThatIsNotAFrameIsNotParsable() {
-        let p = parseFrame([0xAA, 0x00, 0x00])
+        let p = parseFrame([0xAA, 0x00, 0x00], family: .whoop5)
         XCTAssertFalse(p.isParsable)
         XCTAssertEqual(p.typeName, ParsedFrame.unparsableTypeName)
     }
 
     func testAnIntactFrameIsBothIntactAndParsable() {
-        let p = parseFrame(hex(FrameIntegrityTests.w4Valid))
+        let p = parseFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5)
         XCTAssertTrue(p.ok)
         XCTAssertTrue(p.isParsable)
         XCTAssertEqual(p.rejectReason, .none)
@@ -42,17 +43,17 @@ final class FrameDiagnosticsTests: XCTestCase {
     // MARK: - the inspector's line keeps type AND names the reason
 
     func testInspectionLineOfARejectedFrameCarriesTypeAndReason() {
-        let line = frameInspectionLine(index: 7, family: .whoop4, parsed: parseFrame(headerBroken()))
+        let line = frameInspectionLine(index: 7, family: .whoop5, parsed: parseFrame(headerBroken(), family: .whoop5))
         XCTAssertTrue(line.contains("ok=false"), line)
-        XCTAssertTrue(line.contains("type=REALTIME_DATA"), "a rejected frame must keep its type: \(line)")
+        XCTAssertTrue(line.contains("type=COMMAND_RESPONSE"), "a rejected frame must keep its type: \(line)")
         XCTAssertTrue(line.contains("reason=headerChecksumMismatch"), line)
         // The payload CRC32 verified — the line says so rather than smearing one failure over both.
         XCTAssertTrue(line.contains("crc=ok"), line)
     }
 
     func testInspectionLineOfAnIntactFrameCarriesNoReason() {
-        let line = frameInspectionLine(index: 0, family: .whoop4,
-                                       parsed: parseFrame(hex(FrameIntegrityTests.w4Valid)))
+        let line = frameInspectionLine(index: 0, family: .whoop5,
+                                       parsed: parseFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5))
         XCTAssertTrue(line.contains("ok=true"), line)
         XCTAssertFalse(line.contains("reason="), "an intact frame has no reason to report: \(line)")
     }
@@ -60,10 +61,10 @@ final class FrameDiagnosticsTests: XCTestCase {
     /// A structural rejection whose declared payload is unavailable keeps the CRC column at "—"
     /// rather than claiming the checksum was computed and disagreed.
     func testUnavailablePayloadCRCDiagnosticIsNotReportedAsAMismatch() {
-        let p = parseFrame(hex(FrameIntegrityTests.w4Total8))
+        let p = parseFrame(hex(FrameIntegrityTests.w5Total12), family: .whoop5)
         XCTAssertNil(p.crcOK)
         XCTAssertNotEqual(p.rejectReason, .payloadCRCMismatch)
-        let line = frameInspectionLine(index: 1, family: .whoop4, parsed: p)
+        let line = frameInspectionLine(index: 1, family: .whoop5, parsed: p)
         XCTAssertTrue(line.contains("crc=—"), line)
         XCTAssertFalse(line.contains("crc=BAD"), "we did not observe a mismatch, so we do not report one")
     }
@@ -114,10 +115,10 @@ final class FrameDiagnosticsTests: XCTestCase {
 
     func testTallyCountsEachReasonSeparately() {
         var tally = FrameRejectTally()
-        tally.note(parseFrame(headerBroken()))
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Valid) + [0x00]))     // trailing byte
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))            // below the 11-byte floor
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Valid)))             // intact: not counted
+        tally.note(parseFrame(headerBroken(), family: .whoop5))
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Valid) + [0x00], family: .whoop5))     // trailing byte
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Total12), family: .whoop5))            // below the 13-byte floor
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5))             // intact: not counted
         XCTAssertEqual(tally.count(.headerChecksumMismatch), 1)
         XCTAssertEqual(tally.count(.lengthMismatch), 1)
         XCTAssertEqual(tally.count(.belowMinimumLength), 1)
@@ -128,10 +129,10 @@ final class FrameDiagnosticsTests: XCTestCase {
     func testTallyReportsOnlyAComputedPayloadMismatchAsPayloadCRCMismatch() {
         var tally = FrameRejectTally()
         // Payload byte flipped: the CRC32 was computed and disagreed.
-        var wrongPayload = hex(FrameIntegrityTests.w4Valid)
+        var wrongPayload = hex(FrameIntegrityTests.w5Valid)
         wrongPayload[10] ^= 0xFF
-        tally.note(parseFrame(wrongPayload))
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))
+        tally.note(parseFrame(wrongPayload, family: .whoop5))
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Total12), family: .whoop5))
         XCTAssertEqual(tally.count(.payloadCRCMismatch), 1)
         XCTAssertEqual(tally.count(.belowMinimumLength), 1,
                        "an unavailable CRC stays classified by the structural failure")
@@ -142,12 +143,12 @@ final class FrameDiagnosticsTests: XCTestCase {
     /// bucket also collects the harmless resyncs after a lost notification.
     func testThePreviouslyAdmittedClassHasItsOwnCounter() {
         var tally = FrameRejectTally()
-        tally.note(parseFrame(headerBroken()))                                // header wrong, CRC32 right
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Valid) + [0x00]))     // length wrong, CRC32 right
-        var wrongPayload = hex(FrameIntegrityTests.w4Valid)
+        tally.note(parseFrame(headerBroken(), family: .whoop5))                                // header wrong, CRC32 right
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Valid) + [0x00], family: .whoop5))     // length wrong, CRC32 right
+        var wrongPayload = hex(FrameIntegrityTests.w5Valid)
         wrongPayload[10] ^= 0xFF
-        tally.note(parseFrame(wrongPayload))                                  // CRC32 wrong: NOT the class
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))             // CRC32 unavailable: not it
+        tally.note(parseFrame(wrongPayload, family: .whoop5))                                  // CRC32 wrong: NOT the class
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Total12), family: .whoop5))             // CRC32 unavailable: not it
         XCTAssertEqual(tally.payloadCRCOKButEnvelopeRejected, 2)
         XCTAssertEqual(tally.totalRejected, 4, "the class is counted BESIDE its reason, not instead of it")
     }
@@ -159,9 +160,9 @@ final class FrameDiagnosticsTests: XCTestCase {
     func testTheVerdictOverloadCountsTheSameReasonAndClassAsTheParseResult() {
         let broken = headerBroken()
         var fromParse = FrameRejectTally()
-        fromParse.note(parseFrame(broken, family: .whoop4))
+        fromParse.note(parseFrame(broken, family: .whoop5))
         var fromVerdict = FrameRejectTally()
-        let reason = fromVerdict.note(verifyFrame(broken, family: .whoop4))
+        let reason = fromVerdict.note(verifyFrame(broken, family: .whoop5))
         XCTAssertEqual(reason, .headerChecksumMismatch)
         XCTAssertEqual(fromVerdict, fromParse, "the two routes into the tally must agree exactly")
         XCTAssertEqual(fromVerdict.payloadCRCOKButEnvelopeRejected, 1,
@@ -172,12 +173,12 @@ final class FrameDiagnosticsTests: XCTestCase {
     /// wrong payload CRC32 is not the named class, and a structural failure with no CRC result is neither.
     func testTheVerdictOverloadKeepsTheClassSeparations() {
         var tally = FrameRejectTally()
-        XCTAssertEqual(tally.note(verifyFrame(hex(FrameIntegrityTests.w4Valid), family: .whoop4)), .none)
+        XCTAssertEqual(tally.note(verifyFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5)), .none)
         XCTAssertEqual(tally.totalRejected, 0, "an intact frame is never counted as a rejection")
-        var wrongPayload = hex(FrameIntegrityTests.w4Valid)
+        var wrongPayload = hex(FrameIntegrityTests.w5Valid)
         wrongPayload[10] ^= 0xFF
-        tally.note(verifyFrame(wrongPayload, family: .whoop4))
-        tally.note(verifyFrame(hex(FrameIntegrityTests.w4Total8), family: .whoop4))
+        tally.note(verifyFrame(wrongPayload, family: .whoop5))
+        tally.note(verifyFrame(hex(FrameIntegrityTests.w5Total12), family: .whoop5))
         XCTAssertEqual(tally.count(.payloadCRCMismatch), 1)
         XCTAssertEqual(tally.count(.belowMinimumLength), 1)
         XCTAssertEqual(tally.payloadCRCOKButEnvelopeRejected, 0,
@@ -188,10 +189,10 @@ final class FrameDiagnosticsTests: XCTestCase {
     /// reassembler drops never reaches a parser — and never reaches the evidence-preserving reader —
     /// so its disappearance is only visible if it is counted.
     func testReassemblerDropsAreCountedAsBelowMinimumLength() {
-        let r = Reassembler(family: .whoop4)
+        let r = Reassembler(family: .whoop5)
         // A start-of-frame declaring a total of 8 bytes (below the 11-byte floor), then a real frame.
         let runt: [UInt8] = [0xAA, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        let good = hex(FrameIntegrityTests.w4Valid)
+        let good = hex(FrameIntegrityTests.w5Valid)
         let out = r.feed(runt + good)
         XCTAssertEqual(out.count, 1, "the stream resyncs and still yields the real frame")
         XCTAssertGreaterThan(r.belowMinimumLengthDrops, 0, "precondition: the runt was dropped")
@@ -206,13 +207,13 @@ final class FrameDiagnosticsTests: XCTestCase {
 
     func testSummaryLineIsSilentWhenNothingWasRejected() {
         var tally = FrameRejectTally()
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Valid)))
+        tally.note(parseFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5))
         XCTAssertNil(tally.summaryLine(), "no \"0 rejections\" line to read past")
     }
 
     func testSummaryLineNamesOnlyTheReasonsThatOccurred() {
         var tally = FrameRejectTally()
-        tally.note(parseFrame(headerBroken()))
+        tally.note(parseFrame(headerBroken(), family: .whoop5))
         let line = try? XCTUnwrap(tally.summaryLine())
         XCTAssertEqual(line, "frameReject total=1 headerChecksumMismatch=1 payloadCRCOKButEnvelopeRejected=1")
     }

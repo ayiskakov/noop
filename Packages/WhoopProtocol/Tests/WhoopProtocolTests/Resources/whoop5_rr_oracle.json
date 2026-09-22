@@ -73,30 +73,6 @@
   "policy_cases": [
     {
       "brand": "WHOOP",
-      "model": "4.0",
-      "strict": false,
-      "tagged": false
-    },
-    {
-      "brand": "WHOOP",
-      "model": "4.0",
-      "strict": false,
-      "tagged": true
-    },
-    {
-      "brand": null,
-      "model": "WHOOP 4.0",
-      "strict": false,
-      "tagged": false
-    },
-    {
-      "brand": null,
-      "model": "WHOOP 4.0",
-      "strict": false,
-      "tagged": true
-    },
-    {
-      "brand": "WHOOP",
       "model": "5.0 MG",
       "strict": true,
       "tagged": false
@@ -164,18 +140,6 @@
     {
       "brand": "Oura",
       "model": "5.0 MG",
-      "strict": false,
-      "tagged": true
-    },
-    {
-      "brand": "Apple",
-      "model": "4.0",
-      "strict": false,
-      "tagged": false
-    },
-    {
-      "brand": "Apple",
-      "model": "4.0",
       "strict": false,
       "tagged": true
     },

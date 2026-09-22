@@ -49,9 +49,9 @@ final class AnalyzeRecentDayCacheTests: XCTestCase {
     // count+maxTs for the same window. The owner id is part of the key, so it never falsely reuses one
     // strap's scan for the other.
     func testDifferentOwnerInvalidates() {
-        let whoop4 = AnalyzeRecentDayCache.cacheKey(owner: "whoop4-A", hrCount: 178_000, hrMaxTs: 1_700_000_000, skinAnchorRaw: 1290, streams: baseStreams, hrvWindowDetail: false)
-        let whoop5 = AnalyzeRecentDayCache.cacheKey(owner: "whoop5-B", hrCount: 178_000, hrMaxTs: 1_700_000_000, skinAnchorRaw: 1290, streams: baseStreams, hrvWindowDetail: false)
-        XCTAssertNotEqual(whoop4, whoop5)
+        let strapA = AnalyzeRecentDayCache.cacheKey(owner: "strap-A", hrCount: 178_000, hrMaxTs: 1_700_000_000, skinAnchorRaw: 1290, streams: baseStreams, hrvWindowDetail: false)
+        let strapB = AnalyzeRecentDayCache.cacheKey(owner: "strap-B", hrCount: 178_000, hrMaxTs: 1_700_000_000, skinAnchorRaw: 1290, streams: baseStreams, hrvWindowDetail: false)
+        XCTAssertNotEqual(strapA, strapB)
     }
 
     /// #1575: the day that emits the per-window HRV DETAIL must not be reused as an ordinary night.

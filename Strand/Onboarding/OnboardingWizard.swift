@@ -320,7 +320,7 @@ private struct WhatItDoesStep: View {
         .init(icon: "waveform.path.ecg",
               tint: StrandPalette.accent,
               title: String(localized: "Watch your heart, live"),
-              body: String(localized: "Connect a WHOOP, a heart-rate strap or a gym machine and watch each beat in real time: heart rate, variability and zones as they happen. Already have history elsewhere? Import it from WHOOP, Apple Health, Oura, Fitbit or Garmin.")),
+              body: String(localized: "Connect a WHOOP, a heart-rate strap or a gym machine and watch each beat in real time: heart rate, variability and zones as they happen. Already have history elsewhere? Import it from WHOOP or Apple Health.")),
         .init(icon: "lock.shield",
               tint: StrandPalette.statusPositive,
               title: String(localized: "Own your data, offline"),
@@ -532,8 +532,8 @@ private struct ScanStep: View {
     @State private var showHelp = false
 
     /// Which strap to look for — shared with the Live screen via the same key.
-    @AppStorage("selectedWhoopModel") private var selectedModelRaw = WhoopModel.whoop4.rawValue
-    private var selectedModel: WhoopModel { WhoopModel(rawValue: selectedModelRaw) ?? .whoop4 }
+    @AppStorage("selectedWhoopModel") private var selectedModelRaw = WhoopModel.whoop5mg.rawValue
+    private var selectedModel: WhoopModel { WhoopModel(rawValue: selectedModelRaw) ?? .whoop5mg }
 
     var body: some View {
         StepShell(title: String(localized: "Find your strap"),
@@ -582,7 +582,7 @@ private struct ScanStep: View {
                     // WHOOP is NOOP's primary band, so onboarding leads with it — but it isn't required.
                     // Make that obvious so a non-WHOOP user doesn't feel stuck here: they can continue now
                     // and pair a heart-rate strap or import data afterwards (in Devices / Data Sources).
-                    Text("No WHOOP? You can still continue. Pair a heart-rate strap (Polar, Wahoo, Coospo, Garmin HRM…) or a gym machine under Devices, or import from WHOOP, Apple Health, Oura, Fitbit, Garmin and more under Data Sources. You can do either any time.")
+                    Text("No WHOOP? You can still continue. Pair a heart-rate strap (Polar, Wahoo, Coospo, Garmin HRM…) or a gym machine under Devices, or import from WHOOP or Apple Health under Data Sources. You can do either any time.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textTertiary)
                         .multilineTextAlignment(.center)

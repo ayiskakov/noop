@@ -1,7 +1,10 @@
 # Self-hosted push protocol
 
 This document specifies the wire contract for NOOP's **Experimental**, default-off export to a
-user-owned HTTP(S) endpoint. Protocol version **1.0** covers the Android-first client. It is a
+user-owned HTTP(S) endpoint, the one network-export exception permitted by
+[`SCOPE.md`](SCOPE.md) (#1314). Protocol version **1.0** is the versioned contract that a client
+in this repository implements; no sender ships in the current macOS/iOS app, so the requirements
+below on "the sender" bind a future Apple client rather than describe shipping behaviour. It is a
 one-way export protocol: the on-device database is authoritative, the receiver acknowledges writes
 and may advertise only which fixed v1 streams it accepts. NOOP never reads health data, commands,
 URLs, field names, or other configuration back from the receiver.
@@ -39,10 +42,10 @@ and generation fences so deterministic baseline batch IDs are applied again rath
 
 `streams` is a duplicate-free subset of the twelve names in the selected v1 registry; array order has
 no semantic meaning. An empty array is valid. Unknown names, duplicate names, a missing required member,
-an unsupported version, malformed JSON, or a response over 16 KiB fail closed before Room is opened or
-health data is encoded. Unknown optional object members are ignored within a supported major version. The
+an unsupported version, malformed JSON, or a response over 16 KiB fail closed before the local
+database is opened or health data is encoded. Unknown optional object members are ignored within a supported major version. The
 receiver cannot add tables or fields: the effective registry is always the intersection of its list
-and the client's compiled v1 registry. Android performs no snapshot read and no batch `POST` for an
+and the client's compiled v1 registry. The sender performs no snapshot read and no batch `POST` for an
 unadvertised stream.
 
 Capability changes affect future attempts only. A client retains progress for an unadvertised
@@ -72,12 +75,12 @@ Content-Encoding: gzip
   exists.
 - One request contains exactly one device and one stream. A v1 request contains at most **5,000 record
   lines** and at most **4 MiB (4,194,304 bytes)** of decoded UTF-8 NDJSON, including newlines.
-- Android sends request entities with `Content-Encoding: gzip` and an explicit `Content-Length`.
+- The sender sends request entities with `Content-Encoding: gzip` and an explicit `Content-Length`.
   The decoded NDJSON bound is authoritative; the sender also caps the encoded wire entity at
   **4 MiB + 64 KiB** so compression cannot introduce unbounded buffering. Receivers must decode
   before enforcing the NDJSON limit. Other conforming senders may use identity encoding while
   applying the same 4-MiB decoded bound.
-- For compatibility with protocol-1.0 identity-only receivers, Android retries once without
+- For compatibility with protocol-1.0 identity-only receivers, the sender retries once without
   `Content-Encoding` only after a definitive HTTP `415 Unsupported Media Type`. The fallback uses
   the same endpoint, authorization, `batchId`, and byte-identical decoded NDJSON entity. Redirects,
   transient failures, and every other status never trigger this fallback.
@@ -85,16 +88,17 @@ Content-Encoding: gzip
   data**. Larger local windows fail visibly before the first HTTP request instead of growing memory
   without bound or sending an incomplete authoritative replacement.
 - Before reading an append page (at most 5,001 queried rows) or mutable snapshot (at most 1,001
-  queried rows), Android performs a length preflight over that exact ordered, limited selection in
+  queried rows), the sender performs a length preflight over that exact ordered, limited selection in
   the same database transaction. The conservative estimate charges every text value at six times
   its UTF-8 byte length for worst-case JSON escaping plus fixed per-row/object overhead. Oversized
   snapshots fail without truncation or cursor movement before unrestricted text enters app memory.
 - Network or receiver failure must not block strap offload, local writes, analytics, or UI. Delivery
   is retried by the independent background worker.
-- Android coalesces triggers that arrive during a running worker, processes at most one remembered
+- The sender coalesces triggers that arrive during a running worker, processes at most one remembered
   device scope per attempt, and rotates that durable device cursor only after the slice completes.
-  Per-call DNS and HTTP deadlines keep the attempt below WorkManager's execution window; automatic
-  retries stop after a finite attempt budget and resume on a later successful offload or app launch.
+  Per-call DNS and HTTP deadlines keep the attempt within the platform's background execution window;
+  automatic retries stop after a finite attempt budget and resume on a later successful offload or app
+  launch.
 
 ## Identity and storage scope
 
@@ -173,7 +177,7 @@ must reject duplicate keys within a batch or complete replacement window.
 Each append highwater is local state scoped by `(sourceId, deviceId, stream)` inside the destination
 namespace above. It is an opaque receiver value carrying the sender's persistent monotonic insertion
 position, not a measurement timestamp or natural primary key. The v1 member is named `rowId` because
-NOOP's Android and Apple SQLite stores both map it to SQLite insertion `rowid`; a conforming non-SQLite
+NOOP's SQLite store maps it to SQLite insertion `rowid`; a conforming non-SQLite
 sender may supply an equivalent durable insertion sequence. Receivers validate and echo it but must not
 interpret it as receiver state.
 The sender selects rows for that device whose `rowid` is greater than `startCursor.rowId`, orders by
@@ -217,11 +221,11 @@ streams have independent highwaters and may continue.
 Mutable and recomputed tables use authoritative `replace_window` operations rather than append cursors.
 After an offload, the sender evaluates the current local calendar day plus the preceding 13 local days
 (approximately 14 times 24 hours across daylight-saving changes). On a fresh destination it sends that
-complete 14-day baseline. Afterwards Android stores a canonical SHA-256 separately for every local day,
+complete 14-day baseline. Afterwards the sender stores a canonical SHA-256 separately for every local day,
 device, stream, source, and endpoint namespace. These hashes are local progress metadata and are never
 transmitted.
 
-If every daily hash is unchanged, no replacement request is necessary. If days changed, Android sends the
+If every daily hash is unchanged, no replacement request is necessary. If days changed, the sender sends the
 smallest contiguous window spanning those days; unchanged days between the first and last changed day may
 be included. A formerly populated day whose canonical snapshot is now empty is changed and must be sent as
 an empty authoritative window. Hash progress advances only after every part receives an exact durable
@@ -298,12 +302,12 @@ null. The database's `deviceId` is supplied by the header and `synced` is intent
 | `workout` | `startTs`, `sport` | `startTs` | `endTs`, `source`, `durationS`, `energyKcal`, `avgHr`, `maxHr`, `strain`, `distanceM`, `zonesJSON`, `notes`, `routePolyline`, `steps` |
 | `journal` | `day`, `question` | `day` | `answeredYes`, `notes`, `numericValue` |
 
-Unless inherent above, mutable data members are nullable exactly as in the current Room schema.
+Unless inherent above, mutable data members are nullable exactly as in the local schema.
 `sleepSession.endTs`, `workout.endTs`, `workout.source`, and `journal.answeredYes` are required;
 `sleepSession.userEdited` is a required boolean. `day` is `YYYY-MM-DD`; timestamp and count fields
 are integers; metric and measurement fields are finite numbers. See [DATA_MODEL.md](DATA_MODEL.md)
-and `android/app/src/main/java/com/noop/data/Entities.kt` for the local meanings and units. The wire
-registry, not automatic reflection over either database, determines what is sent.
+for the local meanings and units. The wire registry, not automatic reflection over the database,
+determines what is sent.
 
 Newer tables such as `ppgHrSample`, `stepSample`, `sleepStateSample`, `metricSeries`, raw waveform /
 IMU tables, and any future schema additions are not silently exported by v1. Adding a stream or an
@@ -353,11 +357,11 @@ A receiver should return a bounded machine-readable body for non-2xx responses:
 {"type":"error","protocolVersion":"1.0","code":"registry_mismatch"}
 ```
 
-`code` contains 1–64 lowercase ASCII letters, digits, or underscores and starts with a letter. Android
-may display and persist only this validated code alongside the HTTP status; it never retains arbitrary
-response text. Unknown error members are ignored.
+`code` contains 1–64 lowercase ASCII letters, digits, or underscores and starts with a letter. The
+sender may display and persist only this validated code alongside the HTTP status; it never retains
+arbitrary response text. Unknown error members are ignored.
 
-The Android client reports a safe, structured cause for self-hosting diagnostics: DNS resolution,
+The sender reports a safe, structured cause for self-hosting diagnostics: DNS resolution,
 TLS certificate or handshake, connection timeout/refused/unreachable/reset, numeric HTTP status,
 invalid capabilities or acknowledgement, local encoding limits, or local database state. These
 categories survive bounded continuation work so the final status keeps the original cause. Raw
@@ -366,8 +370,8 @@ network stacks and receiver errors can contain endpoint details, credentials, or
 
 ## Versioning and forward compatibility
 
-`protocolVersion` is `MAJOR.MINOR`. Capability discovery negotiates one exact version before Room is
-opened; senders never optimistically emit a version the receiver did not select.
+`protocolVersion` is `MAJOR.MINOR`. Capability discovery negotiates one exact version before the local
+database is opened; senders never optimistically emit a version the receiver did not select.
 
 - A major version changes framing, required members, keys, or existing semantics. A receiver must
   reject an unsupported major version.
@@ -384,10 +388,12 @@ Capability discovery only selects an offered version and narrows the sender's co
 It is not general negotiation: the receiver cannot add schemas, change delivery modes, select an
 endpoint, request diagnostics, set cadence, or otherwise control NOOP.
 
-## Apple compatibility
+## Implementation status
 
-The contract is platform-neutral. NOOP on iOS/macOS uses GRDB/SQLite with the same natural keys and
-logical v1 streams, but every implementation uses explicit registry projections rather than reflection
-or `SELECT *`. A platform lacking a nullable exported column emits `null`; platform-only columns stay
-absent until a later negotiated registry version. Scheduling and credential storage are platform
-concerns and do not change NDJSON, acknowledgement, idempotency, or replacement semantics.
+The contract is platform-neutral and was first exercised by a client that is no longer part of this
+repository. The current macOS/iOS app ships no sender. An Apple client, when built, reads NOOP's
+GRDB/SQLite store with the same natural keys and logical v1 streams and uses explicit registry
+projections rather than reflection or `SELECT *`. A platform lacking a nullable exported column emits
+`null`; platform-only columns stay absent until a later negotiated registry version. Scheduling and
+credential storage are platform concerns and do not change NDJSON, acknowledgement, idempotency, or
+replacement semantics.

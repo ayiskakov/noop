@@ -1,6 +1,5 @@
 import Foundation
 import WhoopProtocol
-import WhoopStore   // OuraRespScale: the one place a ring's milli-bpm respiration row is read
 @preconcurrency import WhoopStore
 
 // AnalyticsEngine.swift — orchestrator producing DailyMetric + sleep-session results.
@@ -268,36 +267,6 @@ public enum AnalyticsEngine {
     ///   - baselines: personal baselines for recovery normalization.
     ///   - maxHROverride: explicit HRmax (bpm) to use for strain/zones; nil →
     ///     Tanaka from profile.age.
-    /// The night's respiratory rate (breaths/min) from a strap's OWN per-window rate rows, or nil when
-    /// the night has too little of it to summarise. Pure → unit-testable, and byte-twinned in Kotlin.
-    ///
-    /// This is NOT the RSA estimate `SleepStager.respRateFromRR` computes: these rows are a measurement
-    /// the device made and NOOP decoded (the Oura ring's 0x6A `breath`, stored in milli-bpm), so the
-    /// question is coverage, not method. The night's value is the MEDIAN of the rows that fall inside a
-    /// matched in-bed session — the same statistic the ledger this decode was validated with used, and
-    /// robust to the odd out-of-band record.
-    ///
-    /// Two guards, both about representativeness rather than trust:
-    ///   * the in-session rows must SPAN at least `vendorRespMinSpanS`. A record cadence is not a
-    ///     reliable proxy for coverage (real nights hold both ~30 s and ~296 s spacing), so the gate is on
-    ///     the time the rows actually cover: a 36-minute tail of a night is not that night's respiration,
-    ///     and it would enter the personal baseline as though it were.
-    ///   * the median must land inside `SleepStager.respPlausibleRangeBpm` (8–25), the SAME band the RSA
-    ///     path is clamped to, so one corrupt record can never publish an impossible rate.
-    public static func vendorRespRateBpm(_ rows: [RespSample],
-                                         sessions: [(start: Int, end: Int)]) -> Double? {
-        guard !rows.isEmpty, !sessions.isEmpty else { return nil }
-        let inSession = rows.filter { r in sessions.contains { r.ts >= $0.start && r.ts <= $0.end } }
-        guard let first = inSession.map(\.ts).min(), let last = inSession.map(\.ts).max(),
-              last - first >= vendorRespMinSpanS else { return nil }
-        let median = HRVAnalyzer.median(inSession.map { OuraRespScale.breathsPerMin(raw: $0.raw) })
-        return SleepStager.respPlausibleRangeBpm.contains(median) ? median : nil
-    }
-
-    /// Minimum span (seconds) a night's vendor respiration rows must cover before their median is taken
-    /// as the night's rate. One hour: enough that the value describes the night rather than a fragment,
-    /// and low enough to keep a partially-drained night. Twin of the Kotlin constant.
-    public static let vendorRespMinSpanS = 3_600
 
     public static func analyzeDay(day: String,
                                   // Optional sink for the Effort funnel line. Nil (the default) builds
@@ -307,13 +276,6 @@ public enum AnalyticsEngine {
                                   hr: [HRSample] = [],
                                   rr: [RRInterval] = [],
                                   resp: [RespSample] = [],
-                                  // The strap's OWN per-window respiratory RATE rows, when it measures one
-                                  // (the Oura ring's 0x6A `breath`, stored in milli-bpm — see
-                                  // `OuraRespScale`). Kept separate from `resp` on purpose: `resp` is the
-                                  // WHOOP raw respiration ADC WAVEFORM the stager peak-detects, a different
-                                  // quantity that must never be pooled with a rate. Empty for every WHOOP
-                                  // night, which therefore scores exactly as before.
-                                  vendorResp: [RespSample] = [],
                                   gravity: [GravitySample] = [],
                                   steps: [StepSample] = [],
                                   // Calendar-day-scoped overrides for the ADDITIVE daily totals
@@ -351,15 +313,6 @@ public enum AnalyticsEngine {
                                   // keeps every 5/MG + pure-function caller byte-identical;
                                   // IntelligenceEngine passes the day owner's real family.
                                   skinTempFamily: DeviceFamily = .whoop5,
-                                  // Per-device WHOOP 4.0 worn anchor raw (#938 second capture): the raw that
-                                  // maps to 33.0 °C for THIS device. The @72 skin-temp ADC's register offset is
-                                  // per-device — a second real 4.0 strap shares the floor (~509) + saturation
-                                  // (2047) but has a worn band ~1100–1600, which the global 826 anchor maps to
-                                  // 47–72 °C, failing 100% of the worn gate. IntelligenceEngine learns it once
-                                  // per run from the owner's own worn median. nil → the family-aware conversion
-                                  // uses the global `Whoop4SkinTemp.anchorRaw`, so every 5/MG + pure-function
-                                  // caller stays byte-identical (`.whoop5` ignores the anchor entirely).
-                                  skinTempAnchorRaw: Double? = nil,
                                   // #1467: 0 (default) keeps every existing caller's skin-temp "worn" gate
                                   // exact-timestamp, byte-identical. IntelligenceEngine passes a non-zero
                                   // value for an owner whose HR and skin-temp streams aren't co-sampled at
@@ -803,18 +756,7 @@ public enum AnalyticsEngine {
         // NOT a cloud/clinical respiration value. Per matched in-bed session, estimate
         // over [start, end]; the night's value = median of finite per-session
         // estimates; nil only when no session yields a finite estimate.
-        //
-        // A DEVICE-MEASURED rate wins over that estimate when the night has one. `vendorResp` carries a
-        // strap's own respiratory-rate rows — today the Oura ring's 0x6A `breath`, one value per sleep
-        // window, computed by the ring's firmware rather than derived here (see `vendorRespRateBpm`).
-        // Preferring it is not a close call: on a ring night the RSA estimate is built from BANKED R-R,
-        // where shuffling or reversing the night returns the same 13.3333 bpm — it carries no breathing
-        // information at all. A WHOOP night passes no `vendorResp`, so it keeps the RSA path verbatim.
         let respRateDaily: Double? = {
-            if let vendor = Self.vendorRespRateBpm(vendorResp,
-                                                   sessions: matched.map { (start: $0.start, end: $0.end) }) {
-                return vendor
-            }
             let perSession = matched
                 .map { SleepStager.respRateFromRR(rr, start: $0.start, end: $0.end) }
                 .filter { $0.isFinite }
@@ -831,7 +773,7 @@ public enum AnalyticsEngine {
         // and the mean is harvested; IntelligenceEngine seeds the baseline from those means
         // and re-derives the deviation in pass 2 (mirrors avgHrv→recovery). APPROXIMATE.
         let nightlySkinTempC = wornNightlySkinTempC(matched, hr: hr, skinTemp: skinTemp,
-                                                    family: skinTempFamily, anchorRaw: skinTempAnchorRaw,
+                                                    family: skinTempFamily,
                                                     wornToleranceSec: skinTempWornToleranceSec)
         let skinTempDevC: Double? = nightlySkinTempC.flatMap { (v: Double) -> Double? in
             guard let b = baselines.skinTemp, b.usable else { return nil }
@@ -1233,10 +1175,6 @@ public enum AnalyticsEngine {
                                      hr: [HRSample],
                                      skinTemp: [SkinTempSample],
                                      family: DeviceFamily = .whoop5,
-                                     // Per-device WHOOP 4.0 worn anchor raw (#938); nil → the global
-                                     // `Whoop4SkinTemp.anchorRaw`, keeping 5/MG + pure-function callers
-                                     // byte-identical. Threaded straight to the funnel's conversion.
-                                     anchorRaw: Double? = nil,
                                      minSamples: Int = minSkinTempSamples,
                                      // #1467: how many seconds apart a "worn" HR sample may sit from a
                                      // skin-temp sample and still count it as concurrent. Default 0 =
@@ -1244,7 +1182,7 @@ public enum AnalyticsEngine {
                                      // caller. See `skinTempFunnel`'s doc for why a ring needs this > 0.
                                      wornToleranceSec: Int = 0) -> Double? {
         skinTempFunnel(sessions, hr: hr, skinTemp: skinTemp, family: family,
-                       anchorRaw: anchorRaw, minSamples: minSamples,
+                       minSamples: minSamples,
                        wornToleranceSec: wornToleranceSec).mean
     }
 
@@ -1442,15 +1380,14 @@ public enum AnalyticsEngine {
         // #skin-diag: raw-ADC visibility so an absent WHOOP 4.0 skin temp explains WHY (anchor mis-map
         // vs genuinely no worn data). Pure observations of the input — they do NOT affect `mean`/gates.
         /// Min / median / max of the night's RAW skin-temp ADC values (nil when no samples). The WHOOP
-        /// 4.0 worn band is ~550–2040; this tells whether the strap streamed a plausible worn band at all.
+        /// This tells whether the strap streamed a plausible worn band at all.
         public let rawMin: Int?
         public let rawMedian: Int?
         public let rawMax: Int?
-        /// Raw samples inside the worn ADC band (`Whoop4SkinTemp.wornMin…wornMaxRaw`). ≥100 lets the
-        /// per-device anchor (#938/#404) learn; below that it falls back to the global 826 anchor.
+        /// Raw samples inside the worn band. On the 5/MG centidegree path every sample is in band, so
+        /// this equals the total; the field stays because ONE shared formatter renders this diagnostic.
         public let inBandCount: Int
-        /// The anchor raw actually used for the °C map — the caller's per-device anchor if supplied, else
-        /// the global 826. nil on 5/MG (centidegree path, no anchor).
+        /// The anchor raw used for the °C map. Always nil on the 5/MG centidegree path, which needs none.
         public let resolvedAnchorRaw: Double?
         /// What °C the median raw maps to under `resolvedAnchorRaw`. If this sits outside 28–42 °C, EVERY
         /// worn sample is gated out — the #404 anchor-mismap signature. nil on 5/MG or when no samples.
@@ -1508,10 +1445,6 @@ public enum AnalyticsEngine {
                                       hr: [HRSample],
                                       skinTemp: [SkinTempSample],
                                       family: DeviceFamily = .whoop5,
-                                      // Per-device WHOOP 4.0 worn anchor raw (#938 second capture); nil → the
-                                      // global `Whoop4SkinTemp.anchorRaw`, so 5/MG + pure-function callers are
-                                      // byte-identical.
-                                      anchorRaw: Double? = nil,
                                       minSamples: Int = minSkinTempSamples,
                                       // #1467: 0 (default) = exact-timestamp "worn" match, byte-identical to
                                       // every caller before this change. A device whose HR and skin-temp
@@ -1527,12 +1460,12 @@ public enum AnalyticsEngine {
         let rawMin = sortedRaws.first
         let rawMax = sortedRaws.last
         let rawMedian = sortedRaws.isEmpty ? nil : sortedRaws[sortedRaws.count / 2]
-        let inBandCount = family == .whoop4
-            ? sortedRaws.filter { $0 >= Whoop4SkinTemp.wornMinRaw && $0 <= Whoop4SkinTemp.wornMaxRaw }.count
-            : total
-        let usedAnchor: Double? = family == .whoop4 ? (anchorRaw ?? Whoop4SkinTemp.anchorRaw) : nil
-        let medianMappedC: Double? = (usedAnchor != nil && rawMedian != nil)
-            ? skinTempCelsius(raw: rawMedian!, family: family, anchorRaw: usedAnchor!) : nil
+        // The 5/MG register is a centidegree value with no worn-band filter and no anchor, so every
+        // sample is in band and there is no anchor to resolve. Both fields stay as the 5/MG path always
+        // reported them; they exist because the diagnostic is rendered by one shared formatter.
+        let inBandCount = total
+        let usedAnchor: Double? = nil
+        let medianMappedC: Double? = nil
         // No sessions ⇒ every sample is out of window; no samples ⇒ an empty funnel. Either way the mean is
         // nil, exactly as `wornNightlySkinTempC`'s early return produced before.
         if sessions.isEmpty || skinTemp.isEmpty {
@@ -1578,19 +1511,7 @@ public enum AnalyticsEngine {
         for t in skinTemp {
             if !isWorn(t.ts) { notWorn += 1; continue }
             if !sessions.contains(where: { t.ts >= $0.start && t.ts <= $0.end }) { outOfWindow += 1; continue }
-            // WHOOP 4.0 ONLY (#938 second capture): drop raws outside the plausible worn ADC band BEFORE the
-            // anchor map. The no-contact floor (~509) and the 11-bit saturation ceiling (2047) are doff /
-            // charging transients, not worn skin — with a per-device anchor a floor or pegged raw could
-            // otherwise map into the 28–42 °C window and poison the mean. Attributed to the SAME `outOfRange`
-            // bucket the °C gate uses ("out of plausible range"), so the four drop buckets + kept still sum to
-            // totalSamples. `.whoop5` is untouched here → its centidegree path stays byte-identical.
-            if family == .whoop4,
-               t.raw < Whoop4SkinTemp.wornMinRaw || t.raw > Whoop4SkinTemp.wornMaxRaw {
-                outOfRange += 1; continue
-            }
-            // Per-device anchor (#938): nil anchorRaw → the global `Whoop4SkinTemp.anchorRaw` (826), byte-
-            // identical to the pre-change conversion; `.whoop5` ignores the anchor.
-            let c = skinTempCelsius(raw: t.raw, family: family, anchorRaw: anchorRaw ?? Whoop4SkinTemp.anchorRaw)
+            let c = skinTempCelsius(raw: t.raw, family: family)
             if c < skinTempMinC || c > skinTempMaxC { outOfRange += 1; continue }
             sum += c
             kept += 1

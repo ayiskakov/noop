@@ -6,7 +6,7 @@ The R-R optimization work improves the beat-to-beat interval processing that fee
 
 `HrvAnalyzer` gained gap-aware RMSSD and pNN50 (`cleanRRGapAware`, `rmssdGapAware`, `pnn50GapAware`). When cleaning drops an out-of-range or ectopic beat, its two neighbours become adjacent in the cleaned list, and the plain successive-difference RMSSD counts the difference across that splice as a real beat-to-beat delta. Because RMSSD squares each delta, one removed beat can bias RMSSD high. The gap-aware path skips any difference that straddles a dropped beat. On a series with no drops it is identical to the plain path, so clean data and the existing golden vectors are unchanged. Wired into `analyzeRaw` (spot and daytime and windowed HRV) and the nightly `SleepStager.sessionHrvWindows`.
 
-The gap-aware analysis path shipped as PR ryanbr/noop#204 (iOS/macOS twin #208). It composes with the seq storage fix (PR ryanbr/noop#163): the PK `(deviceId, ts, rrMs, seq)` stops two equal same-second intervals from colliding under INSERT IGNORE and being dropped, which also biased RMSSD high. The two fixes cover the same class of defect from opposite sides, one at storage and one at analysis.
+The gap-aware analysis path shipped as PRs ryanbr/noop#204 and #208. It composes with the seq storage fix (PR ryanbr/noop#163): the PK `(deviceId, ts, rrMs, seq)` stops two equal same-second intervals from colliding under INSERT IGNORE and being dropped, which also biased RMSSD high. The two fixes cover the same class of defect from opposite sides, one at storage and one at analysis.
 
 ## The harness
 
@@ -58,11 +58,11 @@ HRV absolute match is capped by capture quality. Only three of the eight nights 
 
 These are supported by the analysis but were deliberately not shipped, each for a stated reason.
 
-Raise the recovery sleep weight and add an HRV/RHR-ratio term in `RecoveryScorer`. Supported by the driver analysis and by Plews (2013) and Bellenger (2016), but the exact weights need more nights before they are fixed, and the change touches the Swift parity port. A second wearer found that adding an RHR term destabilised their recovery fit and that HRV alone was the robust choice at n = 20, which is the same overfit wall the honest-limits section describes and reinforces holding this until more nights are available.
+Raise the recovery sleep weight and add an HRV/RHR-ratio term in `RecoveryScorer`. Supported by the driver analysis and by Plews (2013) and Bellenger (2016), but the exact weights need more nights before they are fixed. A second wearer found that adding an RHR term destabilised their recovery fit and that HRV alone was the robust choice at n = 20, which is the same overfit wall the honest-limits section describes and reinforces holding this until more nights are available.
 
 Recalibrate the recovery logistic (`logisticK`, `logisticZ0`). The shipped `logisticK = 1.6` is too steep and saturates the extremes; a gentler slope cut the recovery MAE from about 20 to about 9 leave-one-out. This centers to the user's current elevated-RHR period, so it needs more nights before the constants are hardcoded, and it should likely become a personal calibration rather than a fixed constant.
 
-Raise the per-window beat floors toward 20 to 30 beats. `sessionHrvWindows` allows a window RMSSD from two beats and `rollingRmssd` from eight, both below Baek (2015)'s roughly 30-beat reliability floor for RMSSD. Cheap and pure-Kotlin, and independent of the WHOOP-match work.
+Raise the per-window beat floors toward 20 to 30 beats. `sessionHrvWindows` allows a window RMSSD from two beats and `rollingRmssd` from eight, both below Baek (2015)'s roughly 30-beat reliability floor for RMSSD. Cheap, pure, and independent of the WHOOP-match work.
 
 ## References
 

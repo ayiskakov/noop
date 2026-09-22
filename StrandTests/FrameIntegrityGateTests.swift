@@ -16,22 +16,29 @@ import WhoopStore
 @MainActor
 final class FrameIntegrityGateTests: XCTestCase {
 
-    private func bytes(_ s: String) -> [UInt8] {
-        var out = [UInt8](); out.reserveCapacity(s.count / 2); var i = s.startIndex
-        while i < s.endIndex { let j = s.index(i, offsetBy: 2)
-            out.append(UInt8(s[i..<j], radix: 16)!); i = j }
-        return out
-    }
+    /// The inner record of the REALTIME_DATA frame the protocol package's own framing fixtures use
+    /// (HR 60), wrapped in the WHOOP 5/MG envelope. Reused rather than invented so the gate is exercised
+    /// on the same field bytes the decoder tests already pin.
+    private let realtimeData: [UInt8] = [0x3d, 0xe1, 0x01, 0x28, 0x66, 0x3c,
+                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    /// The WHOOP 4.0 REALTIME_DATA frame the protocol package's own framing fixtures use (28 bytes,
-    /// HR 60) — header checksum and payload CRC32 both verify. Reused rather than invented so the gate
-    /// is exercised on the same bytes the decoder tests already pin.
-    private let realtimeHex = "aa1800ff28020f3de10128663c0000000000000000000000da855212"
+    /// A complete, intact REALTIME_DATA frame: CRC16 header and payload CRC32 both verify.
+    private func realtimeFrame() -> [UInt8] { w5Frame(realtimeData, type: 40, seq: 2, cmd: 0x0f) }
 
-    /// The same frame with ONLY its CRC-8 header checksum broken. Its payload CRC32 still verifies —
+    /// The same frame with ONLY its CRC-16 header checksum broken. Its payload CRC32 still verifies —
     /// this is precisely the class that reached live state before the integrity gate.
     private func headerBroken() -> [UInt8] {
-        var f = bytes(realtimeHex); f[3] ^= 0xFF; return f
+        var f = realtimeFrame(); f[6] ^= 0xFF; return f
+    }
+
+    /// The same frame re-declaring a length below the family minimum, with a CORRECT header checksum for
+    /// that declared length — so what the gate refuses is the length, not a broken checksum.
+    private func declaredLengthBelowMinimum(_ frame: [UInt8], declLen: Int = 4) -> [UInt8] {
+        var f = frame
+        f[2] = UInt8(declLen & 0xFF); f[3] = UInt8((declLen >> 8) & 0xFF)
+        let c16 = crc16Modbus(Array(f[0..<6]))
+        f[6] = UInt8(c16 & 0xFF); f[7] = UInt8((c16 >> 8) & 0xFF)
+        return f
     }
 
     override func setUp() {
@@ -50,7 +57,7 @@ final class FrameIntegrityGateTests: XCTestCase {
 
     func testRouterRejectsABrokenHeaderChecksum() {
         let frame = headerBroken()
-        let parsed = parseFrame(frame, family: .whoop4)
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertEqual(parsed.crcOK, true, "precondition: the payload CRC32 verifies")
         XCTAssertEqual(parsed.parsed["heart_rate"]?.intValue, 60, "precondition: the HR still decodes")
 
@@ -64,16 +71,14 @@ final class FrameIntegrityGateTests: XCTestCase {
     func testRouterAcceptsTheSameFrameIntact() {
         let live = LiveState()
         let router = FrameRouter(state: live)
-        router.handle(frame: bytes(realtimeHex))
+        router.handle(frame: realtimeFrame())
         XCTAssertEqual(live.heartRate, 60, "control: the untouched frame still drives live state")
         XCTAssertEqual(live.lastFrameType, "REALTIME_DATA")
     }
 
     func testRouterRejectsADeclaredLengthBelowTheFamilyMinimum() {
-        var frame = bytes(realtimeHex)
-        frame[1] = 6; frame[2] = 0                       // declared 6 → total 10, under the 11-byte floor
-        frame[3] = crc8(frame, 1, 3)                     // with a CORRECT checksum for that length word
-        XCTAssertEqual(parseFrame(frame, family: .whoop4).rejectReason, .belowMinimumLength)
+        let frame = declaredLengthBelowMinimum(realtimeFrame())
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).rejectReason, .belowMinimumLength)
 
         let live = LiveState()
         FrameRouter(state: live).handle(frame: frame)
@@ -82,8 +87,8 @@ final class FrameIntegrityGateTests: XCTestCase {
     }
 
     func testRouterRejectsATruncatedTrailer() {
-        let frame = Array(bytes(realtimeHex).dropLast(2))
-        let parsed = parseFrame(frame, family: .whoop4)
+        let frame = Array(realtimeFrame().dropLast(2))
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertEqual(parsed.rejectReason, .lengthMismatch)
         XCTAssertEqual(parsed.typeName, "REALTIME_DATA", "precondition: it still reads as a frame")
 
@@ -94,8 +99,8 @@ final class FrameIntegrityGateTests: XCTestCase {
     }
 
     func testRouterRejectsTrailingBytes() {
-        let frame = bytes(realtimeHex) + [0x00]
-        XCTAssertEqual(parseFrame(frame, family: .whoop4).rejectReason, .lengthMismatch)
+        let frame = realtimeFrame() + [0x00]
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).rejectReason, .lengthMismatch)
         let live = LiveState()
         FrameRouter(state: live).handle(frame: frame)
         XCTAssertNil(live.heartRate)
@@ -125,7 +130,7 @@ final class FrameIntegrityGateTests: XCTestCase {
     func testPerConnectionRejectDetailIsGatedBehindTheConnectionDomain() {
         let live = LiveState()
         let router = FrameRouter(state: live)
-        router.handle(frame: Array(bytes(realtimeHex).dropLast(2)))   // lengthMismatch, CRC32 unknown
+        router.handle(frame: Array(realtimeFrame().dropLast(2)))   // lengthMismatch, CRC32 unknown
         XCTAssertTrue(live.taggedTail(domain: .connection).isEmpty,
                       "mode off must emit zero tagged lines: \(live.taggedTail(domain: .connection))")
 
@@ -133,14 +138,14 @@ final class FrameIntegrityGateTests: XCTestCase {
         defer { TestCentre.deactivate(.connection) }
         let live2 = LiveState()
         let router2 = FrameRouter(state: live2)
-        router2.handle(frame: Array(bytes(realtimeHex).dropLast(2)))
+        router2.handle(frame: Array(realtimeFrame().dropLast(2)))
         let tagged = live2.taggedTail(domain: .connection)
         XCTAssertEqual(tagged.count, 1, "one line per reason, got \(tagged)")
         XCTAssertTrue(tagged[0].contains("frameReject reason=lengthMismatch"), tagged[0])
         XCTAssertTrue(tagged[0].contains("type=REALTIME_DATA"),
                       "a rejected frame keeps its packet type in the diagnosis: \(tagged[0])")
         // One line per REASON, not per frame.
-        router2.handle(frame: Array(bytes(realtimeHex).dropLast(2)))
+        router2.handle(frame: Array(realtimeFrame().dropLast(2)))
         XCTAssertEqual(live2.taggedTail(domain: .connection).count, 1)
     }
 
@@ -149,82 +154,33 @@ final class FrameIntegrityGateTests: XCTestCase {
     func testReassemblerDropsAreFoldedIntoTheConnectionTally() {
         let live = LiveState()
         let router = FrameRouter(state: live)
-        let r = Reassembler(family: .whoop4)
-        let runt: [UInt8] = [0xAA, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]   // declares 8 total
-        let completed = r.feed(runt + bytes(realtimeHex))
+        let r = Reassembler(family: .whoop5)
+        // Declares 4 → total 12, under the 13-byte floor: dropped inside the reassembler.
+        let runt: [UInt8] = [0xAA, 0x01, 0x04, 0x00, 0x00, 0x01,
+                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        let completed = r.feed(runt + realtimeFrame())
         router.noteReassemblerDrops(r.belowMinimumLengthDrops)
         XCTAssertEqual(completed.count, 1, "the stream resyncs onto the real frame")
         XCTAssertEqual(router.rejectTally.count(.belowMinimumLength), r.belowMinimumLengthDrops)
         XCTAssertGreaterThan(r.belowMinimumLengthDrops, 0)
     }
 
-    // MARK: - the clock correlation takes no anchor from a frame that is not intact (2.14)
-
-    /// A WHOOP 4.0 GET_CLOCK COMMAND_RESPONSE carrying a device clock value.
-    ///
-    /// The command byte must be the REAL `GET_CLOCK` opcode: the decoder only publishes `clock` when
-    /// the schema resolves `frame[6]` to `GET_CLOCK`, so a made-up opcode yields a frame that verifies
-    /// and parses but carries no anchor at all — a gate test written on one would pass while proving
-    /// nothing about the gate.
-    private func clockResponse() -> [UInt8] {
-        // [type 36][seq][cmd = GET_CLOCK][resp_seq][result][clock u32 LE]
-        frameFromPayload([0x0A, 0x01, 0x8F, 0x64, 0xE1, 0x01],
-                         type: 36, seq: 1, cmd: WhoopCommand.getClock.rawValue)
-    }
-
-    /// The helper is only meaningful if it really carries an anchor — pinned separately so a future
-    /// opcode change fails HERE, with the cause named, instead of quietly hollowing out the two gate
-    /// tests below into assertions that nil equals nil.
-    func testTheClockResponseHelperActuallyCarriesAClock() {
-        let parsed = parseFrame(clockResponse(), family: .whoop4)
-        XCTAssertEqual(parsed.typeName, "COMMAND_RESPONSE")
-        XCTAssertEqual(parsed.parsed["clock"]?.intValue, 31_548_559,
-                       "the helper must decode a clock, or the gate tests prove nothing")
-    }
-
-    func testClockRefIsTakenFromAnIntactResponse() {
-        let parsed = parseFrame(clockResponse(), family: .whoop4)
-        XCTAssertTrue(parsed.ok, "precondition: the response is intact")
-        XCTAssertNotNil(parsed.parsed["clock"]?.intValue, "precondition: it carries a clock")
-        XCTAssertNotNil(ClockCorrelation.clockRef(from: parsed, wall: 1_736_365_593),
-                        "control: the useful path still anchors")
-    }
-
-    func testClockRefIsNotTakenFromABrokenHeaderChecksum() {
-        var frame = clockResponse()
-        frame[3] ^= 0xFF
-        let parsed = parseFrame(frame, family: .whoop4)
-        XCTAssertEqual(parsed.crcOK, true, "precondition: only the header checksum is broken")
-        XCTAssertNotNil(parsed.parsed["clock"]?.intValue, "precondition: the clock value still decodes")
-        XCTAssertNil(ClockCorrelation.clockRef(from: parsed, wall: 1_736_365_593),
-                     "an anchor from a damaged frame mis-stamps every row that follows")
-    }
-
-    func testClockRefIsNotTakenFromADeclaredLengthBelowTheMinimum() {
-        var frame = clockResponse()
-        frame[1] = 6; frame[2] = 0
-        frame[3] = crc8(frame, 1, 3)
-        let parsed = parseFrame(frame, family: .whoop4)
-        XCTAssertEqual(parsed.rejectReason, .belowMinimumLength)
-        XCTAssertNil(ClockCorrelation.clockRef(from: parsed, wall: 1_736_365_593))
-    }
-
     // MARK: - the data-range reply (2.15)
 
-    /// A protocol-correct WHOOP 4.0 GET_DATA_RANGE COMMAND_RESPONSE (built here, not captured): its
+    /// A protocol-correct GET_DATA_RANGE COMMAND_RESPONSE (built here, not captured): its
     /// plausible-unix words are the window the offload judges every drained record against (#547).
     private func dataRangeResponse() -> [UInt8] {
         // The two-byte response header, a filler word, then the oldest and newest markers on the
-        // 4-byte grid the oldest-scan reads (frame[11] and frame[15]).
+        // 4-byte grid the offset-agnostic scan reads.
         let payload: [UInt8] = [0x0A, 0x01, 0x00, 0x00,
                                 0x00, 0xF1, 0x53, 0x65,      // 1_700_000_000 LE
                                 0x70, 0xE1, 0x4C, 0x68]      // 1_749_868_912 LE
-        return frameFromPayload(payload, type: 36, seq: 1, cmd: WhoopCommand.getDataRange.rawValue)
+        return w5Frame(payload, type: 36, seq: 1, cmd: WhoopCommand.getDataRange.rawValue)
     }
 
     func testTheDataRangeWindowIsReadFromAnIntactReply() {
         let frame = dataRangeResponse()
-        XCTAssertTrue(parseFrame(frame, family: .whoop4).ok, "precondition: intact")
+        XCTAssertTrue(parseFrame(frame, family: .whoop5).ok, "precondition: intact")
         XCTAssertEqual(BLEManager.dataRangeOldestUnix(from: frame), 1_700_000_000)
         XCTAssertEqual(BLEManager.dataRangeNewestUnix(from: frame, wallNowUnix: 1_760_000_000),
                        1_749_868_912)
@@ -236,8 +192,8 @@ final class FrameIntegrityGateTests: XCTestCase {
     /// through it, the section persists nothing — and is acknowledged anyway.
     func testABrokenDataRangeReplyIsRefusedByTheVerdictTheSeamChecks() {
         var frame = dataRangeResponse()
-        frame[3] ^= 0xFF
-        let parsed = parseFrame(frame, family: .whoop4)
+        frame[6] ^= 0xFF
+        let parsed = parseFrame(frame, family: .whoop5)
         XCTAssertFalse(parsed.ok, "the seam's condition is `parsed.ok`, and it must be false here")
         XCTAssertEqual(parsed.rejectReason, .headerChecksumMismatch)
         XCTAssertEqual(parsed.crcOK, true, "…even though the payload CRC32 verifies")
@@ -247,8 +203,8 @@ final class FrameIntegrityGateTests: XCTestCase {
 
     func testATruncatedDataRangeReplyIsRefusedByTheSameVerdict() {
         let frame = Array(dataRangeResponse().dropLast(2))
-        XCTAssertFalse(parseFrame(frame, family: .whoop4).ok)
-        XCTAssertEqual(parseFrame(frame, family: .whoop4).rejectReason, .lengthMismatch)
+        XCTAssertFalse(parseFrame(frame, family: .whoop5).ok)
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).rejectReason, .lengthMismatch)
     }
 
     // MARK: - the app's own direct call into the verifier (2.5, the fifth caller)

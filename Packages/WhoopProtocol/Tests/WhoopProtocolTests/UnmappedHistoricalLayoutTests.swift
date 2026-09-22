@@ -107,19 +107,4 @@ final class UnmappedHistoricalLayoutTests: XCTestCase {
         XCTAssertTrue(rejectedHistoricalRecords([bytes(whoop5V18Hex)], family: .whoop5).isEmpty)
     }
 
-    /// The layout rule is WHOOP 5-only: it keys off `frame[9]`, which on a WHOOP 4 frame is a payload
-    /// byte, not a version. WHOOP 4's unmapped versions go through the schema's validated v24 fallback
-    /// (`PostHooks`), which keeps a record only when it decodes to a ~1 g gravity vector and a plausible
-    /// HR and otherwise drops the biometrics — so those records reach the archive by the decode-outcome
-    /// route and must not be dragged in by this one.
-    func testWhoop4FramesAreUnaffectedByTheWhoop5LayoutRule() {
-        // A synthetic WHOOP 4 V24 type-47 record (HR=63) that decodes cleanly (from HistoricalV24Tests).
-        let v24Hex =
-            "aa5a008e2f18000000000000f153650000000000003f0152030000000000000000dc053075" +
-            "000000cdcc4c3dcdcccc3d5a657e3f00000040cdcc4c3dcdcccc3d5a657e3f504668428403" +
-            "200364006400b80bb80b000000000000c25c1a88"
-        XCTAssertTrue(rejectedHistoricalRecords([bytes(v24Hex)], family: .whoop4).isEmpty)
-        XCTAssertFalse(isUnmappedWhoop5HistoricalRecord(bytes(v24Hex)),
-                       "a WHOOP 4 frame has no type-47 byte at index 8 — the rule must not fire on it")
-    }
 }

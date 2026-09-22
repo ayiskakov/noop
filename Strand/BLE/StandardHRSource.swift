@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import CoreBluetooth
-import PolarProtocol
 import WhoopProtocol
 import WhoopStore
 
@@ -316,20 +315,8 @@ extension StandardHRSource: @preconcurrency CBCentralManagerDelegate {
         }
     }
 
-    /// #polar-debug: when the toggle is on and the connected strap identifies as Polar, log the model NOOP
-    /// resolves it to (+ PMD/HRV capability summary) ONCE per connection. Auto-detected from the advertised
-    /// name via the pure `PolarModel` helper (the same one the Test Centre uses on the paired record); a
-    /// non-Polar strap returns nil and logs nothing. Diagnostic-only. Twin of the Android StandardHrSource hook.
-    private func logPolarIdentityOnce(_ peripheral: CBPeripheral) {
-        guard !loggedPolarIdentity, polarDebug(),
-              let line = PolarModel.debugIdentification(advertisedName: peripheral.name) else { return }
-        loggedPolarIdentity = true
-        log("HR-strap: \(line)")
-    }
-
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         log("HR-strap: connected — discovering services")
-        logPolarIdentityOnce(peripheral)
         peripheral.delegate = self
         // Discover the HR service (unchanged) AND, additively, the standard Battery Service + the three
         // fitness-sensor services (RSC/CSC/CPS) so a generic strap's charge AND a connected footpod / bike
@@ -353,7 +340,6 @@ extension StandardHRSource: @preconcurrency CBCentralManagerDelegate {
             log("HR-strap: disconnected (clean)")
         }
         loggedFirstHR = false   // a reconnect should log its first sample again
-        loggedPolarIdentity = false
         loggedFirstSensor = false
         batteryPct = nil        // a stale charge must not outlive the link
         flush()

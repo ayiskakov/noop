@@ -1,7 +1,7 @@
 # Contributing to NOOP
 
 Thanks for your interest in contributing. NOOP is a standalone, fully **offline**
-companion app for WHOOP 4.0 and 5.0 / MG straps — it pairs over Bluetooth, stores
+companion app for WHOOP 5.0 and MG straps, for macOS and iOS — it pairs over Bluetooth, stores
 everything on-device in SQLite, and computes recovery / strain / HRV / sleep
 locally. No servers, no accounts, no data leaving the device.
 
@@ -18,9 +18,8 @@ non-trivial PR.
 
 ## Quick start
 
-The codebase is reusable Swift packages (`Packages/`) plus a thin macOS app
-(`Strand/`) and a full Android app (`android/`). The fastest feedback loop is the
-packages — they build and test on their own, no Xcode project and no strap needed.
+The codebase is reusable Swift packages (`Packages/`) plus thin macOS (`Strand/`)
+and iOS (`StrandiOS/`) app layers. The fastest feedback loop is the packages — they build and test on their own, no Xcode project and no strap needed.
 
 ### Swift packages
 
@@ -29,12 +28,12 @@ packages — they build and test on their own, no Xcode project and no strap nee
 cd Packages/WhoopProtocol && swift build && swift test
 ```
 
-The five packages are `WhoopProtocol` (BLE framing / decode), `WhoopStore`
+The packages are `WhoopProtocol` (BLE framing / decode), `WhoopStore`
 (SQLite persistence), `StrandAnalytics` (recovery / strain / HRV / sleep math),
-`StrandImport` (WHOOP CSV + Apple Health importers), and `StrandDesign` (the
-SwiftUI design system).
+`StrandImport` (WHOOP CSV + Apple Health importers), `StrandDesign` (the
+SwiftUI design system) and `NoopLocalAccess` (the local-access helpers).
 
-### macOS app
+### macOS and iOS apps
 
 The Xcode project is generated from `project.yml` and is **not** committed.
 
@@ -45,16 +44,8 @@ open Strand.xcodeproj     # build and run from Xcode
 ```
 
 For a runnable, ad-hoc-signed `NOOP.app` without an Apple ID, see
-[`docs/BUILD.md`](docs/BUILD.md).
-
-### Android app
-
-```bash
-cd android
-./gradlew assembleFullDebug      # the real app (full flavour); JDK 17 required
-./gradlew assembleDemoDebug      # demo flavour — 120 days of synthetic data, no strap
-./gradlew testFullDebugUnitTest  # unit tests
-```
+[`docs/BUILD.md`](docs/BUILD.md); the iOS target (`NOOPiOS` scheme) is covered in
+[`docs/IOS.md`](docs/IOS.md).
 
 ---
 
@@ -74,28 +65,27 @@ names. That column is why this table exists:
 | `check` | **i18n Coverage** (`i18n-coverage.yml`) | every PR |
 | `doc-comments` | **Source Hygiene** (`source-hygiene.yml`) | every PR |
 | `linux-capture` | **Tools Python CI** (`tools-python.yml`) | every PR |
-| `build-and-test` | **Android CI** (`android.yml`) | `android/**`, the protocol/store test resources, `Strand/Resources/Localizable.xcstrings` |
-| `test (…)`, `tools (…)` | **Swift Packages CI** (`swift-packages.yml`) | `Packages/**`, the `Tools/SleepBench`, `Tools/SleepPSG` and `Tools/Backfill` packages, `android/app/src/test/resources/**`, `Strand/Liquid/LiquidCore.swift` |
+| `test (…)`, `tools (…)` | **Swift Packages CI** (`swift-packages.yml`) | `Packages/**`, the `Tools/SleepBench`, `Tools/SleepPSG` and `Tools/Backfill` packages, `Strand/Liquid/LiquidCore.swift` |
 
-Read that as a worked example: an Android-only PR runs Android CI plus the three that always
-run, so a short list of checks does not mean little was checked.
+Read that as a worked example: a packages-only PR runs Swift Packages CI plus the three that
+always run, so a short list of checks does not mean little was checked.
 
 **App build** (`app-build.yml`, app-target compile + the `StrandTests` macOS suite) is
 `disabled_manually` and is **not** in that list. App-target code — SwiftUI views,
-`BLEManager`, `Repository`, Compose screens — is compiled by **nothing** on a normal PR, so
+`BLEManager`, `Repository`, `RootTabView` — is compiled by **nothing** on a normal PR, so
 build it locally before you push, or ask a maintainer to dispatch `app-build.yml`. See
 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#what-ci-gates--and-what-it-deliberately-doesnt)
 for why the lean setup is deliberate and what else is gated at release time instead.
 
 If CI fails on your PR, fix the cause rather than working around it. Never commit
-generated output (`Strand.xcodeproj/`) or any secrets, keystores, or `local.properties`.
+generated output (`Strand.xcodeproj/`) or any secrets or signing material.
 
 ---
 
 ## Submitting a PR
 
-1. One concern per PR where practical (keep protocol, schema, UI, and Android
-   changes separate).
+1. One concern per PR where practical (keep protocol, schema, and UI changes
+   separate).
 2. Fill in the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
 3. For anything on the BLE path, state what you tested **on real hardware** and on
    which strap. A green build is not proof a command behaves correctly.

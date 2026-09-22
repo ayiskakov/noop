@@ -91,5 +91,4 @@ if __name__ == '__main__':
     # RGBA icon renders glitched when applied as an alternate icon (#708). The art already fills the
     # whole opaque navy tile, so dropping the all-255 alpha channel changes nothing visible.
     render(1024, ring_scale=1.00).convert('RGB').save(os.path.join(OUT, 'noop_icon_1024.png'))   # iOS/macOS (squircle shows full art)
-    render(432,  ring_scale=0.80).save(os.path.join(OUT, 'noop_icon_432.png'))     # Android adaptive bg (ring inside safe-zone)
-    print('wrote noop_icon_1024.png, noop_icon_432.png, noop_icon_preview.png')
+    print('wrote noop_icon_1024.png, noop_icon_preview.png')

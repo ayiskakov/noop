@@ -75,9 +75,11 @@ final class Whoop5RRStoreTests: XCTestCase {
         let withheld = try await store.legacyWhoop5RRWithheld(
             deviceId: "my-whoop", from: 0, to: 1000, unlabelledAliasOfWhoop5: true)
         XCTAssertTrue(withheld, "the canonical alias must expose the same strict-window status as its read")
-        try registry(store, model: "4.0")
-        let confirmedFour = try await store.isWhoop5RRSource(deviceId: "my-whoop", unlabelledAliasOfWhoop5: true)
-        XCTAssertFalse(confirmedFour)
+        // A positively NON-WHOOP brand is the one remaining piece of evidence that overrides the alias:
+        // a leftover row from a device NOOP no longer drives must not inherit the strap's unit policy.
+        try registry(store, model: "5.0 MG", brand: "Oura")
+        let notAWhoop = try await store.isWhoop5RRSource(deviceId: "my-whoop", unlabelledAliasOfWhoop5: true)
+        XCTAssertFalse(notAWhoop)
         let legacy = try await store.rrIntervals(deviceId: "my-whoop", from: 0, to: 1000, limit: 100,
                                                 unlabelledAliasOfWhoop5: true)
         XCTAssertEqual(legacy.map(\.rrMs), [1024])
@@ -87,12 +89,12 @@ final class Whoop5RRStoreTests: XCTestCase {
         let store = try await WhoopStore.inMemory()
         try registry(store, model: "WHOOP")
         let registry = DeviceRegistryStore(dbQueue: store.registryWriter)
-        for (owner, model) in [("old-four", "4.0"), ("new-five", "5.0 MG")] {
-            try registry.add(PairedDevice(id: owner, brand: "WHOOP", model: model,
-                sourceKind: .liveBLE, capabilities: [.hr, .hrv], status: .paired, addedAt: 1, lastSeenAt: 1))
-        }
+        try registry.add(PairedDevice(id: "unlabelled", brand: "WHOOP", model: "WHOOP",
+            sourceKind: .liveBLE, capabilities: [.hr, .hrv], status: .paired, addedAt: 1, lastSeenAt: 1))
+        try registry.add(PairedDevice(id: "new-five", brand: "WHOOP", model: "5.0 MG",
+            sourceKind: .liveBLE, capabilities: [.hr, .hrv], status: .paired, addedAt: 1, lastSeenAt: 1))
         _ = try await store.insert(Streams(rr: [RRInterval(ts: 100, rrMs: 1000)]), deviceId: id)
-        try registry.setActive("old-four")
+        try registry.setActive("unlabelled")
         let global = try await store.analysisFingerprint()
         let day = try await store.dayStreamFingerprint(deviceId: id, from: 0, to: 1000)
         let legacy = try await read(store)
@@ -104,9 +106,9 @@ final class Whoop5RRStoreTests: XCTestCase {
         let changedDay = try await store.dayStreamFingerprint(deviceId: id, from: 0, to: 1000)
         XCTAssertNotEqual(global, changedGlobal)
         XCTAssertNotEqual(day, changedDay)
-        try self.registry(store, model: "4.0")
-        let confirmedFour = try await read(store)
-        XCTAssertEqual(confirmedFour.map(\.rrMs), [1000])
+        try self.registry(store, model: "5.0 MG", brand: "Oura")
+        let notAWhoop = try await read(store)
+        XCTAssertEqual(notAWhoop.map(\.rrMs), [1000])
     }
 
     func testOwnerPolicyExcludesMixedLegacyWithoutChangingStoredRows() async throws {
@@ -157,9 +159,6 @@ final class Whoop5RRStoreTests: XCTestCase {
         XCTAssertFalse(labelled,
                        "any scorable labelled transport ends legacy protection")
 
-        try registry(s, model: "4.0")
-        let whoop4 = try await s.legacyWhoop5RRWithheld(deviceId: id, from: 100, to: 149)
-        XCTAssertFalse(whoop4)
         try registry(s, model: "5.0 MG", brand: "Oura")
         let otherBrand = try await s.legacyWhoop5RRWithheld(deviceId: id, from: 100, to: 149)
         XCTAssertFalse(otherBrand)
@@ -274,15 +273,24 @@ final class Whoop5RRStoreTests: XCTestCase {
         }
     }
 
-    func testPromotionDoesNotRelabelOuraAndRegistryOnlyChangesInvalidateCaches() async throws {
+    /// A row already carrying a RETIRED channel code (1-4, written by a source NOOP no longer supports)
+    /// must survive a WHOOP 5 insert unrelabelled. NULL rows are legitimately promoted; a foreign label
+    /// is evidence about where the beat came from, and overwriting it would invent a WHOOP transport for
+    /// a beat no WHOOP measured.
+    func testPromotionDoesNotRelabelRetiredChannelRowsAndRegistryOnlyChangesInvalidateCaches() async throws {
         let s = try await WhoopStore.inMemory()
-        _ = try await s.insert(Streams(rr: [RRInterval(ts: 100, rrMs: 800, srcChannel: .greenQuality)]), deviceId: id)
+        let deviceId = id
+        try await s.registryWriter.write { db in
+            try db.execute(sql: "INSERT INTO rrInterval (deviceId, ts, rrMs, seq, srcChannel) VALUES (?, 100, 800, 0, 1)",
+                           arguments: [deviceId])
+        }
         let standard = try await s.insert(Streams(rr: [RRInterval(ts: 100, rrMs: 800, srcChannel: .whoop5Standard)]), deviceId: id)
         XCTAssertEqual(standard.rr, 0)
         let n = try await s.insert(Streams(rr: [RRInterval(ts: 100, rrMs: 800, srcChannel: .whoop5Historical)]), deviceId: id)
         XCTAssertEqual(n.rr, 0)
         let stored = try await s.rrRowsWithChannelForTest(deviceId: id)
-        XCTAssertEqual(stored.map(\.srcChannel), [1])
+        XCTAssertEqual(stored.map(\.srcChannel), [1],
+                       "a retired-code row keeps its own label; promotion relabels nothing")
         let g0 = try await s.analysisFingerprint()
         let d0 = try await s.dayStreamFingerprint(deviceId: id, from: 0, to: 1000)
         try registry(s, model: "5.0 MG")

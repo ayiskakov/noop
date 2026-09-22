@@ -46,7 +46,5 @@ public func historicalLayoutSupport(version: Int,
     case .whoop5:
         if !mappedWhoop5HistoricalVersions.contains(version) { return .unmapped }
         return carriesNamedSignal ? .supported : .decodesWithoutNamedSignal
-    case .whoop4:
-        return carriesNamedSignal ? .supported : .unmapped
     }
 }

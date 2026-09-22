@@ -2,7 +2,9 @@
 
 Read the [scope and compatibility](PROTOCOL.md#scope-and-compatibility) before applying this page.
 
-## Standard SIG services (both generations)
+<a id="standard-sig-services-both-generations"></a>
+
+## Standard SIG services
 
 | Service | UUID | Characteristic | UUID | Notes |
 |---------|------|----------------|------|-------|
@@ -21,7 +23,8 @@ These standard characteristics are separate from the custom command replies.
 
 A frame is a self-delimiting byte string beginning with a Start-Of-Frame marker and ending with
 a CRC32 trailer. The two generations share the CRC32 payload check but differ in the header
-checksum. Select the family before parsing:
+checksum. Select the family before parsing. (NOOP implements the WHOOP 5/MG check only; the
+WHOOP 4 row is a documented protocol fact, not a supported connection.)
 
 | Family | Header check |
 |--------|--------------|

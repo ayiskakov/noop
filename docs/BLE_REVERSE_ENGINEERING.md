@@ -564,9 +564,8 @@ captured one.
 
 Provenance is generally declared, but **at the top of the file, not at each fixture**: `StreamsTests`
 and `FramingTests` both open by saying their frames are synthetic and that no real capture is
-embedded, the Kotlin `FramingTest` says its vectors were generated independently in Python, and
-`ExtendedBatteryProbeTests.realFrame` names the device it came off. Read that header before quoting a
-frame in an issue.
+embedded, and `ExtendedBatteryProbeTests.realFrame` names the device it came off. Read that header
+before quoting a frame in an issue.
 
 This is not bookkeeping. #900 was filed against a decode that four in-tree fixtures appeared to
 contradict; three of the four declare themselves generated in exactly those headers, and the fourth

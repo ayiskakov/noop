@@ -84,12 +84,12 @@ final class BackfillerHexDumpBudgetTests: XCTestCase {
         let backfiller = Backfiller(store: NoopStore(), deviceId: "test", ackTrim: { _, _ in }, log: { _ in })
         XCTAssertEqual(backfiller.rejectHexBudget, Backfiller.rejectHexDumpBudget)
 
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         XCTAssertEqual(backfiller.rejectHexBudget, Backfiller.rejectHexDumpBudget,
                        "a fresh Backfiller starts full, so this only shows begin() did not zero it")
 
         // A second session must inherit whatever the first spent, not start over.
-        backfiller.begin(family: .whoop4)
+        backfiller.begin(family: .whoop5)
         XCTAssertEqual(backfiller.rejectHexBudget, Backfiller.rejectHexDumpBudget,
                        "begin() must never refill the budget: the rolling log it protects belongs to "
                         + "the process, not to one offload session")

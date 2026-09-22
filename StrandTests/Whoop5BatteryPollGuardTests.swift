@@ -21,25 +21,18 @@ final class Whoop5BatteryPollGuardTests: XCTestCase {
                           encoding: .utf8)
     }
 
-    /// Whitespace-normalised on both sides. A Swift multiline literal strips indentation to its closing
-    /// delimiter, so a literal written here could never carry the source's own leading spaces, and
-    /// comparing raw text would fail for a reason that has nothing to do with the guard.
-    private func normalised(_ s: String) -> String {
-        s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-    }
-
-    /// The poll is family-guarded, and the guard is on the SAME statement as the send — a nearby `if`
-    /// that merely reads well would not stop the traffic.
-    func testTheBatteryPollIsGuardedAwayFromWhoop5() throws {
-        let src = try normalised(managerSource())
-        let expected = normalised("""
-            if selectedModel.deviceFamily != .whoop5,
-            BLEManager.batteryPollDue(tick: keepAliveTick, charging: state.charging == true) {
-            send(.getBatteryLevel, payload: [])
-            }
-            """)
-        XCTAssertTrue(src.contains(expected),
-                      "the keep-alive battery poll must be guarded away from the 5/MG (#1948)")
+    /// The cadenced poll is GONE, not merely guarded: every command it sent is refused by the 5/MG send
+    /// allowlist before it leaves the app, so the keep-alive must contain no `getBatteryLevel` send at
+    /// all. Asserting its absence is stronger than asserting a guard around it (#1948).
+    func testNoCadencedBatteryPollSurvivesTheKeepAlive() throws {
+        let src = try managerSource()
+        guard let start = src.range(of: "private func keepAliveFire() {"),
+              let end = src.range(of: "private func startBackfillTimer") else {
+            return XCTFail("the keep-alive function or its next landmark was not found")
+        }
+        let body = String(src[start.upperBound..<end.lowerBound])
+        XCTAssertFalse(body.contains(".getBatteryLevel"),
+                       "the keep-alive must send no cadenced GET_BATTERY_LEVEL (#1948)")
     }
 
     /// Nothing may send the pack opcode on a cadence. The user-initiated probe still may, so this asserts

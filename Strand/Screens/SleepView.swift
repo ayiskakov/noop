@@ -518,7 +518,7 @@ struct SleepView: View {
             }
 
             SourceBadge(
-                score != nil ? heroSource(for: night) : (repo.activeDeviceIsOura ? "Oura" : "On-device"),
+                score != nil ? heroSource(for: night) : "On-device",
                 tint: StrandPalette.restColor
             )
             .padding(.top, 8)
@@ -552,14 +552,14 @@ struct SleepView: View {
         }
     }
 
-    /// Whether a SPECIFIC night's sleep-performance score is WHOOP's own imported figure, an Oura
-    /// ring-provided figure, or NOOP's on-device approximation — so the hero is honest about provenance,
+    /// Whether a SPECIFIC night's sleep-performance score is WHOOP's own imported figure or NOOP's
+    /// on-device approximation — so the hero is honest about provenance,
     /// like Today's badges. Keyed by the night's wake-day (matching `performanceScore(for:)`) so a
     /// navigated night's badge tracks ITS OWN score's provenance, not last night's.
     private func heroSource(for night: Night) -> LocalizedStringKey {
         let wakeDay = Repository.localDayKey(Date(timeIntervalSince1970: TimeInterval(night.session.endTs)))
         if repo.importedSleep[wakeDay]?.performancePct != nil { return "Whoop" }
-        return repo.activeDeviceIsOura ? "Oura" : "On-device"
+        return "On-device"
     }
 
     // MARK: - Provenance for the displayed night (COMPONENT 4, spec 2026-06-20)
@@ -574,11 +574,6 @@ struct SleepView: View {
     private func nightSource(_ night: Night) -> String {
         let wakeDay = Repository.localDayKey(Date(timeIntervalSince1970: TimeInterval(night.session.endTs)))
         if repo.importedSleep[wakeDay] != nil { return String(localized: "Whoop") }
-        // An Oura ring PROVIDES the night's stages (its own SleepNet hypnogram, banked as the imported
-        // session that wins the merge), so name it "Oura" — not the generic "On-device" that implies a
-        // NOOP computation. WHOOP import still wins above; only a night surfaced under a live Oura strap
-        // reaches here as "Oura".
-        if repo.activeDeviceIsOura { return String(localized: "Oura") }
         return String(localized: "On-device")
     }
 
@@ -777,12 +772,7 @@ struct SleepView: View {
     private func stageCard(_ night: Night, intervals: [SleepInterval]) -> some View {
         let s = night.stages
         let isPersisted = (night.realSegments?.count ?? 0) >= 2
-        // An Oura night's stages are the ring's RAW on-device SleepNet classification (decoded off the 0x49
-        // phase stream), NOT a NOOP approximation — so it gets its own honest caption instead of the
-        // "stages approximate (on-device)" one that describes NOOP's own sparse-motion staging.
-        let stageCaption = repo.activeDeviceIsOura
-            ? String(localized: "raw on-device stages")
-            : String(localized: "stages approximate (on-device)")
+        let stageCaption = String(localized: "stages approximate (on-device)")
         let subtitle = isPersisted
             ? String(localized: "\(durationText(night.timeInBed)) in bed · \(efficiencyText(night)) efficiency · \(stageCaption)")
             : String(localized: "\(durationText(night.timeInBed)) in bed · \(efficiencyText(night)) efficiency")
@@ -844,12 +834,6 @@ struct SleepView: View {
             if let coverage = stageCoverage(night), coverage < HypnogramCoverage.minCoverage {
                 stagePartialNote(coverage)
             }
-            // For an Oura-provided night, say plainly that this split is the ring's RAW on-device
-            // classification — so the larger Awake / smaller Deep+REM here isn't misread as the polished
-            // numbers the Oura app shows for the same night (the app post-processes the same stream).
-            if repo.activeDeviceIsOura {
-                ouraRawStagesNote
-            }
         }
         // WHOOP top-chart data (ryanAtriumAi #988): 1-min sleeping-HR buckets for THIS night, reloaded
         // only when the displayed night changes (same `.task(id:)` pattern the other per-night loads use).
@@ -903,14 +887,14 @@ struct SleepView: View {
                     stagePalette: style.stagePalette
                 )
             },
-            // A colour-coded key in the chart's ramp so the bands are decodable (esp. the Garmin ramp's two
-            // pinks), then the per-stage breakdown rows below.
+            // A colour-coded key in the chart's ramp so the bands are decodable, then the per-stage
+            // breakdown rows below.
             footer: {
                     // #1536: the stage LEGEND that used to sit here is gone, and the rows below now take
                     // the chart's ramp. Those two go together. The legend decoded the hypnogram above it,
                     // which is real work — but it listed the stages in a different order than the rows, and
                     // the rows drew FIXED palette tokens while the chart drew ramp colours, so on
-                    // Oura/Garmin three things in one card disagreed. Ramp-aware rows name and colour every
+                    // three things in one card disagreed. Ramp-aware rows name and colour every
                     // stage correctly, which IS the key; a legend above a correct key is the redundancy
                     // that was reported.
                     stageBreakdownRows(s, palette: style.stagePalette)
@@ -1097,23 +1081,6 @@ struct SleepView: View {
         }
         .padding(.horizontal, 2)
         .accessibilityElement(children: .combine)
-    }
-
-    /// Honest caveat for an Oura-provided night: the stage split shown here is the ring's RAW on-device
-    /// SleepNet classification, read straight off the BLE phase stream — NOT the adjusted stages the Oura
-    /// app displays. The app post-processes the same night, so its Deep/REM run higher and its Awake lower;
-    /// cross-checks put our Awake well above the app's. Surfaced so the breakdown isn't taken for the app's.
-    private var ouraRawStagesNote: some View {
-        HStack(alignment: .top, spacing: 8) {
-            SourceBadge("Raw on-device stages", tint: StrandPalette.restColor)
-            Text("This split is the ring's raw on-device classification read over Bluetooth, not the adjusted stages the Oura app shows. Expect more Awake and less Deep/REM here than in the Oura app for the same night.")
-                .font(StrandFont.footnote)
-                .foregroundStyle(StrandPalette.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Raw on-device stages. This split is the ring's raw on-device classification read over Bluetooth, not the adjusted stages the Oura app shows. Expect more awake and less deep or REM here than in the Oura app for the same night.")
     }
 
     /// The night's clock window — when you fell asleep and when you woke — as its own clearly

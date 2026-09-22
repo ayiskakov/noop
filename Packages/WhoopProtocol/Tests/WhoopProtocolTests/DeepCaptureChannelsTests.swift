@@ -251,18 +251,6 @@ final class DeepCaptureChannelsTests: XCTestCase {
 
     // MARK: - What must NOT change
 
-    /// WHOOP 4.0 is untouched: no aux rows, and the new columns stay nil on the streams it does produce.
-    func testWhoop4V24RecordAddsNothing() throws {
-        let s = extractHistoricalStreams([parseFrame(bytes(v24Hex))],
-                                         deviceClockRef: 1_700_000_000, wallClockRef: 1_700_000_000)
-        XCTAssertTrue(s.v18Aux.isEmpty, "a 4.0 v24 record must bank no aux row")
-        XCTAssertNil(s.gravity.first?.dynAccel)
-        XCTAssertNil(s.skinTemp.first?.aux1Raw)
-        XCTAssertNil(s.skinTemp.first?.aux2Raw)
-        // The 4.0 schema DOES emit rr_count, which is why the aux gate keys on hist_version rather than
-        // on which keys happen to be present — a presence test would bank a near-empty row per 4.0 second.
-        XCTAssertEqual(parseFrame(bytes(v24Hex)).parsed["rr_count"]?.intValue, 1)
-    }
 
     /// The v18 gate is explicit: only layout 18 banks aux rows.
     func testAuxCollectionIsGatedOnLayoutV18() {

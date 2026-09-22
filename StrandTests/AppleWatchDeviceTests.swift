@@ -118,12 +118,12 @@ final class AppleWatchDeviceTests: XCTestCase {
 
     func testNoSustituyeUnWhoopRealNiUnaFuenteElegida() {
         let pairedWhoop = PairedDevice(
-            id: "my-whoop", brand: "WHOOP", model: "WHOOP 4.0", peripheralId: "BLE-123",
+            id: "my-whoop", brand: "WHOOP", model: "WHOOP 5.0 / MG", peripheralId: "BLE-123",
             sourceKind: .liveBLE, capabilities: [.hr], status: .active,
             addedAt: 1000, lastSeenAt: 2000)
-        let oura = PairedDevice(
-            id: "oura-123", brand: "Oura", model: "Ring 4", peripheralId: "BLE-456",
-            sourceKind: .oura, capabilities: [.hr, .hrv], status: .active,
+        let strap = PairedDevice(
+            id: "strap-123", brand: "Polar", model: "H10", peripheralId: "BLE-456",
+            sourceKind: .liveBLE, capabilities: [.hr, .hrv], status: .active,
             addedAt: 1000, lastSeenAt: 2000)
 
         XCTAssertFalse(AppleWatchDevice.shouldAutoActivate(
@@ -131,7 +131,7 @@ final class AppleWatchDeviceTests: XCTestCase {
         XCTAssertFalse(AppleWatchDevice.shouldAutoActivate(
             current: pairedWhoop, currentHasRecentData: true))
         XCTAssertFalse(AppleWatchDevice.shouldAutoActivate(
-            current: oura, currentHasRecentData: false))
+            current: strap, currentHasRecentData: false))
     }
 
     func testNoSustituyeElWhoopSemillaSiTieneDatosRecientes() {

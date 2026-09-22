@@ -1,31 +1,25 @@
 # Attribution
 
-NOOP is an independent, unofficial, local-first app for macOS, Android and iOS. It is not affiliated
+NOOP is an independent, unofficial, local-first app for macOS and iOS. It is not affiliated
 with, endorsed by, or connected to WHOOP, Inc. "WHOOP" is used nominatively only to
 identify the hardware the app interoperates with.
 
-NOOP builds on prior community reverse-engineering and interoperability work:
+NOOP supports the WHOOP 5.0 and MG straps only. It builds on prior community reverse-engineering
+and interoperability work:
 
 ## WHOOP 4.0 protocol + Swift packages
 - **`johnmiddleton12/my-whoop`** — the `WhoopProtocol` and `WhoopStore` Swift packages
   (vendored under `Packages/`), the WHOOP 4.0 BLE framing/command/decode work, and the
   iOS collection logic that NOOP's `WhoopBLE`/`Collect` layers are adapted from.
-  See `DISCLAIMER.md` (carried over from that project).
+  See `DISCLAIMER.md` (carried over from that project). NOOP no longer connects to a
+  WHOOP 4.0 strap (it is detected and reported as unsupported), but the package
+  structure, the history/streams model and the CRC-gating discipline descend from that work.
 
 ## WHOOP 5.0 / MG protocol
 - **`b-nnett/goose`** — the WHOOP 5.0 BLE reverse-engineering (service UUID family
   `fd4b0001-…`, CRC16-Modbus header, CLIENT_HELLO, and the "puffin" packet types)
   that NOOP's `DeviceFamily` Whoop-5 path and `whoop5_protocol.json` are ported from.
 
-## Xiaomi Smart Band (Mi Band) import
-- **`artyomxx/xiaomi-band-ios-export`** — documented the Mi Fitness iOS app's on-device
-  SQLite layout (`DataBase/<user_id>/de/<user_id>.db`, JSON `value` columns, the `*_day`
-  rollups and the `sleep` table's `items[]` hypnogram with state codes). NOOP's
-  `XiaomiBandImporter` is **re-derived** from those findings and verified against a real
-  Mi Band 10 export; **no code is copied** (the reference tool is AGPL, NOOP is not).
-- **Gadgetbridge** (`Freeyourgadget/Gadgetbridge`) — referenced only for *protocol facts*
-  about the live Mi-protobuf BLE stack in the roadmap's research notes. GPLv3; NOOP copies
-  **none** of its code and has not built the live lane.
 
 ## Facts learned from a decompiled app
 
@@ -47,13 +41,13 @@ This is long-standing practice, not a one-off. Worked examples already in the tr
   percentage, attributed as *"a decompile-sourced decode (gen5.rs `spo2_pct`), reimplemented here as a
   protocol fact with attribution"*. A guard test stops it ever writing `spo2Pct`, and it is still a
   candidate because the cross-device evidence is split.
-- **The R22 config opcodes** (`Whoop5Config.swift` / `.kt`) — `SET_FF_VALUE (0x78)` and the flag key
+- **The R22 config opcodes** (`Whoop5Config.swift`) — `SET_FF_VALUE (0x78)` and the flag key
   names, corroborated against *Asherlc/dofek docs/whoop-ble-protocol.md (Android APK decompilation)*
   and validated byte-for-byte against a decrypted HCI capture.
-- **The disputed battery opcode** (`Commands.swift`, `Enums.kt`) — a decompile reads
+- **The disputed battery opcode** (`Commands.swift`) — a decompile reads
   `GET_EXTENDED_BATTERY_INFO` as 87 where our table says 98. Both readings are recorded and the
   question is settled by probing real firmware, not by picking a source.
-- **The MG ECG ("Labrador") packet layouts** (`Whoop5Ecg.swift` / `.kt`, `docs/PROTOCOL.md` §9.1) —
+- **The MG ECG ("Labrador") packet layouts** (`Whoop5Ecg.swift`, `docs/PROTOCOL.md` §9.1) —
   field order, widths and enum values for `FilteredLabradorPacket` / `RawLabradorPacket`, plus the
   `{revision, arg, padding}` command payload shape, re-derived from static analysis of the vendor's iOS
   client. The four command NUMBERS were already in our own `CommandNumber` table from the whoomp/goose
@@ -69,7 +63,7 @@ This is long-standing practice, not a one-off. Worked examples already in the tr
 
 And the line held from the other side:
 
-- **`StrainTargetNotifier`** (both platforms) — *"CLEAN-ROOM: this reimplements the BEHAVIOUR only. The
+- **`StrainTargetNotifier`** — *"CLEAN-ROOM: this reimplements the BEHAVIOUR only. The
   copy is NOOP's own — NOT WHOOP's decompiled strings."* Behaviour re-derived; the user-facing text
   written fresh.
 - **The `LINK_VALID` handshake**, rejected in
@@ -77,23 +71,6 @@ And the line held from the other side:
   literal string lifted from the app. Expression, not a fact about the wire, so it stays out
   regardless of whether the handshake turns out to be real.
 
-## Oura ring (gen 3/4/5) protocol
-NOOP's Oura code is **original clean-room** work. The local BLE source
-(`Strand/BLE/OuraLiveSource.swift` + `android/.../ble/OuraLiveSource.kt`) and the JVM/Swift-pure
-`OuraProtocol` package (`Packages/OuraProtocol/`, `android/.../com/noop/oura/`) were written from
-**documented protocol facts only**, cited tersely in `docs/OURA_PROTOCOL.md`. The community
-reverse-engineering resources below were consulted as **facts-only references** (byte layouts,
-service/characteristic UUIDs, framing and auth shapes); **no RE source code is copied** into NOOP.
-- **`open_ring`**: consulted for protocol facts only. Licensed **GPL-3.0**; NOOP copies none of
-  its code and is not a derivative work of it.
-- **`open_oura`**, **`ringverse`**, **`relue`**: consulted for protocol facts only. These carry
-  **no license**, so NOOP treats them as reference documentation of observed behaviour only and
-  copies no code from them.
-
-NOOP reads only the ring's own decoded raw signals and its own open event tags, computes NOOP's
-own Charge/Rest, and **never** reads or displays Oura's encrypted readiness or sleep scores. The
-documented Oura file-import lane (`Packages/StrandImport/Sources/StrandImport/OuraExportParser.swift`)
-remains available as a fallback.
 
 ## Other
 - **GRDB.swift** (`groue/GRDB.swift`) — SQLite persistence (via Swift Package Manager).

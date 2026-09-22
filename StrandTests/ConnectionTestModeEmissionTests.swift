@@ -26,7 +26,7 @@ final class ConnectionTestModeEmissionTests: XCTestCase {
     // A valid REALTIME_DATA (type 40) frame: parses ok with a non-nil typeName, so FrameRouter reaches the
     // frame-type-transition branch where the .connection emitter lives.
     private func realtimeFrame() -> [UInt8] {
-        frameFromPayload([0x01, 0x02, 0x03], type: 40, seq: 0, cmd: 0)
+        w5Frame([0x01, 0x02, 0x03], type: 40)
     }
 
     private func connectionLines(_ live: LiveState) -> [String] {

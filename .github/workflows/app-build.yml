@@ -20,9 +20,8 @@ on:
       # that was.
       #
       # This is the only test directory that needs naming, and the reason is layout rather than
-      # oversight: Android's tests sit under `android/**` and the package suites under `Packages/**`,
-      # both already inside their subject's glob, while StrandTests is a SIBLING of `Strand/` instead
-      # of part of it. `project.yml` does not cover it either — the target takes
+      # oversight: the package suites under `Packages/**` already sit inside their subject's glob,
+      # while StrandTests is a SIBLING of `Strand/` instead of part of it. `project.yml` does not cover it either — the target takes
       # `sources: [StrandTests]`, a directory, so adding a test file changes no other tracked path.
       - 'StrandTests/**'
       - 'StrandiOS/**'

@@ -11,11 +11,11 @@ import WhoopProtocol
 /// TWO restart opcodes are included, both non-destructive (a restart keeps the strap's stored data)
 /// and both user-initiated + confirmation-gated, never sent automatically:
 ///   - `rebootStrap` (29): the normal Restart. NOOP already triggers a reboot today via
-///     `setAdvertisingNameHarvard` (rename applies on reboot). See `BLEManager.rebootStrap()`.
-///   - `powerCycleStrap` (32): a harder restart, included ONLY as a candidate for the WHOOP 4.0
+///     `setAdvertisingNameHarvard`. See `BLEManager.rebootStrap()`.
+///   - `powerCycleStrap` (32): a harder restart, kept as a protocol fact from the WHOOP 4.0
 ///     reboot probe (Test Centre → Connection, 4.0 only). The 4.0 ignores opcode 29/empty (#235) and
 ///     the correct frame is unknown, so the probe tries this alongside 29-with-payload on real 4.0
-///     hardware to find which one actually reboots. Driven only by `BLEManager.rebootProbe(_:)`.
+///     reboot investigation. Nothing sends it.
 /// See the "Destructive commands" note in docs/PROTOCOL.md.
 public enum WhoopCommand: UInt8, CaseIterable {
     case toggleRealtimeHR      = 3
@@ -41,19 +41,16 @@ public enum WhoopCommand: UInt8, CaseIterable {
     /// REBOOT_STRAP (29) — restart the strap. Payload is an **empty body** (the official app's builder
     /// `rh0.C45476d0` passes a null payload). The strap drops the BLE link and re-advertises after boot;
     /// **stored data is kept** (non-destructive), but any in-flight offload is interrupted (chunk-acked,
-    /// so nothing is lost — it re-offloads on reconnect). Opcode 29 is shared across WHOOP 4.0 (harvard,
-    /// crc8) and 5/MG (puffin, crc16). The **5.0 form is hardware-confirmed** (fw 50.40.1.0, #227). The
-    /// **4.0 form is NOT confirmed** — it was decoded from the app builder but a real 4.0 silently ignores
-    /// this empty-body frame (#235): no reboot, no disconnect, no COMMAND_RESPONSE. The correct 4.0 frame
-    /// (a payload byte? a different opcode?) needs an HCI capture. `BLEManager.rebootStrap()` logs the
+    /// so nothing is lost — it re-offloads on reconnect). The 5/MG puffin form is
+    /// **hardware-confirmed** (fw 50.40.1.0, #227). `BLEManager.rebootStrap()` logs the
     /// strap's COMMAND_RESPONSE + a no-disconnect watchdog so a strap log shows which case it hit.
     /// User-initiated + confirmation-gated only; never sent automatically. Driven only by `BLEManager.rebootStrap()`.
     case rebootStrap           = 29
     /// POWER_CYCLE_STRAP (32) — a harder restart than REBOOT_STRAP (a full power cycle of the strap
     /// SoC vs a warm reboot). Non-destructive: stored data lives in flash and survives, the strap
-    /// re-advertises after boot. Included ONLY as a gated candidate for the WHOOP 4.0 reboot probe
+    /// re-advertises after boot. Kept as a protocol fact from the WHOOP 4.0 reboot investigation
     /// (#235: a real 4.0 silently ignores opcode 29/empty, and the correct 4.0 reboot frame is unknown).
-    /// NOT hardware-confirmed on any family. Sent only via `BLEManager.rebootProbe(.powerCycle32Empty)`,
+    /// NOT hardware-confirmed on any family, and nothing in NOOP sends it,
     /// itself gated behind Test Centre → Connection + a confirmation. Never sent automatically.
     case powerCycleStrap       = 32
     case getDataRange          = 34
@@ -63,10 +60,8 @@ public enum WhoopCommand: UInt8, CaseIterable {
     /// 4.0 answers "unsupported" and ignores it, so this is only sent to a 5/MG strap. Read-only.
     case getHello              = 145
     case getAdvertisingNameHarvard = 76
-    /// SET_ADVERTISING_NAME_HARVARD (77) — rename the strap's BLE advertising name on a WHOOP 4.0
-    /// (Harvard). Payload = `advertisingNamePayload(_:)` (a 2-byte header + UTF-8 name + trailing NUL,
-    /// the form WHOOP 4.0 firmware accepts). The strap reboots to apply, so the new name shows on the
-    /// next connect (the connect handshake re-reads it via cmd 76). WHOOP 4.0 only — a 5/MG uses puffin
+    /// SET_ADVERTISING_NAME_HARVARD (77) — renamed the strap's BLE advertising name on a WHOOP 4.0
+    /// (Harvard). Kept as a protocol fact: NOOP no longer sends it, since a 5/MG uses puffin
     /// framing and a different device-config path. Reversible (rename again any time). Driven only by
     /// `BLEManager.renameStrap(_:)`.
     case setAdvertisingNameHarvard = 77
@@ -283,108 +278,5 @@ public enum WhoopCommand: UInt8, CaseIterable {
          0x00, 0x00] // haptic-mode field (from @ujix's official-app wire capture, #535)
     }
 
-    /// Max UTF-8 byte length for a strap advertising name. BLE caps the whole advertising payload at
-    /// 31 bytes; keeping the name ≤ 24 leaves room for the rest of the AD structure (flags + service
-    /// UUID) the strap still has to broadcast.
-    public static let maxAdvertisingNameBytes = 24
-
-    /// SET_ADVERTISING_NAME_HARVARD (77) payload: `[0x00, 0x00] + <UTF-8 name> + [0x00]`.
-    /// The 2-byte header + trailing NUL is the `h2z` layout verified against the whoop-rename prototype
-    /// on WHOOP 4.0 firmware. The name is clamped to `maxAdvertisingNameBytes` on a Unicode-scalar
-    /// boundary (never splitting a multibyte character) so it can't overflow the BLE advertising packet.
-    public static func advertisingNamePayload(_ name: String) -> [UInt8] {
-        var clamped = name
-        while clamped.utf8.count > maxAdvertisingNameBytes { clamped.removeLast() }
-        return [0x00, 0x00] + Array(clamped.utf8) + [0x00]
-    }
-
-    /// COMMAND packet type byte (PacketType.COMMAND).
-    static let commandType: UInt8 = 35
-
-    /// Build a complete, framed COMMAND packet ready to write to char 61080002.
-    ///
-    /// Layout (verified against whoomp's WhoopPacket.framed_packet):
-    /// `[0xAA][len u16 LE][crc8(len bytes)][type=35][seq][cmd][payload...][crc32 LE]`
-    /// - `len` = (3 + payload.count) + 4  (inner type+seq+cmd+payload, plus the 4 envelope bytes)
-    /// - `crc8` is over the 2 length bytes only
-    /// - `crc32` (zlib) is over the inner `[type][seq][cmd][payload]`
-    public func frame(seq: UInt8, payload: [UInt8] = [0x00]) -> [UInt8] {
-        let inner: [UInt8] = [Self.commandType, seq, rawValue] + payload
-        let length = UInt16(inner.count + 4)
-        let lenBytes: [UInt8] = [UInt8(length & 0xFF), UInt8(length >> 8)]
-        let headerCRC = crc8(lenBytes)
-        let trailer = crc32(inner)
-        let trailerBytes: [UInt8] = [
-            UInt8(trailer & 0xFF),
-            UInt8((trailer >> 8) & 0xFF),
-            UInt8((trailer >> 16) & 0xFF),
-            UInt8((trailer >> 24) & 0xFF),
-        ]
-        return [0xAA] + lenBytes + [headerCRC] + inner + trailerBytes
-    }
 }
 
-/// Candidate reboot frames for the WHOOP 4.0 reboot probe (Test Centre → Connection, WHOOP 4.0 only).
-///
-/// A real WHOOP 4.0 silently ignores NOOP's production reboot frame (opcode 29 REBOOT_STRAP, empty
-/// body — #235: no reboot, no disconnect, no COMMAND_RESPONSE), and the correct 4.0 frame is unknown.
-/// These are the plausible NON-DESTRUCTIVE candidates — a restart / power-cycle only, never a
-/// data-wiping opcode — tried one at a time on real hardware so the strap log tells which one works:
-/// `reboot: link dropped …` = the strap acted; `reboot: no disconnect within 12s …` = ignored.
-///
-/// The definitive fix is still an HCI capture of the official app rebooting a 4.0 (exactly how the
-/// alarm frame was pinned — @ujix's capture, #535). This probe is the interim way to find the frame
-/// when a 4.0 is in hand. The Kotlin twin is `RebootProbeVariant` (WhoopBleClient.kt); the `logTag`
-/// strings are byte-identical across platforms so a strap log reads the same either side.
-public enum RebootProbeVariant: String, CaseIterable, Sendable {
-    /// A — opcode 29 REBOOT_STRAP, empty body: NOOP's current production frame (ignored on 4.0).
-    case reboot29Empty
-    /// B — opcode 32 POWER_CYCLE_STRAP, empty body: a harder restart, never tried.
-    case powerCycle32Empty
-    /// C — opcode 29 REBOOT_STRAP, payload [0x01]: same opcode with a non-empty sub-command byte.
-    /// On a real 4.0 this DROPPED THE LINK but did NOT power-cycle (sensor stayed on) — a BLE
-    /// disconnect, not a reboot (#275). So the sub-command byte reaches the strap; D/E try it on the
-    /// harder power-cycle opcode and a different byte on reboot.
-    case reboot29Payload1
-    /// D — opcode 32 POWER_CYCLE_STRAP, payload [0x01]: the "harder restart" opcode with the sub-command
-    /// byte that made 29 react (#275). Best remaining safe candidate for a genuine power-cycle.
-    case powerCycle32Payload1
-    /// E — opcode 29 REBOOT_STRAP, payload [0x00]: the zero-byte sub-command (vs empty vs 0x01).
-    case reboot29Payload0
-
-    var command: WhoopCommand {
-        switch self {
-        case .powerCycle32Empty, .powerCycle32Payload1: return .powerCycleStrap
-        default:                                         return .rebootStrap
-        }
-    }
-    var payload: [UInt8] {
-        switch self {
-        case .reboot29Payload1, .powerCycle32Payload1: return [0x01]
-        case .reboot29Payload0:                        return [0x00]
-        default:                                       return []
-        }
-    }
-
-    /// Short menu label, e.g. "A · REBOOT_STRAP(29) empty".
-    public var menuLabel: String {
-        switch self {
-        case .reboot29Empty:        return "A · REBOOT_STRAP(29) empty"
-        case .powerCycle32Empty:    return "B · POWER_CYCLE(32) empty"
-        case .reboot29Payload1:     return "C · REBOOT_STRAP(29) payload=01"
-        case .powerCycle32Payload1: return "D · POWER_CYCLE(32) payload=01"
-        case .reboot29Payload0:     return "E · REBOOT_STRAP(29) payload=00"
-        }
-    }
-
-    /// Tag written to the strap log so each attempt is correlatable (byte-identical to Kotlin).
-    public var logTag: String {
-        switch self {
-        case .reboot29Empty:        return "A/reboot29-empty"
-        case .powerCycle32Empty:    return "B/powercycle32-empty"
-        case .reboot29Payload1:     return "C/reboot29-payload01"
-        case .powerCycle32Payload1: return "D/powercycle32-payload01"
-        case .reboot29Payload0:     return "E/reboot29-payload00"
-        }
-    }
-}

@@ -41,7 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-GLOBS = ("android/**/*.kt", "Strand/**/*.swift", "Packages/**/*.swift", "NOOPWatch/**/*.swift")
+GLOBS = ("Strand/**/*.swift", "Packages/**/*.swift", "NOOPWatch/**/*.swift")
 
 # A doc block sitting above these is a FILE header, not a declaration doc — the blank line
 # after it is conventional and correct, so it must not be reported.
@@ -131,7 +131,7 @@ def main() -> int:
             found = findings(path)
             if found:
                 # as_posix(), not str(): the baseline is written with forward slashes, so on Windows
-                # str() yields "android\app\..." and every baseline lookup misses. That made the gate fail
+                # str() yields "Strand\App\..." and every baseline lookup misses. That made the gate fail
                 # on a clean tree there (every grandfathered site read as a regression, and every
                 # baselined file as IMPROVED -> 0), so a Windows contributor could not run it locally.
                 rel = path.relative_to(ROOT).as_posix()

@@ -6,7 +6,6 @@ import StrandDesign
 import StrandAnalytics
 import WhoopProtocol
 import WhoopStore
-import OuraProtocol
 
 /// Live — the connected strap in real time, in the liquid finish. Built on the shared design system
 /// (ScreenScaffold chrome + day-of-sky backdrop, StrandPalette, StrandFont) and the liquid vocabulary
@@ -27,10 +26,9 @@ struct LiveView: View {
     /// the request; LiveView never needs to know which.
     @EnvironmentObject private var router: NavRouter
 
-    /// Which strap the user is pairing — persists across launches. Drives which
-    /// BLE service we scan for so a WHOOP 4.0 scan never hangs on a WHOOP 5 wrist.
-    @AppStorage("selectedWhoopModel") private var selectedModelRaw = WhoopModel.whoop4.rawValue
-    private var selectedModel: WhoopModel { WhoopModel(rawValue: selectedModelRaw) ?? .whoop4 }
+    /// Which strap the user is pairing — persists across launches. Drives which BLE service we scan for.
+    @AppStorage("selectedWhoopModel") private var selectedModelRaw = WhoopModel.whoop5mg.rawValue
+    private var selectedModel: WhoopModel { WhoopModel(rawValue: selectedModelRaw) ?? .whoop5mg }
 
     /// "Card transparency" (0–100, default 100): fades the live console cards in lockstep with the frosted
     /// cards; content stays readable. Mirrors Kotlin `NoopPrefs.cardOpacityPercent`.
@@ -38,12 +36,10 @@ struct LiveView: View {
     private var cardOpacity: Double { max(0, min(1, Double(cardOpacityPercent) / 100)) }
 
     /// Maps the picked strap model to the HRV-reading source so the spot caveat is honest (#537): a
-    /// WHOOP 5/MG's R-R is optical PPG (noisier), a WHOOP 4 is electrical R-R. Mirrors the Android
-    /// `LiveScreen` mapping.
+    /// WHOOP 5/MG's R-R is optical PPG (noisier).
     private var hrvSnapshotSource: SpotHrvReading.Source {
         switch selectedModel {
         case .whoop5mg: return .opticalPPG
-        case .whoop4:   return .chestStrap
         }
     }
 
@@ -59,33 +55,13 @@ struct LiveView: View {
         )
     }
 
-    /// Whether the ACTIVE registry device is an Oura ring (#2305) — the ring-only affordances below.
-    private var activeIsOura: Bool {
-        LiveConsoleReadout.activeIsOura(
-            devices: model.deviceRegistry?.devices ?? [],
-            activeId: model.deviceRegistry?.activeDeviceId,
-        )
-    }
-
-    /// The live ring's link phase, mirrored off the Oura source (#2305). Meaningful only under
-    /// `activeIsOura`; `.disconnected` otherwise.
-    private var ringPhase: OuraLiveSource.LinkPhase { model.ouraLinkPhase }
-
     /// A trusted WHOOP link, for the console readouts and the bond-only controls.
     ///
     /// Gated on the active device actually BEING a WHOOP (#2075). `LiveState` is one object that every
-    /// live source writes into, so `connected && bonded` stays true for a bonded strap while an Oura
-    /// ring is the device on screen. That showed the WHOOP pill, the WHOOP charge and live WHOOP-only
-    /// controls under the ring's name, and made the pill's own ring branch unreachable, because this one
-    /// is tested first.
+    /// live source writes into, so `connected && bonded` stays true for a bonded strap while another
+    /// device is the one on screen. That showed the WHOOP pill, the WHOOP charge and live WHOOP-only
+    /// controls under the other device's name.
     private var activeConnection: Bool { activeIsWhoop && live.connected && live.bonded }
-
-    /// A non-WHOOP live source (the Oura ring) that is connected and actively streaming live HR. It
-    /// authenticates and streams but never reaches a WHOOP encrypted bond, so `bonded` stays false and
-    /// `activeConnection` never trips — which left the console reading "stream not yet trusted" for a
-    /// perfectly good ring stream. The status copy below treats this as a trusted live stream; the
-    /// bond-only feature gates (buzz, alarm, HRV snapshot) keep keying off `activeConnection`. (#69 twin.)
-    private var ringStreaming: Bool { live.connected && live.streamingLiveHR }
 
     /// The display name of the active device from the registry ("WHOOP", a strap's nickname, …) — what
     /// the user is connected to, or would connect to. Falls back to "WHOOP" before the registry opens or
@@ -126,15 +102,12 @@ struct LiveView: View {
                 // an offline user saw only inert copy up top. Gated purely on `!live.connected`, so it
                 // disappears the instant the radio connects. Shared with macOS — it reuses `scanButton`,
                 // which the wide layout already renders in `controls`.
-                // WHOOP only (#2305): under a ring this card named the ring over a button that ran a
-                // WHOOP scan — the #2303 reporter's Re-scan ran a full 5/MG handshake with the ring active.
+                // WHOOP only (#2305): under another device this card named that device over a button that
+                // ran a WHOOP scan — the #2303 reporter's Re-scan ran a full 5/MG handshake with it active.
                 if activeIsWhoop, !live.connected { offlineConnectCallout }
-                // The ring's own above-the-fold affordance: its link phase and a reconnect, shown until
-                // `auth OK` — the same "no link yet" slot the WHOOP callout fills.
-                if activeIsOura, ringPhase != .authenticated { ringConnectCallout }
                 bodyConsole
-                // Low-bandwidth fallback note (#80): the radio couldn't sustain the WHOOP 4 R10/R11 raw
-                // realtime burst, so live HR is riding the standard BLE Heart-Rate profile instead. Live HR
+                // Low-bandwidth fallback note (#80): the radio couldn't sustain the raw realtime burst, so
+                // live HR is riding the standard BLE Heart-Rate profile instead. Live HR
                 // still works — this is informational, not an error — so it sits right under the readout in
                 // a calm accent treatment rather than the amber warning banners above.
                 if Self.shouldShowStandardHRNote(live.standardHRMode) {
@@ -142,19 +115,15 @@ struct LiveView: View {
                 }
                 signalTrustRail
                 sessionConsole
-                // Show the strap picker whenever we're not actively streaming, so a user with both a
-                // WHOOP 4 and a 5/MG can switch between them. (It used to hide once `bonded`, which is
-                // sticky across disconnects — so after the first pairing the picker vanished for good.)
-                // WHOOP only (#2305): `activeConnection` is false for a ring BY CONSTRUCTION, so without
-                // the brand gate the WHOOP picker was shown MORE readily under a ring than under a strap.
+                // Show the strap picker whenever we're not actively streaming. (It used to hide once
+                // `bonded`, which is sticky across disconnects — so after the first pairing the picker
+                // vanished for good.) WHOOP only (#2305).
                 if activeIsWhoop, !activeConnection { modelPicker }
                 // Scan / Buzz / Disconnect are the WHOOP path (`model.scan` → `BLEManager.connect`, the
-                // explicit user-connect that bypasses the #1881 active-device gate on purpose). A ring
-                // gets its own row; any other brand keeps the Devices row alone.
+                // explicit user-connect that bypasses the #1881 active-device gate on purpose). Any other
+                // brand keeps the Devices row alone.
                 if activeIsWhoop {
                     controls
-                } else if activeIsOura {
-                    ringControls
                 }
                 manageDevicesRow
                 LiveLogCard()
@@ -251,7 +220,6 @@ struct LiveView: View {
     private var connectionModeBadge: LocalizedStringKey {
         if activeConnection && live.encryptedBond { return "FULL BOND" }
         if activeConnection { return "LIVE HR ONLY" }
-        if ringStreaming { return "STREAMING" }
         if live.connected { return "CONNECTING" }
         if live.encryptedBond { return "PAIRED" }
         return "OFFLINE"
@@ -267,7 +235,7 @@ struct LiveView: View {
     }
 
     private var connectionModeColor: Color {
-        if (activeConnection && live.encryptedBond) || ringStreaming { return StrandPalette.accent }
+        if activeConnection && live.encryptedBond { return StrandPalette.accent }
         if activeConnection || live.connected { return StrandPalette.statusWarning }
         return StrandPalette.metricRose
     }
@@ -279,7 +247,6 @@ struct LiveView: View {
         let (label, color): (String, Color) =
             (activeConnection && live.encryptedBond) ? (String(localized: "Bonded · streaming"), StrandPalette.accent)
             : activeConnection ? (String(localized: "Live HR (not fully paired)"), StrandPalette.statusWarning)
-            : ringStreaming ? (String(localized: "Streaming"), StrandPalette.accent)
             : live.connected ? (String(localized: "Connected"), StrandPalette.statusWarning)
             : live.encryptedBond ? (String(localized: "Paired · idle"), StrandPalette.statusWarning)
             : (String(localized: "Disconnected"), StrandPalette.metricRose)
@@ -302,14 +269,14 @@ struct LiveView: View {
         card {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: NoopMetrics.space6) {
-                    LiveHeartReadout(activeIsWhoop: activeIsWhoop, activeIsOura: activeIsOura, hrMax: model.profile.hrMax)
+                    LiveHeartReadout(activeIsWhoop: activeIsWhoop, hrMax: model.profile.hrMax)
                         .frame(minWidth: 260, maxWidth: 340)
                     Divider().overlay(StrandPalette.hairline)
                     LivePhysiology(activeIsWhoop: activeIsWhoop)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 VStack(alignment: .leading, spacing: 18) {
-                    LiveHeartReadout(activeIsWhoop: activeIsWhoop, activeIsOura: activeIsOura, hrMax: model.profile.hrMax)
+                    LiveHeartReadout(activeIsWhoop: activeIsWhoop, hrMax: model.profile.hrMax)
                     Divider().overlay(StrandPalette.hairline)
                     LivePhysiology(activeIsWhoop: activeIsWhoop)
                 }
@@ -543,8 +510,8 @@ struct LiveView: View {
 
     // MARK: - Strap picker
 
-    /// Pick the strap family to scan for. Switching the selection drops the current strap's bond so the
-    /// newly-picked one connects fresh — letting a user move between a WHOOP 4 and a 5/MG.
+    /// Pick the strap model to scan for. Switching the selection drops the current strap's bond so the
+    /// newly-picked one connects fresh.
     private var modelPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -686,58 +653,6 @@ struct LiveView: View {
         #endif
     }
 
-    // MARK: - Ring controls (#2305)
-
-    /// The ring's above-the-fold card while it is not yet authenticated: the honest phase line and the
-    /// only ring reconnect in the app. Same slot and shape as `offlineConnectCallout`, which is WHOOP-only.
-    @ViewBuilder private var ringConnectCallout: some View {
-        card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .foregroundStyle(StrandPalette.accent)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LiveRingCopy.status(ringPhase, streaming: false))
-                            .font(StrandFont.headline)
-                            .foregroundStyle(StrandPalette.textPrimary)
-                        Text("Reconnect drops the current link, if any, and connects to the ring again. To pair or switch bands, open Devices.")
-                            .font(StrandFont.subhead)
-                            .foregroundStyle(StrandPalette.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                ringReconnectButton
-            }
-        }
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .strokeBorder(StrandPalette.accent.opacity(0.30), lineWidth: 1))
-    }
-
-    /// The ring's row in the `controls` slot: one primary action. No Buzz (the ring has no haptic) and no
-    /// Disconnect (a stopped ring source would not reconnect for the night; Devices is where a ring is
-    /// deactivated).
-    private var ringControls: some View {
-        VStack(alignment: .leading, spacing: NoopMetrics.rowSpacing) {
-            Text(LiveRingCopy.status(ringPhase, streaming: ringStreaming))
-                .font(StrandFont.footnote)
-                .foregroundStyle(StrandPalette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            ringReconnectButton
-        }
-    }
-
-    /// Drops the current ring link, if any, and connects again — `OuraLiveSource.reconnect()` through the
-    /// coordinator, so it can only reach the ring that is the live source. Enabled in every phase: a ring
-    /// parked in `.authenticating` (#2303) is exactly the case this exists for.
-    private var ringReconnectButton: some View {
-        NoopButton("Reconnect ring", systemImage: "arrow.clockwise",
-                   kind: .primary, fullWidth: true) {
-            model.reconnectOuraRing()
-        }
-    }
-
     // The connect / buzz / disconnect controls, all routed through the unified NOOP button system:
     // a filled primary for the lead Scan action, a secondary surface for Buzz, and the destructive
     // role for Disconnect — sentence-case, single line, optical-centred at controlHeight.
@@ -807,32 +722,16 @@ private struct LiveHeaderStats: View {
     /// Resolved by the parent (#2075), so the charge below can belong to the device being named.
     let activeIsWhoop: Bool
     let deviceName: String
-    /// #218: an Oura ring streams live HR WITHOUT a WHOOP bond, so `activeConnection` (which needs the bond)
-    /// is false for it and the wear stat read "—" mid-stream. A live HR stream is itself the wear signal
-    /// (Oura only emits PPG HR while worn). `streamingLiveHR` is Oura-only, so this never widens WHOOP.
-    private var ringStreaming: Bool { live.connected && live.streamingLiveHR }
-    private var liveLink: Bool { activeConnection || ringStreaming }
+    private var liveLink: Bool { activeConnection }
 
     /// The ACTIVE device's charge (#2075). A non-WHOOP active device never falls back to the strap's
-    /// number: an em dash says "not reported", where the strap's charge under the ring's name is a
-    /// confident lie, and was exactly what the report saw.
+    /// number: an em dash says "not reported", where the strap's charge under another device's name is
+    /// a confident lie, and was exactly what the report saw. Rounded, like Devices and the widget.
     private var batteryLabel: String {
-        LiveConsoleReadout.batteryPercent(
-            activeIsWhoop: activeIsWhoop, whoopPct: live.batteryPct, ringPct: live.ouraBatteryPct,
-        ).map { "\($0)%" } ?? "—"
+        (activeIsWhoop ? live.batteryPct.map { Int($0.rounded()) } : nil).map { "\($0)%" } ?? "—"
     }
 
-    /// A streaming Oura ring is definitionally worn (PPG needs skin contact), and `worn` isn't reset on a
-    /// source switch — so a stale `worn=false` from a prior WHOOP WRIST_OFF must not read "Off wrist"
-    /// mid-stream. For WHOOP `ringStreaming` is always false, so this is just `live.worn`. #218.
-    private var wornNow: Bool {
-        // An Oura ring reports a precise live wear/charge state (live-HR presence + charger STATE + a
-        // removal watchdog), so prefer it — it drops to not-worn the moment the ring is off the finger or
-        // on the charger, unlike `ringStreaming`, which lingers. WHOOP has no such signal (ouraWearState
-        // stays nil), so it keeps the bond-worn / stream fallback. #218.
-        if let w = live.ouraWearState { return w == .worn }
-        return live.worn || ringStreaming
-    }
+    private var wornNow: Bool { live.worn }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -866,8 +765,6 @@ private struct LiveHeaderStats: View {
 private struct LiveHeartReadout: View {
     /// Resolved by the parent (#2075); this leaf does not re-derive it.
     let activeIsWhoop: Bool
-    /// Resolved by the parent (#2305), same reason.
-    let activeIsOura: Bool
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var live: LiveState
     let hrMax: Int
@@ -955,10 +852,6 @@ private struct LiveHeartReadout: View {
     private var signalTrustSummary: String {
         if activeConnection && live.encryptedBond { return String(localized: "Encrypted stream: deep controls and history sync available.") }
         if activeConnection { return String(localized: "Live heart rate is flowing; full strap controls need an encrypted bond.") }
-        // A ring reads its OWN phase (#2305, #2304): `live.connected` here is whichever source last
-        // wrote it, and under a ring parked in the nonce handshake it read "Connected, waiting for a
-        // streaming state" for an hour (#2303). The ring's phase is what the console should say.
-        if activeIsOura { return LiveRingCopy.status(model.ouraLinkPhase, streaming: live.connected && live.streamingLiveHR) }
         if live.connected { return String(localized: "Connected, waiting for a streaming state.") }
         // The actionable "Scan and connect…" CTA now lives in `offlineConnectCallout` above the fold, so
         // this caption stays a calm empty-state descriptor rather than a second, competing CTA.
@@ -976,8 +869,6 @@ private struct LivePhysiology: View {
     let activeIsWhoop: Bool
 
     private var activeConnection: Bool { activeIsWhoop && live.connected && live.bonded }
-    /// Oura ring actively streaming live HR — trusted stream without a WHOOP bond (see LiveView.ringStreaming).
-    private var ringStreaming: Bool { live.connected && live.streamingLiveHR }
 
     /// The liquid heart pink (matches LiquidThread's default + the mockup #ff6b81).
     private let liquidHeart = Color(.sRGB, red: 1, green: 107 / 255, blue: 129 / 255, opacity: 1)
@@ -1085,7 +976,7 @@ private struct LivePhysiology: View {
 
     private var connectionModeDetail: String {
         if activeConnection && live.encryptedBond { return String(localized: "Full strap stream is active.") }
-        if activeConnection || ringStreaming { return String(localized: "Heart rate stream is active.") }
+        if activeConnection { return String(localized: "Heart rate stream is active.") }
         if live.connected { return String(localized: "Radio connected, stream not yet trusted.") }
         return String(localized: "No live stream.")
     }
@@ -1101,28 +992,12 @@ private struct LiveSignalTrustRail: View {
 
     /// The ACTIVE device's charge, or nil when it has not reported one.
     private var activeBatteryPct: Int? {
-        LiveConsoleReadout.batteryPercent(
-            activeIsWhoop: activeIsWhoop, whoopPct: live.batteryPct, ringPct: live.ouraBatteryPct,
-        )
+        activeIsWhoop ? live.batteryPct.map { Int($0.rounded()) } : nil
     }
 
     private var displayHR: Int? { model.bpm }
-    /// Oura ring actively streaming live HR — trusted stream without a WHOOP bond (see LiveView.ringStreaming).
-    private var ringStreaming: Bool { live.connected && live.streamingLiveHR }
-    /// #218: a live link for the wear stat = a WHOOP bond OR an Oura HR stream. Oura streams only while worn
-    /// (PPG needs skin contact) and stops when removed, so `ringStreaming` doubles as its wear signal.
-    private var liveLink: Bool { activeConnection || ringStreaming }
-    /// Streaming ⟹ worn: keeps a stale `worn=false` (from a prior WHOOP WRIST_OFF, never reset on a source
-    /// switch) from reading "Off wrist" while an Oura ring streams. For WHOOP `ringStreaming` is always
-    /// false, so this is just `live.worn`. #218.
-    private var wornNow: Bool {
-        // An Oura ring reports a precise live wear/charge state (live-HR presence + charger STATE + a
-        // removal watchdog), so prefer it — it drops to not-worn the moment the ring is off the finger or
-        // on the charger, unlike `ringStreaming`, which lingers. WHOOP has no such signal (ouraWearState
-        // stays nil), so it keeps the bond-worn / stream fallback. #218.
-        if let w = live.ouraWearState { return w == .worn }
-        return live.worn || ringStreaming
-    }
+    private var liveLink: Bool { activeConnection }
+    private var wornNow: Bool { live.worn }
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: NoopMetrics.gap)],
@@ -1135,7 +1010,7 @@ private struct LiveSignalTrustRail: View {
     }
 
     private var connectionModeColor: Color {
-        if (activeConnection && live.encryptedBond) || ringStreaming { return StrandPalette.accent }
+        if activeConnection && live.encryptedBond { return StrandPalette.accent }
         if activeConnection || live.connected { return StrandPalette.statusWarning }
         return StrandPalette.metricRose
     }
@@ -1165,7 +1040,7 @@ private struct LiveSignalTrustRail: View {
         [
             .init(title: String(localized: "Heart rate"),
                   value: displayHR.map { "\($0) bpm" } ?? String(localized: "Missing"),
-                  detail: (activeConnection || ringStreaming) ? String(localized: "Streaming now") : String(localized: "No active stream"),
+                  detail: activeConnection ? String(localized: "Streaming now") : String(localized: "No active stream"),
                   icon: "waveform.path.ecg",
                   tint: displayHR == nil ? StrandPalette.textTertiary : StrandPalette.accent,
                   frac: displayHR.map { min(1, Double($0) / Double(max(1, model.profile.hrMax))) }),
@@ -1176,11 +1051,11 @@ private struct LiveSignalTrustRail: View {
                   tint: live.rrRecent.isEmpty ? StrandPalette.textTertiary : StrandPalette.metricCyan,
                   frac: live.rrRecent.isEmpty ? nil : min(1, Double(live.rrRecent.count) / 30)),
             .init(title: String(localized: "Connection"),
-                  value: activeConnection && live.encryptedBond ? String(localized: "Encrypted") : activeConnection ? String(localized: "Partial") : ringStreaming ? String(localized: "Streaming") : live.connected ? String(localized: "Connected") : String(localized: "Offline"),
-                  detail: activeConnection && live.encryptedBond ? String(localized: "Controls unlocked") : ringStreaming ? String(localized: "Authenticated ring stream") : String(localized: "Standard HR is not a full bond"),
+                  value: activeConnection && live.encryptedBond ? String(localized: "Encrypted") : activeConnection ? String(localized: "Partial") : live.connected ? String(localized: "Connected") : String(localized: "Offline"),
+                  detail: activeConnection && live.encryptedBond ? String(localized: "Controls unlocked") : String(localized: "Standard HR is not a full bond"),
                   icon: "lock.shield",
                   tint: connectionModeColor,
-                  frac: activeConnection && live.encryptedBond ? 1 : activeConnection ? 0.66 : ringStreaming ? 0.66 : live.connected ? 0.33 : nil),
+                  frac: activeConnection && live.encryptedBond ? 1 : activeConnection ? 0.66 : live.connected ? 0.33 : nil),
             .init(title: String(localized: "History sync"),
                   value: live.backfilling ? String(localized: "\(live.syncChunksThisSession) chunks") : LiveSyncFormat.lastSyncLabel(live.lastSyncedAt),
                   detail: syncDetail,
@@ -1192,17 +1067,13 @@ private struct LiveSignalTrustRail: View {
                   // "by strap" only when a strap is what reported it (#2075).
                   detail: live.charging == true ? String(localized: "Charging")
                           : activeIsWhoop ? String(localized: "Last reported by strap")
-                          : String(localized: "Last reported by the ring"),
+                          : String(localized: "Not reported"),
                   icon: "battery.75percent",
                   tint: batteryTint,
                   frac: activeBatteryPct.map { max(0.02, min(1, Double($0) / 100)) }),
             // Wear is only trustworthy on a live link: `worn` defaults true (LiveState) and is only
             // updated by WRIST_ON/OFF events, so while OFFLINE it would otherwise read a false-green
             // "On wrist". Gate the value AND tint on a live link (triage fix for PR#191).
-            // #218: `liveLink` includes an Oura HR stream, not just a WHOOP bond — an Oura ring streams
-            // with no bond, so this read "Unknown" mid-stream. Oura emits PPG HR only while worn (and stops
-            // when removed), so the stream itself is the wear signal; `worn` stays at its default true for
-            // Oura until its WEAR_EVENT is wired to `worn` (follow-up).
             .init(title: String(localized: "Wear state"),
                   value: liveLink ? (wornNow ? String(localized: "On wrist") : String(localized: "Off wrist")) : String(localized: "Unknown"),
                   detail: liveLink ? (wornNow ? String(localized: "Eligible for live physiology") : String(localized: "Wear the strap for scoring")) : String(localized: "Connect to read wear state"),
@@ -1397,23 +1268,5 @@ private struct SignalTrustTile: View {
         .background(NoopPanelSurface(cornerRadius: 20, surfaceOpacity: cardOpacity))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(tile.title): \(tile.value). \(tile.detail)")
-    }
-}
-
-// MARK: - Ring status copy (#2305)
-
-/// One line per ring link phase, shared by the console centrepiece caption, the above-the-fold callout
-/// and the controls row so the three never disagree about what the ring is doing.
-enum LiveRingCopy {
-    static func status(_ phase: OuraLiveSource.LinkPhase, streaming: Bool) -> String {
-        switch phase {
-        case .disconnected:   return String(localized: "Ring not connected.")
-        case .connecting:     return String(localized: "Connecting to the ring…")
-        case .authenticating: return String(localized: "Connected, authenticating…")
-        case .authenticated:
-            return streaming
-                ? String(localized: "Live heart rate is flowing from the ring.")
-                : String(localized: "Connected, waiting for live heart rate.")
-        }
     }
 }
