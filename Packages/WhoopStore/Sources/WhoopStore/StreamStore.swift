@@ -7,13 +7,30 @@ private struct RRBatchSecond: Hashable {
     let transport: Int
 }
 
-/// One line of the v16 ECG-candidate export (#891): the device, the strap-second, and the SIGNED 18-bit
-/// MAX86176 FIFO samples, serialised as one JSON object per `ecgCandidateSample` row. See
-/// `WhoopStore.ecgCandidateExportJSONL`. UNVALIDATED instrumentation — not an ECG/heart rate/diagnosis.
+/// One line of the R16 ECG-record export (#891): the device, the strap-second, the SIGNED 18-bit
+/// waveform, and the record's own acquisition context. One JSON object per `ecgCandidateSample` row.
+/// See `WhoopStore.writeEcgCandidateExportJSONL`. UNVALIDATED instrumentation — not an ECG, heart rate
+/// or diagnosis.
+///
+/// `declaredCount` ships beside `samples` so an analysis reading this file offline can check the record
+/// for loss without the database — the exact check that would have caught the superseded decoder
+/// discarding 42.8 % of every capture.
 private struct EcgCandidateExportLine: Encodable {
     let deviceId: String
     let ts: Int
     let samples: [Int]
+    let recordIndex: Int?
+    let declaredCount: Int
+    let sampleFlags: [Int]
+    let contactFlags: [Int]
+    let quality: Int
+    let stateBits: Int
+    let classifierResult: Int
+    let classifierState: Int
+    let progress: Int
+    let leadOffCount: Int
+    let leadOffI: [Int]
+    let leadOffQ: [Int]
 }
 
 extension WhoopStore {
@@ -89,6 +106,71 @@ extension WhoopStore {
                 | (UInt32(bytes[i + 2]) << 16) | (UInt32(bytes[i + 3]) << 24)
             out.append(Int(Int32(bitPattern: v)))
             i += 4
+        }
+        return out
+    }
+
+    /// Pack the per-sample `flag6` bits as one BIT PER SAMPLE, LSB-first within each byte.
+    ///
+    /// Bit-packed rather than a byte per sample because the array is the same length as the waveform:
+    /// a byte each would cost 500 bytes against the waveform's 2,000, and this flag is uninterpreted —
+    /// it should not cost a quarter of the row it annotates.
+    static func packEcgSampleFlags(_ flags: [Bool]) -> Data {
+        var buf = Data(repeating: 0, count: (flags.count + 7) / 8)
+        for (i, f) in flags.enumerated() where f { buf[i / 8] |= UInt8(1 << (i % 8)) }
+        return buf
+    }
+
+    /// Inverse of `packEcgSampleFlags`. `count` is supplied by the caller (from the waveform's own
+    /// length) because the packing rounds up to a byte and so cannot carry its own length: without it,
+    /// a 500-flag array would read back as 504.
+    static func unpackEcgSampleFlags(_ data: Data, count: Int) -> [Bool] {
+        guard count > 0 else { return [] }
+        let bytes = [UInt8](data)
+        var out = [Bool](); out.reserveCapacity(count)
+        for i in 0..<count {
+            let byte = i / 8
+            out.append(byte < bytes.count && bytes[byte] & UInt8(1 << (i % 8)) != 0)
+        }
+        return out
+    }
+
+    /// Pack the slower contact stream (at most 11 entries) into one integer bitmask, bit k = entry k.
+    static func packEcgContactMask(_ flags: [Bool]) -> Int {
+        var mask = 0
+        for (i, f) in flags.enumerated() where f && i < 64 { mask |= 1 << i }
+        return mask
+    }
+
+    /// Inverse of `packEcgContactMask`. `count` comes from the row's `leadOffCount`, for the same reason
+    /// the sample flags need one: a mask of 0 is indistinguishable from an empty stream otherwise, and
+    /// "every group was out of contact" and "there was no contact stream" are different facts.
+    static func unpackEcgContactMask(_ mask: Int, count: Int) -> [Bool] {
+        guard count > 0 else { return [] }
+        return (0..<min(count, 64)).map { mask & (1 << $0) != 0 }
+    }
+
+    /// Pack the signed I/Q lead-off diagnostic halfwords as little-endian i16 — the same encoding as
+    /// `packPpgSamples`, and the width they arrive on the wire in.
+    static func packEcgLeadOff(_ values: [Int]) -> Data {
+        var buf = Data(capacity: values.count * 2)
+        for v in values {
+            let u = UInt16(bitPattern: Int16(truncatingIfNeeded: v))
+            buf.append(UInt8(truncatingIfNeeded: u))
+            buf.append(UInt8(truncatingIfNeeded: u >> 8))
+        }
+        return buf
+    }
+
+    /// Inverse of `packEcgLeadOff`. A trailing odd byte is dropped rather than thrown.
+    static func unpackEcgLeadOff(_ data: Data?) -> [Int] {
+        guard let data else { return [] }
+        let bytes = [UInt8](data)
+        var out = [Int](); out.reserveCapacity(bytes.count / 2)
+        var i = 0
+        while i + 1 < bytes.count {
+            out.append(Int(Int16(bitPattern: UInt16(bytes[i]) | (UInt16(bytes[i + 1]) << 8))))
+            i += 2
         }
         return out
     }
@@ -468,19 +550,30 @@ extension WhoopStore {
                     ppgWaveformWritten += 1
                 }
             }
-            // RAW v16 MAX86176 FIFO (#891) — EXPLICITLY UNVALIDATED instrumentation, persisted
-            // exactly like ppgWaveform above: persist-only (not in the 8-field return tuple), ON CONFLICT DO
-            // NOTHING keeps the first-seen candidate for a second, packed into one compact BLOB per row (see
-            // `packEcgCandidateSamples`). NOT an ECG / heart rate / diagnosis; nothing reads it into a score.
+            // R16 raw ECG records (#891) — EXPLICITLY UNVALIDATED instrumentation, persisted exactly
+            // like ppgWaveform above: persist-only (not in the 8-field return tuple), ON CONFLICT DO
+            // NOTHING keeps the first-seen record for a second, waveform packed into one compact BLOB per
+            // row (see `packEcgCandidateSamples`). NOT an ECG / heart rate / diagnosis; nothing reads it
+            // into a score.
             if !streams.ecgCandidate.isEmpty {
                 let stmt = try db.cachedStatement(sql: """
-                    INSERT INTO ecgCandidateSample (deviceId, ts, samples)
-                    VALUES (?, ?, ?)
+                    INSERT INTO ecgCandidateSample
+                        (deviceId, ts, samples, recordIndex, declaredCount, quality, stateBits,
+                         classifierResult, classifierState, progress, leadOffCount, contactMask,
+                         sampleFlags, leadOffI, leadOffQ)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(deviceId, ts) DO NOTHING
                     """)
                 for s in streams.ecgCandidate {
-                    try stmt.execute(arguments: [deviceId, s.ts,
-                                                 WhoopStore.packEcgCandidateSamples(s.samples)])
+                    try stmt.execute(arguments: [
+                        deviceId, s.ts,
+                        WhoopStore.packEcgCandidateSamples(s.samples),
+                        s.recordIndex, s.declaredCount, s.quality, s.stateBits,
+                        s.classifierResult, s.classifierState, s.progress, s.leadOffCount,
+                        WhoopStore.packEcgContactMask(s.contactFlags),
+                        WhoopStore.packEcgSampleFlags(s.sampleFlags),
+                        WhoopStore.packEcgLeadOff(s.leadOffI),
+                        WhoopStore.packEcgLeadOff(s.leadOffQ)])
                     ecgCandidateWritten += 1
                 }
             }
@@ -841,21 +934,117 @@ extension WhoopStore {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ppgWaveformSample") ?? 0 }
     }
 
-    /// The RAW v16 MAX86176 FIFO samples (#891), one row per record, in `[from, to]` for
-    /// one device, ascending by ts. `samples` are the SIGNED 18-bit big-endian FIFO values the strap
-    /// sent, unpacked from the compact on-disk BLOB (`packEcgCandidateSamples`/`unpackEcgCandidateSamples`).
-    /// EXPLICITLY UNVALIDATED — NOT an ECG / heart rate / diagnosis. Empty on every strap/layout but 5/MG
-    /// v16. Twin of `ppgWaveformSamples`; nothing in production reads it (instrumentation only).
+    /// Full R16 records (#891) in `[from, to]` for one device, ascending by ts — waveform, status and
+    /// lead-off diagnostics. EXPLICITLY UNVALIDATED: NOT an ECG, heart rate or diagnosis. Empty on every
+    /// strap/layout but 5/MG v16.
+    ///
+    /// This is the HEAVY read — each row carries ~2 KB of waveform — so callers should bound it to a
+    /// window they are about to draw, and use `ecgRecordingIndex` to decide what that window is.
     public func ecgCandidateSamples(deviceId: String, from: Int, to: Int, limit: Int = 200_000) async throws
         -> [EcgCandidateSample] {
         try syncRead { db in
             try Row.fetchAll(db, sql: """
-                SELECT ts, samples FROM ecgCandidateSample
+                SELECT ts, samples, recordIndex, declaredCount, quality, stateBits, classifierResult,
+                       classifierState, progress, leadOffCount, contactMask, sampleFlags,
+                       leadOffI, leadOffQ
+                FROM ecgCandidateSample
                 WHERE deviceId = ? AND ts >= ? AND ts <= ?
                 ORDER BY ts LIMIT ?
                 """, arguments: [deviceId, from, to, limit])
-                .map { EcgCandidateSample(ts: $0["ts"],
-                                          samples: WhoopStore.unpackEcgCandidateSamples($0["samples"])) }
+                .map { row in
+                    let samples = WhoopStore.unpackEcgCandidateSamples(row["samples"])
+                    return EcgCandidateSample(
+                        ts: row["ts"],
+                        samples: samples,
+                        recordIndex: row["recordIndex"],
+                        declaredCount: row["declaredCount"],
+                        // The flag array's length comes from the WAVEFORM, not from the blob: the bit
+                        // packing rounds up to a byte, so the blob alone would report up to 7 flags that
+                        // no sample owns.
+                        sampleFlags: WhoopStore.unpackEcgSampleFlags(row["sampleFlags"] ?? Data(),
+                                                                    count: samples.count),
+                        contactFlags: WhoopStore.unpackEcgContactMask(row["contactMask"],
+                                                                     count: row["leadOffCount"]),
+                        quality: row["quality"],
+                        stateBits: row["stateBits"],
+                        classifierResult: row["classifierResult"],
+                        classifierState: row["classifierState"],
+                        progress: row["progress"],
+                        leadOffCount: row["leadOffCount"],
+                        leadOffI: WhoopStore.unpackEcgLeadOff(row["leadOffI"]),
+                        leadOffQ: WhoopStore.unpackEcgLeadOff(row["leadOffQ"]))
+                }
+        }
+    }
+
+    /// One row's worth of R16 INDEX — everything needed to list and group recordings, and nothing that
+    /// would require touching the waveform blob.
+    ///
+    /// The separation is the point. A recording is ~64 rows of ~2 KB each, and a table at
+    /// `ecgCandidateRetentionRows` holds tens of thousands; building a recording list by reading full
+    /// rows would load ~86 MB of waveform to display a list of dates. `storedCount` is computed as
+    /// `length(samples) / 4` in SQL, which SQLite answers from the blob's header without reading its
+    /// bytes.
+    public struct EcgRecordIndexEntry: Equatable, Sendable {
+        public let deviceId: String
+        public let ts: Int
+        /// The monotonic lifetime record index, or nil where the record's header could not be read.
+        /// Contiguity in THIS is what defines one continuous recording — not contiguity in `ts`, which a
+        /// strap-clock correction can break in the middle of a session.
+        public let recordIndex: Int?
+        /// Samples the record declared, and samples actually stored. These agree on every cleanly
+        /// decoded record; storing both is what makes disagreement visible instead of silent.
+        public let declaredCount: Int
+        public let storedCount: Int
+        public let quality: Int
+        public let progress: Int
+        public let leadOffCount: Int
+        public let contactMask: Int
+
+        public init(deviceId: String, ts: Int, recordIndex: Int?, declaredCount: Int, storedCount: Int,
+                    quality: Int, progress: Int, leadOffCount: Int, contactMask: Int) {
+            self.deviceId = deviceId
+            self.ts = ts
+            self.recordIndex = recordIndex
+            self.declaredCount = declaredCount
+            self.storedCount = storedCount
+            self.quality = quality
+            self.progress = progress
+            self.leadOffCount = leadOffCount
+            self.contactMask = contactMask
+        }
+
+        /// The record's contact entries, or `[]` where the record carried no slower stream.
+        public var contactFlags: [Bool] {
+            WhoopStore.unpackEcgContactMask(contactMask, count: leadOffCount)
+        }
+    }
+
+    /// Every R16 row's index fields, ascending by (deviceId, ts), WITHOUT reading any waveform.
+    ///
+    /// Across all devices by default: a strap that was re-paired gets a new device id, and a recording
+    /// made before that is still the same person's recording. Pass `deviceId` to narrow.
+    public func ecgRecordingIndex(deviceId: String? = nil, limit: Int = 200_000) async throws
+        -> [EcgRecordIndexEntry] {
+        try syncRead { db in
+            let sql = """
+                SELECT deviceId, ts, recordIndex, declaredCount, length(samples) / 4 AS storedCount,
+                       quality, progress, leadOffCount, contactMask
+                FROM ecgCandidateSample
+                \(deviceId == nil ? "" : "WHERE deviceId = ?")
+                ORDER BY deviceId, ts LIMIT ?
+                """
+            let args: [DatabaseValueConvertible?] = deviceId == nil ? [limit] : [deviceId, limit]
+            return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+                .map { EcgRecordIndexEntry(deviceId: $0["deviceId"],
+                                           ts: $0["ts"],
+                                           recordIndex: $0["recordIndex"],
+                                           declaredCount: $0["declaredCount"],
+                                           storedCount: $0["storedCount"],
+                                           quality: $0["quality"],
+                                           progress: $0["progress"],
+                                           leadOffCount: $0["leadOffCount"],
+                                           contactMask: $0["contactMask"]) }
         }
     }
 
@@ -893,11 +1082,27 @@ extension WhoopStore {
             buf.reserveCapacity(WhoopStore.exportFlushBytes * 2)
             var rows = 0
             let cursor = try Row.fetchCursor(db, sql: """
-                SELECT deviceId, ts, samples FROM ecgCandidateSample ORDER BY deviceId, ts
+                SELECT deviceId, ts, samples, recordIndex, declaredCount, quality, stateBits,
+                       classifierResult, classifierState, progress, leadOffCount, contactMask,
+                       sampleFlags, leadOffI, leadOffQ
+                FROM ecgCandidateSample ORDER BY deviceId, ts
                 """)
             while let row = try cursor.next() {
-                let line = EcgCandidateExportLine(deviceId: row["deviceId"], ts: row["ts"],
-                                                  samples: WhoopStore.unpackEcgCandidateSamples(row["samples"]))
+                let samples = WhoopStore.unpackEcgCandidateSamples(row["samples"])
+                let line = EcgCandidateExportLine(
+                    deviceId: row["deviceId"], ts: row["ts"], samples: samples,
+                    recordIndex: row["recordIndex"], declaredCount: row["declaredCount"],
+                    // Flags export as 0/1 rather than true/false: the consumer is an offline numeric
+                    // analysis, and a column of booleans in JSON is one more thing for it to coerce.
+                    sampleFlags: WhoopStore.unpackEcgSampleFlags(row["sampleFlags"] ?? Data(),
+                                                                 count: samples.count).map { $0 ? 1 : 0 },
+                    contactFlags: WhoopStore.unpackEcgContactMask(row["contactMask"],
+                                                                  count: row["leadOffCount"]).map { $0 ? 1 : 0 },
+                    quality: row["quality"], stateBits: row["stateBits"],
+                    classifierResult: row["classifierResult"], classifierState: row["classifierState"],
+                    progress: row["progress"], leadOffCount: row["leadOffCount"],
+                    leadOffI: WhoopStore.unpackEcgLeadOff(row["leadOffI"]),
+                    leadOffQ: WhoopStore.unpackEcgLeadOff(row["leadOffQ"]))
                 buf.append(try enc.encode(line))
                 buf.append(0x0A)          // "\n"
                 rows += 1

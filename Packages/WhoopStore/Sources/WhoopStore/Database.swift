@@ -1134,6 +1134,59 @@ extension WhoopStore {
         migrator.registerMigration("v48-ecg-candidate-signed") { db in
             try db.execute(sql: "DELETE FROM ecgCandidateSample")
         }
+        // v49-ecg-r16-record (#891): PURGE again, and widen the row from "a waveform" to "a record".
+        //
+        // The purge is the same class of repair as v48 and for a sharper reason. v47 changed the BLOB's
+        // ENCODING; this changes what the BLOB CONTAINS. The superseded decoder filtered the waveform by
+        // each sample's flag bits — treating them as a channel selector when they are a per-sample flag
+        // and a slower contact flag — so a v48 row holds a SUBSET of its record's samples, packed
+        // contiguously with the gaps closed up. Across the corpus that is 42.8 % of samples discarded and
+        // 52 of 128 records stored as nothing at all.
+        //
+        // That is worse than a wrong encoding, because it is not recoverable and not visible. A v48 row
+        // cannot be repaired in place: the discarded samples are gone, and the survivors no longer carry
+        // the position information that would say where they were. Nor can the row be rendered honestly —
+        // its timestamps still look like one second of 500 Hz data, so a viewer drawn on it shows a
+        // distorted waveform with nothing to indicate that it has been distorted. Keeping such rows to
+        // avoid an empty table would put a lie in front of the user in the exact screen this data exists
+        // to feed.
+        //
+        // What makes the delete acceptable rather than merely necessary: nothing scores these rows, the
+        // Test Centre export can stage them to a file BEFORE upgrading for anyone who wants to keep them,
+        // and the strap re-offloads v16 records on the next sync within its retention window. Note the
+        // export caveat is load-bearing from here on — once the review screen ships, "nothing reads this
+        // table" stops being true, and a future encoding change must migrate rather than purge.
+        //
+        // The added columns are additive and nullable-with-default, so the schema change itself touches no
+        // other table. They carry the rest of the R16 record (docs/PROTOCOL_ECG.md §R16): the declared
+        // count beside the stored one so loss stays checkable, the monotonic record index that identifies
+        // a continuous recording, the packed status codes, and the lead-off diagnostics. Banking the
+        // waveform without them would preserve a signal nobody could later tell the conditions of.
+        migrator.registerMigration("v49-ecg-r16-record") { db in
+            try db.execute(sql: "DELETE FROM ecgCandidateSample")
+            // `recordIndex` is nullable on purpose: it is the ONE column whose absence is meaningful
+            // (a record whose header could not be read), and a 0 default would make that indistinguishable
+            // from a real index of 0.
+            try db.alter(table: "ecgCandidateSample") { t in
+                t.add(column: "recordIndex", .integer)
+                t.add(column: "declaredCount", .integer).notNull().defaults(to: 0)
+                t.add(column: "quality", .integer).notNull().defaults(to: 0)
+                t.add(column: "stateBits", .integer).notNull().defaults(to: 0)
+                t.add(column: "classifierResult", .integer).notNull().defaults(to: 0)
+                t.add(column: "classifierState", .integer).notNull().defaults(to: 0)
+                t.add(column: "progress", .integer).notNull().defaults(to: 0)
+                t.add(column: "leadOffCount", .integer).notNull().defaults(to: 0)
+                // Contact entries are at most 11, so the whole slower stream fits in one integer bitmask
+                // (bit k = entry k). A BLOB for eleven bits would cost more in row overhead than it stores.
+                t.add(column: "contactMask", .integer).notNull().defaults(to: 0)
+                // flag6 is per-sample and uninterpreted, so it is stored as a BIT PER SAMPLE — 63 bytes
+                // against the waveform's 2,000, about 3 % overhead. Preserved rather than dropped because
+                // re-capturing a wire field costs a session and discarding one costs it forever.
+                t.add(column: "sampleFlags", .blob)
+                t.add(column: "leadOffI", .blob)
+                t.add(column: "leadOffQ", .blob)
+            }
+        }
         return migrator
     }
 }

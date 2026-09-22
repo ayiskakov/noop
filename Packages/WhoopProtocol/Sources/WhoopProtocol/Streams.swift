@@ -301,23 +301,104 @@ public struct PpgWaveformSample: Equatable, Codable, Sendable {
     }
 }
 
-/// One WHOOP 5/MG v16 record's MAX86176 FIFO **0x80-channel** samples (#891), one record per second.
+/// One WHOOP 5/MG **R16 raw ECG record** (#891) — one record per second.
 ///
-/// EXPLICITLY UNVALIDATED INSTRUMENTATION — mirrors `PpgWaveformSample` exactly (decode + store, never a
-/// score). `samples` are the raw FIFO values the strap sent (see `decodeWhoop5HistoricalV16`): 18-bit
-/// TWO'S-COMPLEMENT big-endian, so SIGNED (−131,072…131,071), no invented scale. This is NOT an ECG, NOT a heart
-/// rate, NOT a diagnosis; the sample rate and the physical meaning of the channel are UNPROVEN. Persisted
-/// (and, in WhoopStore, its own `ecgCandidateSample` table) purely so a future analysis can run over the
-/// ORIGINAL samples — nothing reads it into any metric, gate, or UI. A record with no 0x80 words (an empty
-/// v16 record) produces no row.
+/// EXPLICITLY UNVALIDATED INSTRUMENTATION. This is NOT a heart rate and NOT a diagnosis; the sample
+/// rate and the physical scale are UNPROVEN, and nothing downstream may feed it a metric or gate. It is
+/// persisted (as WhoopStore's `ecgCandidateSample`) so a future analysis, and the gated review screen,
+/// can work from the ORIGINAL samples.
+///
+/// The wire contract is `Whoop5EcgRawRecord` / `docs/PROTOCOL_ECG.md` §R16. Everything past `samples` is
+/// carried because the record carries it and discarding a wire field is irreversible — not because any
+/// of it is ready to mean something. In particular the status block's HR-related byte is deliberately
+/// ABSENT from this type: it reads 73 on exactly the records where a session completes, which is the
+/// shape that invites a BPM readout on evidence that never supported one (ECG_FEATURE_NOTES.md §5).
 public struct EcgCandidateSample: Equatable, Codable, Sendable {
     public let ts: Int          // wall-clock unix seconds (one record per second)
-    /// The record's FIFO samples, in wire order — SIGNED 18-bit big-endian, verbatim from
-    /// `ecg_candidate`. Count VARIES per record (see the decoder); a full record carries ~500.
+    /// The record's waveform, in wire order — EVERY declared sample, signed 18-bit (−131,072…131,071),
+    /// no scale applied.
+    ///
+    /// A superseded decoder filtered this array by the samples' flag bits, discarding 42.8 % of the
+    /// captured corpus and closing the time axis up around the holes. `samples.count` must equal
+    /// `declaredCount` on any record that decoded cleanly, and `StreamStore` stores both so that stays
+    /// checkable after the fact.
     public let samples: [Int]
-    public init(ts: Int, samples: [Int]) {
+    /// @11 — the monotonic lifetime record index. The reliable ordering and contiguity key: it advances
+    /// by exactly one per record regardless of what the strap's RTC does, so a run of consecutive
+    /// indices is one continuous recording even across a clock correction. `nil` only for a record whose
+    /// header could not be read.
+    public let recordIndex: Int?
+    /// @32–33 — the count the record DECLARED, kept beside the count actually stored.
+    public let declaredCount: Int
+    /// `flag6` per sample, index-aligned with `samples`. Uninterpreted — see `Whoop5EcgRawRecord`.
+    public let sampleFlags: [Bool]
+    /// The slower contact/lead-state stream, one entry per contact group (the doc's 51/50×8/49 grouping
+    /// for a full record), NOT one per sample.
+    public let contactFlags: [Bool]
+    /// @21 — quality code, raw. Observed 0–3; "partial observed outcomes, not an exhaustive enum or a
+    /// bad/good/excellent scale".
+    public let quality: Int
+    /// @22 — state-transition/presence bits, raw.
+    public let stateBits: Int
+    /// @23 / @24 — classifier result and state codes, raw. No established diagnostic interpretation.
+    public let classifierResult: Int
+    public let classifierState: Int
+    /// @25 — percentage-like session progress. Observed ramping 0, 3, 6 … 100 across a session, and 255
+    /// where no session is running.
+    public let progress: Int
+    /// @1534 — declared slower-entry count, and the signed I/Q diagnostic halfwords that follow it.
+    /// Signed views of an unresolved physical quantity: never a clinical threshold.
+    public let leadOffCount: Int
+    public let leadOffI: [Int]
+    public let leadOffQ: [Int]
+
+    public init(ts: Int, samples: [Int], recordIndex: Int? = nil, declaredCount: Int? = nil,
+                sampleFlags: [Bool] = [], contactFlags: [Bool] = [], quality: Int = 0,
+                stateBits: Int = 0, classifierResult: Int = 0, classifierState: Int = 0,
+                progress: Int = 0, leadOffCount: Int = 0, leadOffI: [Int] = [], leadOffQ: [Int] = []) {
         self.ts = ts
         self.samples = samples
+        self.recordIndex = recordIndex
+        self.declaredCount = declaredCount ?? samples.count
+        self.sampleFlags = sampleFlags
+        self.contactFlags = contactFlags
+        self.quality = quality
+        self.stateBits = stateBits
+        self.classifierResult = classifierResult
+        self.classifierState = classifierState
+        self.progress = progress
+        self.leadOffCount = leadOffCount
+        self.leadOffI = leadOffI
+        self.leadOffQ = leadOffQ
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case ts, samples, recordIndex = "record_index", declaredCount = "declared_count"
+        case sampleFlags = "sample_flags", contactFlags = "contact_flags"
+        case quality, stateBits = "state_bits"
+        case classifierResult = "classifier_result", classifierState = "classifier_state"
+        case progress, leadOffCount = "lead_off_count"
+        case leadOffI = "lead_off_i", leadOffQ = "lead_off_q"
+    }
+
+    /// Every field past `samples` is decoded with `decodeIfPresent`, so JSON written before those fields
+    /// existed still decodes — the same tolerance `Streams` itself applies to each of its streams.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ts = try c.decode(Int.self, forKey: .ts)
+        samples = try c.decodeIfPresent([Int].self, forKey: .samples) ?? []
+        recordIndex = try c.decodeIfPresent(Int.self, forKey: .recordIndex)
+        declaredCount = try c.decodeIfPresent(Int.self, forKey: .declaredCount) ?? samples.count
+        sampleFlags = try c.decodeIfPresent([Bool].self, forKey: .sampleFlags) ?? []
+        contactFlags = try c.decodeIfPresent([Bool].self, forKey: .contactFlags) ?? []
+        quality = try c.decodeIfPresent(Int.self, forKey: .quality) ?? 0
+        stateBits = try c.decodeIfPresent(Int.self, forKey: .stateBits) ?? 0
+        classifierResult = try c.decodeIfPresent(Int.self, forKey: .classifierResult) ?? 0
+        classifierState = try c.decodeIfPresent(Int.self, forKey: .classifierState) ?? 0
+        progress = try c.decodeIfPresent(Int.self, forKey: .progress) ?? 0
+        leadOffCount = try c.decodeIfPresent(Int.self, forKey: .leadOffCount) ?? 0
+        leadOffI = try c.decodeIfPresent([Int].self, forKey: .leadOffI) ?? []
+        leadOffQ = try c.decodeIfPresent([Int].self, forKey: .leadOffQ) ?? []
     }
 }
 

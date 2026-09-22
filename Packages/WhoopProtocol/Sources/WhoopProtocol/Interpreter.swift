@@ -708,114 +708,104 @@ private func decodeWhoop5HistoricalV26(_ frame: [UInt8], fb: FieldBuilder, limit
     }
 }
 
-/// Decode a WHOOP 5/MG type-47 **version-16** record — a MAX86176 optical/electrical AFE FIFO buffer,
-/// surfaced ONLY as EXPLICITLY UNVALIDATED instrumentation (#891).
+/// Decode a WHOOP 5/MG type-47 **version-16** record — the **R16 raw ECG waveform** record, surfaced as
+/// EXPLICITLY UNVALIDATED instrumentation (#891).
 ///
-/// UNVALIDATED CANDIDATE; MAX86176 FIFO; NOT an ECG, NOT a heart rate, NOT a diagnosis. The sample rate,
-/// the physical meaning of each channel, and whether any channel is electrocardiography at all are ALL
-/// UNPROVEN. This decoder decodes + stores the bytes and asserts nothing about them. Nothing downstream
-/// may treat `ecg_candidate` as a validated signal, feed it a metric/gate (recovery/illness/HR), or label
-/// it ECG in the UI — it exists so a future analysis can run over the ORIGINAL samples (project rule:
-/// land unvalidated sensor work as instrumentation, never a score; see CLAUDE.md and the withdrawn
-/// #194 PPG->HR estimate).
+/// The wire contract lives in `Whoop5EcgRawRecord`, which implements
+/// [`docs/PROTOCOL_ECG.md`](../../../../docs/PROTOCOL_ECG.md) §"R16 raw waveform and lead diagnostics".
+/// This function is the field-map face of that type and holds no layout knowledge of its own — the two
+/// used to hold separate copies of the geometry and the copies disagreed, which is how 42.8 % of every
+/// recorded waveform came to be discarded before it reached storage. See the `Whoop5EcgRawRecord` type
+/// doc for the evidence that settled the flag-vs-channel reading, and for what this decoder does not
+/// claim: no volts, no sample rate, no electrode acceptance, no clinical reading.
 ///
-/// LAYOUT, established from 128 real v16 records (WHOOP 5/MG, fw 50.39.1.0). The record reuses the shared
-/// type-47 header — the monotonic u32 `record_index` @11 and the u32 `unix` second @15, verified
-/// monotonic/lockstep with v18/v20/v21/v26. The FIFO is LENGTH-PREFIXED: @32 is a u16 LITTLE-ENDIAN count
-/// of 3-byte words and the words run from @34, so the FIFO occupies exactly `[34, 34 + 3*count)`. Each
-/// word is `byte[0]` = a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` = the low 16
-/// bits of a BIG-ENDIAN sample. The sample is **18-bit TWO'S-COMPLEMENT (signed)**: the tag's low two bits
-/// are bits 17…16, so the value is `((tag & 0x03) << 16) | (byte1 << 8) | byte2`, sign-extended. Words are
-/// stored in wire order as `ecg_candidate`; a word whose tag falls outside the expected shape (bit 7 set,
-/// bits 6…2 clear) is tallied into `ecg_candidate_unexpected_tag_count` and dropped. Per-record word counts
-/// VARY widely (an empty record declares 0, a full one ~500) — the decoder extracts what the count declares.
-///
-/// SIGNEDNESS, and how it was established — this is the part an earlier revision got wrong by reading the
-/// samples unsigned. Three independent checks agree, on the full fixture's 500 words:
-///  - Every negative-valued word carries tag `0x83` (low bits `11`) and every positive-valued one `0x80`
-///    (low bits `00`), with no exceptions. That correlation is what sign extension looks like.
-///  - Reconstructing an 18-bit value from those tag bits gives BYTE-IDENTICAL results to sign-extending
-///    the int16 — i.e. the tag bits carry sign, not extra magnitude, for every sample here.
-///  - Continuity. Read unsigned, the series contains a 65,213-step cliff where it crosses zero
-///    (`…64603, 65511, 298, 65162…`); read signed, its largest step is 2,943 and its mean step 787, over a
-///    range of −12,365…+1,007. A signal cannot jump most of its range between adjacent samples.
-/// The 18-bit reconstruction is used rather than a plain int16 sign-extend because it is correct under BOTH
-/// readings of the tag bits (redundant sign flag, or genuine MSBs) and identical on all observed data,
-/// whereas int16 would clip a sample that ever needs the wider range — an R-peak being exactly that case.
-///
-/// TRAILING REGION — the reason the length prefix matters. The FIFO does NOT run to the end of the
-/// payload: a DIFFERENT structure follows it, and in the fixture below it reads cleanly as a count byte
-/// (`0x0b` = 11) followed by 11 + 11 values in 16-bit LITTLE-endian (`[63, 63, 62…]` then `[-19 × 11]`).
-/// Its meaning is UNIDENTIFIED and nothing here decodes it; it is named only so the next reader knows the
-/// bytes are accounted for. Scanning 3-byte words to the payload limit — as an earlier revision did —
-/// walks into this block and harvests whatever its bytes look like at 3-byte alignment: that is where the
-/// "~7 words/record of a second channel" came from. Those 7 were trailing bytes, not a channel; inside
-/// the correctly bounded FIFO both captured records contain ZERO unexpected-tag words. Worse than the
-/// bogus tally,
-/// an unbounded scan can admit a trailing byte pair as a SAMPLE whenever alignment puts a high bit in the
-/// tag position, silently contaminating the very stream this table exists to preserve.
-///
-/// DEVIATION from the original field note (real captures, never invented offsets): the dominant tag BYTE
-/// observed is `0x83` (not a bare `0x80`), which the signedness note above explains: its low bits are the
-/// sample's sign, so the tag is a SHAPE (bit 7 set, bits 6…2 clear), not an exact byte match. Proven here: the header offsets (@11/@15), the @32 word count and
-/// its @34 body (`34 + 3*500 = 1534` lands exactly on the trailing region in the full fixture, and the
-/// empty record declares 0), and the 3-byte-word/BE16 framing. No other byte is named.
+/// UNVALIDATED CANDIDATE; NOT a heart rate, NOT a diagnosis. Nothing downstream may feed `ecg_candidate`
+/// to a metric or gate (recovery/illness/HR) — it exists so a future analysis, and the gated review
+/// screen, can work from the ORIGINAL samples (project rule: land unvalidated sensor work as
+/// instrumentation, never a score; see CLAUDE.md and the withdrawn #194 PPG→HR estimate).
 private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit: Int) {
-    // record_index@11: the same monotonic lifetime per-record counter v18/v20/v21/v26 carry at @11
-    // (+1 per record, independent of unix). @11 is the low byte of a u32 LE.
-    if let idx = readU32(frame, 11, limit) {
-        fb.add(11, 4, "record_index", "meta", value: .int(idx), note: "monotonic lifetime record index")
+    guard let record = Whoop5EcgRawRecord.decode(frame) else { return }
+    fb.add(11, 4, "record_index", "meta", value: .int(Int(record.recordIndex)),
+           note: "monotonic lifetime record index")
+    fb.add(15, 4, "unix", "time", value: .int(Int(record.unix)), note: "real unix seconds")
+
+    // The 13-byte packed status region. Each byte is published as the RAW value the strap sent: the doc
+    // rules that the quality codes are "partial observed outcomes, not an exhaustive enum" and that the
+    // classifier codes carry "no established diagnostic interpretation", so naming them here would be
+    // this layer asserting more than the wire does.
+    let s = record.status
+    fb.region(21, 34, "R16 packed status", "ecg",
+              note: "13-byte packed region; raw codes preserved, no clinical meaning asserted")
+    fb.add(21, 1, "ecg_quality_code", "ecg", value: .int(Int(s.quality)),
+           note: "observed 0-3; thresholds and vocabulary unresolved")
+    fb.add(22, 1, "ecg_state_bits", "ecg", value: .int(Int(s.stateBits)),
+           note: "state-transition/presence bits; state codes, not clinical states")
+    fb.add(23, 1, "ecg_classifier_result", "ecg", value: .int(Int(s.classifierResult)),
+           note: "no established diagnostic interpretation")
+    fb.add(24, 1, "ecg_classifier_state", "ecg", value: .int(Int(s.classifierState)))
+    fb.add(25, 1, "ecg_progress", "ecg", value: .int(Int(s.progress)),
+           note: "percentage-like session progress; 255 observed when no session runs")
+    fb.add(26, 1, "ecg_packed_booleans", "ecg", value: .int(Int(s.packedBooleans)),
+           note: "four booleans in bits 0-3; individual names unresolved")
+    // Published, never displayed. See `Whoop5EcgRawRecord.Status.hrRelated` — this reads 73 on exactly
+    // the records where progress reaches 100, which is precisely the shape that invites a BPM readout on
+    // evidence (ECG_FEATURE_NOTES.md §5) that never supported one.
+    fb.add(27, 1, "ecg_hr_related", "ecg", value: .int(Int(s.hrRelated)),
+           note: "HR-related classifier value; average/current distinction unresolved; NOT a heart rate")
+    fb.add(28, 1, "ecg_hr_related_r17", "ecg", value: .int(Int(s.hrRelatedR17)),
+           note: "zero placeholder on R16")
+    fb.add(29, 2, "ecg_hrv_related", "ecg", value: .int(Int(s.hrvRelated)),
+           note: "HRV-related value, units unresolved; 65535 observed as unset")
+    fb.add(31, 1, "ecg_reserved_zero", "ecg", value: .int(Int(s.reservedZero)),
+           note: "zero placeholder in this version; NOT a measured stress value")
+    fb.add(32, 2, "ecg_candidate_word_count", "meta", value: .int(Int(s.declaredSampleCount)),
+           note: "declared waveform sample count; capacity is 500 slots and is a separate fact")
+
+    if !record.samples.isEmpty {
+        // EVERY declared sample, in wire order — the flags ride alongside rather than filtering this.
+        fb.add(Whoop5EcgRawRecord.waveformStart,
+               record.samples.count * Whoop5EcgRawRecord.waveformSlotWidth,
+               "ecg_candidate", "ecg", value: .intArray(record.samples),
+               note: "UNVALIDATED R16 waveform (signed 18-bit BE); NOT an ECG/HR/diagnosis (#891)")
+        fb.parsed["ecg_candidate_count"] = .int(record.samples.count)
+        // flag6, index-aligned with the samples above. Deliberately uninterpreted — the type doc records
+        // why the obvious "saturation marker" reading fails its own converse test.
+        fb.parsed["ecg_sample_flags"] = .intArray(record.sampleFlags.map { $0 ? 1 : 0 })
     }
-    if let unix = readU32(frame, 15, limit) {
-        fb.add(15, 4, "unix", "time", value: .int(unix), note: "real unix seconds")
+
+    // Lead-off diagnostics at their FIXED offsets. The count is published even when it is zero, because
+    // "the slower array was empty" and "we did not look" are different facts and only one of them is true.
+    fb.add(Whoop5EcgRawRecord.leadOffCountOffset, 1, "ecg_lead_off_count", "ecg",
+           value: .int(record.leadOffCount),
+           note: "slower contact/lead-state entries; 11 fixed I/Q slots follow at fixed offsets")
+    if !record.contactFlags.isEmpty {
+        fb.parsed["ecg_contact_flags"] = .intArray(record.contactFlags.map { $0 ? 1 : 0 })
     }
-    // The FIFO is LENGTH-PREFIXED, and honouring that bound is what keeps the stream clean: @32 is a u16
-    // LE count of 3-byte words and the words themselves start @34, so the FIFO occupies exactly
-    // [34, 34 + 3*count) and something else entirely follows it (see the TRAILING REGION note above).
-    // Scanning to `limit` instead — as if the whole body were FIFO — walks the loop straight into that
-    // trailing block and harvests whatever its bytes happen to look like at 3-byte alignment.
-    guard let wordCount = readU16(frame, 32, limit) else { return }
-    fb.add(32, 2, "ecg_candidate_word_count", "meta", value: .int(wordCount),
-           note: "MAX86176 FIFO 3-byte-word count; the FIFO body is exactly this long")
-    // Clamp rather than trust: a corrupt length must not read past the payload into the CRC trailer.
-    let fifoStart = 34
-    let fifoEnd = min(fifoStart + wordCount * 3, limit)
-    var samples: [Int] = []
-    var unexpectedTags = 0
-    var off = fifoStart
-    while off + 3 <= fifoEnd {
-        guard let tag = readU8(frame, off, fifoEnd),
-              let hi = readU8(frame, off + 1, fifoEnd),
-              let lo = readU8(frame, off + 2, fifoEnd) else { break }
-        defer { off += 3 }
-        // EXPECTED SHAPE: bit 7 set (a real sample word) and bits 6…2 clear. Every word in both captured
-        // records is 0x83 or 0x80. A word outside that shape is one this decoder cannot account for, so it
-        // is TALLIED and dropped — never guessed at, and never mixed into the sample stream.
-        guard tag & 0x80 != 0, tag & 0x7C == 0 else {
-            unexpectedTags += 1
-            continue
+    if !record.leadOffI.isEmpty {
+        fb.add(Whoop5EcgRawRecord.leadOffIStart, record.leadOffI.count * 2, "ecg_lead_off_i", "ecg",
+               value: .intArray(record.leadOffI),
+               note: "signed diagnostic halfwords; no physical units, never a clinical threshold")
+        fb.add(Whoop5EcgRawRecord.leadOffQStart, record.leadOffQ.count * 2, "ecg_lead_off_q", "ecg",
+               value: .intArray(record.leadOffQ),
+               note: "signed diagnostic halfwords; no physical units, never a clinical threshold")
+    }
+
+    // ANOMALIES. Each entry means this record disagreed with the fixed layout, which is the one case
+    // where the outputs above should not be trusted. Published as separate, specifically-named counters
+    // rather than one "unexpected" tally: the tally this replaces counted ordinary flag-bearing samples
+    // as anomalies and so reported hundreds of them on records where nothing was wrong.
+    for anomaly in record.anomalies {
+        switch anomaly {
+        case .waveformCountOverCapacity(let declared):
+            fb.parsed["ecg_anomaly_waveform_count_over_capacity"] = .int(declared)
+        case .leadOffCountOverCapacity(let declared):
+            fb.parsed["ecg_anomaly_lead_off_count_over_capacity"] = .int(declared)
+        case .reservedBitsSet(let words):
+            fb.parsed["ecg_anomaly_reserved_bits_set"] = .int(words)
+        case .unexpectedFrameLength(let length):
+            fb.parsed["ecg_anomaly_frame_length"] = .int(length)
         }
-        // 18-bit TWO'S-COMPLEMENT, big-endian: bits 17…16 ride the tag's low two bits, bits 15…0 are
-        // byte[1..2]. Reading these unsigned — as the first revision did — turns every zero crossing into a
-        // ~65000-step cliff (`…65511, 298, 65162…`), which is what gave that reading away.
-        let raw = ((tag & 0x03) << 16) | (hi << 8) | lo
-        samples.append(raw >= 0x2_0000 ? raw - 0x4_0000 : raw)
     }
-    if !samples.isEmpty {
-        // The RAW FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
-        // channel meaning and sample rate unproven (#891). Consumed only as durable instrumentation.
-        // The byte span is the FIFO body exactly — [34, fifoEnd) — not the rest of the record.
-        fb.add(fifoStart, max(0, fifoEnd - fifoStart), "ecg_candidate", "ecg", value: .intArray(samples),
-               note: "UNVALIDATED MAX86176 FIFO samples (signed 18-bit BE); NOT an ECG/HR/diagnosis (#891)")
-        fb.parsed["ecg_candidate_count"] = .int(samples.count)
-    }
-    // Tally of FIFO words whose tag falls outside the expected shape — a derived count spanning no single
-    // byte, so it rides `parsed` like v26's `ppg_sample_count`. It is 0 in both captured records, and that
-    // is exactly why it is worth keeping: bits 6…2 of the tag are unaccounted for, so if a firmware ever
-    // uses them this counter is how we find out, instead of those words being silently reinterpreted as
-    // samples. (Its predecessor, `ecg_candidate_alt_count`, reported 7 here — not a second channel, but
-    // the trailing region being read as FIFO words.) No meaning is claimed; such words are NOT stored.
-    fb.parsed["ecg_candidate_unexpected_tag_count"] = .int(unexpectedTags)
 }
 
 /// Decode WHOOP 5.0 type-47 **version-20 / version-21** records — the bulk multi-channel sensor stream

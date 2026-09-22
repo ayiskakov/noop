@@ -310,13 +310,32 @@ public func extractHistoricalStreams(_ parsed: [ParsedFrame],
                                                          burstIndex: p["burst_index"]?.intValue,
                                                          baseCode: p["ppg_base_code"]?.intValue))
             }
-            // v16 MAX86176 FIFO 0x80-channel (#891): EXPLICITLY UNVALIDATED instrumentation, the twin of
-            // the ppg_waveform persist above. A v16 record carries no heart_rate/gravity/ppg_waveform, so
-            // it adds nothing to the branches below — the FIFO is banked here or it is lost, because adding
-            // v16 to `mappedWhoop5HistoricalVersions` took it off the raw-archive path. NOT an ECG / HR /
+            // v16 R16 raw ECG record (#891): EXPLICITLY UNVALIDATED instrumentation, the twin of the
+            // ppg_waveform persist above. A v16 record carries no heart_rate/gravity/ppg_waveform, so it
+            // adds nothing to the branches below — it is banked here or it is lost, because adding v16 to
+            // `mappedWhoop5HistoricalVersions` took it off the raw-archive path. NOT an ECG / HR /
             // diagnosis; nothing downstream scores this row.
+            //
+            // The status and lead-off fields ride along with the waveform rather than being banked
+            // separately: they describe THIS record's acquisition (was contact closed, was the session
+            // settled, how far through it was), so a row that carried samples without them would preserve
+            // a waveform nobody could later tell the conditions of.
             if let samples = p["ecg_candidate"]?.intArrayValue, !samples.isEmpty {
-                out.ecgCandidate.append(EcgCandidateSample(ts: ts, samples: samples))
+                out.ecgCandidate.append(EcgCandidateSample(
+                    ts: ts,
+                    samples: samples,
+                    recordIndex: p["record_index"]?.intValue,
+                    declaredCount: p["ecg_candidate_word_count"]?.intValue,
+                    sampleFlags: (p["ecg_sample_flags"]?.intArrayValue ?? []).map { $0 != 0 },
+                    contactFlags: (p["ecg_contact_flags"]?.intArrayValue ?? []).map { $0 != 0 },
+                    quality: p["ecg_quality_code"]?.intValue ?? 0,
+                    stateBits: p["ecg_state_bits"]?.intValue ?? 0,
+                    classifierResult: p["ecg_classifier_result"]?.intValue ?? 0,
+                    classifierState: p["ecg_classifier_state"]?.intValue ?? 0,
+                    progress: p["ecg_progress"]?.intValue ?? 0,
+                    leadOffCount: p["ecg_lead_off_count"]?.intValue ?? 0,
+                    leadOffI: p["ecg_lead_off_i"]?.intArrayValue ?? [],
+                    leadOffQ: p["ecg_lead_off_q"]?.intArrayValue ?? []))
             }
             if let bpm = p["heart_rate"]?.intValue, bpm != 0 {  // skip startup hr=0
                 out.hr.append(HRSample(ts: ts, bpm: bpm))

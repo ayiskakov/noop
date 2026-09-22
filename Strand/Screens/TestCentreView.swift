@@ -255,6 +255,22 @@ struct TestCentreView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Divider().overlay(StrandPalette.hairline)
+                // The gated ECG review screen (#891). Behind the SAME Experimental opt-in that unlocks
+                // the capture probe — a waveform this explicitly unvalidated does not belong in the main
+                // navigation — and read-only: it never writes to the strap. Hidden rather than disabled
+                // when the opt-in is off, so a normal install is not invited to turn it on.
+                if ecgEnabled {
+                    NavigationLink {
+                        EcgReviewView()
+                    } label: {
+                        Label("Review ECG recordings", systemImage: "waveform.path.ecg")
+                    }
+                    .buttonStyle(NoopButtonStyle(.secondary, fullWidth: true))
+                    Text("View the raw waveform your WHOOP MG recorded, as a scrollable strip. UNVALIDATED instrumentation, not a medical ECG — no heart rate or rhythm is shown, because nothing here has been validated to produce one. Read-only; never writes to the strap.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider().overlay(StrandPalette.hairline)
+                }
                 // Export the decoded WHOOP 5/MG v16 ECG-candidate stream (#891). On Apple, v16 is DECODED
                 // into the `ecgCandidateSample` table, so — unlike Android, where it is raw-archived — it is
                 // NOT in the reject archive above; this button is its export. UNVALIDATED MAX86176 FIFO
