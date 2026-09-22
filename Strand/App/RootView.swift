@@ -23,6 +23,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
     case dataSources = "Data Sources"
     case backupSync = "Backup & Sync"
     case fusedRecord = "Your Data, Fused"
+    case healthspan = "Healthspan"
     case devices = "Devices"
     case noopLimitations = "NOOP Limitations"
     case notifications = "Notifications"
@@ -59,6 +60,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .dataSources: return "Data Sources"
         case .backupSync: return "Backup & Sync"
         case .fusedRecord: return "Your Data, Fused"
+        case .healthspan: return "Healthspan"
         case .devices: return "Devices"
         case .noopLimitations: return "NOOP Limitations"
         case .notifications: return "Notifications"
@@ -102,6 +104,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .dataSources: return String(localized: "Data Sources")
         case .backupSync: return String(localized: "Backup & Sync")
         case .fusedRecord: return String(localized: "Your Data, Fused")
+        case .healthspan: return String(localized: "Healthspan")
         case .devices: return String(localized: "Devices")
         case .noopLimitations: return String(localized: "NOOP Limitations")
         case .notifications: return String(localized: "Notifications")
@@ -137,6 +140,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .dataSources: return "square.and.arrow.down.fill"
         case .backupSync: return "externaldrive.fill.badge.icloud"
         case .fusedRecord: return "square.stack.3d.up.fill"
+        case .healthspan: return "figure.stand"
         case .devices: return "badge.plus.radiowaves.right"
         case .noopLimitations: return "list.bullet.rectangle"
         case .notifications: return "bell.badge.fill"
@@ -168,7 +172,7 @@ struct NavGroup: Identifiable {
         NavGroup(title: "Today", id: "today", items: [.today]),
         NavGroup(title: "Sleep", id: "sleep", items: [.sleep]),
         NavGroup(title: "Body", id: "body", items: [
-            .workouts, .live, .health, .stress, .intervals, .breathe,
+            .workouts, .live, .health, .healthspan, .stress, .intervals, .breathe,
         ]),
         // S6: the overlapping insight surfaces (Intelligence / What Moves You / Insights / Insights Hub)
         // all collapse under this single Insights group rather than scattering across the flat list.
@@ -317,6 +321,7 @@ struct RootView: View {
             case .insightsHub: selection = .insightsHub
             case .labBook: selection = .labBook
             case .fusedRecord: selection = .fusedRecord
+            case .healthspan: selection = .healthspan
             case .rhythm: selection = .rhythm
             case .trends: selection = .trends
             // The Today active-workout indicator routes to the Live surface; LiveView then consumes the
@@ -448,6 +453,7 @@ struct RootView: View {
         case .dataSources: DataSourcesView()
         case .backupSync: BackupSyncView()
         case .fusedRecord: FusedRecordHost()
+        case .healthspan: HealthspanView()
         case .devices: DevicesView()
         case .noopLimitations: NoopLimitationsView()
         case .notifications: NotificationSettingsView()

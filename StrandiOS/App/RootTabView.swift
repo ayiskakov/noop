@@ -207,7 +207,7 @@ struct RootTabView: View {
             case .devices:
                 showDevices = true
                 router.requestedDestination = nil
-            case .insightsHub, .labBook, .fusedRecord, .rhythm:
+            case .insightsHub, .labBook, .fusedRecord, .rhythm, .healthspan:
                 routedPillar = dest
                 router.requestedDestination = nil
             case .coach:
@@ -322,6 +322,7 @@ struct RootTabView: View {
                 case .insightsHub: InsightsHubView()
                 case .labBook: LabBookView()
                 case .fusedRecord: FusedRecordHost()
+                case .healthspan: HealthspanView()
                 case .rhythm: RhythmHost(onClose: { routedPillar = nil })
                 case .devices: DevicesView()
                 // .trends is never presented as a pillar sheet on iPhone (it's a primary tab — the
@@ -478,6 +479,7 @@ struct RootTabView: View {
                     MoreRow("Workouts", "figure.run", .workouts)
                     MoreRow("Lift Log", "dumbbell.fill", .liftLog)
                     MoreRow("Health", "heart.text.square.fill", .health)
+                    MoreRow("Healthspan", "figure.stand", .healthspan)
                     MoreRow("Lab Book", "books.vertical.fill", .labBook)
                     MoreRow("Stress", "bolt.heart.fill", .stress)
                     MoreRow("Breathe", "wind", .breathe)
@@ -599,7 +601,7 @@ struct RootTabView: View {
 /// registration in `moreTab`.
 private enum MoreDestination: Hashable {
     case insightsHub, intelligence, coach, insights, explore, compare
-    case live, workouts, liftLog, health, labBook, stress, breathe, intervals, rhythm
+    case live, workouts, liftLog, health, healthspan, labBook, stress, breathe, intervals, rhythm
     case fusedRecord, appleHealth, dataSources, backupSync, shortcutsExport, noopLimitations
     case alarms, automations, testCentre, siriShortcuts, powerSaving, settings
 
@@ -615,6 +617,7 @@ private enum MoreDestination: Hashable {
         case .workouts:        WorkoutsView()
         case .liftLog:         LiftLogView()
         case .health:          HealthView()
+        case .healthspan:      HealthspanView()
         case .labBook:         LabBookView()
         case .stress:          StressView()
         case .breathe:         BreathingView()

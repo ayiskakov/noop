@@ -1,6 +1,7 @@
 import Foundation
 import WhoopStore
 import StrandImport
+import StrandAnalytics
 
 /// Maps a parsed Whoop CSV export into the on-device WhoopStore tables the UI reads
 /// (dailyMetric + sleepSession), so importing lights up the full history immediately.
@@ -121,7 +122,9 @@ enum WhoopImporter {
             var arr = zoneByDay[day] ?? [0, 0, 0, 0, 0]
             for i in 0..<5 { if let p = zp[i] { arr[i] += dur * p / 100.0 } }
             zoneByDay[day] = arr
-            if let n = w.activityName?.lowercased(), n.contains("strength") || n.contains("weight") {
+            // One resolver, shared with the analytics pass that writes the same `strength_min` key from
+            // strap-scored days — see `StrengthActivity`.
+            if let n = w.activityName, StrengthActivity.isStrengthSport(n) {
                 strengthByDay[day, default: 0] += dur
             }
         }
