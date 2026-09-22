@@ -34,8 +34,10 @@ enum class HistoricalLayoutSupport {
  * night made only of them really cannot be staged. So the question splits.
  *
  * Note [MAPPED_WHOOP5_HISTORICAL_VERSIONS] is DELIBERATELY narrower here than Swift's: Android has no
- * v20/v21 historical branch, so a v20 record genuinely does not decode on this side and genuinely is
- * UNMAPPED, where Swift answers DECODES_WITHOUT_NAMED_SIGNAL for the same version. The platforms differing
+ * v16/v20/v21 historical branch, so a v20 record genuinely does not decode on this side and genuinely is
+ * UNMAPPED, where Swift answers DECODES_WITHOUT_NAMED_SIGNAL for the same version. The same holds for
+ * v16 (#891), which Swift decodes into its UNVALIDATED ecg-candidate stream and this side does not decode
+ * at all. The platforms differing
  * there is the divergence itself, not a bug in this function, and both sides pin their own answer.
  */
 fun historicalLayoutSupport(

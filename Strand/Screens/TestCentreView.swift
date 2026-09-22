@@ -353,10 +353,10 @@ struct TestCentreView: View {
                 // 0x80-channel samples: NOT an ECG, heart rate, or diagnosis. Read-only; never touches the strap.
                 NoopButton("Export ECG candidate (unvalidated)…", systemImage: "square.and.arrow.up", kind: .secondary) {
                     Task {
-                        let jsonl = await model.repo.ecgCandidateExportJSONL()
-                        guard !jsonl.isEmpty else { return }
-                        FileExport.exportText(jsonl,
-                                              suggestedName: FileExport.timestampedName("noop-ecg-candidate", ext: "jsonl"))
+                        // Staged to a temp file by the store (the export is far too large to hold in
+                        // memory); `exportStagedFile` removes it once the panel / share sheet closes.
+                        guard let url = await model.repo.ecgCandidateExportFile() else { return }
+                        FileExport.exportStagedFile(at: url)
                     }
                 }
                 Text("Decoded WHOOP 5/MG v16 samples — an UNVALIDATED MAX86176 sensor buffer, not an ECG, heart rate, or diagnosis — one JSON line per second, for offline analysis. Nothing appears until a v16 sync has landed. Read-only; never writes to the strap.")

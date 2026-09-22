@@ -150,17 +150,27 @@ extension WhoopStore {
     /// once per session would close it for both, and belongs in a change that covers both.
     public static let ppgWaveformPruneEveryRows = 10_000
 
-    /// Rolling retention for the v47 ECG-candidate table (#891) — the SAME newest-N-rows cap and reasoning
-    /// as `ppgWaveformRetentionRows`: this is a blob table of UNVALIDATED instrumentation nothing reads yet,
-    /// so bound the bytes while always leaving a full working set to analyse, and never age-drop (a sporadic
-    /// wearer's v16 seconds are spread thin, and an age cut would empty the table for exactly the person a
-    /// future analysis needs). 604,800 = 7 × 86,400, matching the ppg cap. The KOTLIN twin is pending.
-    public static let ecgCandidateRetentionRows = 604_800
+    /// Rolling retention for the v47 ECG-candidate table (#891) — the same newest-N-rows SHAPE as
+    /// `ppgWaveformRetentionRows` and the same reasoning (bound the bytes of an UNVALIDATED blob table
+    /// nothing reads yet, never age-drop: a sporadic wearer's v16 seconds are spread thin, and an age cut
+    /// would empty the table for exactly the person a future analysis needs).
+    ///
+    /// The ROW COUNT is deliberately NOT copied from the ppg cap, because these rows are ~21x heavier and
+    /// a cap is a byte budget wearing a row count. A v26 ppg row holds 24 deltas (~48 B packed); a v16 row
+    /// holds ~500 FIFO samples (~1000 B packed), so ppg's 604,800 rows would be ~600 MB on device against
+    /// ppg's own ~29 MB. 86,400 = 24 x 3,600 keeps a FULL DAY of strap-seconds — a whole night's recording,
+    /// which is the working set a future analysis actually needs — inside ~86 MB. The KOTLIN twin is pending.
+    public static let ecgCandidateRetentionRows = 86_400
 
     /// Rows to bank before sweeping `ecgCandidateSample` again — same amortisation as
     /// `ppgWaveformPruneEveryRows`, and the same in-memory-per-instance caveat (a store fed only short
     /// bursts between kills can drift above the cap; the sweep is the only thing enforcing retention here).
     public static let ecgCandidatePruneEveryRows = 10_000
+
+    /// Buffer size at which a streamed export flushes to disk (#891). Big enough that a multi-GB export is
+    /// not one write syscall per row, small enough that peak memory is bounded regardless of table size —
+    /// the whole point of streaming the export rather than building it in memory.
+    static let exportFlushBytes = 256 * 1024
 
     /// v31 rolling retention for the v18 aux-slot table (twin of Kotlin `V18_AUX_RETENTION_ROWS`).
     ///
@@ -842,29 +852,51 @@ extension WhoopStore {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? 0 }
     }
 
-    /// Newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891), one object per
-    /// strap-second: `{"deviceId":…,"ts":…,"samples":[u16,…]}`, ascending by (deviceId, ts). This is the
-    /// Test Centre export path for the UNVALIDATED v16 candidate — the iOS/macOS analogue of Android's raw
-    /// reject-archive export (on Apple v16 is decoded into this table, so it is NOT in the reject archive).
-    /// NOT an ECG / heart rate / diagnosis; the samples are raw unsigned-16-bit MAX86176 FIFO values with no
-    /// asserted scale. Empty string when the table has no rows. Streamed via a cursor and one small
-    /// per-row `JSONEncoder` (sorted keys, so the file diffs cleanly) so a large table does not build an
-    /// intermediate row array. Read-only; touches no strap.
-    public func ecgCandidateExportJSONL() async throws -> String {
-        try syncRead { db in
+    /// Write newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891) to `url`,
+    /// one object per strap-second: `{"deviceId":…,"ts":…,"samples":[u16,…]}`, ascending by (deviceId, ts).
+    /// Returns the number of rows written — 0 leaves an empty file, so the caller can delete it and no-op
+    /// rather than share nothing. This is the Test Centre export path for the UNVALIDATED v16 candidate —
+    /// the iOS/macOS analogue of Android's raw reject-archive export (on Apple v16 is decoded into this
+    /// table, so it is NOT in the reject archive). NOT an ECG / heart rate / diagnosis; the samples are raw
+    /// unsigned-16-bit MAX86176 FIFO values with no asserted scale. Read-only; touches no strap.
+    ///
+    /// Writes to a FILE rather than returning a `String`, and that is load-bearing rather than stylistic:
+    /// a row holds ~500 samples, so a line is ~3 KB of JSON and a table at `ecgCandidateRetentionRows`
+    /// serialises to tens of GB. Accumulating that in memory (and handing it to a writer that copies it
+    /// again) is an out-of-memory kill on iOS, not a slow export. The cursor streams row-by-row into a
+    /// bounded buffer that is flushed every `exportFlushBytes`, so peak memory is the buffer plus one row
+    /// whatever the table holds. Sorted keys keep the file diffable.
+    public func writeEcgCandidateExportJSONL(to url: URL) async throws -> Int {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        guard fm.createFile(atPath: url.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        return try syncRead { db in
             let enc = JSONEncoder()
             enc.outputFormatting = [.sortedKeys]
-            var out = ""
+            var buf = Data()
+            buf.reserveCapacity(WhoopStore.exportFlushBytes * 2)
+            var rows = 0
             let cursor = try Row.fetchCursor(db, sql: """
                 SELECT deviceId, ts, samples FROM ecgCandidateSample ORDER BY deviceId, ts
                 """)
             while let row = try cursor.next() {
                 let line = EcgCandidateExportLine(deviceId: row["deviceId"], ts: row["ts"],
                                                   samples: WhoopStore.unpackEcgCandidateSamples(row["samples"]))
-                out += String(decoding: try enc.encode(line), as: UTF8.self)
-                out += "\n"
+                buf.append(try enc.encode(line))
+                buf.append(0x0A)          // "\n"
+                rows += 1
+                if buf.count >= WhoopStore.exportFlushBytes {
+                    try handle.write(contentsOf: buf)
+                    buf.removeAll(keepingCapacity: true)
+                }
             }
-            return out
+            if !buf.isEmpty { try handle.write(contentsOf: buf) }
+            return rows
         }
     }
 

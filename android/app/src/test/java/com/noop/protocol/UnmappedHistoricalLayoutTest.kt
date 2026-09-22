@@ -111,10 +111,15 @@ class UnmappedHistoricalLayoutTest {
     /**
      * The mapped versions ARE recognised as mapped (the other direction of the lockstep).
      *
-     * This set is now {18, 20, 21, 26}, matching Swift. v20 (raw optical) and v21 (raw 6-axis IMU) were
-     * the long-standing gap: `Whoop5RawOptical`/`Whoop5RawImu` existed on this side but were wired only
-     * to the LIVE deep-buffer route, never to the type-47 historical dispatch, so an offloaded record in
-     * either layout decoded to null. `decodeWhoop5HistoricalV2021` closes that.
+     * This set is {18, 20, 21, 26}. v20 (raw optical) and v21 (raw 6-axis IMU) were the long-standing
+     * gap: `Whoop5RawOptical`/`Whoop5RawImu` existed on this side but were wired only to the LIVE
+     * deep-buffer route, never to the type-47 historical dispatch, so an offloaded record in either
+     * layout decoded to null. `decodeWhoop5HistoricalV2021` closes that.
+     *
+     * It is NARROWER than Swift's `[16, 18, 20, 21, 26]` by exactly v16 (#891), which Swift decodes into
+     * its UNVALIDATED ecg-candidate stream and this platform does not decode at all — so a v16 record is
+     * correctly unmapped here and is preserved by the raw reject archive. This assertion is the thing
+     * that must change when the Kotlin v16 decoder + Room twin lands, not before.
      */
     @Test fun mappedVersionsAreNotTreatedAsUnmapped() {
         assertEquals(setOf(18, 20, 21, 26), MAPPED_WHOOP5_HISTORICAL_VERSIONS)

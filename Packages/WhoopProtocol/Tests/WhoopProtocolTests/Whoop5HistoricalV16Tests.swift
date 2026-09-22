@@ -126,7 +126,33 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertFalse(isUnmappedWhoop5HistoricalRecord(full), "v16 is now a mapped layout")
         XCTAssertTrue(rejectedHistoricalRecords([full], family: .whoop5).isEmpty,
                       "an intact v16 record is stored durably in ecgCandidateSample, so it must not be "
-                      + "double-archived as raw history (the v26-style verdict skip)")
+                      + "double-archived as raw history (the sample-bound skip)")
+    }
+
+    /// The skip is bound to a row EXISTING, not to a clean verdict. An intact v16 record whose FIFO body
+    /// is all padding decodes no samples, so `extractHistoricalStreams` banks nothing for it — archiving
+    /// is then the only thing standing between that record and the next trim ack. Making the skip
+    /// verdict-bound instead (as v26's is) silently dropped exactly these records.
+    func testEmptyV16IsStillRawArchived() {
+        let empty = bytes(emptyHex)
+        let p = parseFrame(empty, family: .whoop5)
+        XCTAssertTrue(p.ok && p.crcOK == true,
+                      "fixture is an INTACT record — a verdict-bound skip would drop it, which is the bug")
+        XCTAssertNil(p.parsed["ecg_candidate"], "…and it decodes no samples, so no row will be banked")
+
+        let streams = extractHistoricalStreams([p], deviceClockRef: 1_789_990_273,
+                                               wallClockRef: 1_789_990_273)
+        XCTAssertTrue(streams.ecgCandidate.isEmpty, "premise: the extraction banks nothing for this record")
+        XCTAssertEqual(rejectedHistoricalRecords([empty], family: .whoop5), [empty],
+                       "so its bytes must survive in the raw archive — otherwise it is stored NOWHERE")
+    }
+
+    /// The two fixtures together: the one that banks a row is skipped, the one that does not is archived.
+    func testV16ArchiveSplitsOnWhetherARowWillExist() {
+        let full = bytes(fullHex)
+        let empty = bytes(emptyHex)
+        XCTAssertEqual(rejectedHistoricalRecords([full, empty], family: .whoop5), [empty],
+                       "every v16 record is stored SOMEWHERE — as a row, or as archived bytes, never neither")
     }
 
     // MARK: - Codable tolerance (mirrors the ppg_waveform decodeIfPresent guard)

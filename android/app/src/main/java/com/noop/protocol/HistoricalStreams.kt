@@ -345,15 +345,20 @@ fun decodeHistorical(frame: ByteArray, family: DeviceFamily = DeviceFamily.WHOOP
  * happened to decode a plausible `unix` and `gravity_x`/`heart_rate` slipping past the archive filter, so
  * its bytes were kept nowhere at all and the strap freed them on the very next trim ack.
  *
- * ⚠️ DELIBERATELY NARROWER THAN THE SWIFT `mappedWhoop5HistoricalVersions`, which is `[18, 20, 21, 26]`.
- * Swift's `decodeWhoop5Historical` dispatches v20 (raw optical block) and v21 (raw 6-axis IMU) through
- * `decodeWhoop5HistoricalV2021`; the Kotlin historical path has no such branch — `Whoop5RawOptical` and
- * `Whoop5RawImu` exist here but are wired to the LIVE deep-buffer route in `WhoopBleClient`, not to the
- * type-47 historical dispatch. Claiming 20/21 here would assert a field map Android does not have, which
- * is precisely the "it holds by accident" class of bug this constant was introduced to close. The archive
- * OUTCOME is unchanged either way today: an unmapped 5/MG version already decodes to null on Android and
- * so was already archived by the decode-outcome route. Add a version here only when a decoder for it
- * lands on this side. Pinned by `UnmappedHistoricalLayoutTest`.
+ * ⚠️ DELIBERATELY NARROWER THAN THE SWIFT `mappedWhoop5HistoricalVersions`, which is
+ * `[16, 18, 20, 21, 26]`. The difference is exactly **v16** (#891): Swift decodes that layout's MAX86176
+ * FIFO into its EXPLICITLY UNVALIDATED `ecgCandidate` stream and stores it in `ecgCandidateSample`, while
+ * this side has neither the decoder nor the Room table yet — so a v16 record genuinely does not decode
+ * here, genuinely IS unmapped, and its bytes are preserved by the raw reject archive instead. Add 16 here
+ * in the same change that lands the Kotlin decoder + Room twin, and not before: claiming a version here
+ * asserts a field map, and asserting one this platform does not have is precisely the "it holds by
+ * accident" class of bug this constant was introduced to close.
+ *
+ * (v20/v21 were the same story until `decodeWhoop5HistoricalV2021` below landed on this side; they are in
+ * the set now because the decoders are real here, which is the bar v16 has yet to meet.)
+ *
+ * The archive OUTCOME is unchanged either way today: an unmapped 5/MG version already decodes to null on
+ * Android and so was already archived by the decode-outcome route. Pinned by `UnmappedHistoricalLayoutTest`.
  */
 val MAPPED_WHOOP5_HISTORICAL_VERSIONS: Set<Int> = setOf(18, 20, 21, 26)
 

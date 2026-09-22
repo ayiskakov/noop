@@ -90,7 +90,11 @@ final class EcgCandidateSampleTests: XCTestCase {
         _ = try await store.insert(Streams(ecgCandidate: [
             EcgCandidateSample(ts: 50, samples: [7]),
         ]), deviceId: "dev-b")
-        let jsonl = try await store.ecgCandidateExportJSONL()
+        let url = Self.tempExportURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let rows = try await store.writeEcgCandidateExportJSONL(to: url)
+        XCTAssertEqual(rows, 3)
+        let jsonl = try String(contentsOf: url, encoding: .utf8)
         let lines = jsonl.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, [
             #"{"deviceId":"dev-a","samples":[60944,1],"ts":100}"#,
@@ -99,12 +103,72 @@ final class EcgCandidateSampleTests: XCTestCase {
         ], "one sorted-key JSON object per row, ordered by (deviceId, ts), unsigned samples preserved")
     }
 
-    /// A store with no candidate rows exports an empty string (the button then no-ops rather than
-    /// handing the share sheet an empty file).
-    func testEcgCandidateExportEmptyStoreIsEmptyString() async throws {
+    /// A store with no candidate rows writes no rows (the button then deletes the file and no-ops rather
+    /// than handing the share sheet an empty one).
+    func testEcgCandidateExportEmptyStoreWritesNoRows() async throws {
         let store = try await WhoopStore.inMemory()
-        let jsonl = try await store.ecgCandidateExportJSONL()
-        XCTAssertTrue(jsonl.isEmpty)
+        let url = Self.tempExportURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let rows = try await store.writeEcgCandidateExportJSONL(to: url)
+        XCTAssertEqual(rows, 0)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "")
+    }
+
+    /// The export must stay correct across the flush boundary — the bug a buffered writer invites is a
+    /// dropped or duplicated row exactly where the buffer empties. `exportFlushBytes` is 256 KB and a row
+    /// here is ~3 KB, so 200 rows spans several flushes plus a partial tail.
+    func testEcgCandidateExportStreamsCorrectlyAcrossFlushBoundaries() async throws {
+        let store = try await WhoopStore.inMemory()
+        let rowCount = 200
+        // A REAL-SIZED record: ~500 unsigned FIFO words, which is what makes a line ~3 KB. The 10-value
+        // `realSamples` fixture is far too small to reach a flush, so it would prove nothing here.
+        let wideSamples = (0..<500).map { 57_000 + ($0 * 11) % 8_000 }
+        for ts in 0..<rowCount {
+            _ = try await store.insert(
+                Streams(ecgCandidate: [EcgCandidateSample(ts: ts, samples: wideSamples)]),
+                deviceId: "dev-a")
+        }
+        let url = Self.tempExportURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let written = try await store.writeEcgCandidateExportJSONL(to: url)
+        XCTAssertEqual(written, rowCount)
+
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        XCTAssertEqual(lines.count, rowCount, "no row lost or duplicated at a buffer flush")
+        XCTAssertGreaterThan(lines.joined().count, WhoopStore.exportFlushBytes,
+                             "fixture must actually exceed one buffer, or it proves nothing")
+        // Every line is intact JSON with its samples verbatim — a torn write would fail to decode.
+        for (i, line) in lines.enumerated() {
+            let obj = try JSONDecoder().decode(ExportRow.self, from: Data(line.utf8))
+            XCTAssertEqual(obj.ts, i)
+            XCTAssertEqual(obj.samples, wideSamples)
+        }
+    }
+
+    /// Mirror of the export's line shape, for decoding it back in tests.
+    private struct ExportRow: Decodable {
+        let deviceId: String
+        let ts: Int
+        let samples: [Int]
+    }
+
+    /// Re-exporting over an existing file must REPLACE it, never append to the previous run.
+    func testEcgCandidateExportOverwritesAnExistingFile() async throws {
+        let store = try await WhoopStore.inMemory()
+        _ = try await store.insert(Streams(ecgCandidate: [
+            EcgCandidateSample(ts: 1, samples: [7]),
+        ]), deviceId: "dev-a")
+        let url = Self.tempExportURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "stale contents from an earlier export".write(to: url, atomically: true, encoding: .utf8)
+        _ = try await store.writeEcgCandidateExportJSONL(to: url)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8),
+                       #"{"deviceId":"dev-a","samples":[7],"ts":1}"# + "\n")
+    }
+
+    private static func tempExportURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("ecg-candidate-export-test-\(UUID().uuidString).jsonl")
     }
 
     func testPackUnpackEcgCandidateSamplesRoundTripsUnsigned() {
@@ -159,9 +223,21 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(rows.map(\.ts), [100])
     }
 
-    func testProductionRetentionCapMatchesPpgWaveform() {
-        XCTAssertEqual(WhoopStore.ecgCandidateRetentionRows, 604_800)
+    /// The cap is a BYTE budget expressed as a row count, so it must not be copied from a table whose rows
+    /// are a different size. A v16 row (~500 samples x 2 B) is ~21x a v26 ppg row (24 deltas x 2 B), so
+    /// sharing ppg's 604,800 would put ~600 MB of UNVALIDATED instrumentation on the device against ppg's
+    /// own ~29 MB. 86,400 rows = a full day of strap-seconds, the working set a future analysis needs.
+    func testProductionRetentionCapIsSizedForThisTablesRows() {
+        XCTAssertEqual(WhoopStore.ecgCandidateRetentionRows, 86_400)
         XCTAssertEqual(WhoopStore.ecgCandidatePruneEveryRows, 10_000)
+
+        let ecgRowBytes = 500 * 2, ppgRowBytes = 24 * 2
+        let ecgBudget = WhoopStore.ecgCandidateRetentionRows * ecgRowBytes
+        let ppgBudget = WhoopStore.ppgWaveformRetentionRows * ppgRowBytes
+        XCTAssertLessThan(ecgBudget, 128 * 1_000_000, "an unread blob table must stay well bounded")
+        XCTAssertLessThan(ecgBudget, ppgBudget * 4,
+                          "the two instrumentation tables must stay within the same order of magnitude; "
+                          + "reusing ppg's ROW count here is what breaks that")
     }
 
     /// End-to-end: a real v16 offload frame decodes and banks exactly one candidate row via the same

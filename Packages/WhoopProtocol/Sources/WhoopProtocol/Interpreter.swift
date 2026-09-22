@@ -427,8 +427,9 @@ private func parseFrameWhoop5(_ frame: [UInt8], collectFields: Bool) -> ParsedFr
 /// classifies `decodesWithoutNamedSignal` exactly like v20/v21. Adding it here removes v16 from the
 /// UNMAPPED archive path (`rejectedHistoricalRecords` archives raw only for layouts OUTSIDE this set),
 /// which is why the v16 decoder MUST durably store its FIFO body in WhoopStore's `ecgCandidateSample`
-/// table — see `decodeWhoop5HistoricalV16`. `rejectedHistoricalRecords` also gains a v26-style verdict
-/// skip for v16, so an intact v16 record is not double-archived beside its durable stream.
+/// table — see `decodeWhoop5HistoricalV16`. `rejectedHistoricalRecords` also gains a v16 skip so an
+/// intact record is not double-archived beside its durable stream; that skip is bound to the record
+/// actually decoding SAMPLES, because a v16 record carrying none banks no row and must still be archived.
 public let mappedWhoop5HistoricalVersions: Set<Int> = [16, 18, 20, 21, 26]
 
 /// True when `frame` is a WHOOP 5/MG type-47 record whose layout version has NO field map — the
@@ -838,11 +839,9 @@ private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit
         if tag & 0x80 != 0,
            let hi = readU8(frame, off + 1, limit), let lo = readU8(frame, off + 2, limit) {
             let sample = (hi << 8) | lo          // 16-bit BIG-ENDIAN, unsigned (0…65535)
-            switch tag & 0xC0 {
-            case 0x80: samples.append(sample)
-            case 0xC0: altCount += 1
-            default: break                        // 0x40 signature: neither channel, not stored
-            }
+            // The guard above already required the high bit, so `tag & 0xC0` is 0x80 or 0xC0 and there is
+            // no third case to handle here — bit 0x40 alone separates the two channels.
+            if tag & 0x40 == 0 { samples.append(sample) } else { altCount += 1 }
         }
         off += 3
     }
