@@ -78,6 +78,55 @@ final class EcgCandidateSampleTests: XCTestCase {
         XCTAssertEqual(read, [EcgCandidateSample(ts: 500, samples: [40000, 12])])
     }
 
+    // MARK: - v48: rows written under v47's unsigned i16 packing must not survive
+
+    /// The v47→v48 hazard is invisible to the schema: `samples` was a BLOB and still is, so nothing in
+    /// the column definitions changed. What changed is the BLOB's ENCODING — v47 wrote 2 bytes/sample
+    /// (unsigned 16-bit), the signed decode writes 4 (signed 32-bit). A surviving v47 row would not fail
+    /// to parse; it would quietly yield half as many samples, each assembled from an adjacent pair.
+    /// Seed a row at the v47 schema, run the rest of the migrator, and require it to be gone.
+    func testV48PurgesRowsWrittenWithTheOldUnsignedPacking() async throws {
+        let dbQueue = try DatabaseQueue()
+        try WhoopStore.makeMigrator().migrate(dbQueue, upTo: "v47-ecg-candidate")
+
+        // Exactly what v47 would have banked for [60944, 59816, 62200]: little-endian UNSIGNED i16.
+        let legacy: Data = {
+            var d = Data()
+            for v in [60944, 59816, 62200] as [Int] {
+                d.append(UInt8(truncatingIfNeeded: v))
+                d.append(UInt8(truncatingIfNeeded: v >> 8))
+            }
+            return d
+        }()
+        XCTAssertEqual(legacy.count, 6, "the v47 format is 2 bytes/sample — that is the whole problem")
+        try await dbQueue.write { db in
+            try db.execute(sql: "INSERT INTO ecgCandidateSample (deviceId, ts, samples) VALUES (?, ?, ?)",
+                           arguments: ["my-whoop", 1_789_990_296, legacy])
+        }
+        // Prove the hazard is real before proving the migration closes it: read back through the CURRENT
+        // unpacker and the row is neither empty nor correct — it is one fabricated sample.
+        let misread = WhoopStore.unpackEcgCandidateSamples(legacy)
+        XCTAssertEqual(misread.count, 1, "6 bytes read as i32 groups yields 1 sample, not 3")
+        XCTAssertNotEqual(misread, [60944, 59816, 62200])
+
+        try WhoopStore.makeMigrator().migrate(dbQueue)
+
+        let remaining = try await dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? -1
+        }
+        XCTAssertEqual(remaining, 0, "v47-format rows must be purged, not silently misread forever")
+    }
+
+    /// v48 must leave the SCHEMA alone — it is a data repair, not a shape change. If it ever starts
+    /// altering the table, the Room twin's pending contract moves with it and nobody is told.
+    func testV48LeavesTheTableShapeUnchanged() async throws {
+        let store = try await WhoopStore.inMemory()
+        let cols = try await store.columnNamesForTest(table: "ecgCandidateSample")
+        XCTAssertEqual(Set(cols), ["deviceId", "ts", "samples"])
+        let pk = try await store.primaryKeyColumns("ecgCandidateSample")
+        XCTAssertEqual(pk, ["deviceId", "ts"])
+    }
+
     // MARK: - #891 Test Centre export
 
     /// The export emits one JSON line per row, ordered by (deviceId, ts), with sorted keys and SIGNED

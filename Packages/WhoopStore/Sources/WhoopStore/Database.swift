@@ -1119,6 +1119,24 @@ extension WhoopStore {
                 t.primaryKey(["deviceId", "ts"])
             }
         }
+        // v48-ecg-candidate-signed (#891): PURGE the rows v47 banked. The SCHEMA is unchanged — `samples`
+        // was a BLOB before and still is — so this migration touches no column; what changed is the BLOB's
+        // encoding, which the schema cannot express and therefore cannot protect.
+        //
+        // v47 packed each sample as an UNSIGNED 16-bit value, on the reading that v16 FIFO samples were
+        // unsigned. They are 18-bit two's complement (see `decodeWhoop5HistoricalV16`), so the packing is
+        // now SIGNED 32-bit. A row written under v47 is 2 bytes per sample; `unpackEcgCandidateSamples`
+        // now reads groups of 4. Left in place, every such row would silently decode to half as many
+        // samples with values assembled from adjacent pairs — not an obviously broken row, just a wrong
+        // one, in the exact table whose purpose is to hand a future analysis the ORIGINAL samples.
+        //
+        // Deleting is the right repair rather than a loss: those rows are UNVALIDATED instrumentation that
+        // nothing reads, they were mis-decoded when written (every negative sample recorded ~65,536 too
+        // high), and the strap re-offloads v16 records on the next sync. Keeping a corrupt archive to
+        // avoid an empty one would be the worse trade. Additive-safe: no other table is touched.
+        migrator.registerMigration("v48-ecg-candidate-signed") { db in
+            try db.execute(sql: "DELETE FROM ecgCandidateSample")
+        }
         return migrator
     }
 }
