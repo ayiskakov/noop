@@ -809,11 +809,25 @@ private func decodeWhoop5HistoricalV26(_ frame: [UInt8], fb: FieldBuilder, limit
 /// type-47 header — the monotonic u32 `record_index` @11 and the u32 `unix` second @15, verified
 /// monotonic/lockstep with v18/v20/v21/v26. The FIFO is LENGTH-PREFIXED: @32 is a u16 LITTLE-ENDIAN count
 /// of 3-byte words and the words run from @34, so the FIFO occupies exactly `[34, 34 + 3*count)`. Each
-/// word is `byte[0]` = a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` = a 16-bit
-/// BIG-ENDIAN sample `(byte1 << 8) | byte2`. Words are classified by the tag's TOP TWO BITS (`tag & 0xC0`):
-/// the `0x80` class is stored, in wire order, as `ecg_candidate`; a `0xC0`-class word would be tallied into
-/// `ecg_candidate_alt_count`. Per-record word counts VARY widely (an empty record declares 0, a full one
-/// ~500) — expected; the decoder extracts exactly what the count declares.
+/// word is `byte[0]` = a tag whose HIGH BIT is set on a real sample word, and `byte[1..2]` = the low 16
+/// bits of a BIG-ENDIAN sample. The sample is **18-bit TWO'S-COMPLEMENT (signed)**: the tag's low two bits
+/// are bits 17…16, so the value is `((tag & 0x03) << 16) | (byte1 << 8) | byte2`, sign-extended. Words are
+/// stored in wire order as `ecg_candidate`; a word whose tag falls outside the expected shape (bit 7 set,
+/// bits 6…2 clear) is tallied into `ecg_candidate_unexpected_tag_count` and dropped. Per-record word counts
+/// VARY widely (an empty record declares 0, a full one ~500) — the decoder extracts what the count declares.
+///
+/// SIGNEDNESS, and how it was established — this is the part an earlier revision got wrong by reading the
+/// samples unsigned. Three independent checks agree, on the full fixture's 500 words:
+///  - Every negative-valued word carries tag `0x83` (low bits `11`) and every positive-valued one `0x80`
+///    (low bits `00`), with no exceptions. That correlation is what sign extension looks like.
+///  - Reconstructing an 18-bit value from those tag bits gives BYTE-IDENTICAL results to sign-extending
+///    the int16 — i.e. the tag bits carry sign, not extra magnitude, for every sample here.
+///  - Continuity. Read unsigned, the series contains a 65,213-step cliff where it crosses zero
+///    (`…64603, 65511, 298, 65162…`); read signed, its largest step is 2,943 and its mean step 787, over a
+///    range of −12,365…+1,007. A signal cannot jump most of its range between adjacent samples.
+/// The 18-bit reconstruction is used rather than a plain int16 sign-extend because it is correct under BOTH
+/// readings of the tag bits (redundant sign flag, or genuine MSBs) and identical on all observed data,
+/// whereas int16 would clip a sample that ever needs the wider range — an R-peak being exactly that case.
 ///
 /// TRAILING REGION — the reason the length prefix matters. The FIFO does NOT run to the end of the
 /// payload: a DIFFERENT structure follows it, and in the fixture below it reads cleanly as a count byte
@@ -821,14 +835,15 @@ private func decodeWhoop5HistoricalV26(_ frame: [UInt8], fb: FieldBuilder, limit
 /// Its meaning is UNIDENTIFIED and nothing here decodes it; it is named only so the next reader knows the
 /// bytes are accounted for. Scanning 3-byte words to the payload limit — as an earlier revision did —
 /// walks into this block and harvests whatever its bytes look like at 3-byte alignment: that is where the
-/// "~7 words/record of 0xC0 channel" came from. Those 7 were trailing bytes, not a channel; inside the
-/// correctly bounded FIFO both captured records contain ZERO 0xC0-class words. Worse than the bogus tally,
+/// "~7 words/record of a second channel" came from. Those 7 were trailing bytes, not a channel; inside
+/// the correctly bounded FIFO both captured records contain ZERO unexpected-tag words. Worse than the
+/// bogus tally,
 /// an unbounded scan can admit a trailing byte pair as a SAMPLE whenever alignment puts a high bit in the
 /// tag position, silently contaminating the very stream this table exists to preserve.
 ///
 /// DEVIATION from the original field note (real captures, never invented offsets): the dominant tag BYTE
-/// observed is `0x83` (not a bare `0x80`) and the `0x80` class is therefore the `tag & 0xC0 == 0x80`
-/// SIGNATURE, not an exact byte match. Proven here: the header offsets (@11/@15), the @32 word count and
+/// observed is `0x83` (not a bare `0x80`), which the signedness note above explains: its low bits are the
+/// sample's sign, so the tag is a SHAPE (bit 7 set, bits 6…2 clear), not an exact byte match. Proven here: the header offsets (@11/@15), the @32 word count and
 /// its @34 body (`34 + 3*500 = 1534` lands exactly on the trailing region in the full fixture, and the
 /// empty record declares 0), and the 3-byte-word/BE16 framing. No other byte is named.
 private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit: Int) {
@@ -852,34 +867,41 @@ private func decodeWhoop5HistoricalV16(_ frame: [UInt8], fb: FieldBuilder, limit
     let fifoStart = 34
     let fifoEnd = min(fifoStart + wordCount * 3, limit)
     var samples: [Int] = []
-    var altCount = 0
+    var unexpectedTags = 0
     var off = fifoStart
     while off + 3 <= fifoEnd {
-        guard let tag = readU8(frame, off, fifoEnd) else { break }
-        if tag & 0x80 != 0,
-           let hi = readU8(frame, off + 1, fifoEnd), let lo = readU8(frame, off + 2, fifoEnd) {
-            let sample = (hi << 8) | lo          // 16-bit BIG-ENDIAN, unsigned (0…65535)
-            // The guard above already required the high bit, so `tag & 0xC0` is 0x80 or 0xC0 and there is
-            // no third case to handle here — bit 0x40 alone separates the two classes.
-            if tag & 0x40 == 0 { samples.append(sample) } else { altCount += 1 }
+        guard let tag = readU8(frame, off, fifoEnd),
+              let hi = readU8(frame, off + 1, fifoEnd),
+              let lo = readU8(frame, off + 2, fifoEnd) else { break }
+        defer { off += 3 }
+        // EXPECTED SHAPE: bit 7 set (a real sample word) and bits 6…2 clear. Every word in both captured
+        // records is 0x83 or 0x80. A word outside that shape is one this decoder cannot account for, so it
+        // is TALLIED and dropped — never guessed at, and never mixed into the sample stream.
+        guard tag & 0x80 != 0, tag & 0x7C == 0 else {
+            unexpectedTags += 1
+            continue
         }
-        off += 3
+        // 18-bit TWO'S-COMPLEMENT, big-endian: bits 17…16 ride the tag's low two bits, bits 15…0 are
+        // byte[1..2]. Reading these unsigned — as the first revision did — turns every zero crossing into a
+        // ~65000-step cliff (`…65511, 298, 65162…`), which is what gave that reading away.
+        let raw = ((tag & 0x03) << 16) | (hi << 8) | lo
+        samples.append(raw >= 0x2_0000 ? raw - 0x4_0000 : raw)
     }
     if !samples.isEmpty {
-        // The RAW 0x80-class FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
+        // The RAW FIFO samples, verbatim, no invented scale. NOT an ECG / HR / diagnosis;
         // channel meaning and sample rate unproven (#891). Consumed only as durable instrumentation.
         // The byte span is the FIFO body exactly — [34, fifoEnd) — not the rest of the record.
         fb.add(fifoStart, max(0, fifoEnd - fifoStart), "ecg_candidate", "ecg", value: .intArray(samples),
-               note: "UNVALIDATED MAX86176 FIFO 0x80-class samples (BE16); NOT an ECG/HR/diagnosis (#891)")
+               note: "UNVALIDATED MAX86176 FIFO samples (signed 18-bit BE); NOT an ECG/HR/diagnosis (#891)")
         fb.parsed["ecg_candidate_count"] = .int(samples.count)
     }
-    // Tally of words in the FIFO whose tag is 0xC0-class rather than 0x80-class — a derived count spanning
-    // no single byte, so it rides `parsed` like v26's `ppg_sample_count`. It is 0 in every record captured
-    // so far, and that is the point of keeping it: if a real second class ever appears its words are
-    // counted here instead of being silently mixed into `ecg_candidate`. An earlier revision reported 7
-    // for the fixture below, which was not a channel at all — it was the trailing region being read as
-    // FIFO words. No meaning is claimed for the class; its samples are NOT stored.
-    fb.parsed["ecg_candidate_alt_count"] = .int(altCount)
+    // Tally of FIFO words whose tag falls outside the expected shape — a derived count spanning no single
+    // byte, so it rides `parsed` like v26's `ppg_sample_count`. It is 0 in both captured records, and that
+    // is exactly why it is worth keeping: bits 6…2 of the tag are unaccounted for, so if a firmware ever
+    // uses them this counter is how we find out, instead of those words being silently reinterpreted as
+    // samples. (Its predecessor, `ecg_candidate_alt_count`, reported 7 here — not a second channel, but
+    // the trailing region being read as FIFO words.) No meaning is claimed; such words are NOT stored.
+    fb.parsed["ecg_candidate_unexpected_tag_count"] = .int(unexpectedTags)
 }
 
 /// Decode WHOOP 5.0 type-47 **version-20 / version-21** records — the bulk multi-channel sensor stream

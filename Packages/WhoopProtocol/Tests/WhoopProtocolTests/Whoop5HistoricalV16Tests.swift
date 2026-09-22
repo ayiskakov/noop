@@ -5,7 +5,7 @@ import XCTest
 /// ONLY as EXPLICITLY UNVALIDATED instrumentation (#891).
 ///
 /// UNVALIDATED CANDIDATE; MAX86176 FIFO; NOT an ECG, NOT a heart rate, NOT a diagnosis. The sample rate
-/// and the physical meaning of the channels are UNPROVEN. These tests pin the DECODE + STORE shape — the
+/// and the physical meaning of the signal are UNPROVEN. These tests pin the DECODE + STORE shape — the
 /// header, the FIFO framing, and that a full record yields a non-empty candidate stream while an empty one
 /// yields none — and the classification (`decodesWithoutNamedSignal`); they assert NOTHING physiological.
 ///
@@ -21,13 +21,14 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         return out
     }
 
-    // A FULL v16 record: record_index 29868937, unix 1789990296. Its MAX86176 FIFO carries 500 words on
-    // the 0x80 channel (dominant tag byte 0x83) and 7 on the 0xC0 channel.
+    // A FULL v16 record: record_index 29868937, unix 1789990296. It DECLARES 500 FIFO words @32 and
+    // carries exactly that many from @34 (dominant tag byte 0x83, whose low bits are the sample's sign).
+    // The 46 bytes after the FIFO are the unidentified trailing region, not FIFO — see the decoder.
     private let fullHex =
         "aa0128060100cde02f100389c3c7019815b16a3d2a030a000132000000ffff00f40183ee1083e9a883f2f883f32a83f1ca83f0a783f0a483ec8a83f09883ee2283ee9983eb7c83f0c883f48a83f8b983f67c83ed1683eaba83ee5d83e94983ea8683f18583f70f83f52883f33383edef83eaba83ead383e86983eb5b83f05983f16c83f8a383f79d83ec1e83e56a83e8e983ed1e83ea5283ebdb83f0fd83edd883ebd383ed4c83f20783f57583f21083f3d883f35e83ee9583ed8b83ecdf83ed9b83ec8e83f54783f2e683f1f083eae883eb2f83efe683f62683ef2383e9d783e7eb83eb2f83e8e183e8df83eb7983f05d83eed183e85d83f14483f96a83ef5383e70a83e9bd83eb6683f19b83edfe83e58083e72e83e94883ee3683efa783f2ba83f01383ef3f83f00e83e9e683e6a983e7f683eabf83f00383ef1483f1f383f0a383ee6c83ec7983e73d83dec383e25683e61f83e3f183e56983ebd383ee6b83eecc83eacc83ea3583eb3483ec1883eca383f11883f0e983eb8d83ebda83eb4883f13683f06783f36a83ee3383e2dd83e3eb83e9ba83ea2283e80683eccd83e83583e7f483e8fc83e89e83e3ee83e80783ed1283edb283ec5a83eadf83ec4e83ef5d83eb3783e50f83e18a83e42283e9d483e5ab83e95083ef6583f01083ecd383ea4583ebcc83f52283f11b83e9ea83e6a583e64583e48183e8d683e9f083e6b083ebb983ecff83ede683edc883e7e883ea9e83e6f783e8af83e9d283e66783e6bf83f05783f26483f20183eafb83e9c283eabd83f04e83efca83ed4983eddd83e87283e7be83e6db83e5ef83eb0483ef9a83eefb83e8fb83e28f83e50983eb6d83eec783eca083e8e083e52083e9f783e82c83e97a83ec6583e9e083e8df83e63283e1e683e68983eab483e9a583e60883eade83eaad83eb7783eba583e20483e1f683e6c383e91683e6da83e64483e7b583e8d683e93883e60783e68983ec1283e96c83e8a183e94e83e63e83e7ba83ec6883e59283e51483e62983ec1483ecc983ec4e83ea2083e65283e6b883ed4283f1a783f2d883f5b583fbd583fc5b83ffe780012a83fe8a8003ef83ff5d83f64283f05f83e93a83e77983eb4083ec3383e6bc83e16383dad083d7da83d40283cfb383d1fe83d41f83d98383dd0c83dd9f83dffb83e40a83e5b583e36e83e4e983ed2283eeea83ecea83ec2683e9ea83e7ad83e1c983e8db83f0b983f08483edc983eb5183f04583ea6a83e9b683e8e683eb3383ec4783ec2083ea2683ef7283eff383eac783f10b83f03c83ed0283ee9883eda883f05a83f3a383edc283e9f583eab683e92c83e6c683e89583f0f683f01783eeea83efc483ecf483ef7a83ede483f00e83f0c983eae183efb483eff483f2d783f45f83efd483e9e883eaad83f13c83ef7183f06c83f0c483ece683ef2f83efe883eea883f07c83f58783f29883f42883f6bf83f43683f20283f55e83f28c83f42283f20f83f46683f5c383f0f583f57383f72983f6a083f2b383f3ab83f65d83f40f83f74883f88183f98c83f68f83f59683fb4283f9f183f68f83f72383f60f83f71683f6f483efa983ef0283f47183f6dd83f64483f6d083f9b483fa7e83f87483f3d383ef4483efaf83edf083ee2383eb2183e79583e6bf83e94b83f1a183f2b283eeea83f2bd83ed7d83e88b83e94183f03883f19383effb83eb5683e77983e4f683dee683e00a83de8f83df6d83e32283e59483e98e83e75883e7c883dff083da6583dda183e39b83e4dc83e61b83e17483e27683e77283e89883e7da83e27f83df9b83e18283e24983e14083e00e83dd0383de0883e2a583e56083e0e383e52983e80683e29683e5a383dd1583d8bf83e24383e97a83e97483e47283e46a83e0f983dd4483e2ca83e13683e10183e28183e7c883e0da83de3283dba983de8183e41483e80e83e5bb83e35d83de8483dcb083dff883e1b683e52183e2e383e38183e0ca83e66e83e3d283e3eb83e5f983e6df83e8f383e68383e31083dcdb83d94283dd2f83e15083e38283e05083dcd583de2b83e0df83e33183e37b83e5bd83e4b983e51d83e35083e46583e34183dc6583da1983de9b83e39f83e3d483e6d083e85d83e39683e45e83e5a883e68983e5e683e14c0b3f003f003e003e003e003e003e003e003e003e003e00edffedffedffedffedffedffedffedffedffedffedff003c9b1ea9"
 
-    // An EMPTY v16 record (~1% nonzero payload): record_index 29868914, unix 1789990273. Its FIFO body is
-    // all-zero padding, so it carries NO 0x80- or 0xC0-channel words.
+    // An EMPTY v16 record (~1% nonzero payload): record_index 29868914, unix 1789990273. It declares a
+    // word count of 0 @32, so it carries no FIFO samples at all.
     private let emptyHex =
         "aa0128060100cde02f100372c3c7018115b16a3d2a0003000100000000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000088a5f065"
 
@@ -68,12 +69,13 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
                        "the FIFO is length-prefixed; the stored sample count must equal the declared one")
         // ZERO, not 7. The 7 an earlier revision reported were bytes of the TRAILING region being read as
         // FIFO words; inside the correctly bounded FIFO there is no 0xC0-class word at all.
-        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 0)
-        // The raw big-endian 16-bit samples, verbatim (0x83 tag → 0x80 class; sample = byte1<<8|byte2).
-        XCTAssertEqual(Array(samples.prefix(6)), [60944, 59816, 62200, 62250, 61898, 61607])
-        XCTAssertEqual(samples.last, 57676)
-        // Unsigned 16-bit: instrumentation only, no scale/sign asserted.
-        XCTAssertTrue(samples.allSatisfy { $0 >= 0 && $0 <= 65535 })
+        XCTAssertEqual(p["ecg_candidate_unexpected_tag_count"]?.intValue, 0)
+        // The samples, verbatim: 18-bit two's-complement, so SIGNED. Read unsigned these were 60944,
+        // 59816, … — the same bits, an interpretation that put a biosignal entirely above 57,000.
+        XCTAssertEqual(Array(samples.prefix(6)), [-4592, -5720, -3336, -3286, -3638, -3929])
+        XCTAssertEqual(samples.last, -7860)
+        // 18-bit signed domain: instrumentation only, no scale asserted.
+        XCTAssertTrue(samples.allSatisfy { $0 >= -131_072 && $0 <= 131_071 })
     }
 
     /// The FIFO must stop where the record says it stops. The body does NOT run to the payload limit: a
@@ -97,8 +99,10 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         // Every stored sample must be reconstructible from a word inside [34, fifoEnd) — i.e. none of them
         // came from beyond the declared FIFO.
         var expected: [Int] = []
-        for off in stride(from: 34, to: fifoEnd, by: 3) where frame[off] & 0x80 != 0 {
-            expected.append((Int(frame[off + 1]) << 8) | Int(frame[off + 2]))
+        for off in stride(from: 34, to: fifoEnd, by: 3)
+        where frame[off] & 0x80 != 0 && frame[off] & 0x7C == 0 {
+            let raw = (Int(frame[off] & 0x03) << 16) | (Int(frame[off + 1]) << 8) | Int(frame[off + 2])
+            expected.append(raw >= 0x2_0000 ? raw - 0x4_0000 : raw)
         }
         XCTAssertEqual(samples, expected)
 
@@ -114,7 +118,26 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertNil(p["ecg_candidate"], "a v16 record declaring 0 FIFO words carries no samples")
         XCTAssertNil(p["ecg_candidate_count"])
         XCTAssertEqual(p["ecg_candidate_word_count"]?.intValue, 0, "the record declares an empty FIFO")
-        XCTAssertEqual(p["ecg_candidate_alt_count"]?.intValue, 0, "no 0xC0-class words either")
+        XCTAssertEqual(p["ecg_candidate_unexpected_tag_count"]?.intValue, 0, "and no unaccounted-for tags")
+    }
+
+    /// SIGNEDNESS regression. The samples are 18-bit two's complement; reading them unsigned was the
+    /// original defect and it is invisible in aggregate — the same bits, a plausible-looking series.
+    /// What gives it away is the zero crossing: read unsigned, adjacent samples leap most of the range.
+    func testV16SamplesAreSignedAcrossTheZeroCrossing() {
+        let samples = try! XCTUnwrap(parseFrame(bytes(fullHex), family: .whoop5)
+            .parsed["ecg_candidate"]?.intArrayValue)
+        // The capture crosses zero once. Unsigned, this window read `…64603, 65511, 298, 65162, 1007…`.
+        let i = try! XCTUnwrap(samples.firstIndex(of: 298))
+        XCTAssertEqual(Array(samples[(i - 2)...(i + 2)]), [-933, -25, 298, -374, 1007])
+
+        // The signal must be CONTINUOUS: no step may approach the full range, which is precisely what an
+        // unsigned reading produces (a 65,213 step here) and a signed one does not.
+        let steps = (0..<(samples.count - 1)).map { abs(samples[$0 + 1] - samples[$0]) }
+        let span = samples.max()! - samples.min()!
+        XCTAssertLessThan(steps.max()!, span / 2,
+                          "a sample-to-sample step over half the signal's range means a misread sign")
+        XCTAssertLessThan(samples.min()!, 0, "the capture genuinely goes negative")
     }
 
     /// A corrupt/oversized length must clamp to the payload, never read into the CRC trailer or past the
@@ -157,7 +180,7 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         let row = try! XCTUnwrap(streams.ecgCandidate.first)
         XCTAssertEqual(row.ts, 1_789_990_296)
         XCTAssertEqual(row.samples.count, 500)
-        XCTAssertEqual(Array(row.samples.prefix(3)), [60944, 59816, 62200])
+        XCTAssertEqual(Array(row.samples.prefix(3)), [-4592, -5720, -3336])
         // A v16-only chunk must NOT read as "no sensor records" — it persisted an instrumentation stream.
         XCTAssertFalse(streams.isEmpty)
         // And it truly emits no scoreable stream (instrumentation only).

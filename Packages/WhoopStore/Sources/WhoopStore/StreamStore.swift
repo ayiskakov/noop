@@ -7,8 +7,8 @@ private struct RRBatchSecond: Hashable {
     let transport: Int
 }
 
-/// One line of the v16 ECG-candidate export (#891): the device, the strap-second, and the unsigned-16-bit
-/// MAX86176 FIFO 0x80-channel samples, serialised as one JSON object per `ecgCandidateSample` row. See
+/// One line of the v16 ECG-candidate export (#891): the device, the strap-second, and the SIGNED 18-bit
+/// MAX86176 FIFO samples, serialised as one JSON object per `ecgCandidateSample` row. See
 /// `WhoopStore.ecgCandidateExportJSONL`. UNVALIDATED instrumentation — not an ECG/heart rate/diagnosis.
 private struct EcgCandidateExportLine: Encodable {
     let deviceId: String
@@ -55,33 +55,40 @@ extension WhoopStore {
         return out
     }
 
-    /// Pack a decoded v16 MAX86176 FIFO candidate's samples as little-endian 16-bit values (2 bytes/
-    /// sample) — a single compact BLOB per (deviceId, ts) row (#891, v47), the twin of `packPpgSamples`.
+    /// Pack a decoded v16 MAX86176 FIFO candidate's samples as little-endian SIGNED 32-bit values
+    /// (4 bytes/sample) — a single compact BLOB per (deviceId, ts) row (#891, v47).
     ///
-    /// DEVIATION from `packPpgSamples`, deliberate: v16 candidate samples are UNSIGNED 16-bit big-endian
-    /// FIFO words (0…65535), where the v26 PPG waveform is SIGNED i16 AC deltas. The packed BYTES are
-    /// identical in layout (low byte, high byte), but `unpackEcgCandidateSamples` reads them back UNSIGNED
-    /// so the round trip preserves the 0…65535 domain rather than sign-flipping a value above 32767. Any
-    /// value is truncated to its low 16 bits (matching the wire format the decoder produced).
+    /// WIDER THAN `packPpgSamples`'s i16, deliberately. A v16 sample is 18-bit two's-complement (see
+    /// `decodeWhoop5HistoricalV16`), so its domain is −131,072…131,071 and an i16 field cannot hold it
+    /// without clipping. Clipping is not an option HERE specifically: this table's entire purpose is that
+    /// a future analysis can run over the ORIGINAL samples, and a large deflection — the very feature such
+    /// an analysis would look for — is exactly what would be clipped. The observed capture fits in i16
+    /// comfortably (−12,365…1,007), but storing to the observed range rather than the wire range is how a
+    /// format quietly becomes lossy the first time the signal does something interesting.
     static func packEcgCandidateSamples(_ samples: [Int]) -> Data {
-        var buf = Data(capacity: samples.count * 2)
+        var buf = Data(capacity: samples.count * 4)
         for s in samples {
-            let v = UInt16(truncatingIfNeeded: s)
+            let v = UInt32(bitPattern: Int32(truncatingIfNeeded: s))
             buf.append(UInt8(truncatingIfNeeded: v))
             buf.append(UInt8(truncatingIfNeeded: v >> 8))
+            buf.append(UInt8(truncatingIfNeeded: v >> 16))
+            buf.append(UInt8(truncatingIfNeeded: v >> 24))
         }
         return buf
     }
 
-    /// Inverse of `packEcgCandidateSamples` — reads each pair back as an UNSIGNED 16-bit value (0…65535).
-    /// A trailing odd byte (a corrupt/truncated blob) is dropped rather than thrown, like `unpackPpgSamples`.
+    /// Inverse of `packEcgCandidateSamples` — reads each group of 4 back as a SIGNED 32-bit value.
+    /// A trailing partial group (a corrupt/truncated blob) is dropped rather than thrown, like
+    /// `unpackPpgSamples`.
     static func unpackEcgCandidateSamples(_ data: Data) -> [Int] {
         let bytes = [UInt8](data)
-        var out = [Int](); out.reserveCapacity(bytes.count / 2)
+        var out = [Int](); out.reserveCapacity(bytes.count / 4)
         var i = 0
-        while i + 1 < bytes.count {
-            out.append(Int(UInt16(bytes[i]) | (UInt16(bytes[i + 1]) << 8)))
-            i += 2
+        while i + 3 < bytes.count {
+            let v = UInt32(bytes[i]) | (UInt32(bytes[i + 1]) << 8)
+                | (UInt32(bytes[i + 2]) << 16) | (UInt32(bytes[i + 3]) << 24)
+            out.append(Int(Int32(bitPattern: v)))
+            i += 4
         }
         return out
     }
@@ -155,12 +162,16 @@ extension WhoopStore {
     /// nothing reads yet, never age-drop: a sporadic wearer's v16 seconds are spread thin, and an age cut
     /// would empty the table for exactly the person a future analysis needs).
     ///
-    /// The ROW COUNT is deliberately NOT copied from the ppg cap, because these rows are ~21x heavier and
+    /// The ROW COUNT is deliberately NOT copied from the ppg cap, because these rows are far heavier and
     /// a cap is a byte budget wearing a row count. A v26 ppg row holds 24 deltas (~48 B packed); a v16 row
-    /// holds ~500 FIFO samples (~1000 B packed), so ppg's 604,800 rows would be ~600 MB on device against
-    /// ppg's own ~29 MB. 86,400 = 24 x 3,600 keeps a FULL DAY of strap-seconds — a whole night's recording,
-    /// which is the working set a future analysis actually needs — inside ~86 MB. The KOTLIN twin is pending.
-    public static let ecgCandidateRetentionRows = 86_400
+    /// holds ~500 FIFO samples at 4 B each (~2 KB packed), so ppg's 604,800 rows would be well over a
+    /// gigabyte against ppg's own ~29 MB. 43,200 holds ~86 MB — the same byte budget this constant carried
+    /// when the samples were packed as i16, halved in rows when widening them to i32 doubled the row.
+    ///
+    /// 43,200 is not a duration. Reading it as "12 hours" assumes one record per strap-second, and the two
+    /// captured records are 23 seconds apart, so the real cadence is unknown and likely far sparser — in
+    /// which case this is many days of v16 activity, not half of one. The KOTLIN twin is pending.
+    public static let ecgCandidateRetentionRows = 43_200
 
     /// Rows to bank before sweeping `ecgCandidateSample` again — same amortisation as
     /// `ppgWaveformPruneEveryRows`, and the same in-memory-per-instance caveat (a store fed only short
@@ -457,7 +468,7 @@ extension WhoopStore {
                     ppgWaveformWritten += 1
                 }
             }
-            // RAW v16 MAX86176 FIFO 0x80-channel (#891) — EXPLICITLY UNVALIDATED instrumentation, persisted
+            // RAW v16 MAX86176 FIFO (#891) — EXPLICITLY UNVALIDATED instrumentation, persisted
             // exactly like ppgWaveform above: persist-only (not in the 8-field return tuple), ON CONFLICT DO
             // NOTHING keeps the first-seen candidate for a second, packed into one compact BLOB per row (see
             // `packEcgCandidateSamples`). NOT an ECG / heart rate / diagnosis; nothing reads it into a score.
@@ -830,8 +841,8 @@ extension WhoopStore {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ppgWaveformSample") ?? 0 }
     }
 
-    /// The RAW v16 MAX86176 FIFO 0x80-channel samples (#891), one record per second, in `[from, to]` for
-    /// one device, ascending by ts. `samples` are the UNSIGNED 16-bit big-endian FIFO values the strap
+    /// The RAW v16 MAX86176 FIFO samples (#891), one row per record, in `[from, to]` for
+    /// one device, ascending by ts. `samples` are the SIGNED 18-bit big-endian FIFO values the strap
     /// sent, unpacked from the compact on-disk BLOB (`packEcgCandidateSamples`/`unpackEcgCandidateSamples`).
     /// EXPLICITLY UNVALIDATED — NOT an ECG / heart rate / diagnosis. Empty on every strap/layout but 5/MG
     /// v16. Twin of `ppgWaveformSamples`; nothing in production reads it (instrumentation only).
@@ -853,12 +864,12 @@ extension WhoopStore {
     }
 
     /// Write newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891) to `url`,
-    /// one object per strap-second: `{"deviceId":…,"ts":…,"samples":[u16,…]}`, ascending by (deviceId, ts).
+    /// one object per strap-second: `{"deviceId":…,"ts":…,"samples":[i18,…]}`, ascending by (deviceId, ts).
     /// Returns the number of rows written — 0 leaves an empty file, so the caller can delete it and no-op
     /// rather than share nothing. This is the Test Centre export path for the UNVALIDATED v16 candidate —
     /// the iOS/macOS analogue of Android's raw reject-archive export (on Apple v16 is decoded into this
     /// table, so it is NOT in the reject archive). NOT an ECG / heart rate / diagnosis; the samples are raw
-    /// unsigned-16-bit MAX86176 FIFO values with no asserted scale. Read-only; touches no strap.
+    /// signed 18-bit MAX86176 FIFO values with no asserted scale. Read-only; touches no strap.
     ///
     /// Writes to a FILE rather than returning a `String`, and that is load-bearing rather than stylistic:
     /// a row holds ~500 samples, so a line is ~3 KB of JSON and a table at `ecgCandidateRetentionRows`

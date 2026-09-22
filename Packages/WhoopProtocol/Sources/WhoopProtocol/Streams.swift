@@ -402,15 +402,15 @@ public struct PpgWaveformSample: Equatable, Codable, Sendable {
 /// One WHOOP 5/MG v16 record's MAX86176 FIFO **0x80-channel** samples (#891), one record per second.
 ///
 /// EXPLICITLY UNVALIDATED INSTRUMENTATION — mirrors `PpgWaveformSample` exactly (decode + store, never a
-/// score). `samples` are the raw 16-bit BIG-ENDIAN 0x80-channel FIFO values the strap sent (see
-/// `decodeWhoop5HistoricalV16`), UNSIGNED (0…65535), no invented scale. This is NOT an ECG, NOT a heart
+/// score). `samples` are the raw FIFO values the strap sent (see `decodeWhoop5HistoricalV16`): 18-bit
+/// TWO'S-COMPLEMENT big-endian, so SIGNED (−131,072…131,071), no invented scale. This is NOT an ECG, NOT a heart
 /// rate, NOT a diagnosis; the sample rate and the physical meaning of the channel are UNPROVEN. Persisted
 /// (and, in WhoopStore, its own `ecgCandidateSample` table) purely so a future analysis can run over the
 /// ORIGINAL samples — nothing reads it into any metric, gate, or UI. A record with no 0x80 words (an empty
 /// v16 record) produces no row.
 public struct EcgCandidateSample: Equatable, Codable, Sendable {
     public let ts: Int          // wall-clock unix seconds (one record per second)
-    /// The record's 0x80-channel FIFO samples, in wire order — UNSIGNED 16-bit big-endian, verbatim from
+    /// The record's FIFO samples, in wire order — SIGNED 18-bit big-endian, verbatim from
     /// `ecg_candidate`. Count VARIES per record (see the decoder); a full record carries ~500.
     public let samples: [Int]
     public init(ts: Int, samples: [Int]) {
@@ -636,7 +636,7 @@ public struct Streams: Equatable, Codable {
     /// samples `ppgHr` is derived FROM. Kept separate so a consumer that only wants the HR estimate
     /// never pays for the 24x-larger raw stream, and so the two can be persisted/pruned independently.
     public var ppgWaveform: [PpgWaveformSample]
-    /// The RAW v16 MAX86176 FIFO 0x80-channel samples (#891), one record per second — EXPLICITLY
+    /// The RAW v16 MAX86176 FIFO samples (#891), one row per record — EXPLICITLY
     /// UNVALIDATED instrumentation, twin of `ppgWaveform`. NOT an ECG / heart rate / diagnosis; channel
     /// meaning and sample rate unproven. Empty on every strap/layout except 5/MG v16. Nothing scores it.
     public var ecgCandidate: [EcgCandidateSample]

@@ -3,18 +3,19 @@ import GRDB
 import WhoopProtocol
 @testable import WhoopStore
 
-/// v47 migration: durable storage for the WHOOP 5/MG v16 MAX86176 FIFO 0x80-channel (#891).
+/// v47 migration: durable storage for the WHOOP 5/MG v16 MAX86176 FIFO (#891).
 ///
 /// EXPLICITLY UNVALIDATED INSTRUMENTATION — the twin of `PpgWaveformSampleTests`. Adding v16 to
 /// `mappedWhoop5HistoricalVersions` took it off the raw-archive path, so the FIFO body is stored here or
 /// it is lost; these tests prove the new table exists, its key/shape, that insert/read round-trips, and
-/// that the packed BLOB survives a write + read cycle intact — including UNSIGNED samples above 32767,
-/// which is the one place this table's packing deliberately differs from the signed PPG waveform. They
+/// that the packed BLOB survives a write + read cycle intact — across the FULL 18-bit signed domain,
+/// which is why this table packs i32 where the PPG waveform packs i16. They
 /// assert NOTHING physiological: this is not an ECG, heart rate, or diagnosis.
 final class EcgCandidateSampleTests: XCTestCase {
-    // Realistic v16 candidate values: unsigned 16-bit big-endian FIFO words near the top of the range
-    // (the real capture reads ~57k–62k), which is exactly where a signed round trip would flip the sign.
-    private let realSamples = [60944, 59816, 62200, 62250, 61898, 61607, 57676, 0, 65535, 1]
+    // Realistic v16 candidate values: 18-bit two's-complement FIFO samples. The real capture sits on a
+    // negative baseline (~-3k…-8k) and crosses zero, so the fixture carries both signs plus the extremes
+    // of the 18-bit domain — the range an i16 column could not hold.
+    private let realSamples = [-4592, -5720, -3336, 298, 1007, -12365, 0, -131_072, 131_071, 1]
 
     func testV47CreatesEcgCandidateTable() async throws {
         let store = try await WhoopStore.inMemory()
@@ -43,7 +44,7 @@ final class EcgCandidateSampleTests: XCTestCase {
         let read = try await store.ecgCandidateSamples(deviceId: "my-whoop",
                                                        from: 1_789_990_296, to: 1_789_990_296)
         XCTAssertEqual(read, [EcgCandidateSample(ts: 1_789_990_296, samples: realSamples)],
-                       "unsigned 16-bit samples (incl. 65535) must survive the round trip unflipped")
+                       "signed 18-bit samples must survive the round trip with their sign intact")
         // Idempotent re-insert, ON CONFLICT DO NOTHING (mirrors every other per-second stream's dedupe).
         _ = try await store.insert(streams, deviceId: "my-whoop")
         let n2 = try await store.ecgCandidateCountForTest()
@@ -79,13 +80,13 @@ final class EcgCandidateSampleTests: XCTestCase {
 
     // MARK: - #891 Test Centre export
 
-    /// The export emits one JSON line per row, ordered by (deviceId, ts), with sorted keys and unsigned
+    /// The export emits one JSON line per row, ordered by (deviceId, ts), with sorted keys and SIGNED
     /// samples — the format the app hands to the iOS share sheet / macOS save panel.
     func testEcgCandidateExportJSONL() async throws {
         let store = try await WhoopStore.inMemory()
         _ = try await store.insert(Streams(ecgCandidate: [
-            EcgCandidateSample(ts: 100, samples: [60944, 1]),
-            EcgCandidateSample(ts: 101, samples: [65535]),
+            EcgCandidateSample(ts: 100, samples: [-4592, 1]),
+            EcgCandidateSample(ts: 101, samples: [-131_072]),
         ]), deviceId: "dev-a")
         _ = try await store.insert(Streams(ecgCandidate: [
             EcgCandidateSample(ts: 50, samples: [7]),
@@ -97,10 +98,10 @@ final class EcgCandidateSampleTests: XCTestCase {
         let jsonl = try String(contentsOf: url, encoding: .utf8)
         let lines = jsonl.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, [
-            #"{"deviceId":"dev-a","samples":[60944,1],"ts":100}"#,
-            #"{"deviceId":"dev-a","samples":[65535],"ts":101}"#,
+            #"{"deviceId":"dev-a","samples":[-4592,1],"ts":100}"#,
+            #"{"deviceId":"dev-a","samples":[-131072],"ts":101}"#,
             #"{"deviceId":"dev-b","samples":[7],"ts":50}"#,
-        ], "one sorted-key JSON object per row, ordered by (deviceId, ts), unsigned samples preserved")
+        ], "one sorted-key JSON object per row, ordered by (deviceId, ts), NEGATIVE samples preserved")
     }
 
     /// A store with no candidate rows writes no rows (the button then deletes the file and no-ops rather
@@ -120,9 +121,9 @@ final class EcgCandidateSampleTests: XCTestCase {
     func testEcgCandidateExportStreamsCorrectlyAcrossFlushBoundaries() async throws {
         let store = try await WhoopStore.inMemory()
         let rowCount = 200
-        // A REAL-SIZED record: ~500 unsigned FIFO words, which is what makes a line ~3 KB. The 10-value
-        // `realSamples` fixture is far too small to reach a flush, so it would prove nothing here.
-        let wideSamples = (0..<500).map { 57_000 + ($0 * 11) % 8_000 }
+        // A REAL-SIZED record: ~500 FIFO samples on a negative baseline like the real capture, which is
+        // what makes a line ~3 KB. The 10-value `realSamples` fixture is far too small to reach a flush.
+        let wideSamples = (0..<500).map { -8_000 + ($0 * 11) % 8_000 }
         for ts in 0..<rowCount {
             _ = try await store.insert(
                 Streams(ecgCandidate: [EcgCandidateSample(ts: ts, samples: wideSamples)]),
@@ -171,15 +172,18 @@ final class EcgCandidateSampleTests: XCTestCase {
             .appendingPathComponent("ecg-candidate-export-test-\(UUID().uuidString).jsonl")
     }
 
-    func testPackUnpackEcgCandidateSamplesRoundTripsUnsigned() {
-        let samples = [0, 1, 32767, 32768, 65535, 60944, 57676]
+    /// The packing must survive the WHOLE 18-bit signed domain, not just the range this capture happens
+    /// to use. An i16 column would silently clip the two extremes below — and a large deflection is
+    /// exactly the feature a future analysis of this table would be looking for.
+    func testPackUnpackEcgCandidateSamplesRoundTripsTheSigned18BitDomain() {
+        let samples = [0, 1, -1, 32767, 32768, -32768, -32769, 131_071, -131_072, -4592]
         let packed = WhoopStore.packEcgCandidateSamples(samples)
-        XCTAssertEqual(packed.count, samples.count * 2, "2 bytes/sample, no per-record overhead")
+        XCTAssertEqual(packed.count, samples.count * 4, "4 bytes/sample, no per-record overhead")
         XCTAssertEqual(WhoopStore.unpackEcgCandidateSamples(packed), samples,
-                       "values above 32767 must NOT be sign-flipped (the deviation from packPpgSamples)")
+                       "every value in the 18-bit signed domain must survive the round trip intact")
     }
 
-    func testUnpackEcgCandidateSamplesDropsTrailingOddByte() {
+    func testUnpackEcgCandidateSamplesDropsTrailingPartialGroup() {
         var data = WhoopStore.packEcgCandidateSamples([1, 2, 3])
         data.append(0xFF)
         XCTAssertEqual(WhoopStore.unpackEcgCandidateSamples(data), [1, 2, 3])
@@ -224,14 +228,14 @@ final class EcgCandidateSampleTests: XCTestCase {
     }
 
     /// The cap is a BYTE budget expressed as a row count, so it must not be copied from a table whose rows
-    /// are a different size. A v16 row (~500 samples x 2 B) is ~21x a v26 ppg row (24 deltas x 2 B), so
-    /// sharing ppg's 604,800 would put ~600 MB of UNVALIDATED instrumentation on the device against ppg's
-    /// own ~29 MB. 86,400 rows = a full day of strap-seconds, the working set a future analysis needs.
+    /// are a different size, and it must MOVE when this table's row width does. A v16 row (~500 samples x
+    /// 4 B) dwarfs a v26 ppg row (24 deltas x 2 B), so sharing ppg's 604,800 would put well over a
+    /// gigabyte of UNVALIDATED instrumentation on the device against ppg's own ~29 MB.
     func testProductionRetentionCapIsSizedForThisTablesRows() {
-        XCTAssertEqual(WhoopStore.ecgCandidateRetentionRows, 86_400)
+        XCTAssertEqual(WhoopStore.ecgCandidateRetentionRows, 43_200)
         XCTAssertEqual(WhoopStore.ecgCandidatePruneEveryRows, 10_000)
 
-        let ecgRowBytes = 500 * 2, ppgRowBytes = 24 * 2
+        let ecgRowBytes = 500 * 4, ppgRowBytes = 24 * 2
         let ecgBudget = WhoopStore.ecgCandidateRetentionRows * ecgRowBytes
         let ppgBudget = WhoopStore.ppgWaveformRetentionRows * ppgRowBytes
         XCTAssertLessThan(ecgBudget, 128 * 1_000_000, "an unread blob table must stay well bounded")
@@ -253,7 +257,7 @@ final class EcgCandidateSampleTests: XCTestCase {
                                                        from: 1_789_990_296, to: 1_789_990_296)
         XCTAssertEqual(read.count, 1)
         XCTAssertEqual(read.first?.samples.count, 500)
-        XCTAssertEqual(Array(read.first!.samples.prefix(3)), [60944, 59816, 62200])
+        XCTAssertEqual(Array(read.first!.samples.prefix(3)), [-4592, -5720, -3336])
     }
 
     private func v16FullFrame() -> [UInt8] {
