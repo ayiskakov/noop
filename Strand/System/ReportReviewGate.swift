@@ -13,14 +13,12 @@ struct ReportReviewGate {
     init(entries: [FileExport.BundleEntry]) { self.entries = entries }
 
     /// The bundle files that are NEVER shown inline in the review sheet by NAME: the binary screenshot plus
-    /// the large raw research streams (WHOOP raw-capture + the Oura Tier-B sidecars — each up to the 25 MB
-    /// cap `OuraActivityDump.maxBytes` / `OuraMotionDump.maxBytes` actually enforce; this said 20 MB). Rendering megabytes of text as a single SwiftUI `Text` pins the main thread in CoreText glyph
-    /// layout — a ~12 MB `oura-raw.jsonl` allocated >1 GB and hung the review sheet indefinitely. They are
+    /// the large raw research streams (the WHOOP raw-capture sidecar, capped at tens of MB). Rendering
+    /// megabytes of text as a single SwiftUI `Text` pins the main thread in CoreText glyph layout — a
+    /// ~12 MB sidecar allocated >1 GB and hung the review sheet indefinitely. They are
     /// already PII-scrubbed and are NAMED in the "attached" note below, so the review stays honest without
     /// trying to lay them out.
-    static let notShownInline: Set<String> = [
-        "screenshot.png", "raw-capture.jsonl", "oura-raw.jsonl", "oura-ibihr.jsonl", "oura-activity.jsonl",
-    ]
+    static let notShownInline: Set<String> = ["screenshot.png", "raw-capture.jsonl"]
 
     /// Belt-and-braces size guard: ANY entry larger than this is named, never inlined, even one NOT in
     /// `notShownInline` (a future stream, or a pathologically large report.txt). 1 MiB sits far above a

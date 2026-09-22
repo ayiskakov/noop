@@ -244156,6 +244156,586 @@
           }
         }
       }
+    },
+    "Connect a WHOOP, a heart-rate strap or a gym machine and watch each beat in real time: heart rate, variability and zones as they happen. Already have history elsewhere? Import it from WHOOP or Apple Health.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde ein WHOOP, einen Herzfrequenzgurt oder ein Fitnessgerät und verfolge jeden Schlag in Echtzeit: Herzfrequenz, Variabilität und Zonen, während sie entstehen. Du hast bereits Verlaufsdaten anderswo? Importiere sie aus WHOOP oder Apple Health."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta un WHOOP, una banda de frecuencia cardiaca o una máquina de gimnasio y observa cada latido en tiempo real: frecuencia cardiaca, variabilidad y zonas según ocurren. ¿Ya tienes historial en otro sitio? Impórtalo desde WHOOP o Apple Salud."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connectez un WHOOP, une ceinture cardio ou une machine de salle et suivez chaque battement en temps réel : fréquence cardiaque, variabilité et zones au fil de l'effort. Vous avez déjà un historique ailleurs ? Importez-le depuis WHOOP ou Apple Santé."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liga um WHOOP, uma banda de frequência cardíaca ou uma máquina de ginásio e vê cada batimento em tempo real: frequência cardíaca, variabilidade e zonas à medida que acontecem. Já tens histórico noutro lado? Importa-o do WHOOP ou da Apple Saúde."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collega un WHOOP, una fascia cardio o una macchina da palestra e osserva ogni battito in tempo reale: frequenza cardiaca, variabilità e zone mentre accadono. Hai già uno storico altrove? Importalo da WHOOP o Apple Salute."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podłącz WHOOP, pas na tętno lub maszynę na siłowni i obserwuj każde uderzenie na żywo: tętno, zmienność i strefy w czasie rzeczywistym. Masz już historię gdzie indziej? Zaimportuj ją z WHOOP lub Apple Health."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключите WHOOP, нагрудный датчик пульса или тренажёр и следите за каждым ударом в реальном времени: пульс, вариабельность и зоны. Уже есть история в другом месте? Импортируйте её из WHOOP или Apple Health."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接 WHOOP、心率带或健身器械，实时观察每一次心跳：心率、变异性和心率区间即时呈现。已有其他来源的历史数据？可从 WHOOP 或 Apple 健康导入。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連接 WHOOP、心率帶或健身器材，即時觀察每一次心跳：心率、變異性與心率區間即時呈現。已有其他來源的歷史資料？可從 WHOOP 或 Apple 健康匯入。"
+          }
+        }
+      }
+    },
+    "No WHOOP? You can still continue. Pair a heart-rate strap (Polar, Wahoo, Coospo, Garmin HRM…) or a gym machine under Devices, or import from WHOOP or Apple Health under Data Sources. You can do either any time.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein WHOOP? Du kannst trotzdem fortfahren. Koppele unter Geräte einen Herzfrequenzgurt (Polar, Wahoo, Coospo, Garmin HRM…) oder ein Fitnessgerät, oder importiere unter Datenquellen aus WHOOP oder Apple Health. Beides ist jederzeit möglich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿No tienes WHOOP? Puedes continuar igualmente. Empareja una banda de frecuencia cardiaca (Polar, Wahoo, Coospo, Garmin HRM…) o una máquina de gimnasio en Dispositivos, o importa desde WHOOP o Apple Salud en Fuentes de datos. Puedes hacerlo en cualquier momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas de WHOOP ? Vous pouvez continuer. Associez une ceinture cardio (Polar, Wahoo, Coospo, Garmin HRM…) ou une machine de salle dans Appareils, ou importez depuis WHOOP ou Apple Santé dans Sources de données. Les deux restent possibles à tout moment."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem WHOOP? Podes continuar à mesma. Emparelha uma banda de frequência cardíaca (Polar, Wahoo, Coospo, Garmin HRM…) ou uma máquina de ginásio em Dispositivos, ou importa do WHOOP ou da Apple Saúde em Fontes de dados. Podes fazer qualquer uma a qualquer momento."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun WHOOP? Puoi comunque continuare. Associa una fascia cardio (Polar, Wahoo, Coospo, Garmin HRM…) o una macchina da palestra in Dispositivi, oppure importa da WHOOP o Apple Salute in Sorgenti dati. Puoi farlo in qualsiasi momento."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie masz WHOOP? Możesz kontynuować. Sparuj pas na tętno (Polar, Wahoo, Coospo, Garmin HRM…) lub maszynę na siłowni w Urządzeniach albo zaimportuj dane z WHOOP lub Apple Health w Źródłach danych. Obie opcje są dostępne w dowolnym momencie."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет WHOOP? Можно продолжить. Подключите нагрудный датчик пульса (Polar, Wahoo, Coospo, Garmin HRM…) или тренажёр в разделе «Устройства» либо импортируйте данные из WHOOP или Apple Health в разделе «Источники данных». И то и другое доступно в любой момент."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 WHOOP？仍可继续。在「设备」中配对心率带（Polar、Wahoo、Coospo、Garmin HRM…）或健身器械，或在「数据来源」中从 WHOOP 或 Apple 健康导入。两者随时都可以。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有 WHOOP？仍可繼續。在「裝置」中配對心率帶（Polar、Wahoo、Coospo、Garmin HRM…）或健身器材，或在「資料來源」中從 WHOOP 或 Apple 健康匯入。兩者隨時都可以。"
+          }
+        }
+      }
+    },
+    "The band NOOP supports, with live data and history sync": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das von NOOP unterstützte Band, mit Live-Daten und Verlaufssynchronisierung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La banda compatible con NOOP, con datos en directo y sincronización del historial"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet pris en charge par NOOP, avec données en direct et synchronisation de l'historique"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A banda suportada pelo NOOP, com dados em direto e sincronização do histórico"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La fascia supportata da NOOP, con dati in tempo reale e sincronizzazione dello storico"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska obsługiwana przez NOOP, z danymi na żywo i synchronizacją historii"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет, поддерживаемый NOOP, с данными в реальном времени и синхронизацией истории"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 支持的手环，具备实时数据与历史同步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 支援的手環，具備即時資料與歷史同步"
+          }
+        }
+      }
+    },
+    "Any strap that broadcasts standard Bluetooth heart rate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Gurt, der die Standard-Bluetooth-Herzfrequenz sendet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cualquier banda que emita frecuencia cardiaca Bluetooth estándar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toute ceinture qui diffuse la fréquence cardiaque Bluetooth standard"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualquer banda que transmita frequência cardíaca Bluetooth padrão"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualsiasi fascia che trasmette la frequenza cardiaca Bluetooth standard"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dowolny pas nadający standardowe tętno przez Bluetooth"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Любой датчик, передающий стандартный пульс по Bluetooth"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任何广播标准蓝牙心率的心率带"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任何廣播標準藍牙心率的心率帶"
+          }
+        }
+      }
+    },
+    "Not supported by this build": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von diesem Build nicht unterstützt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No compatible con esta versión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non pris en charge par cette version"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não suportado por esta versão"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non supportato da questa build"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieobsługiwane przez tę wersję"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не поддерживается этой сборкой"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本不支持"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本不支援"
+          }
+        }
+      }
+    },
+    "Nothing live. Stored history stays readable": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts live. Gespeicherter Verlauf bleibt lesbar"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nada en directo. El historial guardado sigue siendo legible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien en direct. L'historique enregistré reste lisible"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nada em direto. O histórico guardado continua legível"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niente in tempo reale. Lo storico salvato resta leggibile"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak danych na żywo. Zapisana historia pozostaje czytelna"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего в реальном времени. Сохранённая история остаётся доступной"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有实时数据。已存储的历史仍可读取"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有即時資料。已儲存的歷史仍可讀取"
+          }
+        }
+      }
+    },
+    "NOOP recognises a WHOOP 4.0 but does not connect to it. Only WHOOP 5.0 and MG straps sync in this build.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP erkennt ein WHOOP 4.0, verbindet sich aber nicht damit. In diesem Build synchronisieren nur WHOOP 5.0 und MG."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP reconoce un WHOOP 4.0 pero no se conecta a él. En esta versión solo sincronizan las bandas WHOOP 5.0 y MG."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP reconnaît un WHOOP 4.0 mais ne s'y connecte pas. Seuls les bracelets WHOOP 5.0 et MG se synchronisent dans cette version."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O NOOP reconhece um WHOOP 4.0 mas não se liga a ele. Nesta versão só sincronizam as bandas WHOOP 5.0 e MG."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP riconosce un WHOOP 4.0 ma non si connette. In questa build si sincronizzano solo le fasce WHOOP 5.0 e MG."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP rozpoznaje WHOOP 4.0, ale się z nim nie łączy. W tej wersji synchronizują się tylko opaski WHOOP 5.0 i MG."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP распознаёт WHOOP 4.0, но не подключается к нему. В этой сборке синхронизируются только браслеты WHOOP 5.0 и MG."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 能识别 WHOOP 4.0，但不会与其连接。此版本仅同步 WHOOP 5.0 和 MG 手环。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 能辨識 WHOOP 4.0，但不會與其連線。此版本僅同步 WHOOP 5.0 和 MG 手環。"
+          }
+        }
+      }
+    },
+    "Not reported": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gemeldet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No informado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non communiqué"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não reportado"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non riportato"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie zgłoszono"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не сообщается"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未报告"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未回報"
+          }
+        }
+      }
+    },
+    "Blood Oxygen: strap estimate (WHOOP 5/MG)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blutsauerstoff: Schätzung des Bands (WHOOP 5/MG)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oxígeno en sangre: estimación de la banda (WHOOP 5/MG)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oxygène sanguin : estimation du bracelet (WHOOP 5/MG)"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oxigénio no sangue: estimativa da banda (WHOOP 5/MG)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ossigeno nel sangue: stima della fascia (WHOOP 5/MG)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tlen we krwi: szacunek opaski (WHOOP 5/MG)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кислород в крови: оценка браслета (WHOOP 5/MG)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "血氧：手环估算值（WHOOP 5/MG）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "血氧：手環估算值（WHOOP 5/MG）"
+          }
+        }
+      }
+    },
+    "Your WHOOP 5.0/MG sends a strap-computed SpO₂ percentage (the @82 candidate byte) every second — an 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. Turning this on surfaces it as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein WHOOP 5.0/MG sendet jede Sekunde einen vom Band berechneten SpO₂-Wert (das Kandidaten-Byte @82). Eine unabhängige Validierung über 8 Nächte ergab eine Korrelation von +0,99 zur WHOOP-App, doch zwei Nächte auf dem ursprünglichen Testgerät liefen in die ENTGEGENGESETZTE Richtung, sodass die Geräte-/Firmware-Varianz ungeklärt ist. Wenn du dies aktivierst, erscheint der Wert als „Schätzung des Bands (unbestätigt)“ in der Blutsauerstoff-Kachel, sofern kein kalibrierter Import vorliegt. Er fließt nie in Erholungs- oder Krankheitswerte ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu WHOOP 5.0/MG envía cada segundo un porcentaje de SpO₂ calculado por la banda (el byte candidato @82). Una validación independiente de 8 noches lo situó en una correlación de +0,99 frente a la app de WHOOP, pero dos noches en el dispositivo de prueba original fueron en dirección OPUESTA, así que la variación entre dispositivos y firmware sigue sin resolverse. Al activarlo, aparece como «estimación de la banda (sin verificar)» en el recuadro de Oxígeno en sangre cuando no hay una importación calibrada. Nunca alimenta la recuperación ni la detección de enfermedad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre WHOOP 5.0/MG envoie chaque seconde un pourcentage de SpO₂ calculé par le bracelet (l'octet candidat @82). Une validation indépendante sur 8 nuits a relevé une corrélation de +0,99 avec l'app WHOOP, mais deux nuits sur l'appareil de test initial ont évolué en sens INVERSE : la variation selon l'appareil et le micrologiciel reste non résolue. En l'activant, la valeur apparaît comme « estimation du bracelet (non vérifiée) » dans la tuile Oxygène sanguin lorsqu'aucun import calibré n'existe. Elle n'alimente jamais la récupération ni la détection de maladie."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O teu WHOOP 5.0/MG envia a cada segundo uma percentagem de SpO₂ calculada pela banda (o byte candidato @82). Uma validação independente de 8 noites registou uma correlação de +0,99 face à app da WHOOP, mas duas noites no dispositivo de teste original seguiram a direção OPOSTA, pelo que a variação entre dispositivos e firmware continua por resolver. Ao ativar, o valor surge como «estimativa da banda (não verificada)» no cartão de Oxigénio no sangue quando não existe uma importação calibrada. Nunca alimenta a recuperação nem a deteção de doença."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo WHOOP 5.0/MG invia ogni secondo una percentuale di SpO₂ calcolata dalla fascia (il byte candidato @82). Una validazione indipendente su 8 notti ha rilevato una correlazione di +0,99 con l'app WHOOP, ma due notti sul dispositivo di test originale sono andate nella direzione OPPOSTA, quindi la varianza tra dispositivi e firmware resta irrisolta. Attivandolo, il valore compare come «stima della fascia (non verificata)» nel riquadro Ossigeno nel sangue quando non esiste un import calibrato. Non alimenta mai il recupero né il rilevamento di malattia."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Twój WHOOP 5.0/MG co sekundę wysyła wyliczony przez opaskę odsetek SpO₂ (bajt kandydujący @82). Niezależna walidacja przez 8 nocy wykazała korelację +0,99 z aplikacją WHOOP, ale dwie noce na pierwotnym urządzeniu testowym poszły w PRZECIWNYM kierunku, więc zmienność między urządzeniami i wersjami firmware pozostaje nierozstrzygnięta. Po włączeniu wartość pojawia się jako „szacunek opaski (niezweryfikowany)” w kafelku Tlen we krwi, gdy nie ma skalibrowanego importu. Nigdy nie zasila regeneracji ani wykrywania choroby."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваш WHOOP 5.0/MG каждую секунду отправляет рассчитанный браслетом процент SpO₂ (байт-кандидат @82). Независимая проверка за 8 ночей показала корреляцию +0,99 с приложением WHOOP, но две ночи на исходном тестовом устройстве дали ПРОТИВОПОЛОЖНОЕ направление, поэтому разброс между устройствами и прошивками не выяснен. При включении значение отображается как «оценка браслета (не подтверждено)» в плитке «Кислород в крови», если нет калиброванного импорта. Оно никогда не влияет на восстановление и на выявление болезни."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的 WHOOP 5.0/MG 每秒发送一个由手环计算的 SpO₂ 百分比（@82 候选字节）。一项为期 8 晚的独立验证显示其与 WHOOP 应用的相关性为 +0.99，但原始测试设备上有两晚走向相反，因此设备与固件差异尚未厘清。开启后，在没有校准导入时，血氧卡片会将其显示为「手环估算值（未验证）」。它从不参与恢复或疾病评分。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的 WHOOP 5.0/MG 每秒傳送一個由手環計算的 SpO₂ 百分比（@82 候選位元組）。一項為期 8 晚的獨立驗證顯示其與 WHOOP App 的相關性為 +0.99，但原始測試裝置上有兩晚走向相反，因此裝置與韌體差異尚未釐清。開啟後，在沒有校準匯入時，血氧卡片會將其顯示為「手環估算值（未驗證）」。它從不參與恢復或疾病評分。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

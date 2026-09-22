@@ -96,7 +96,7 @@ final class AnalyticsEngineProvidedSleepTests: XCTestCase {
             hr: [],
             rr: [],
             resp: [],
-            vendorResp: [],
+
             gravity: [],
             steps: [],
             dayHr: nil,
@@ -104,7 +104,6 @@ final class AnalyticsEngineProvidedSleepTests: XCTestCase {
             dayGravity: nil,
             skinTemp: [],
             skinTempFamily: .whoop5,
-            skinTempAnchorRaw: nil,
             spo2: [],
             profile: profile,
             baselines: AnalyticsEngine.ProfileBaselines(),

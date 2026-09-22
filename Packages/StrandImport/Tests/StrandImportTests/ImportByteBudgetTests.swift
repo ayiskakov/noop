@@ -62,25 +62,4 @@ final class ImportByteBudgetTests: XCTestCase {
         XCTAssertTrue(capped.workouts.isEmpty)
         XCTAssertTrue(capped.journal.isEmpty)
     }
-
-    // MARK: Wearable — the real offender: cap bounds the retained set regardless of entry count
-
-    func testWearableZipStopsAtTotalByteBudget() throws {
-        // Content is irrelevant to collection (the wellness filter is name-based); size is what matters.
-        let blob = Data(repeating: 0x20, count: 400)   // 400 bytes each, all "sleep*" → wellness by name
-        let zip = try makeZip(named: "wearable.zip", entries: [
-            ("sleep_a.json", blob),
-            ("sleep_b.json", blob),
-            ("sleep_c.json", blob),
-        ])
-
-        let full = try WearableExportImporter().collectFiles(from: zip)
-        XCTAssertEqual(full.count, 3)
-
-        // Cap = 1.5 blobs: admits the first, trips before the second.
-        let cap = 600
-        let capped = try WearableExportImporter(maxTotalBytes: cap).collectFiles(from: zip)
-        XCTAssertEqual(capped.count, 1)
-        XCTAssertLessThanOrEqual(capped.values.reduce(0) { $0 + $1.count }, cap)
-    }
 }

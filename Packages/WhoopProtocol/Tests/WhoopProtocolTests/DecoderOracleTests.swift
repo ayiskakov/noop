@@ -28,6 +28,17 @@ import XCTest
 ///                        something. Deleting an `expect` key, a frame or a batch fails a test.
 final class DecoderOracleTests: XCTestCase {
 
+    /// The fixture's family tag, refused rather than defaulted. A tag this does not recognise is a
+    /// fixture for hardware NOOP no longer decodes, and silently decoding it as a 5/MG would compare
+    /// one family's bytes against another's expectations.
+    private func family(_ name: String) throws -> DeviceFamily {
+        guard name == "whoop5" else {
+            XCTFail("oracle fixture names unsupported family '\(name)'")
+            throw XCTSkip("unsupported family")
+        }
+        return .whoop5
+    }
+
     // Mirrors the JSON shape. `expect` is a heterogeneous map decoded leniently below.
     private struct Oracle: Decodable {
         let tolerance: Double
@@ -132,7 +143,7 @@ final class DecoderOracleTests: XCTestCase {
         XCTAssertGreaterThan(oracle.frames.count, 0, "no oracle frames loaded")
 
         for frame in oracle.frames {
-            let family: DeviceFamily = frame.family == "whoop5" ? .whoop5 : .whoop4
+            let family = try self.family(frame.family)
             let parsed = parseFrame(hexToBytes(frame.hex), family: family).parsed
 
             for (key, expected) in frame.expect {
@@ -188,7 +199,7 @@ final class DecoderOracleTests: XCTestCase {
         for f in oracle.frames { byName[f.name] = f }
 
         for batch in oracle.streamBatches {
-            let family: DeviceFamily = batch.family == "whoop5" ? .whoop5 : .whoop4
+            let family = try self.family(batch.family)
             let parsed: [ParsedFrame] = try batch.frames.map { name in
                 let f = try XCTUnwrap(byName[name], "\(batch.name): unknown fixture frame '\(name)'")
                 return parseFrame(hexToBytes(f.hex), family: family)
@@ -302,7 +313,7 @@ final class DecoderOracleTests: XCTestCase {
         let derived = Set(cov.derivedFields)
         var seen = Set<String>()
         for f in oracle.frames {
-            let family: DeviceFamily = f.family == "whoop5" ? .whoop5 : .whoop4
+            let family = try self.family(f.family)
             let parsed = parseFrame(hexToBytes(f.hex), family: family).parsed
             seen.formUnion(parsed.keys)
         }

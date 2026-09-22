@@ -112,7 +112,7 @@ final class CollectorStandardHRContactTests: XCTestCase {
         let store = CaptureStore()
         let collector = Collector(store: store, deviceId: "strap")
         collector.ingestStandardHR(hr: 60, rr: [1000], family: .whoop5, at: 100)
-        collector.ingestStandardHR(hr: 60, rr: [1001], family: .whoop4, at: 101)
+        collector.ingestStandardHR(hr: 60, rr: [1001], at: 101)
         collector.ingestStandardHR(hr: 60, rr: [1002], at: 102)
         store.failNextInsert = true
         await collector.flushStandardHR()

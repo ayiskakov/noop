@@ -306,7 +306,7 @@ final class LocalDayWindowsTests: XCTestCase {
     /// It fails rather than skips when the file is absent: an oracle nobody can find would otherwise
     /// let both platforms stay green while they disagree, which is the whole thing this file guards.
     private func loadOracle() throws -> [String: Any] {
-        let relative = "android/app/src/test/resources/local_day_windows_oracle.json"
+        let relative = "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/oracles/local_day_windows_oracle.json"
         var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         for _ in 0..<8 {
             let candidate = dir.appendingPathComponent(relative)
@@ -323,7 +323,8 @@ final class LocalDayWindowsTests: XCTestCase {
 
     /// Every value in the committed oracle, re-derived by the helper and compared.
     ///
-    /// The Kotlin twin asserts the same file, so a change on either side reddens one of the two suites.
+    /// The oracle is the committed record of what this helper produces, so an accidental change to the
+    /// windowing reddens this suite rather than silently re-dating every stored day.
     func testSwiftTestReadsTheSameCommittedFile() throws {
         let oracle = try loadOracle()
 

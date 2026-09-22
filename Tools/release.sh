@@ -5,7 +5,7 @@
 #
 #   Tools/release.sh <version> <asset> [<asset> ...] [-- "release notes"]
 #   e.g. Tools/release.sh 4.7.0 \
-#          dist/NOOP-v4.7.0-macos.zip dist/NOOP-v4.7.0.ipa dist/NOOP-v4.7.0.apk \
+#          dist/NOOP-v4.7.0-macos.zip dist/NOOP-v4.7.0.ipa \
 #          -- "Bug fixes and the new Lab Book."
 #
 # GitHub is CANONICAL — the release is created there FIRST (ryanbr/noop, marked

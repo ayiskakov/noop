@@ -41,7 +41,7 @@ import Foundation
 /// ## Read-only by construction
 ///
 /// The probe writes command frames purely in order to read, the same shape as the Oura feature-status
-/// probes NOOP already ships (`Packages/OuraProtocol/…/Commands.swift`) and as the #761 enumeration. The
+/// probes NOOP already ships and as the #761 enumeration. The
 /// SET verbs are named in `writeOpcodes` for exactly one reason: so the send allowlist can be expressed
 /// as "`readOnlyOpcodes` only" and a unit test can prove 119/120 are rejected by it. Nothing in this file
 /// or on its BLE path can form a SET frame.

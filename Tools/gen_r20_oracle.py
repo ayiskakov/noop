@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Regenerate `r20_optical_oracle.json` from a WHOOP 5/MG deep-buffer capture.
 
-The R20 (layout-v20, 2,140-byte) optical golden vectors are checked in twice — once for Swift, once
-for Android — and the two copies must stay byte-identical. This script writes both from the same
-buffer, so they cannot drift.
+The R20 (layout-v20, 2,140-byte) optical golden vectors are checked in as a WhoopProtocol test
+resource. This script writes them from a captured buffer.
 
-The expected values are produced here by a THIRD, independent implementation of the byte layout
-(plain `struct.unpack` against the published offsets from issue #423). Swift and Kotlin then both have
-to reproduce them, which is what makes the fixture a drift guard rather than a snapshot of whichever
+The expected values are produced here by a SECOND, independent implementation of the byte layout
+(plain `struct.unpack` against the published offsets from issue #423). The Swift decoder then has to
+reproduce them, which is what makes the fixture a drift guard rather than a snapshot of whichever
 decoder happened to run last.
 
 Usage:
@@ -30,7 +29,6 @@ DEFAULT_NAMES = ["blk0_active_negatives", "rails_saturation_and_negatives"]
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DESTS = [
     REPO_ROOT / "Packages/WhoopProtocol/Tests/WhoopProtocolTests/Resources/r20_optical_oracle.json",
-    REPO_ROOT / "android/app/src/test/resources/r20_optical_oracle.json",
 ]
 
 
@@ -160,10 +158,9 @@ def main():
         ("note",
          "Golden vectors for the WHOOP 5/MG layout-v20 (R20, 2,140-byte) optical record. Both `hex` "
          "strings are REAL records from a NOOP deep-buffer capture (issue #423); the expected values "
-         "were produced by an independent third implementation of the published byte layout, so Swift "
-         "and Kotlin each have to reproduce them rather than agreeing with each other by construction. "
-         "Regenerate with Tools/gen_r20_oracle.py, which writes both copies at once — they MUST stay "
-         "byte-identical."),
+         "were produced by an independent second implementation of the published byte layout, so the "
+         "Swift decoder has to reproduce them rather than being the source of its own expectations. "
+         "Regenerate with Tools/gen_r20_oracle.py."),
         ("layout", collections.OrderedDict([
             ("buffer_length", 2140),
             ("block_bases", BLOCK_BASES),

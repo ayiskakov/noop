@@ -192,12 +192,12 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(try store.dayOwner("2026-06-15")?.locked, false)
     }
 
-    // MARK: #771 — adopt the ring's stable serial id (scoped to the active CB-UUID row only).
+    // MARK: #771 — adopt the strap's stable serial id (scoped to the active CB-UUID row only).
 
-    private func addOura(_ store: DeviceRegistryStore, _ id: String, model: String = "Oura Ring 3",
-                         peripheralId: String? = nil, status: DeviceStatus, addedAt: Int) throws {
-        try store.add(PairedDevice(id: id, brand: "Oura", model: model, peripheralId: peripheralId ?? String(id.dropFirst(5)),
-                                   sourceKind: .oura, capabilities: [.hr, .sleep], status: status,
+    private func addStrap(_ store: DeviceRegistryStore, _ id: String, model: String = "WHOOP 5.0 / MG",
+                          peripheralId: String? = nil, status: DeviceStatus, addedAt: Int) throws {
+        try store.add(PairedDevice(id: id, brand: "WHOOP", model: model, peripheralId: peripheralId ?? String(id.dropFirst(6)),
+                                   sourceKind: .liveBLE, capabilities: [.hr, .sleep], status: status,
                                    addedAt: addedAt, lastSeenAt: addedAt))
     }
     private func hrCount(_ dbq: DatabaseQueue, _ id: String) throws -> Int {
@@ -206,10 +206,10 @@ final class DeviceRegistryStoreTests: XCTestCase {
 
     func testAdoptSerialRenamesWhenSerialIsNew() throws {
         let dbq = try makeDB(); let store = DeviceRegistryStore(dbQueue: dbq)
-        let cbuuid = "oura-4DD70E24", serial = "oura-2H3B2405003655"
-        try addOura(store, cbuuid, peripheralId: "4DD70E24", status: .paired, addedAt: 100)
+        let cbuuid = "whoop-4DD70E24", serial = "whoop-2H3B2405003655"
+        try addStrap(store, cbuuid, peripheralId: "4DD70E24", status: .paired, addedAt: 100)
         try store.setActive(cbuuid)
-        try dbq.write { try $0.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('oura-4DD70E24', 10, 55)") }
+        try dbq.write { try $0.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-4DD70E24', 10, 55)") }
 
         XCTAssertTrue(try store.adoptSerialIdentity(from: cbuuid, to: serial))
 
@@ -219,7 +219,7 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(ids, ["my-whoop", serial])            // provisional CB-UUID row renamed away
         let row = try store.all().first { $0.id == serial }
         XCTAssertEqual(row?.peripheralId, "4DD70E24")        // BLE identity carried over → reconnect works
-        XCTAssertEqual(row?.model, "Oura Ring 3")
+        XCTAssertEqual(row?.model, "WHOOP 5.0 / MG")
     }
 
     /// The computed sibling must travel with the pairing.
@@ -228,11 +228,11 @@ final class DeviceRegistryStoreTests: XCTestCase {
     /// DERIVES. It never equals `activeId`, so an exact-match re-key left it behind while the next scoring
     /// pass wrote under `<serialId>-noop` — stranding the computed history under an id nothing reads
     /// again, which is the orphaned-history failure adoption exists to prevent. A ring has no computed
-    /// sibling, so the shipped Oura path could never surface this.
+    /// sibling, so the shipped strap path could never surface this.
     func testAdoptSerialCarriesTheComputedSibling() throws {
         let dbq = try makeDB(); let store = DeviceRegistryStore(dbQueue: dbq)
         let cbuuid = "whoop-4DD70E24", serial = "whoop-MGB1234567"
-        try addOura(store, cbuuid, peripheralId: "4DD70E24", status: .paired, addedAt: 100)
+        try addStrap(store, cbuuid, peripheralId: "4DD70E24", status: .paired, addedAt: 100)
         try store.setActive(cbuuid)
         try dbq.write { db in
             try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-4DD70E24', 10, 55)")
@@ -254,8 +254,8 @@ final class DeviceRegistryStoreTests: XCTestCase {
     func testAdoptSerialMergesComputedSiblingsOnClash() throws {
         let dbq = try makeDB(); let store = DeviceRegistryStore(dbQueue: dbq)
         let cbuuid = "whoop-0102A826", serial = "whoop-MGB7654321"
-        try addOura(store, serial, peripheralId: "OLDPID", status: .paired, addedAt: 100)
-        try addOura(store, cbuuid, peripheralId: "0102A826", status: .paired, addedAt: 200)
+        try addStrap(store, serial, peripheralId: "OLDPID", status: .paired, addedAt: 100)
+        try addStrap(store, cbuuid, peripheralId: "0102A826", status: .paired, addedAt: 200)
         try store.setActive(cbuuid)
         try dbq.write { db in
             try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-MGB7654321-noop', 10, 50)")
@@ -270,13 +270,13 @@ final class DeviceRegistryStoreTests: XCTestCase {
 
     func testAdoptSerialMergesWhenSerialAlreadyExists() throws {
         let dbq = try makeDB(); let store = DeviceRegistryStore(dbQueue: dbq)
-        let serial = "oura-2H3B2405003655", cbuuid2 = "oura-0102A826"
-        try addOura(store, serial, peripheralId: "OLDPID", status: .paired, addedAt: 100)   // prior pairing
-        try addOura(store, cbuuid2, peripheralId: "0102A826", status: .paired, addedAt: 200)
+        let serial = "whoop-2H3B2405003655", cbuuid2 = "whoop-0102A826"
+        try addStrap(store, serial, peripheralId: "OLDPID", status: .paired, addedAt: 100)   // prior pairing
+        try addStrap(store, cbuuid2, peripheralId: "0102A826", status: .paired, addedAt: 200)
         try store.setActive(cbuuid2)
         try dbq.write { db in
-            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('oura-2H3B2405003655', 10, 50)")
-            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('oura-0102A826', 20, 60)")
+            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-2H3B2405003655', 10, 50)")
+            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-0102A826', 20, 60)")
         }
         try store.adoptSerialIdentity(from: cbuuid2, to: serial)
 
@@ -287,15 +287,15 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(row?.peripheralId, "0102A826")        // fresh pairing's BLE identity carried onto serial
     }
 
-    func testAdoptSerialLeavesOtherOuraPairingsUntouched() throws {
+    func testAdoptSerialLeavesOtherPairingsUntouched() throws {
         let dbq = try makeDB(); let store = DeviceRegistryStore(dbQueue: dbq)
-        let other = "oura-99B6BA9D", cbuuid = "oura-D6235E4F", serial = "oura-2H3B2405003655"
-        try addOura(store, other, status: .archived, addedAt: 50)     // a past pairing, NOT to be touched
-        try addOura(store, cbuuid, peripheralId: "D6235E4F", status: .paired, addedAt: 300)
+        let other = "whoop-99B6BA9D", cbuuid = "whoop-D6235E4F", serial = "whoop-2H3B2405003655"
+        try addStrap(store, other, status: .archived, addedAt: 50)     // a past pairing, NOT to be touched
+        try addStrap(store, cbuuid, peripheralId: "D6235E4F", status: .paired, addedAt: 300)
         try store.setActive(cbuuid)
         try dbq.write { db in
-            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('oura-99B6BA9D', 1, 44)")
-            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('oura-D6235E4F', 2, 70)")
+            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-99B6BA9D', 1, 44)")
+            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-D6235E4F', 2, 70)")
         }
         try store.adoptSerialIdentity(from: cbuuid, to: serial)
 
@@ -308,7 +308,7 @@ final class DeviceRegistryStoreTests: XCTestCase {
 
     func testAdoptSerialNoOpWhenSameOrAbsent() throws {
         let store = DeviceRegistryStore(dbQueue: try makeDB())
-        XCTAssertFalse(try store.adoptSerialIdentity(from: "oura-X", to: "oura-X"))       // same id
-        XCTAssertFalse(try store.adoptSerialIdentity(from: "oura-absent", to: "oura-Y"))  // no active row
+        XCTAssertFalse(try store.adoptSerialIdentity(from: "whoop-X", to: "whoop-X"))       // same id
+        XCTAssertFalse(try store.adoptSerialIdentity(from: "whoop-absent", to: "whoop-Y"))  // no active row
     }
 }

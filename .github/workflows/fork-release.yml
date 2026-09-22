@@ -2,9 +2,9 @@
 # "Check for updates" — which reads GitHub `releases/latest`, and GitHub excludes prereleases —
 # points at this fork.
 #
-# The `bump` input (patch / minor / major / none) increments the version IN SOURCE — both
-# android/app/build.gradle.kts (versionName + versionCode) and project.yml (MARKETING_VERSION +
-# CURRENT_PROJECT_VERSION) — and commits that to the dispatched branch, so the built app actually
+# The `bump` input (patch / minor / major / none) increments the version IN SOURCE — project.yml's
+# MARKETING_VERSION (the single source of truth for the app version) + CURRENT_PROJECT_VERSION (the
+# build number) — and commits that to the dispatched branch, so the built app actually
 # REPORTS the new version. Then it publishes a fixed, non-prerelease `v<VERSION>` release with the
 # version-stamped artifacts. releases/latest returns it, so UpdateCheck finds it (isNewer strips the
 # `-staging` suffix, so an installed staging build compares clean).
@@ -58,10 +58,10 @@ jobs:
           OVERRIDE: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
-          GRADLE=android/app/build.gradle.kts
 
-          # Android versionName is the source of truth UpdateCheck compares against.
-          CUR=$(grep -m1 'versionName = "' "$GRADLE" | sed -E 's/.*"([^"]+)".*/\1/')
+          # project.yml's MARKETING_VERSION is the single source of truth UpdateCheck compares against.
+          CUR=$(grep -m1 'MARKETING_VERSION:' project.yml | sed -E 's/.*MARKETING_VERSION: *"?([^" ]+)"?.*/\1/')
+          [ -n "$CUR" ] || { echo "::error::Could not read MARKETING_VERSION from project.yml" >&2; exit 1; }
           IFS=. read -r MA MI PA <<< "$CUR"; MA=${MA:-0}; MI=${MI:-0}; PA=${PA:-0}
           case "${BUMP:-patch}" in
             major) NEW="$((MA+1)).0.0" ;;
@@ -77,15 +77,12 @@ jobs:
           echo "Version: $CUR -> $NEW  (tag $TAG)"
 
           if [ "$NEW" != "$CUR" ]; then
-            # Bump BOTH platforms' version + build number in source, then commit to the branch so the
-            # built artifacts report $NEW (each build number is an independent monotonic counter).
-            ACODE=$(grep -m1 'versionCode = ' "$GRADLE" | sed -E 's/.*versionCode = ([0-9]+).*/\1/')
+            # Bump the version + build number in project.yml, then commit to the branch so the built
+            # artifacts report $NEW (the build number is an independent monotonic counter).
             ICODE=$(grep -m1 'CURRENT_PROJECT_VERSION:' project.yml | sed -E 's/.*"([0-9]+)".*/\1/')
-            sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"$NEW\"/" "$GRADLE"
-            sed -i -E "s/versionCode = [0-9]+/versionCode = $((ACODE+1))/" "$GRADLE"
             sed -i -E "s/MARKETING_VERSION: \"[^\"]+\"/MARKETING_VERSION: \"$NEW\"/" project.yml
             sed -i -E "s/CURRENT_PROJECT_VERSION: \"[0-9]+\"/CURRENT_PROJECT_VERSION: \"$((ICODE+1))\"/" project.yml
-            # In-app "What's New": generate the AppChangelog entry (both platforms) + bump its constant
+            # In-app "What's New": generate the AppChangelog entry + bump its constant
             # from docs/releases/<TAG>.md's whatsnew: front-matter, so the in-app card ships in sync with
             # this version. Warn (don't fail) if the notes file / its front-matter is missing.
             if [ -f "docs/releases/${TAG}.md" ]; then
@@ -148,46 +145,12 @@ jobs:
             fi
             {
               printf '\n---\n\n**Downloads** — NOOP Staging identity, installs **beside** the official app (separate data):\n'
-              printf -- '- **Android** — `NOOP-android-v%s.apk` (`com.noop.whoop.staging`)\n' "$NEW"
               printf -- '- **macOS** — `NOOP-macos-v%s.zip` (unzip, then right-click → Open)\n' "$NEW"
               printf -- '- **iOS** — `NOOP-ios-unsigned-v%s.ipa` (AltStore / Sideloadly)\n' "$NEW"
             } >> "$BODY"
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$(git rev-parse HEAD)" \
               --title "NOOP ${NEW}" --notes-file "$BODY"
           fi
-
-  android:
-    needs: bump
-    runs-on: ubuntu-latest
-    # Uploads the built APK to the release created by the `bump` job.
-    permissions:
-      contents: write
-    defaults:
-      run:
-        working-directory: android
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          ref: ${{ needs.bump.outputs.sha }}   # build the bumped commit
-      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-      # Release-only (no debug APK). Signed with the committed fork-debug.keystore via the debug
-      # signingConfig storeFile (release falls back to it when no keystore.properties is present);
-      # -PstagingRelease gives it the .staging app id so it installs beside the official app.
-      - name: Build staging-release APK
-        run: ./gradlew assembleFullRelease -PstagingRelease
-      - name: Version the filename + attach
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VER: ${{ needs.bump.outputs.ver }}
-        run: |
-          cp app/build/outputs/apk/full/release/*.apk "NOOP-android-v${VER}.apk"
-          gh release upload "${{ needs.bump.outputs.tag }}" "NOOP-android-v${VER}.apk" \
-            --repo "$GITHUB_REPOSITORY" --clobber
 
   macos:
     needs: bump

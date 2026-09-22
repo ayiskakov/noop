@@ -37,7 +37,7 @@ effect.
 
 | Profile | Start here | Interpretation |
 |---|---|---|
-| WHOOP 4 | [WHOOP 4 profile](PROTOCOL_WHOOP4.md) | Legacy connection, framing, identity and record conventions |
+| WHOOP 4 | [WHOOP 4 profile](PROTOCOL_WHOOP4.md) | Legacy connection, framing, identity and record conventions — protocol reference only; NOOP reports a 4.0 as detected-but-unsupported and does not connect |
 | WHOOP 5/MG | [WHOOP 5/MG profile](PROTOCOL_WHOOP5.md) | Shared transport; check capabilities independently |
 | All readers | [Shared concepts](PROTOCOL_CONCEPTS.md) | Integrity, request lifecycle and durable history handling |
 
@@ -77,7 +77,7 @@ NOOP is an independent, offline companion and is not affiliated with WHOOP or a
 medical device. See [disclaimer](../DISCLAIMER.md) and [attribution](../ATTRIBUTION.md).
 The existing work builds on `johnmiddleton12/my-whoop` (WHOOP 4) and
 `b-nnett/goose` (WHOOP 5); further credits remain with the historical observations.
-The Swift protocol package and Android protocol entry points are indexed in the
+The Swift protocol package entry points are indexed in the
 [file map](PROTOCOL_IMPLEMENTATION.md#11-file-map).
 
 ## Legacy anchors

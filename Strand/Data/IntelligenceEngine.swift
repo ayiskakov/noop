@@ -1055,12 +1055,6 @@ final class IntelligenceEngine: ObservableObject {
             // suspension point. No such constraint applies here, and the emitted line is identical either
             // way — do not "align" the two shapes.
             var skippedSleepDays: [(day: String, hrSamples: Int)] = []
-            // #938: the WHOOP 4.0 ADC offset is per-device, not per-night. Learn one anchor per owner
-            // from the whole scan window and reuse it for every night so cross-night deviations survive.
-            let skinAnchorScanFrom = nowLocalMidnight - (maxDays - 1) * 86_400 - StreamReadCap.lookbackSeconds
-            let skinAnchorScanTo = nowLocalMidnight + 18 * 3_600
-            var skinAnchorByOwner: [String: Double] = [:]
-            var skinAnchorResolvedOwners = Set<String>()
             // #1005: the reuse cache, snapshotted in from the main-actor stored property; mutated here and
             // returned so it can be written back after `.value`. `dayCacheReused` counts hits for a one-line
             // diagnostic carried on `skippedDayLines`.
@@ -1142,28 +1136,14 @@ final class IntelligenceEngine: ObservableObject {
                 // through to the identical full path.
                 var dayCacheKey: String? = nil
                 if dayCacheEligible,
-                   let ownerFamily = DeviceFamily.forRegistryDevice(
+                   DeviceFamily.forRegistryDevice(
                         model: regDevices.first(where: { $0.id == owner })?.model,
-                        brand: regDevices.first(where: { $0.id == owner })?.brand) {
-                    // Resolve the 4.0 window-wide anchor BEFORE the gate (it's a key input); once per owner,
-                    // reads the sparse skin stream — not the big HR one. This pre-populates `skinAnchorByOwner`,
-                    // so the existing per-day anchor block below sees the owner already resolved and is a
-                    // no-op — byte-identical anchor either way. Skipped for a 5/MG (anchor stays nil).
-                    if ownerFamily == .whoop4, !skinAnchorResolvedOwners.contains(owner) {
-                        let windowSkin = (try? await store.skinTempSamples(deviceId: owner,
-                                                                           from: skinAnchorScanFrom,
-                                                                           to: skinAnchorScanTo,
-                                                                           limit: StreamReadCap.skin)) ?? []
-                        if let anchor = Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { $0.raw }) {
-                            skinAnchorByOwner[owner] = anchor
-                        }
-                        skinAnchorResolvedOwners.insert(owner)
-                    }
+                        brand: regDevices.first(where: { $0.id == owner })?.brand) != nil {
                     if let fp = try? await store.hrFingerprint(deviceId: owner, from: from, to: to),
                        let streamFp = try? await store.dayStreamFingerprint(deviceId: owner, from: from, to: to) {
                         let key = AnalyzeRecentDayCache.cacheKey(
                             owner: owner, hrCount: fp.count, hrMaxTs: fp.maxTs,
-                            skinAnchorRaw: skinAnchorByOwner[owner],
+                            skinAnchorRaw: nil,
                             // #29: the OTHER scored streams for this night. Without it a night whose R-R
                             // (or resp/SpO2) landed after its HR keys identically to the HR-only scan it
                             // was scored from, and the HRV-less result is re-served for the rest of the
@@ -1213,64 +1193,18 @@ final class IntelligenceEngine: ObservableObject {
                 let strictWhoop5RR = (try? await store.isWhoop5RRSource(deviceId: owner,
                     unlabelledAliasOfWhoop5: activeWhoop5RR && owner == Repository.whoopSource)) ?? true
                 let rr = await rrWindow.rows(owner: owner, from: from, to: to, allowReuse: !strictWhoop5RR)
-                // `forScoring` drops an Oura ring's respiration rows: those are the ring's OWN per-window
-                // RATE (0x6A, milli-bpm, ~1 row per 5 min), stored as instrumentation, while the stager
-                // reads this stream as a ~1 Hz raw ADC waveform. Refusing by provenance keeps the
-                // instrumentation out of every scored path by construction rather than by cadence luck.
-                // A WHOOP owner is unaffected, and this day scores exactly as it did before those rows
-                // existed. See `OuraRespScale.forScoring`.
-                // ONE read, TWO consumers, and they must not be confused for each other. `forScoring`
-                // strips an Oura ring's rows from the STAGER's input: the stager reads this stream as a
-                // ~1 Hz raw ADC waveform and peak-detects it, and the ring's rows are a per-window RATE —
-                // the wrong shape, however good the rate. `forVendorRate` hands those same rows to
-                // `analyzeDay` as what they are: the device's OWN measured respiratory rate, which
-                // becomes the night's `respRateBpm` instead of the RSA estimate. A WHOOP owner gets the
-                // rows in the first list and nothing in the second, so its night is unchanged.
-                let respRows = (try? await store.respSamples(deviceId: owner, from: from, to: to,
-                                                             limit: 200_000)) ?? []
-                let resp = OuraRespScale.forScoring(respRows, deviceId: owner)
-                let vendorResp = OuraRespScale.forVendorRate(respRows, deviceId: owner)
+                let resp = (try? await store.respSamples(deviceId: owner, from: from, to: to,
+                                                         limit: 200_000)) ?? []
                 let grav = (try? await store.gravitySamples(deviceId: owner, from: from, to: to,
                                                             limit: StreamReadCap.gravity)) ?? []
                 let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
                 let skin = (try? await store.skinTempSamples(deviceId: owner, from: from, to: to, limit: StreamReadCap.skin)) ?? []
-                // #93: WHOOP 4.0 raw SpO2 PPG samples for the night; analyzeDay banks the nightly red/IR ADC
+                // #93: raw SpO2 PPG samples for the night, if any; analyzeDay banks the nightly red/IR ADC
                 // means on the DailyMetric. Empty on a 5/MG (no v24 spo2 channels) → the raw means stay nil.
                 let spo2 = (try? await store.spo2Samples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
-                // #938: the strap family that WROTE this owner's skin-temp rows, so analyzeDay converts the raw
-                // register on the right scale (5/MG banks centidegrees, a WHOOP 4.0 v24 banks a raw ADC). The
-                // registry knows each device's model; unknown/non-WHOOP owners fall back to `.whoop5` (the prior
-                // /100 behaviour), so this only changes the mapping for a device positively identified as a 4.0.
+                // #938: the strap family that wrote this owner's skin-temp rows (always `.whoop5` now; stated,
+                // not assumed, so the conversion names the hardware it applies to).
                 let skinFamily = Self.skinTempFamily(forOwner: owner, devices: regDevices)
-                // #1467: the worn-gate timestamp tolerance for this owner (0 for WHOOP, byte-identical).
-                let skinWornToleranceSec = Self.skinTempWornToleranceSec(forOwner: owner, devices: regDevices)
-                // #938 (second capture): learn THIS device's worn skin-temp anchor raw ONCE, WINDOW-WIDE (the
-                // whole scan window's skin samples), not per-night. The @72 skin-temp ADC's register offset is
-                // per-device — a second real 4.0 strap shares the no-contact floor (~509) + 11-bit saturation
-                // (2047) but a worn band ~1100–1600 (nightly mean raw ~1290), which the global 826 anchor maps
-                // to 47–72 °C, so 100% of its worn samples fail the 28–42 °C gate (kept=0, no baseline, no
-                // signal). WINDOW-WIDE, not per-night: a per-night re-centre would subtract each night's own
-                // mean and ERASE the cross-night deviation the skinTempDevC signal exists to carry.
-                // Deterministic per run; SAFE because the skin baseline is re-folded from the SAME window's
-                // nightly means every run, so this constant offset cancels in the deviation. nil for a non-4.0
-                // owner (`.whoop5` ignores the anchor) or when <100 in-band samples exist → the conversion
-                // falls back to the global anchor (byte-identical to today).
-                let skinAnchorRaw: Double?
-                if skinFamily == .whoop4 {
-                    if !skinAnchorResolvedOwners.contains(owner) {
-                        let windowSkin = (try? await store.skinTempSamples(deviceId: owner,
-                                                                           from: skinAnchorScanFrom,
-                                                                           to: skinAnchorScanTo,
-                                                                           limit: StreamReadCap.skin)) ?? []
-                        if let anchor = Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { $0.raw }) {
-                            skinAnchorByOwner[owner] = anchor
-                        }
-                        skinAnchorResolvedOwners.insert(owner)
-                    }
-                    skinAnchorRaw = skinAnchorByOwner[owner]
-                } else {
-                    skinAnchorRaw = nil
-                }
                 // Wrist-wear events in the night window, paired into off-wrist [start, end) intervals for the
                 // off-wrist sleep backstop (#500). The HR-gap proxy in the stager is the always-on guard;
                 // these explicit intervals sharpen it under the FRACTIONAL rule (#504) , a session is dropped
@@ -1430,13 +1364,11 @@ final class IntelligenceEngine: ObservableObject {
                 let res = AnalyticsEngine.analyzeDay(day: day,
                                                      strainDiag: { strainDiagLines.append($0) },
                                                      hr: hr, rr: rr, resp: resp,
-                                                     vendorResp: vendorResp, gravity: grav,
+                                                     gravity: grav,
                                                      steps: steps, dayHr: dayHr, daySteps: daySteps,
                                                      dayGravity: dayGrav,
                                                      skinTemp: skin,
                                                      skinTempFamily: skinFamily,   // #938
-                                                     skinTempAnchorRaw: skinAnchorRaw,   // #938 second capture
-                                                     skinTempWornToleranceSec: skinWornToleranceSec,   // #1467
                                                      spo2: spo2,                   // #93
                                                      profile: up, baselines: baselines1, maxHROverride: maxHR,
                                                      tzOffsetSeconds: tzOffset, wristOff: wristOff,
@@ -1678,37 +1610,18 @@ final class IntelligenceEngine: ObservableObject {
                                                             beatAccurate: respGateAcc,
                                                             rrIntegrity: respGateIntegrity)
                 // #103/queue-11a: SpO₂ candidate nightly mean. Only computed when the display toggle is
-                // ON, and the transform is device-conditional (#1086-style brand lookup, matching
-                // `skinTempWornToleranceSec`'s idiom just above): a WHOOP owner averages the in-band
-                // (70–100) `spo2_candidate_82` V18Aux byte; an Oura owner averages the ring's own `0x6F`
-                // SpO2 (`spo2`, already fetched above for `nightlySpo2RawMeans`) through the ceiling@100
-                // transform — see `AnalyticsEngine.nightlySpo2CeilingMean`'s doc for why ceiling@100 is
-                // queue 11a's starting choice. nil on a WHOOP 4.0 (no v18 aux stream) with no candidate
-                // decode, an Oura night with no in-window plausible sample, or when the toggle is OFF.
+                // ON: the in-band (70–100) `spo2_candidate_82` V18Aux byte, averaged over the night. nil
+                // when there is no v18 aux stream or no candidate decode, or when the toggle is OFF.
                 // The mean is written to metricSeries as "spo2_candidate" in pass 2, never to `spo2Pct` —
                 // the guard test `testHistoricalV18OpticalFieldsAreNotNamedPhysiologically` enforces that
                 // boundary for the WHOOP path.
                 var spo2CandidateMean: Int? = nil
                 if spo2CandidateDisplayOn {
-                    // Through the catalog, NOT `regDevices…?.brand == "Oura"`. Kotlin resolves this with
-                    // `DeviceBrandCatalog.isOura(owner)` — id-PREFIX to `sourceKind` — and the Swift twin is
-                    // byte-identical, so the brand-string compare that shipped here made the two platforms
-                    // key on different things: a device with an `oura-` id but no registry row (or a row
-                    // whose brand text differs) was Oura on Android and not on iOS, so Android computed the
-                    // ceiling@100 candidate and iOS did not. `Repository.activeDeviceIsOura` already routes
-                    // through the catalog for exactly this reason ("rather than an ad-hoc 'oura' literal").
-                    let ownerIsOura = DeviceBrandCatalog.isOura(owner)
-                    if ownerIsOura {
-                        if let cand = AnalyticsEngine.nightlySpo2CeilingMean(res.sleepSessions, spo2: spo2) {
+                    let auxSamples = (try? await store.v18AuxSamples(
+                        deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                    if !auxSamples.isEmpty {
+                        if let cand = AnalyticsEngine.nightlySpo2CandidateMean(res.sleepSessions, aux: auxSamples) {
                             spo2CandidateMean = cand.mean
-                        }
-                    } else {
-                        let auxSamples = (try? await store.v18AuxSamples(
-                            deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
-                        if !auxSamples.isEmpty {
-                            if let cand = AnalyticsEngine.nightlySpo2CandidateMean(res.sleepSessions, aux: auxSamples) {
-                                spo2CandidateMean = cand.mean
-                            }
                         }
                     }
                 }
@@ -2340,41 +2253,6 @@ final class IntelligenceEngine: ObservableObject {
         // only , imported "my-whoop" rows are never touched (a BLE-only WHOOP 4.0 user has no import
         // fallback). Rows older than the window keep their old keys (cosmetic off-by-one, acceptable).
         // yyyy-MM-dd sorts chronologically, so the string range IS a date range.
-        // ── Source-only Charge/Rest fold for wearable imports (Oura / Fitbit / Garmin / Health Connect) ──
-        // Same honesty gap the watch fold above closes (#823), extended to the other import-only sources: a
-        // user who ONLY imports an Oura/Fitbit/Garmin export (or Health Connect) has DAILY aggregates (HRV +
-        // resting HR) but no raw HR stream, so the raw-HR loop never scored their days and the import left
-        // recovery nil , Today/Recovery show a blank Charge. Score it from the daily aggregate vs the person's
-        // own baseline with the SAME `watchRecoveries` engine the apple fold uses (which reuses
-        // RecoveryScorer.recovery verbatim), then write the score under the COMPUTED ("-noop") source so it
-        // merges onto Today exactly like a live day. The imported daily row keeps its raw values untouched;
-        // the computed row carries the NOOP-derived Charge + the Rest composite. HONEST DATA: the engine
-        // returns nil + calibrating until the HRV baseline is usable, so an import-only day stays calibrating
-        // rather than faking a number. The strap and a real WHOOP/Apple import keep winning , we skip any day
-        // already scored this pass (`dailies`) or owned by a WHOOP/Apple import. The window matches the
-        // computed reconcile below, so the fold's rows survive the stale-row eviction.
-        var importScoredDays = Set(dailies.map { $0.day }).union(importedWhoopDays).union(appleHealthDays)
-        for source in Repository.wearableImportSources {
-            let rows = ((try? await store.dailyMetrics(deviceId: source, from: oldestDay, to: newestDay)) ?? [])
-                .sorted { $0.day < $1.day }
-            guard !rows.isEmpty else { continue }
-            let byDay = Dictionary(rows.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
-            for w in Self.watchRecoveries(appleRows: rows, strapRecoveryDays: importScoredDays) {
-                guard let recovery = w.recovery, let row = byDay[w.day] else { continue }
-                let scored = row.with(recovery: recovery, skinTempDevC: row.skinTempDevC,
-                                      skinTempC: row.skinTempC)
-                dailies.append(scored)
-                importScoredDays.insert(w.day)
-                resolvedScoreOwnerByDay[w.day] = source
-                if let rest = AnalyticsEngine.Rest.composite(daily: scored) {
-                    restPoints.append(MetricPoint(day: w.day, key: "sleep_performance", value: rest))
-                }
-                out.append(Computed(day: w.day, recovery: recovery, strain: scored.strain,
-                                    sleepMin: scored.totalSleepMin, hrv: scored.avgHrv, rhr: scored.restingHr,
-                                    source: .computed, confidence: w.confidence))
-            }
-        }
-
         // Apply the exact snapshot only after current-score traces and derived series were produced from the
         // current inputs. A legacy snapshot must not masquerade as a value recalculated against today's
         // baselines; it only protects persisted R-R-derived cells from a destructive nil overwrite.
@@ -3022,19 +2900,6 @@ final class IntelligenceEngine: ObservableObject {
         // Non-WHOOP owner (nil) shares the non-4.0 temp scale, so coalesce to `.whoop5` — same conversion
         // as before; the brand-aware resolver just no longer mislabels the owner as a WHOOP (#1086).
         return DeviceFamily.forRegistryDevice(model: d?.model, brand: d?.brand) ?? .whoop5
-    }
-
-    /// #1467: the skin-temp "worn" gate's timestamp tolerance for `owner` — 0 (exact match) for a WHOOP
-    /// strap, whose HR and skin-temp are one co-sampled 1 Hz stream, so this is byte-identical to before
-    /// this change for every WHOOP night. An Oura ring streams the two on independent clocks (dense HR,
-    /// ~1/min skin-temp), so an exact-second match only ever caught ~40-55% of real worn samples — every
-    /// one of 7 straight real nights landed just under `minSkinTempSamples`, ground-truthed against the
-    /// Oura app's own reported skin-temp trend (queue 11b, `worklog/BOARD.md`). Same registry lookup
-    /// `skinTempFamily` uses; deliberately its own small helper rather than folding into `DeviceFamily`,
-    /// which has no Oura case (#1086) and a tolerance-in-seconds isn't a temperature-scale concern.
-    nonisolated static func skinTempWornToleranceSec(forOwner owner: String, devices: [PairedDevice]) -> Int {
-        devices.first(where: { $0.id == owner })?.brand == "Oura"
-            ? AnalyticsEngine.defaultOuraWornToleranceSec : 0
     }
 
     /// #137: re-score under-sampled manual workouts. A `manual` workout is scored from the live HR

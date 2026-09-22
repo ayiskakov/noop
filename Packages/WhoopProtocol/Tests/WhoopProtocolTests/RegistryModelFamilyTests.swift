@@ -1,131 +1,112 @@
 import XCTest
 @testable import WhoopProtocol
 
-/// Registry model-label → `DeviceFamily` resolution (#171). Mirrors the Android `RegistryModelFamilyTest`.
+/// Registry row → `DeviceFamily` resolution (#171, #1086).
 ///
-/// The device registry holds several historical spellings for the same hardware — the Add-Device
-/// wizard's bare "4.0" / "5.0 MG", the full picker labels ("WHOOP 4.0" / "WHOOP 5.0 / MG"), and the
-/// legacy seeded "my-whoop" row's bare "WHOOP". Call sites that compared ONE spelling silently missed
-/// the others (issue #171: wizard-paired 4.0 straps decoded on the 5/MG /100 scale, ~8 °C skin temps
-/// in the Deep Timeline). These tests pin the full label contract so a new spelling — or a regression
-/// back to a single-spelling comparison — fails loudly.
+/// NOOP supports one strap family, so the question a registry row has to answer is no longer "which
+/// generation?" but "is this row a WHOOP at all?" — and that still matters, because an install
+/// upgraded from an older build can hold rows for devices NOOP no longer drives (a ring, a watch, a
+/// generic strap). Answering yes for one of those is the #171 mistake wearing #1086's clothes: a
+/// family question settled by a fall-through rather than by evidence.
+///
+/// The registry also holds several historical spellings for the same hardware — the Add-Device
+/// wizard's bare "5.0 MG", the full picker label "WHOOP 5.0 / MG", and the legacy seeded "my-whoop"
+/// row's bare "WHOOP". `confirmedRegistryFamily` is the one place allowed to read them, and it
+/// distinguishes a POSITIVELY identified 5/MG from a row that merely fails to contradict one.
 final class RegistryModelFamilyTests: XCTestCase {
 
-    // MARK: - WHOOP 4.0 — every stored spelling must positively identify (the #171 fix)
+    // MARK: - confirmedRegistryFamily — positive evidence only
 
-    func testWizardBare40LabelResolvesToWhoop4() {
-        XCTAssertEqual(DeviceFamily.forRegistryModel("4.0"), .whoop4)
+    func testEveryStored5MGSpellingIsPositivelyIdentified() {
+        for model in ["5.0", "5.0 MG", "WHOOP 5.0", "WHOOP 5.0 / MG", "MG", "whoop5",
+                      "5.0 mg", "whoop 5.0 / mg"] {
+            XCTAssertEqual(DeviceFamily.confirmedRegistryFamily(model: model, brand: "WHOOP"), .whoop5,
+                           "\(model) must positively identify a 5/MG")
+        }
     }
 
-    func testFullPicker40LabelResolvesToWhoop4() {
-        XCTAssertEqual(DeviceFamily.forRegistryModel("WHOOP 4.0"), .whoop4)
+    /// The legacy "WHOOP" label predates the wizard and was written identically for every generation,
+    /// so it identifies NOTHING. Nil is the honest answer; callers that need a concrete family coalesce
+    /// it themselves, and callers asking an identity question must not.
+    func testLegacyAndBlankLabelsIdentifyNothing() {
+        for model in ["WHOOP", "", "4.0", "WHOOP 4.0", "Ring Gen3", "garmin-hrm"] {
+            XCTAssertNil(DeviceFamily.confirmedRegistryFamily(model: model, brand: "WHOOP"),
+                         "\(model) carries no 5/MG evidence")
+        }
+        XCTAssertNil(DeviceFamily.confirmedRegistryFamily(model: nil, brand: nil))
     }
 
-    // MARK: - WHOOP 5/MG — both spellings keep the /100 path
-
-    func testWizard5MgLabelResolvesToWhoop5() {
-        XCTAssertEqual(DeviceFamily.forRegistryModel("5.0 MG"), .whoop5)
-        // "WHOOP 5.0 MG" is a spelling no writer produces today (the picker writes
-        // "WHOOP 5.0 / MG"); it lands on the safe .whoop5 default, which happens to be correct.
-        XCTAssertEqual(DeviceFamily.forRegistryModel("WHOOP 5.0 MG"), .whoop5)
-        XCTAssertEqual(DeviceFamily.forRegistryModel("WHOOP 5.0 / MG"), .whoop5)
+    /// A positively non-WHOOP brand is never a WHOOP, whatever its model string says.
+    func testNonWhoopBrandIsNeverConfirmed() {
+        for brand in ["Oura", "Apple", "Garmin", "Polar"] {
+            XCTAssertNil(DeviceFamily.confirmedRegistryFamily(model: "5.0 MG", brand: brand))
+        }
     }
 
-    // MARK: - Legacy + unknowns — the prior .whoop5 fallback, unchanged
+    // MARK: - forRegistryDevice — nil means "not a WHOOP", not "unknown generation"
 
-    /// The seeded "my-whoop" row predates the wizard and was written identically for 4.0 and 5/MG
-    /// installs, so "WHOOP" carries no family information; it keeps the prior fallback.
-    func testLegacySeededWhoopLabelKeepsWhoop5Fallback() {
-        XCTAssertEqual(DeviceFamily.forRegistryModel("WHOOP"), .whoop5)
-    }
-
-    /// Model-ONLY resolution is brand-blind: an Oura/Garmin model string has no WHOOP spelling, so it
-    /// lands on the `.whoop5` default. This is why a non-WHOOP device needs `forRegistryDevice` (#1086) —
-    /// the brand is the evidence the model string lacks.
-    func testNilEmptyAndGarbageFallBackToWhoop5() {
-        XCTAssertEqual(DeviceFamily.forRegistryModel(nil), .whoop5)
-        XCTAssertEqual(DeviceFamily.forRegistryModel(""), .whoop5)
-        XCTAssertEqual(DeviceFamily.forRegistryModel("Oura Ring Gen3"), .whoop5)
-        XCTAssertEqual(DeviceFamily.forRegistryModel("garmin-hrm"), .whoop5)
-    }
-
-    // MARK: - Brand-aware resolution (#1086) — a non-WHOOP brand must NOT resolve to a WHOOP family
-
-    /// The core of #1086: an Oura ring carries `brand == "Oura"`, so it resolves to `nil` (not a WHOOP)
-    /// instead of silently falling through to `.whoop5`, whatever its model string. Because the brand is
-    /// tested BEFORE the model switch, every generation resolves to `nil` — no model-string enumeration
-    /// to keep in sync with new rings (Oura Ring 3/4/5 and the cloud fallback are all one code path).
     func testNonWhoopBrandResolvesToNil() {
-        for model in ["Oura Ring 3", "Oura Ring 4", "Oura Ring 5", "Oura (cloud)"] {
+        for model in ["5.0 MG", "WHOOP 5.0 / MG", "Watch", nil] {
             XCTAssertNil(DeviceFamily.forRegistryDevice(model: model, brand: "Oura"),
-                         "Oura model \(model) must not resolve to a WHOOP family")
+                         "an Oura row must never resolve to a WHOOP family")
         }
         XCTAssertNil(DeviceFamily.forRegistryDevice(model: nil, brand: "Garmin"))
         XCTAssertNil(DeviceFamily.forRegistryDevice(model: "Watch", brand: "Apple"))
     }
 
-    /// A WHOOP brand still resolves by model spelling, exactly as `forRegistryModel` does.
-    func testWhoopBrandResolvesByModel() {
-        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "4.0", brand: "WHOOP"), .whoop4)
-        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "WHOOP 4.0", brand: "WHOOP"), .whoop4)
+    /// A WHOOP brand — or no brand at all, which carries no non-WHOOP signal — resolves to the one
+    /// supported family regardless of model spelling.
+    func testWhoopOrUnbrandedRowsResolveToWhoop5() {
         XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "5.0 MG", brand: "WHOOP"), .whoop5)
-        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "WHOOP 5.0 / MG", brand: "WHOOP"), .whoop5)
-    }
-
-    /// A nil/empty brand carries no non-WHOOP signal (legacy rows, WHOOP straps), so it defers to the
-    /// model mapping — never `nil`.
-    func testMissingBrandDefersToModel() {
-        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "4.0", brand: nil), .whoop4)
-        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "5.0 MG", brand: ""), .whoop5)
+        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "WHOOP 5.0 / MG", brand: "whoop"), .whoop5)
+        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: "WHOOP", brand: nil), .whoop5)
+        XCTAssertEqual(DeviceFamily.forRegistryDevice(model: nil, brand: ""), .whoop5)
         XCTAssertEqual(DeviceFamily.forRegistryDevice(model: nil, brand: nil), .whoop5)
-    }
-
-    /// "No scoring change" half of #1086: the consumers that need a CONCRETE family coalesce a non-WHOOP
-    /// `nil` to `.whoop5` (the non-4.0 skin-temp scale), so the family a non-WHOOP row is *treated as* is
-    /// identical to before the brand-aware resolver existed. Guards the skin-temp/day-owner call sites
-    /// against a scale regression.
-    ///
-    /// ⚠️ Deliberately scoped to those callers. It once said "every consumer", which was true when written
-    /// and became wrong: an identity question ("is it a 5/MG?") must NOT coalesce — see
-    /// `isWhoop5Registry` and the tests below.
-    func testNonWhoopCoalescesToPriorLabel() {
-        for model in ["Oura Ring 3", "Oura Ring 4", "Oura Ring 5"] {
-            XCTAssertEqual(DeviceFamily.forRegistryDevice(model: model, brand: "Oura") ?? .whoop5,
-                           DeviceFamily.forRegistryModel(model), "\(model) treated-as family must be unchanged")
-        }
     }
 
     // MARK: - isWhoop5Registry — the identity question, which must never coalesce
 
-    /// The defect this helper exists to prevent: a non-WHOOP brand must answer NO, whatever its model
-    /// string — including the ones `forRegistryModel` maps to `.whoop5` by fall-through. Written against
-    /// the real registry row of an Oura Gen3 (`brand "Oura"`, `model "Oura Ring 3"`), which under the old
-    /// `forRegistryDevice(…) ?? .whoop5 == .whoop5` shape answered YES and inherited WHOOP-5 empty-state
-    /// copy pointing at an R-R/RSA estimate the ring's banked stream can never produce.
-    func testIsWhoop5RegistryIsFalseForNonWhoopBrands() {
-        for model in ["Oura Ring 3", "Oura Ring 4", "Oura Ring 5", "Oura (cloud)", nil] {
+    /// The shape this helper exists to make unwriteable: `forRegistryDevice(…) ?? .whoop5 == .whoop5`
+    /// answers YES for a leftover non-WHOOP row, because the coalesce throws away the brand evidence.
+    func testIdentityQuestionSaysNoForANonWhoopRow() {
+        for model in ["5.0 MG", "WHOOP 5.0 / MG", "Ring Gen3", nil] {
             XCTAssertFalse(DeviceFamily.isWhoop5Registry(model: model, brand: "Oura"),
-                           "Oura model \(model ?? "nil") must not be treated as a WHOOP 5")
+                           "an Oura row is not a 5/MG, whatever its model string says")
         }
         XCTAssertFalse(DeviceFamily.isWhoop5Registry(model: "Watch", brand: "Apple"))
         XCTAssertFalse(DeviceFamily.isWhoop5Registry(model: nil, brand: "Garmin"))
     }
 
-    /// A real WHOOP 5/MG still answers YES, so #623's empty-state copy is unchanged for the straps it was
-    /// written for — the whole point of fixing this narrowly.
-    func testIsWhoop5RegistryIsTrueForWhoop5() {
+    func testIdentityQuestionSaysYesForAWhoopOrUnbrandedRow() {
         XCTAssertTrue(DeviceFamily.isWhoop5Registry(model: "5.0 MG", brand: "WHOOP"))
         XCTAssertTrue(DeviceFamily.isWhoop5Registry(model: "WHOOP 5.0 / MG", brand: "WHOOP"))
-        // Legacy rows: no brand recorded, so the model mapping decides — including the bare-"WHOOP"
-        // fall-through that #171 documents as 5.0-family.
         XCTAssertTrue(DeviceFamily.isWhoop5Registry(model: "WHOOP", brand: nil))
         XCTAssertTrue(DeviceFamily.isWhoop5Registry(model: nil, brand: ""))
     }
 
-    /// A WHOOP 4.0 answers NO — it is not the 5/MG family — which is what keeps a 4.0-v24 that banks SpO2
-    /// on the generic empty copy rather than "unsupported on this strap".
-    func testIsWhoop5RegistryIsFalseForWhoop4() {
-        XCTAssertFalse(DeviceFamily.isWhoop5Registry(model: "4.0", brand: "WHOOP"))
-        XCTAssertFalse(DeviceFamily.isWhoop5Registry(model: "WHOOP 4.0", brand: nil))
+    // MARK: - the family axis itself
+
+    /// One supported family. Pinned so adding a case is a deliberate act that reddens this suite
+    /// rather than quietly widening every `switch family` in the package.
+    func testOnlyOneFamilyIsSupported() {
+        XCTAssertEqual(DeviceFamily.allCases, [.whoop5])
+    }
+
+    /// A WHOOP 4.0 strap is still RECOGNISED on the air — it just isn't connectable. Reporting it as
+    /// detected-but-unsupported is the honest outcome; silently ignoring the advertisement would leave
+    /// a 4.0 owner with an app that scans forever and says nothing.
+    func testWhoop4IsRecognisedButNotConnectable() {
+        let whoop4 = WhoopGattServiceFamily.whoop4
+        XCTAssertNil(whoop4.connectableDeviceFamily)
+        XCTAssertFalse(whoop4.isConnectable)
+        XCTAssertTrue(WhoopGattServiceFamily.unsupportedFamilies.contains(whoop4))
+        XCTAssertEqual(WhoopGattServiceFamily.forServiceUUIDString("61080001-8d6d-82b8-614a-1c8cb0f8dcc6"),
+                       whoop4)
+        XCTAssertTrue(whoop4.diagnosticUnsupportedMessage.contains("WHOOP 4.0"))
+    }
+
+    func testOnlyTheFd4bServiceIsConnectable() {
+        XCTAssertEqual(WhoopGattServiceFamily.allCases.filter(\.isConnectable), [.maverickGooseFD4B])
+        XCTAssertEqual(WhoopGattServiceFamily.maverickGooseFD4B.connectableDeviceFamily, .whoop5)
     }
 }

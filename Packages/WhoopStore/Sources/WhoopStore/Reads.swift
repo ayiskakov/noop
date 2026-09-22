@@ -269,10 +269,8 @@ extension WhoopStore {
                   (SELECT COUNT(*) FROM ppgHrSample WHERE deviceId = :d AND ts >= :f AND ts <= :t) AS pc,
                   (SELECT COALESCE(MAX(ts), 0) FROM ppgHrSample WHERE deviceId = :d AND ts >= :f AND ts <= :t) AS pm,
                   (SELECT COUNT(*) FROM rrInterval WHERE deviceId = :d AND ts >= :f AND ts <= :t
-                     AND (srcChannel IS NULL OR srcChannel <> :rrx)
                      AND (tsSuspect IS NULL OR tsSuspect <> 1)) AS rc,
                   (SELECT COALESCE(MAX(ts), 0) FROM rrInterval WHERE deviceId = :d AND ts >= :f AND ts <= :t
-                     AND (srcChannel IS NULL OR srcChannel <> :rrx)
                      AND (tsSuspect IS NULL OR tsSuspect <> 1)) AS rm,
                   (SELECT COUNT(*) FROM rrInterval WHERE deviceId = :d AND ts >= :f AND ts <= :t
                      AND srcChannel = 5 AND (tsSuspect IS NULL OR tsSuspect <> 1)) AS w5,
@@ -295,8 +293,7 @@ extension WhoopStore {
                   (SELECT COALESCE(MAX(ts), 0) FROM sleepStateSample WHERE deviceId = :d AND ts >= :f AND ts <= :t) AS bm,
                   (SELECT COUNT(*) FROM event WHERE deviceId = :d AND ts >= :f AND ts <= :t) AS ec,
                   (SELECT COALESCE(MAX(ts), 0) FROM event WHERE deviceId = :d AND ts >= :f AND ts <= :t) AS em
-                """, arguments: ["d": deviceId, "f": from, "t": to,
-                                 "rrx": RRSourceChannel.spo2Ibi.rawValue]) else { return "" }
+                """, arguments: ["d": deviceId, "f": from, "t": to]) else { return "" }
             let keys = ["p", "r", "x", "o", "g", "z", "t", "b", "e"]
             let parts = keys.map { key -> String in
                 let count: Int = row[key + "c"], maxTs: Int = row[key + "m"]
@@ -406,26 +403,18 @@ extension WhoopStore {
     /// WHOOP 5 reads one verified transport; its unlabelled legacy rows remain stored but unscored.
     /// Kotlin's repository routes to equivalent SQLite queries, including the same NULL ordering.
     ///
-    /// ONE optical channel (#1071). An Oura ring measures the same heartbeats on more than one tag, and
-    /// every one of them is stored, so an unfiltered read returned roughly TWO complete copies of a night
-    /// — 2.06x the beats the measured HR curve allows. That leaves `meanNN` (and resting HR) correct and
-    /// destroys every statistic built on successive differences: RMSSD and a ~200 ms nocturnal SDNN where
-    /// a healthy adult asleep is 40-100 ms.
+    /// ONE transport per read (#1071). A strap that reports the same heartbeats on more than one
+    /// transport stores every copy, and an unfiltered read then returns roughly TWO complete copies of a
+    /// night. That leaves `meanNN` (and resting HR) correct and destroys every statistic built on
+    /// successive differences: RMSSD and a ~200 ms nocturnal SDNN where a healthy adult asleep is
+    /// 40-100 ms. Strict WHOOP 5 policy therefore pins the read to a single `scorableWhoop5Channels`
+    /// transport for the whole requested interval.
     ///
-    /// The predicate EXCLUDES the one channel proven redundant (`spo2Ibi`, 0x6E) rather than whitelisting
-    /// the one preferred (`greenQuality`, 0x80), which matters for what it does NOT drop:
-    ///   - Outside strict WHOOP 5 policy, NULL is kept for WHOOP 4 and unlabelled legacy rows.
-    ///   - `ibiAmplitude` (0x60/0x44) is kept. It does not fire on the Gen-3 hardware this was measured
-    ///     on, so there is no evidence it duplicates green — and dropping a ring's ONLY beat source on an
-    ///     untested assumption is the more expensive mistake. If a capture ever shows 0x60 and 0x80 firing
-    ///     together, that is a second exclusion here, decided on that evidence.
-    /// 0x6E is the one excluded because it is the demonstrated duplicate AND the worse measurement of the
-    /// two: it is quantised to an 8 ms grid, applies no quality gate, and runs only while an SpO2
-    /// measurement is on — so scoring off it would make HRV coverage a function of the SpO2 duty cycle.
+    /// NULL is KEPT: a row written before the column existed is legitimately unlabelled, and a filter
+    /// that dropped NULL would silently delete every legacy night from scoring.
     ///
-    /// Rows are FILTERED, never deleted: the 0x6E stream stays on disk as the cross-check on green.
-    /// Every R-R consumer reads through this one function, so the `hrv diag` trace moves with the scores
-    /// rather than reporting a coverage nobody can reproduce.
+    /// Rows are FILTERED, never deleted. Every R-R consumer reads through this one function, so the
+    /// `hrv diag` trace moves with the scores rather than reporting a coverage nobody can reproduce.
     public func rrIntervals(deviceId: String, from: Int, to: Int, limit: Int) async throws -> [RRInterval] {
         try await rrIntervals(deviceId: deviceId, from: from, to: to, limit: limit,
                               unlabelledAliasOfWhoop5: false)
@@ -449,12 +438,10 @@ extension WhoopStore {
             return try Row.fetchAll(db, sql: """
                 SELECT ts, rrMs, srcChannel, ord, seq FROM rrInterval
                 WHERE deviceId = :d AND ts >= :f AND ts <= :t
-                AND (srcChannel IS NULL OR srcChannel <> :rrx)
                 AND \(sourcePredicate)
                 AND (tsSuspect IS NULL OR tsSuspect <> 1)   -- #1073: exclude future-stamped beats
                 ORDER BY ts ASC, ord ASC, rrMs ASC, seq ASC LIMIT :lim
-                """, arguments: ["d": deviceId, "f": from, "t": to,
-                                 "rrx": RRSourceChannel.spo2Ibi.rawValue, "lim": limit])
+                """, arguments: ["d": deviceId, "f": from, "t": to, "lim": limit])
                 .map { row in
                     RRInterval(ts: row["ts"], rrMs: row["rrMs"],
                                srcChannel: (row["srcChannel"] as Int?).flatMap(RRSourceChannel.init(rawValue:)),

@@ -10,8 +10,8 @@ options:
   developmentLanguage: en
 # Project-level xcconfig: Xcode layers this beneath every target's OWN configFiles (a target-level
 # xcconfig only shadows keys it redefines itself), so this is the one place BUNDLE_ID_PREFIX is
-# defined — every target picks it up automatically, including Strand/StrandTests/NOOPiOS, which also
-# carry Strand/Oura/OuraConfig.xcconfig for their unrelated Oura credentials. See Config/BundleId.xcconfig.
+# defined — every target picks it up automatically, including Strand/StrandTests/NOOPiOS.
+# See Config/BundleId.xcconfig.
 configFiles:
   Debug: Config/BundleId.xcconfig
   Release: Config/BundleId.xcconfig
@@ -56,16 +56,6 @@ packages:
     path: Packages/StrandImport
   StrandDesign:
     path: Packages/StrandDesign
-  # Clean-room local Oura ring BLE protocol (framing, auth, decoders, driver). Pure value types,
-  # zero CoreBluetooth, so it stays headless/JVM-testable; the app target imports it for OuraLiveSource.
-  OuraProtocol:
-    path: Packages/OuraProtocol
-  # Clean-room local Polar sensor facts: model identification + PMD stream capability catalog (pure value
-  # types, zero CoreBluetooth, headless/JVM-testable). The app target imports it so StandardHRSource can
-  # log which Polar model a connecting strap is, and the Test Centre can auto-detect it from the paired
-  # record. The live PMD data path is not wired yet — this is identification/diagnostics only.
-  PolarProtocol:
-    path: Packages/PolarProtocol
   # Compresses the full-database `.noopbak` backup (single-entry deflate ZIP) in DataBackup.swift.
   # Already resolved transitively via StrandImport; linked directly so the app target can
   # `import ZIPFoundation`. Same exact version as StrandImport's, so SPM resolves one copy.
@@ -91,13 +81,6 @@ targets:
       # The stress screen is shared with iOS and prints levels through the widget's parity formatter,
       # so its Foundation-only trace model belongs to the macOS app module as well.
       - StrandiOSShared/StressTrace.swift
-    # Oura BYO-app OAuth credentials. OuraConfig.xcconfig is a tracked wrapper that optionally
-    # includes the untracked, gitignored Strand/Oura/OuraSecrets.xcconfig (template at
-    # OuraSecrets.example.xcconfig) — absent secrets leave the $(OURA_*) references in the
-    # info.properties below empty, which disables the Oura Cloud lane at runtime.
-    configFiles:
-      Debug: Strand/Oura/OuraConfig.xcconfig
-      Release: Strand/Oura/OuraConfig.xcconfig
     info:
       path: Strand/Resources/Info.plist
       properties:
@@ -115,13 +98,8 @@ targets:
         # HTTPS endpoints are unaffected. No arbitrary-loads blanket exemption.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # Oura BYO-app OAuth credentials (values come from configFiles above); read at runtime via
-        # OuraCredentials.fromBundle. Absent/blank values cleanly disable the Connect-Oura lane.
-        OURA_CLIENT_ID: $(OURA_CLIENT_ID)
-        OURA_CLIENT_SECRET: $(OURA_CLIENT_SECRET)
-        OURA_REDIRECT_URI: $(OURA_REDIRECT_URI)
-        # Registers the noop:// URL scheme so ASWebAuthenticationSession's OAuth redirect
-        # (noop://oura/callback) reaches OuraOAuthProvider instead of bouncing off the OS.
+        # Registers the noop:// URL scheme for the `noop://import-health` Shortcuts deep link (#581),
+        # so a Shortcut handing an Apple Health export to the app opens it instead of bouncing off the OS.
         CFBundleURLTypes:
           - CFBundleURLSchemes: [noop]
     entitlements:
@@ -156,8 +134,6 @@ targets:
       - package: StrandDesign
       - package: MarkdownUI
       - package: ZIPFoundation
-      - package: OuraProtocol
-      - package: PolarProtocol
   StrandTests:
     type: bundle.unit-test
     platform: macOS
@@ -176,18 +152,12 @@ targets:
       # extension-safe `StressTrace.highBandFloor` copy with the analytics package constant.
       - StrandiOSShared/StressTrace.swift
       # And the widget cost counters, for the same reason again: pure, iOS-only, and the arithmetic is
-      # exactly the part that has been wrong twice on the Android side.
+      # exactly the part that is easiest to get subtly wrong.
       - StrandiOSShared/WidgetTelemetry.swift
-    # Same wrapper as the app target, so the OURA_CLOUD_IMPORT-gated Oura tests compile exactly
-    # when the app's Oura lane does (flag + creds both come from the untracked OuraSecrets.xcconfig).
-    configFiles:
-      Debug: Strand/Oura/OuraConfig.xcconfig
-      Release: Strand/Oura/OuraConfig.xcconfig
     dependencies:
       - target: Strand
       - package: WhoopProtocol
       - package: WhoopStore
-      - package: OuraProtocol
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -232,10 +202,6 @@ targets:
           - "Resources/Info.plist"
           - "Resources/NOOP.entitlements"
       - path: StrandiOSShared
-    # Same tracked wrapper as the macOS target (Strand/Oura/ is shared, not per-platform).
-    configFiles:
-      Debug: Strand/Oura/OuraConfig.xcconfig
-      Release: Strand/Oura/OuraConfig.xcconfig
     info:
       path: StrandiOS/Resources/Info.plist
       properties:
@@ -268,8 +234,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:
           - bluetooth-central
-          # #524: keep recording an outdoor workout's GPS route while the app is backgrounded (screen off),
-          # matching Android's foreground-service capture. Required by GpsWorkoutRecorder's
+          # #524: keep recording an outdoor workout's GPS route while the app is backgrounded (screen off).
+          # Required by GpsWorkoutRecorder's
           # allowsBackgroundLocationUpdates; without this mode iOS crashes when background updates start.
           - location
           # #510: the scheduled debug auto-export submits a BGAppRefreshTaskRequest so iOS can wake the
@@ -311,20 +277,15 @@ targets:
         # are unaffected, so cloud providers stay TLS. Mirrors the macOS target.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Registers the noop:// URL scheme for the `noop://import-health` Shortcuts deep link (#581),
+        # so a Shortcut handing an Apple Health export to the app opens it instead of bouncing off the OS.
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [noop]
         # #155: expose the app's Documents folder to Files/Shortcuts so the user's Siri Shortcut can
         # read the opt-in noop_sync.txt drop file (Apple-Health-free export for sideloaded installs).
         # Both keys are required for the folder to actually appear in Files.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-        # Oura BYO-app OAuth credentials (values come from configFiles above); read at runtime via
-        # OuraCredentials.fromBundle. Absent/blank values cleanly disable the Connect-Oura lane.
-        OURA_CLIENT_ID: $(OURA_CLIENT_ID)
-        OURA_CLIENT_SECRET: $(OURA_CLIENT_SECRET)
-        OURA_REDIRECT_URI: $(OURA_REDIRECT_URI)
-        # Registers the noop:// URL scheme so ASWebAuthenticationSession's OAuth redirect
-        # (noop://oura/callback) reaches OuraOAuthProvider instead of bouncing off the OS.
-        CFBundleURLTypes:
-          - CFBundleURLSchemes: [noop]
     entitlements:
       path: StrandiOS/Resources/NOOP.entitlements
       properties:
@@ -353,7 +314,6 @@ targets:
       - package: StrandDesign
       - package: MarkdownUI
       - package: ZIPFoundation
-      - package: PolarProtocol
       - target: NOOPiOSWidgets
       # Embed the watchOS app so the iPhone app carries it (NOOP.app/Watch/NOOPWatch.app). A watch app
       # installs by riding inside its iOS companion; without this it would never reach a paired watch.

@@ -10,7 +10,7 @@ exports it with enough provenance to analyse later. Typical uses are protocol va
 activity datasets, offline algorithm development, and checking whether a Bluetooth interruption was
 repaired by a later history sync.
 
-It lives in **Test Centre → 5/MG Raw Data Collector** on Android and Apple platforms. A session may be
+It lives in **Test Centre → 5/MG Raw Data Collector** on macOS and iOS. A session may be
 started and stopped live, or created afterwards for an existing time range. Start/end times of a
 completed session can be edited, individual sessions can be deleted, and all completed sessions can
 be deleted after confirmation. Timestamped markers can identify a moment, start, end, or issue; each
@@ -45,12 +45,9 @@ and incoming IMU buffers are routed by **strap timestamp**, not by arrival time.
 the phone is disconnected during part of a recording, matching delayed buffers from a later historical
 offload can still be appended to the session. Duplicate timestamps are discarded.
 
-On Android, an active 100 Hz capture temporarily requests the high-throughput GATT connection
-priority. A later historical offload does the same while it repairs an incomplete capture, then returns
-the link to the balanced priority. This bounded lease is independent of the global experimental
-history-speed preference. Apple's CoreBluetooth chooses connection parameters itself and exposes no
-equivalent app-side priority request, so iOS keeps the same capture and repair lifecycle without a
-non-functional transport toggle.
+CoreBluetooth chooses connection parameters itself and exposes no app-side connection-priority
+request, so the capture and repair lifecycle runs without a transport toggle; a 100 Hz capture is
+bounded by whatever interval the system negotiates.
 
 Consequences for consumers:
 
@@ -94,16 +91,15 @@ exported repeatedly after its window is edited.
 ## Session export
 
 The shareable ZIP contains session provenance and all available sensor material for its selected
-interval. Android currently includes `meta.json`, event JSONL and CSV files, decoded one-second
-signals, raw sensor CSV, and `imu/*.imus`. Apple exports equivalent session metadata/events,
-`history-sensors.csv`, `imu-coverage.json`, and IMU segments through its platform export path. Inspect
-`meta.json` plus the platform's IMU coverage object first:
+interval: session metadata and events, `history-sensors.csv`, `imu-coverage.json`, and the IMU
+segments, written through the platform share sheet. Inspect the session metadata plus
+`imu-coverage.json` first:
 
 - `started_at_ms` / `ended_at_ms` are the selected analysis interval;
 - `captured_started_at_ms` / `captured_ended_at_ms`, when present, preserve the physical recording
   interval even after the selected interval is edited;
-- Android's `imu_100hz_coverage` identifies the segments actually present and `imu_100hz_complete` is
-  the conservative coverage result; Apple carries the same facts in `imu-coverage.json`;
+- `imu-coverage.json` identifies the segments actually present and carries the conservative
+  `imu_100hz_complete` result;
 
 Exports stay local until the user invokes the operating system's share sheet. Raw captures are not
 part of routine cloud sync or telemetry, consistent with NOOP's offline-first privacy model. The
@@ -120,11 +116,10 @@ suggested archive name is `noop-5mg-raw-<session-id>.zip`.
 
 ## Implementation map
 
-| Concern | Apple | Android |
-|---|---|---|
-| Collector UI | `Strand/Screens/RawDataCollectorView.swift` | `com.noop.ui.GroundTruthCollectorScreen` |
-| Session metadata | `RawDataSessionStore` | `GroundTruthCollector` |
-| Live command path | `BLEManager.startGroundTruthRawCapture` | `WhoopBleClient.startGroundTruthImuCapture` |
-| Append/recovery window | `ImuSessionFileStore` | `ImuSessionFileStore` |
-| Canonical segmented storage/export | `ImuSessionFileStore` | `ImuSessionFileStore` |
-| Raw decoder | `Whoop5RawImu` in `WhoopProtocol` | `Whoop5RawImu` in `com.noop.protocol` |
+| Concern | Implementation |
+|---|---|
+| Collector UI | `Strand/Screens/RawDataCollectorView.swift` |
+| Session metadata | `RawDataSessionStore` (`Strand/Collect/RawDataSessionStore.swift`) |
+| Live command path | `BLEManager.startGroundTruthRawCapture` |
+| Append/recovery window and segmented storage/export | `ImuSessionFileStore` (`Strand/Collect/ImuSessionFileStore.swift`) |
+| Raw decoder | `Whoop5RawImu` in `WhoopProtocol` |

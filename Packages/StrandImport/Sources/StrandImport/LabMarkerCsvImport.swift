@@ -20,7 +20,7 @@ import Foundation
 // importer never converts mg/dL to mmol/L or judges a value. Malformed rows are skipped
 // and counted, never fatal, and never guessed (mirrors NutritionCsvImporter's ethos).
 // Import-DoS bounds: a byte cap on the file and a row cap on the parse, like the other
-// file importers (ActivityFileImporter.maxBytes / WearableExportImporter.maxRows).
+// file importers (e.g. ActivityFileImporter.maxBytes).
 //
 // Pure and deterministic — no DB, no I/O, no timezone use (dates are handled as literal
 // "yyyy-MM-dd" day strings). The app layer maps rows 1:1 onto `LabMarkerRow` (the same

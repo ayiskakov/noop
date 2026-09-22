@@ -45,10 +45,10 @@ let helpText = """
 whoop-re — offline reverse-engineering aids over captured WHOOP frames.
 
 USAGE:
-  whoop-re coverage  [--family whoop4|whoop5|auto] FILE
-  whoop-re inventory [--family whoop4|whoop5|auto] FILE
-  whoop-re diff      [--family whoop4|whoop5|auto] FILE_A FILE_B
-  whoop-re gravity2  [--family whoop4|whoop5|auto] FILE
+  whoop-re coverage  [--family whoop5|auto] FILE
+  whoop-re inventory [--family whoop5|auto] FILE
+  whoop-re diff      [--family whoop5|auto] FILE_A FILE_B
+  whoop-re gravity2  [--family whoop5|auto] FILE
   whoop-re truth     [--family …] --field NAME --truth TRUTH.json [--max-dt MS] FILE
 
 FILE is a capture/fixture JSON array of {"hex", …} (the {"hex","char","hr","ts_ms"}
@@ -69,18 +69,13 @@ func bytes(fromHex hex: String) -> [UInt8]? {
     return out
 }
 
-enum FamilyMode { case whoop4, whoop5, auto }
+enum FamilyMode { case whoop5, auto }
 
+/// Every supported strap is a WHOOP 5.0/MG, so `--family` (either value) and the record's `char`
+/// provenance all resolve to the one family. Kept as a seam so call sites read the same as before.
 func resolveFamily(_ rec: CaptureRecord, _ mode: FamilyMode) -> DeviceFamily {
     switch mode {
-    case .whoop4: return .whoop4
-    case .whoop5: return .whoop5
-    case .auto:
-        if let c = rec.char?.lowercased() {
-            if c.hasPrefix("fd4b") { return .whoop5 }
-            if c.hasPrefix("6108") { return .whoop4 }
-        }
-        return .whoop5
+    case .whoop5, .auto: return .whoop5
     }
 }
 
@@ -132,10 +127,9 @@ while i < args.count {
     case "--family":
         i += 1; guard i < args.count else { die("--family needs a value") }
         switch args[i] {
-        case "whoop4": family = .whoop4
         case "whoop5": family = .whoop5
         case "auto": family = .auto
-        default: die("--family must be whoop4|whoop5|auto")
+        default: die("--family must be whoop5|auto")
         }
     case "--field":
         i += 1; guard i < args.count else { die("--field needs a value") }; field = args[i]

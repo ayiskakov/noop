@@ -46,14 +46,6 @@ final class DeviceFamilyFramingTests: XCTestCase {
         XCTAssertEqual(check.crc32OK, true)
     }
 
-    func testWhoop4OnWhoop5FrameFailsHeaderCRC() {
-        // Same bytes, parsed as whoop4: the CRC8 path reads length/crc8 from the wrong offsets,
-        // so the header CRC must fail — proving the family switch genuinely changes behaviour.
-        let frame = Self.hex(Self.validWhoop5)
-        let check = verifyFrame(frame, family: .whoop4)
-        XCTAssertEqual(check.crc8OK, false)
-        XCTAssertFalse(check.ok)
-    }
 
     func testWhoop5HeaderCorruptionDetected() {
         var frame = Self.hex(Self.validWhoop5)
@@ -82,15 +74,7 @@ final class DeviceFamilyFramingTests: XCTestCase {
         XCTAssertFalse(verifyFrame(frame, family: .whoop5).ok)
     }
 
-    // MARK: - whoop4 family overload is byte-for-byte back-compatible
 
-    func testWhoop4FamilyOverloadMatchesLegacy() {
-        // The existing realtime-data fixture from FramingTests must verify identically through the
-        // family-aware overload.
-        let frame = Self.hex("aa1800ff28020f3de10128663c0000000000000000000000da855212")
-        XCTAssertEqual(verifyFrame(frame, family: .whoop4), verifyFrame(frame))
-        XCTAssertTrue(verifyFrame(frame, family: .whoop4).ok)
-    }
 
     // MARK: - CLIENT_HELLO constant
 
@@ -98,7 +82,6 @@ final class DeviceFamilyFramingTests: XCTestCase {
         let hello = DeviceFamily.whoop5ClientHello
         XCTAssertEqual(hello, Self.hex("aa0108000001e67123019101363e5c8d"))
         XCTAssertEqual(DeviceFamily.whoop5.clientHello, hello)
-        XCTAssertNil(DeviceFamily.whoop4.clientHello)
         // The real CLIENT_HELLO must pass whoop5 verification end-to-end.
         let check = verifyFrame(hello, family: .whoop5)
         XCTAssertTrue(check.ok)
@@ -108,29 +91,23 @@ final class DeviceFamilyFramingTests: XCTestCase {
     // MARK: - Per-family metadata (no CoreBluetooth)
 
     func testFamilyMetadata() {
-        XCTAssertEqual(DeviceFamily.whoop4.headerCRCKind, .crc8)
-        XCTAssertEqual(DeviceFamily.whoop5.headerCRCKind, .crc16Modbus)
 
-        XCTAssertEqual(DeviceFamily.whoop4.serviceUUIDString,
-                       "61080001-8d6d-82b8-614a-1c8cb0f8dcc6")
         XCTAssertEqual(DeviceFamily.whoop5.serviceUUIDString,
                        "fd4b0001-cce1-4033-93ce-002d5875f58a")
 
-        XCTAssertEqual(DeviceFamily.whoop4.characteristicUUIDStrings.count, 4)
         XCTAssertEqual(DeviceFamily.whoop5.characteristicUUIDStrings.count, 5)
         XCTAssertTrue(DeviceFamily.whoop5.characteristicUUIDStrings
             .contains("fd4b0007-cce1-4033-93ce-002d5875f58a"))
 
-        XCTAssertEqual(DeviceFamily.whoop4.commandCharacteristicUUIDString,
-                       "61080002-8d6d-82b8-614a-1c8cb0f8dcc6")
         XCTAssertEqual(DeviceFamily.whoop5.commandCharacteristicUUIDString,
                        "fd4b0002-cce1-4033-93ce-002d5875f58a")
 
-        XCTAssertEqual(DeviceFamily.allCases, [.whoop4, .whoop5])
+        XCTAssertEqual(DeviceFamily.allCases, [.whoop5])
     }
 
     func testDiagnosticGattFamiliesAreMetadataOnly() {
         XCTAssertEqual(WhoopGattServiceFamily.unsupportedServiceUUIDStrings, [
+            "61080001-8d6d-82b8-614a-1c8cb0f8dcc6",
             "11500001-6215-11ee-8c99-0242ac120002",
             "8a580001-2fe8-4796-9267-b87a2b0c8234",
             "59830001-5955-419b-bb8d-c8262926af23",
@@ -145,7 +122,7 @@ final class DeviceFamilyFramingTests: XCTestCase {
     }
 
     func testSupportedGattFamiliesRemainTheOnlyConnectableFamilies() {
-        XCTAssertEqual(WhoopGattServiceFamily.whoop4.connectableDeviceFamily, .whoop4)
+        XCTAssertNil(WhoopGattServiceFamily.whoop4.connectableDeviceFamily)
         XCTAssertEqual(WhoopGattServiceFamily.maverickGooseFD4B.connectableDeviceFamily, .whoop5)
         XCTAssertEqual(
             WhoopGattServiceFamily.maverickGooseFD4B.serviceUUIDString,
@@ -165,8 +142,8 @@ final class DeviceFamilyFramingTests: XCTestCase {
 
     func testSelectedServiceAdvertisementsStillConnect() {
         let decision = whoopGattScanDecision(
-            selectedServiceUUIDString: DeviceFamily.whoop4.serviceUUIDString,
-            advertisedServiceUUIDStrings: [DeviceFamily.whoop4.serviceUUIDString]
+            selectedServiceUUIDString: DeviceFamily.whoop5.serviceUUIDString,
+            advertisedServiceUUIDStrings: [DeviceFamily.whoop5.serviceUUIDString]
         )
 
         XCTAssertTrue(decision.shouldConnect)
@@ -175,7 +152,7 @@ final class DeviceFamilyFramingTests: XCTestCase {
 
     func testEmptyAdvertisementServiceListPreservesLegacyConnectPath() {
         let decision = whoopGattScanDecision(
-            selectedServiceUUIDString: DeviceFamily.whoop4.serviceUUIDString,
+            selectedServiceUUIDString: DeviceFamily.whoop5.serviceUUIDString,
             advertisedServiceUUIDStrings: []
         )
 
@@ -223,10 +200,6 @@ final class DeviceFamilyFramingTests: XCTestCase {
         XCTAssertEqual(parsed.crcOK, true)
     }
 
-    func testParseWhoop4FamilyOverloadMatchesLegacy() {
-        let frame = Self.hex("aa1800ff28020f3de10128663c0000000000000000000000da855212")
-        XCTAssertEqual(parseFrame(frame, family: .whoop4), parseFrame(frame))
-    }
 
     // MARK: - Family-aware Reassembler
 
@@ -285,12 +258,6 @@ final class DeviceFamilyFramingTests: XCTestCase {
         XCTAssertEqual(Reassembler(family: .whoop5).feed(f), [f])
     }
 
-    func testReassemblerWhoop4DefaultUnchanged() {
-        // Default family stays WHOOP 4.0: a 28-byte whoop4 frame (length=0x18=24 -> total 28).
-        let frame = Self.hex("aa1800ff28020f3de10128663c0000000000000000000000da855212")
-        XCTAssertEqual(Reassembler().feed(frame), [frame])
-        XCTAssertEqual(Reassembler(family: .whoop4).feed(frame), [frame])
-    }
 
     func testPuffinHapticsFrameMatchesMaverickGolden() {
         // WHOOP 5/MG buzz (#48): the haptic inner is 15 bytes ([35, seq, 0x13] + 12-byte payload), which

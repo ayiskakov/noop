@@ -47,23 +47,6 @@ public enum StandardHRContact: String, Equatable, Codable, Sendable {
 /// stay in lockstep with Kotlin `RrSourceChannel` — they are written to SQLite and cross the `.noopbak`
 /// boundary, so they are a wire format, not an implementation detail. Never renumber a case; only append.
 public enum RRSourceChannel: Int, Equatable, Codable, Sendable, CaseIterable {
-    /// Oura 0x80 `green_ibi_quality_event` — the green-LED beat train, gated on the ring's own
-    /// `quality == 1` flag and a 300-2000 ms physiological window, running the whole night.
-    case greenQuality = 1
-    /// Oura 0x6E `spo2_ibi_and_amplitude_event` — the SpO2/red-channel beat train, on an 8 ms
-    /// quantisation grid with no quality gate, and present ONLY while SpO2 measurement is running.
-    case spo2Ibi = 2
-    /// Oura 0x60 `ibi_and_amplitude_event` — the bit-packed IBI+amplitude family.
-    case ibiAmplitude = 3
-    /// Oura 0x44 `ibi_event` — the SAME bit-packed layout family as 0x60, decoded by the same routine,
-    /// but a DIFFERENT tag on the wire.
-    ///
-    /// Split out (#1071 follow-up) because both tags used to stamp `ibiAmplitude`, which made them
-    /// indistinguishable once stored: a capture showing that channel over-covering its own wall-clock
-    /// could not say whether one tag repeats beats or two tags report the same beats to each other. That
-    /// is the question the channel choice for scoring rests on, and no stored night could answer it.
-    /// Labelling only — both are read exactly as before.
-    case ibiBare = 4
     /// WHOOP 5 v18 history, converted from wire ticks to milliseconds.
     case whoop5Historical = 5
     /// WHOOP 5 type-40 live transport, converted from wire ticks to milliseconds.
@@ -71,14 +54,17 @@ public enum RRSourceChannel: Int, Equatable, Codable, Sendable, CaseIterable {
     /// WHOOP 5 standard BLE 0x2A37 live transport, already converted to milliseconds.
     case whoop5Standard = 7
 
+    /// Raw values 1-4 are RETIRED. They labelled the multi-tag optical channels of a non-WHOOP source
+    /// that NOOP no longer supports, and are deliberately left unclaimed so a row written under the old
+    /// code is never silently reinterpreted as a WHOOP transport. Reads decode an unknown code to nil.
     public var isWhoop5Transport: Bool { (5...7).contains(rawValue) }
 }
 
 public struct RRInterval: Equatable, Codable {
     public let ts: Int          // wall-clock unix seconds
     public let rrMs: Int
-    /// The sensor channel this beat came from, or nil when the source does not distinguish one (every
-    /// WHOOP 4 row, and legacy unlabelled rows). See `RRSourceChannel`.
+    /// The transport this beat arrived on, or nil when the source does not distinguish one (legacy
+    /// unlabelled rows, and rows written before the column existed). See `RRSourceChannel`.
     public let srcChannel: RRSourceChannel?
     /// #1008 diagnostics: this beat's EMISSION ORDER within the batch that delivered it, as stored in
     /// `rrInterval.ord`. nil on a decode (nothing has been stored yet) and on rows written before the
@@ -196,99 +182,15 @@ public struct SkinTempSample: Equatable, Codable {
         self.aux1Raw = aux1Raw; self.aux2Raw = aux2Raw
     }
 }
-
-/// Convert a raw `skin_temp_raw` register value to °C, DEVICE-FAMILY-AWARE (#938).
+/// Raw skin-temperature register → °C.
 ///
-/// The two families bank skin temp on DIFFERENT scales, and applying one family's scale to the other
-/// is a real decode bug: the historical `skin_temp_raw` field is a RAW ADC on the WHOOP 4.0 (v24
-/// `@72`, "degC computed server-side" per the schema) but a CENTIDEGREE register on the 5/MG (v18
-/// `@73`). A single family-blind `raw/100` sent every 4.0 night ~8 °C low, below the 28 °C worn gate,
-/// so skin temp and the illness signal vanished (issue #938, reporter dpguglielmi's 4.0 capture).
-///
-/// - `.whoop5`: `raw / 100`. PROVEN on real 5/MG captures — `Whoop5HistoricalTests` reads worn 3057 =
-///   30.6 °C and off-wrist 2247 = 22.5 °C, physically right on both ends. Unchanged.
-///
-/// - `.whoop4`: a single-anchor affine map. The 4.0 firmware (41.17.6.0) banks byte-72 at 1 Hz
-///   ON-WRIST ONLY, so there is ONE solid anchor and NO clean off-wrist room anchor from the strap.
-///   The reporter's doff/don capture gives a steady worn resting value of raw ~826 (worn steady
-///   ~830–865; a no-contact floor ~510–520 at removal, then banking stops). Under `/100` that worn
-///   value reads ~8.3 °C — impossible for a wrist streaming a resting HR (~52 bpm). We anchor the
-///   worn value at a defensible nocturnal wrist skin temperature (33.0 °C ↔ the worn anchor raw) and
-///   carry a PROVISIONAL slope until a second calibration point exists. Because the downstream use is a
-///   deviation from the user's OWN nightly baseline (`skinTempDevC`), the offset is what must be right
-///   to clear the absolute 28–42 °C worn gate + 20–42 °C baseline clamp; a slope error only rescales
-///   the deviation and stays directionally correct. All 4.0 values APPROXIMATE.
-///
-///   PER-DEVICE ANCHOR (#938 second capture): `anchorRaw` is the raw that maps to 33.0 °C. It defaults to
-///   the global `Whoop4SkinTemp.anchorRaw` (826, first reporter's strap) so every existing caller is
-///   byte-identical, but the register OFFSET is per-device — a second real 4.0 strap shows the SAME floor
-///   (~509) and saturation (2047) yet a worn band of ~1100–1600 (nightly mean raw ~1290), which the global
-///   826 anchor maps to 47–72 °C (all samples fail the worn gate). The analytics caller therefore learns
-///   `anchorRaw` from the device's OWN worn median (`Whoop4SkinTemp.deviceAnchorRaw`) so the worn band lands
-///   in range; the constant offset cancels in the deviation-from-own-baseline the app consumes.
-///
-///   TODO(#938): replace the provisional slope with the exact two-point anchor once a second worn
-///   point at a markedly different ambient (the reporter offered a colder + a warmer room) pins the
-///   ADC→°C transfer — including whether it is linear at all. Until then this is a defensible
-///   worn-range mapping, NOT a claimed-accurate absolute thermometer.
-public func skinTempCelsius(raw: Int, family: DeviceFamily,
-                            anchorRaw: Double = Whoop4SkinTemp.anchorRaw) -> Double {
+/// WHOOP 5/MG banks CENTI-DEGREES: the same `/100` scale the 5/MG decoder already used, verified on
+/// real captures at both ends of the range (worn 3060 = 30.6 °C, off-wrist 2247 = 22.5 °C). `family`
+/// is carried so the call site still states WHICH hardware a reading came from rather than assuming it.
+public func skinTempCelsius(raw: Int, family: DeviceFamily) -> Double {
     switch family {
     case .whoop5:
         return Double(raw) / 100.0
-    case .whoop4:
-        // Anchor: worn resting raw `anchorRaw` (per-device, default 826) → 33.0 °C. Provisional slope 0.05 °C
-        // per raw unit (a ~35-unit worn-steady spread ≈ ~1.75 °C of nocturnal variation). See TODO above.
-        return Whoop4SkinTemp.anchorCelsius
-            + (Double(raw) - anchorRaw) * Whoop4SkinTemp.provisionalSlopeCPerRaw
-    }
-}
-
-/// WHOOP 4.0 (v24) skin-temp mapping constants (#938). Named so the single provisional slope + anchor
-/// live in ONE place and the two-point-calibration TODO has an obvious home. Kept in lockstep with the
-/// Android `Whoop4SkinTemp`.
-public enum Whoop4SkinTemp {
-    /// Worn resting raw register value the GLOBAL anchor pins (first reporter's steady worn baseline, ~826).
-    /// Used as the fallback anchor when a device has too few in-band samples to learn its own (#938).
-    public static let anchorRaw: Double = 826.0
-    /// Physiological nocturnal wrist skin temperature the anchor raw maps to (°C).
-    public static let anchorCelsius: Double = 33.0
-    /// PROVISIONAL °C-per-raw-unit slope. TODO(#938): replace with the two-point anchor slope.
-    public static let provisionalSlopeCPerRaw: Double = 0.05
-
-    // ── Per-device worn anchor (#938, second capture) ─────────────────────────────────────────────────
-    // The @72 skin-temp field is a raw ADC whose register OFFSET is per-device: two real 4.0 straps show the
-    // IDENTICAL no-contact floor (~509) and 11-bit saturation ceiling (2047), but DIFFERENT worn bands — the
-    // first strap ~760–865 (anchored anchorRaw=826), a second ~1100–1600 (nightly mean raw ~1290). Under the
-    // single global anchor the second strap maps to 47–72 °C, so 100% of its samples fail the 28–42 °C worn
-    // gate: kept=0, no nightly mean, no baseline, no skin-temp/illness signal. The floor and ceiling agree
-    // across devices; only the worn offset differs → the anchor must be learned per device from that device's
-    // own worn band. Safe because downstream use is deviation-from-own-baseline (skinTempDevC) and the skin
-    // baseline is re-folded from the same scan window's nightly means every run, so a constant per-run offset
-    // cancels in the deviation.
-
-    /// Lower raw bound of the plausible WORN band. Clear of the no-contact floor (~509–520 observed on two
-    /// devices); banking stops at removal, so floor-and-below values are doff transients, never worn skin —
-    /// excluding them keeps the learned anchor (a median of worn raws) from being dragged down. (#938)
-    public static let wornMinRaw: Int = 550
-    /// Upper raw bound of the plausible WORN band. Clear of the 11-bit register saturation (2047 observed
-    /// pegged during device charging/fault) — a pegged raw is not a worn reading, so it must not enter the
-    /// anchor median or the nightly mean. (#938)
-    public static let wornMaxRaw: Int = 2040
-    /// Minimum in-band samples before a per-device anchor is trusted. Below this, callers fall back to the
-    /// global reporter anchor (`anchorRaw`=826) so sparse-data behavior is byte-identical to today — a
-    /// handful of stray worn raws must not define a device's whole ADC offset. (#938)
-    public static let minAnchorSamples: Int = 100
-
-    /// Per-device worn anchor: median of the in-band raws across the caller's scan window, or nil when fewer
-    /// than `minAnchorSamples` in-band samples exist (caller falls back to `anchorRaw`). Median (not mean) so
-    /// doff/don transients and tails can't drag the anchor. (#938)
-    public static func deviceAnchorRaw(_ raws: [Int]) -> Double? {
-        let inBand = raws.filter { $0 >= wornMinRaw && $0 <= wornMaxRaw }.sorted()
-        if inBand.count < minAnchorSamples { return nil }
-        let n = inBand.count
-        return n % 2 == 1 ? Double(inBand[n / 2])
-            : Double(inBand[n / 2 - 1] + inBand[n / 2]) / 2.0
     }
 }
 

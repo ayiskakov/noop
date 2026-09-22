@@ -20,17 +20,13 @@ final class StreamsTests: XCTestCase {
     }
 
     // REALTIME_DATA: ts=31538447 hr=60 ; ts=31538448 hr=59 (synthetic)
-    private let rt0 = "aa1800ff28020f3de10100003c0000000000000000000000b7e67942"
-    private let rt1 = "aa1800ff2802103de10100003b000000000000000000000048f73dee"
+    private let rt0 = "aa0118000001e2b128020f3de10100003c0000000000000000000000b7e67942"
+    private let rt1 = "aa0118000001e2b12802103de10100003b000000000000000000000048f73dee"
     // EVENT RAW_DATA_COLLECTION_ON(46), event_timestamp=1736365593 (synthetic)
-    private let ev = "aa0c00fc30012e0019d67e67f21241bd"
-    // COMMAND_RESPONSE GET_BATTERY_LEVEL(26), battery_pct=25.5 (synthetic)
-    private let battery = "aa0f00c324141a0000ff0000000000080fadae"
-    // REALTIME_RAW_DATA (type 43): carries a heart_rate byte but MUST NOT feed the HR stream
-    private let raw43 = "aa8407f72b0500bebafeca183de10100000000000046000000000000d275e1c1"
+    private let ev = "aa010c000001e74130012e0019d67e67f21241bd"
 
     private func parsedFrames(_ hexes: [String]) -> [ParsedFrame] {
-        hexes.map { parseFrame(bytes($0)) }
+        hexes.map { parseFrame(bytes($0), family: .whoop5) }
     }
 
     func testRealtimeHRMapsDeviceToWallClock() {
@@ -50,25 +46,11 @@ final class StreamsTests: XCTestCase {
         XCTAssertEqual(s.events[0].payload, [:])                // event/event_timestamp stripped
     }
 
-    func testBatteryStampedAtWallClockRef() {
-        let s = extractStreams(parsedFrames([battery]),
-                               deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
-        XCTAssertEqual(s.battery, [BatterySample(ts: 1_736_365_593, soc: 25.5, mv: nil)])
-    }
 
-    func testHRNotTakenFromType43RawData() {
-        // raw43 decodes with a heart_rate in parsed, but it is REALTIME_RAW_DATA → no HR row.
-        let p = parseFrame(bytes(raw43))
-        XCTAssertEqual(p.typeName, "REALTIME_RAW_DATA")
-        XCTAssertNotNil(p.parsed["heart_rate"])
-        let s = extractStreams([p], deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
-        XCTAssertTrue(s.hr.isEmpty)
-        XCTAssertTrue(s.rr.isEmpty)
-    }
 
     func testCrcFailedAndNotOkFramesSkipped() {
-        let good = parseFrame(bytes(rt0))                       // ok, crc ok
-        let truncated = parseFrame([0xAA, 0x00])                // ok==false (INVALID/FRAGMENT)
+        let good = parseFrame(bytes(rt0), family: .whoop5)                       // ok, crc ok
+        let truncated = parseFrame([0xAA, 0x00], family: .whoop5)                // ok==false (INVALID/FRAGMENT)
         let s = extractStreams([good, truncated],
                                deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
         XCTAssertEqual(s.hr.count, 1)
@@ -82,8 +64,8 @@ final class StreamsTests: XCTestCase {
 
     func testFrameWithABrokenHeaderChecksumYieldsNoRow() {
         var broken = bytes(rt0)
-        broken[3] ^= 0xFF                                       // header checksum only
-        let p = parseFrame(broken)
+        broken[6] ^= 0xFF                                       // header checksum only
+        let p = parseFrame(broken, family: .whoop5)
         XCTAssertEqual(p.crcOK, true, "precondition: the payload CRC32 still verifies")
         XCTAssertNotNil(p.parsed["heart_rate"], "precondition: the frame still decodes an HR")
         let s = extractStreams([p], deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
@@ -92,7 +74,7 @@ final class StreamsTests: XCTestCase {
     }
 
     func testFrameWithTrailingBytesYieldsNoRow() {
-        let p = parseFrame(bytes(rt0) + [0x00])
+        let p = parseFrame(bytes(rt0) + [0x00], family: .whoop5)
         XCTAssertEqual(p.rejectReason, .lengthMismatch)
         let s = extractStreams([p], deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
         XCTAssertTrue(s.hr.isEmpty)
@@ -100,8 +82,8 @@ final class StreamsTests: XCTestCase {
 
     func testOneBrokenFrameInASequenceLosesOnlyItsOwnRow() {
         var broken = bytes(rt1)
-        broken[3] ^= 0xFF
-        let s = extractStreams([parseFrame(bytes(rt0)), parseFrame(broken)],
+        broken[6] ^= 0xFF
+        let s = extractStreams([parseFrame(bytes(rt0), family: .whoop5), parseFrame(broken, family: .whoop5)],
                                deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)
         XCTAssertEqual(s.hr, [HRSample(ts: 1_736_365_593, bpm: 60)],
                        "the intact frame still produces its row; only the broken one is skipped")
@@ -117,11 +99,11 @@ final class StreamsTests: XCTestCase {
     ///
     /// The gate cannot catch this — the frame passes every checksum. Only the payload bound does.
     func testRealtimeRRCountIsNotReadOutOfTheTrailer() {
-        let frame = bytes("aa0d00e9280100000009000000017b826e")
-        let p = parseFrame(frame)
+        let frame = bytes("aa010d000001e6bd280100000009000000017b826e")
+        let p = parseFrame(frame, family: .whoop5)
         XCTAssertTrue(p.ok, "precondition: this frame is intact by every checksum")
         XCTAssertEqual(p.typeName, "REALTIME_DATA")
-        XCTAssertEqual(frame[13], 0x01, "precondition: the trailer's first byte reads as rr_count = 1")
+        XCTAssertEqual(frame[17], 0x01, "precondition: the trailer's first byte reads as rr_count = 1")
         XCTAssertEqual(p.parsed["rr_intervals"], .intArray([]),
                        "an R-R interval must never be decoded out of the CRC32 trailer")
         let s = extractStreams([p], deviceClockRef: deviceClockRef, wallClockRef: wallClockRef)

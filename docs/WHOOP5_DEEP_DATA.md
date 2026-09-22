@@ -49,11 +49,8 @@ not exact computation times. This reconstruction recovered the complete firmware
 `generated a valid SPO2 during sleep`; it contains no numeric oxygen result and does not validate
 the byte-82 candidate. Raw captures remain private; tests use synthetic wrap headers.
 
-**Platform scope:** this investigation is explicitly limited to macOS and the shared Swift core.
-The Android console decoder and its parity vectors are therefore deferred; Android still exposes
-the incorrect u16 `record_index`. This is a deliberate scope limit, not a
-cross-platform parity claim. Update the Kotlin twin and matching wrap/header vectors before
-including this correction in a cross-platform release.
+**Scope:** this investigation was carried out on macOS against the shared Swift core, which is
+the decoder both Apple targets ship.
 
 ## Existing public sources
 

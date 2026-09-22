@@ -56,8 +56,8 @@ final class RestSubScoreTraceTests: XCTestCase {
     func testSleepMotionLine() {
         XCTAssertEqual(
             AnalyticsEngine.sleepMotionLine(day: "2026-07-12", grav: 118, hr: 590, sparse: true,
-                                            useSleepStagerV2: false, family: .whoop4),
-            "sleep-motion day=2026-07-12 grav=118 hr=590 sparse=true stager=V1 family=whoop4")
+                                            useSleepStagerV2: false, family: .whoop5),
+            "sleep-motion day=2026-07-12 grav=118 hr=590 sparse=true stager=V1 family=whoop5")
         XCTAssertEqual(
             AnalyticsEngine.sleepMotionLine(day: "2026-07-12", grav: 800, hr: 590, sparse: false,
                                             useSleepStagerV2: true, family: .whoop5),

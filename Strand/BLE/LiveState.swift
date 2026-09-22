@@ -3,7 +3,6 @@ import Combine
 import StrandAnalytics
 import WhoopProtocol
 import WhoopStore
-import OuraProtocol
 
 /// Observable snapshot of the live connection + biometric state, driven by FrameRouter
 /// (from decoded frames) and BLEManager (from CoreBluetooth callbacks).
@@ -126,19 +125,6 @@ public final class LiveState: ObservableObject {
     /// nil until the first event of a session; cleared on disconnect so a stale flag can't outlive the
     /// link. Flag ONLY — the battery % keeps its family-specific source (#77).
     @Published public var charging: Bool? = nil
-
-    /// The Oura ring's current wear/charge state (nil for non-Oura straps or before any evidence this
-    /// session). Driven by OuraLiveSource from the live-HR push + the ring's STATE charger strings: a live
-    /// beat only comes from a finger (`.worn`); "chg. detected"/"stopped" bracket `.charging`; a silent
-    /// live-HR stream drops to `.off` (removed). Lets the Live view show On wrist / Off wrist.
-    @Published public var ouraWearState: OuraWearState? = nil
-
-    /// The RING's own charge, when a ring is the live source. Separate from [batteryPct], which is the
-    /// WHOOP's, because `LiveState` is ONE object both sources write into: a bonded WHOOP beside a
-    /// streaming ring leaves the WHOOP's charge sitting in `batteryPct`, and a console that reads it
-    /// while a ring is the active device reports the wrong band's battery under the right band's name.
-    /// That is #2075, where a ring on 93% displayed the strap's 72%. Nil when no ring has reported.
-    @Published public var ouraBatteryPct: Int? = nil
 
     /// Whether the ACTIVE device is a WHOOP, published so a readout can answer "whose charge is this"
     /// without observing `AppModel`.
@@ -689,8 +675,6 @@ public final class LiveState: ObservableObject {
         recentGravitySamples.removeAll()
         clearStrapRange()                 // a stale clock-drift window must not outlive the link either
         lastFrameAtUnix = nil             // #987: a stale "last frame" freshness must not outlive it either
-        ouraWearState = nil               // a stale worn/charging badge must not outlive the link either
-        ouraBatteryPct = nil              // nor a stale ring charge (#2075)
         // Perf: flush the durable log tail on disconnect (mirroring is batched in `append`), so a completed
         // session's tail is always persisted for a later scheduled export despite the per-line throttle.
         Self.persistTail(log)
@@ -1055,18 +1039,6 @@ public final class LiveState: ObservableObject {
         out = out.replacingOccurrences(
             of: "whoop-([A-Za-z0-9]{3})[A-Za-z0-9-]{3,}",
             with: "whoop-$1…", options: .regularExpression)
-        // #2092: an Oura device id (`oura-<serial>`) is the same #1303 gap for the OTHER brand — neither
-        // rule above catches it, since the prefix isn't "whoop-". Exact same shape (3-character prefix +
-        // `…`, matching `OuraSerialIdentity.logSafe`) and the same `-noop`-suffix-preserving pair, since
-        // `DeviceRegistryStore.computedSuffix` is brand-agnostic — an Oura device gets a `oura-<serial>
-        // -noop` sibling the same way a WHOOP strap does. Applied AFTER the WHOOP rules but that ordering
-        // is not load-bearing: the two prefixes never overlap. Kotlin twin in `redactStrapLogPii`.
-        out = out.replacingOccurrences(
-            of: "oura-([A-Za-z0-9]{3})[A-Za-z0-9-]{3,}(-noop)",
-            with: "oura-$1…$2", options: .regularExpression)
-        out = out.replacingOccurrences(
-            of: "oura-([A-Za-z0-9]{3})[A-Za-z0-9-]{3,}",
-            with: "oura-$1…", options: .regularExpression)
         // The account holder's NAME, as WHOOP writes it into the advertised local name. WHOOP names a
         // strap "<FirstName>'s Whoop" by default and the scan path logs that name on every discovery, so
         // the shareable log (#445) we ask people to attach to public issues carried a real person's name.
@@ -1152,28 +1124,18 @@ public enum LiveConsoleReadout {
         return SourceIdentity.isWhoop(active)
     }
 
-    /// Whether the ACTIVE registry device is an Oura ring (#2305).
-    ///
-    /// The OPPOSITE default to `activeIsWhoop`: false when the registry has not opened or the active row is
-    /// not resolvable. The ring-only affordances this gates (the ring status line, "Reconnect ring") have
-    /// no WHOOP-first tone to keep; showing them for an unknown device would offer a reconnect that
-    /// reaches nothing. A device that is neither (Polar, Garmin, …) is neither — it gets the Devices row.
-    public static func activeIsOura(devices: [PairedDevice], activeId: String?) -> Bool {
-        guard let activeId, let active = devices.first(where: { $0.id == activeId }) else { return false }
-        return active.brand.caseInsensitiveCompare(ExperimentalBrand.oura.displayBrand) == .orderedSame
-    }
-
     /// The charge to show for the ACTIVE device, or nil to show nothing.
     ///
     /// A non-WHOOP active device never falls back to the WHOOP's charge. Showing nothing is the honest
-    /// answer when a ring has not reported yet; showing the strap's number would be a confident lie, and
-    /// it is the exact shape of the reported bug.
-    public static func batteryPercent(activeIsWhoop: Bool, whoopPct: Double?, ringPct: Int?) -> Int? {
+    /// answer when that device has not reported a charge; showing the strap's number would be a confident
+    /// lie, and it is the exact shape of the reported bug (#2075).
+    ///
+    /// THE one seam every surface reads, so two screens cannot disagree about the same percentage.
+    public static func batteryPercent(activeIsWhoop: Bool, whoopPct: Double?) -> Int? {
         // ROUNDS, and deliberately. The surfaces this replaced disagreed: Devices and the widget rounded,
         // the Live Console truncated, so a strap on 72.6% read 73 on one screen and 72 on another. One
-        // seam has to pick, and for a percentage rounding is the accurate one. `.rounded()` is
-        // half-away-from-zero and Kotlin's Math.round is half-up, identical over the 0...100 this sees.
-        if activeIsWhoop { return whoopPct.map { Int($0.rounded()) } }
-        return ringPct
+        // seam has to pick, and for a percentage rounding is the accurate one.
+        guard activeIsWhoop else { return nil }
+        return whoopPct.map { Int($0.rounded()) }
     }
 }

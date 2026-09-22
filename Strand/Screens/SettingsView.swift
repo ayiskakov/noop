@@ -247,21 +247,12 @@ struct SettingsView: View {
     /// for as long as a strap history sync runs while this is on.
     @AppStorage(ScreenIdle.strapSyncKeepAwakeKey) private var syncKeepScreenOn = false
 
-    /// The strap model the user last picked (same key the scan pickers write). Gates the WHOOP 4.0-only
-    /// rename control in the strap card — renaming uses the Harvard command set, which a 5/MG doesn't share.
-    @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
-    /// Draft text for the strap-rename field (strap card). Empty placeholder; never pre-seeded so the
-    /// current name stays visible separately above it.
-    @State private var strapNameDraft = ""
+    /// The strap model the user last picked (same key the scan pickers write).
+    @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop5mg.rawValue
 
-    /// Whether to surface the WHOOP 5/MG-only probes (puffin/R22/broadcast-HR/frame-capture). Gated so a
-    /// confident 4.0 owner never sees 5/MG controls that can't touch their strap (#22). The model
-    /// preference DEFAULTS to whoop4, so we deliberately do NOT hide on the raw default alone — the same
+    /// Whether to surface the WHOOP 5/MG probes (puffin/R22/broadcast-HR/frame-capture). The same
     /// `"selectedWhoopModel"` key is rewritten to the family that actually advertised when a strap
-    /// connects (BLEManager, PR#195), so a real 5/MG owner who never opened the model picker still flips
-    /// this true the moment their strap is discovered. We hide the 5/MG block only when the user is
-    /// confidently on a 4.0 (pref says whoop4 AND nothing 5/MG is connected). The always-on raw-CSV
-    /// diagnostic stays visible on every model regardless.
+    /// connects (BLEManager, PR#195). The always-on raw-CSV diagnostic stays visible regardless.
     private var showFiveMGControls: Bool {
         selectedWhoopModelRaw == WhoopModel.whoop5mg.rawValue
     }
@@ -1540,12 +1531,6 @@ struct SettingsView: View {
                 // "HRV" card under Advanced (see `hrvCard`) — same @AppStorage bindings, same BLE + re-score
                 // wiring, just relocated as power-user tuning rather than shown here at all times.
 
-                // MARK: Strap name — rename the WHOOP 4.0's BLE advertising name (Harvard command set).
-                if live.connected && selectedWhoopModelRaw == WhoopModel.whoop4.rawValue {
-                    rowDivider
-                    strapNameControl
-                }
-
                 #if os(iOS)
                 rowDivider
                 // MARK: Live Activity — show live HR on the Lock Screen + Dynamic Island (#336).
@@ -1580,44 +1565,6 @@ struct SettingsView: View {
         }
     }
 
-
-    /// Rename the WHOOP 4.0's BLE advertising name. Shows the current name (read back from firmware in
-    /// the connect handshake → `LiveState.advertisingName`) and writes a new one via `renameStrap`. The
-    /// strap reboots to apply, so the new name lands on the next connect. WHOOP 4.0 only (Harvard).
-    @ViewBuilder private var strapNameControl: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Strap name").strandOverline()
-            Text("Current: \(live.advertisingName ?? "—")")
-                .font(StrandFont.subhead)
-                .foregroundStyle(StrandPalette.textSecondary)
-            HStack(spacing: NoopMetrics.space3) {
-                TextField("New strap name", text: $strapNameDraft)
-                    .textFieldStyle(.plain)
-                    .font(StrandFont.body)
-                    .foregroundStyle(StrandPalette.textPrimary)
-                    .padding(.horizontal, NoopMetrics.space3)
-                    .padding(.vertical, 9)
-                    .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(StrandPalette.hairline, lineWidth: 1))
-                    .disableAutocorrection(true)
-                    .accessibilityLabel("New strap name")
-                NoopButton("Rename", systemImage: "pencil", kind: .primary) {
-                    model.ble.renameStrap(strapNameDraft)
-                }
-                .disabled(strapNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            if let status = live.renameStatus {
-                Text(status)
-                    .font(StrandFont.caption)
-                    .foregroundStyle(StrandPalette.textSecondary)
-            }
-            Text("Changes the Bluetooth name your WHOOP 4.0 advertises (what you see when pairing). The strap reboots to apply, so the new name appears the next time it connects. WHOOP 4.0 only.")
-                .font(StrandFont.caption)
-                .foregroundStyle(StrandPalette.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
 
     // Shares LiveState.connectionStatus* with the sidebar footer (RootView) so the two never drift (#266).
     private var strapStatusTitle: String { live.connectionStatusLabel }
@@ -1921,7 +1868,7 @@ struct SettingsView: View {
         liveSessionsCard
         // WHOOP 5/MG protocol research now lives in Test Centre. Everyday Settings no longer carries
         // a second copy; the persisted keys and reversible disable actions remain unchanged there.
-        if showFiveMGControls || model.repo.activeDeviceIsOura { spo2CandidateCard }
+        if showFiveMGControls { spo2CandidateCard }
         sleepStagingCard
         rawSensorDiagnosticsCard
     }
@@ -2402,14 +2349,8 @@ struct SettingsView: View {
         }
     }
 
-    /// SpO2 candidate display (#103/queue-11a) — split out of `fiveMGCard` (2026-08-23): the toggle's
-    /// own copy has covered Oura since `89c8533b` ("Blood Oxygen: strap estimate (WHOOP 5/MG, Oura)"),
-    /// but it stayed nested inside the WHOOP-5/MG-only card, gated by `showFiveMGControls` — so an
-    /// Oura-only install (no WHOOP 5/MG ever connected) could never reach it. `metricSeries` confirmed
-    /// zero `spo2_candidate` rows ever written on such an install despite pass-2 scoring running daily,
-    /// and a full screenshot sweep of Settings confirmed the section never renders. Same split as
-    /// `rawSensorDiagnosticsCard` just below (#22) — this card shows for a 5/MG OR an active Oura
-    /// device, not just a 5/MG.
+    /// SpO2 candidate display (#103/queue-11a) — split out of `fiveMGCard` (2026-08-23) into its own
+    /// card, same split as `rawSensorDiagnosticsCard` just below (#22).
     private var spo2CandidateCard: some View {
         SettingsSection(
             icon: "lungs.fill",
@@ -2418,7 +2359,7 @@ struct SettingsView: View {
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.rowSpacing) {
                 Toggle(isOn: $spo2CandidateDisplayEnabled) {
-                    Text("Blood Oxygen: strap estimate (WHOOP 5/MG, Oura)")
+                    Text("Blood Oxygen: strap estimate (WHOOP 5/MG)")
                         .font(StrandFont.subhead)
                         .foregroundStyle(StrandPalette.textPrimary)
                 }
@@ -2431,7 +2372,7 @@ struct SettingsView: View {
                     // the HRV window toggle above (analyzeRecent → refresh).
                     Task { await model.intelligence.analyzeRecent(); await model.repo.refresh() }
                 }
-                Text("Your WHOOP 5.0/MG sends a strap-computed SpO₂ percentage (the @82 candidate byte) every second — an 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. An Oura ring's own SpO₂ reading runs high on the wire (over 100% on a fifth to a half of samples on a clean night); this instead surfaces the ring's mean with each sample capped at 100% first, which has matched the Oura app's own displayed value on every full night checked against it so far, though only a few nights. Turning this on surfaces whichever applies to your device as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring. WHOOP 4.0 has no @82 stream, so this does nothing there.")
+                Text("Your WHOOP 5.0/MG sends a strap-computed SpO₂ percentage (the @82 candidate byte) every second — an 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. Turning this on surfaces it as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring.")
                     .font(StrandFont.caption)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3500,10 +3441,9 @@ struct StepsCalibrationSheet: View {
     /// banner had not appeared yet and the card explained nothing at all.
     private var strapHasNoMotion: Bool { didLoad && sampleMotion == nil }
 
-    /// #107: the sheet's guidance depends on the strap family. A WHOOP 4.0 streams motion automatically, so
-    /// "let it sync" is right; a 5/MG only streams motion once the experimental deep-data unlock is on, so
-    /// the 4.0 advice is futile there and the empty state must say so instead.
-    @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
+    /// #107: a 5/MG only streams motion once the experimental deep-data unlock is on, so the empty state
+    /// must say so instead of "let it sync".
+    @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop5mg.rawValue
     @AppStorage(PuffinExperiment.deepDataKey) private var deepDataEnabled = false
     private var is5MG: Bool { selectedWhoopModelRaw == WhoopModel.whoop5mg.rawValue }
 

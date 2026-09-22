@@ -308,9 +308,9 @@ final class TodayExplainabilityTests: XCTestCase {
     }
 
     func testProvenance_otherKnownSource_keepsItsDisplayName() {
-        // Mi Band is a real merge winner — keep its own name, never a blanket on-device claim.
-        XCTAssertEqual(TodayView.provenanceDisplayLabel(rawSource: "xiaomi-band", deviceId: "my-whoop"),
-                       "Mi Band")
+        // A real merge winner keeps its own name, never a blanket on-device claim.
+        XCTAssertEqual(TodayView.provenanceDisplayLabel(rawSource: "nutrition-csv", deviceId: "my-whoop"),
+                       "Nutrition")
     }
 
     // MARK: - Apple Watch provenance (M1) — Today-only "Apple Watch" relabel of the apple-health source
@@ -344,21 +344,15 @@ final class TodayExplainabilityTests: XCTestCase {
             TodayView.todayProvenanceChipLabel(rawSource: "my-whoop-noop", deviceId: "my-whoop",
                                                appleHealthSource: "apple-health"),
             "On-device")
-        XCTAssertEqual(
-            TodayView.todayProvenanceChipLabel(rawSource: "xiaomi-band", deviceId: "my-whoop",
-                                               appleHealthSource: "apple-health"),
-            "Mi Band")
     }
 
     func testTodayScoreProviderLabel_coversImportedAndRegisteredProviders() {
         XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "my-whoop", brand: "WHOOP"), "WHOOP")
         XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "apple-health", brand: nil), "Apple Watch")
-        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "health-connect", brand: nil), "Health Connect")
-        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "oura-import", brand: nil), "Oura")
-        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "fitbit-import", brand: nil), "Fitbit")
-        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "garmin-import", brand: nil), "Garmin")
-        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "xiaomi-band", brand: nil), "Mi Band")
-        for brand in DeviceBrandCatalog.all.map(\.brand) {
+        XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "activity-file", brand: nil),
+                       "Workout files")
+        // A registered device names itself from its stored brand, whatever its source id.
+        for brand in ["Polar", "Wahoo", "Coospo", "Garmin"] {
             XCTAssertEqual(TodayView.todayScoreProviderLabel(sourceId: "device-\(brand)", brand: brand), brand)
         }
     }
@@ -384,10 +378,10 @@ final class TodayExplainabilityTests: XCTestCase {
             LiquidTodayView.heroSourceLabel(
                 providers: [
                     .init(sourceId: "my-whoop", brand: "WHOOP"),
-                    .init(sourceId: "oura-import", brand: nil),
+                    .init(sourceId: "activity-file", brand: nil),
                     .init(sourceId: "apple-health", brand: nil),
                 ]),
-            "WHOOP + Oura")
+            "WHOOP + Workout files")
     }
 
     func testLiquidHeroSourceLabel_hidesWhenNoScoreHasAResolvedSource() {

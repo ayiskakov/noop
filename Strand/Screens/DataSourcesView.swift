@@ -28,21 +28,6 @@ struct DataSourcesView: View {
     @State private var activityFileImporting = false
     @State private var activityFileSummary: String?
     @State private var activityFileFailed = false
-    // Wearable export (Oura / Fitbit / Garmin own-data export) import state — same lightweight,
-    // self-contained pattern: parse the file, upsert daily metrics + sleep sessions under the brand's
-    // own source, refresh. The brand's own scores are stored as reference only, never NOOP scores.
-    @State private var wearableImporting = false
-    @State private var wearableSummary: String?
-    @State private var wearableFailed = false
-    #if OURA_CLOUD_IMPORT
-    // Oura history import (compiled in ONLY with OURA_CLOUD_IMPORT): a one-time, user-initiated,
-    // foreground OAuth + backfill of the user's own history over the Oura API, as an alternative to
-    // the manual "Oura / Fitbit / Garmin export" file above. `OuraConnectModel` takes
-    // `repo: Repository` as a call-time parameter (not at construction) — `repo` is an
-    // `@EnvironmentObject`, unavailable until after this view's `init()` runs, so storing it at
-    // `@StateObject` construction time would either fail to compile or crash at runtime.
-    @StateObject private var oura = OuraConnectModel()
-    #endif
     // "Remove Apple Health imported data" (ah-delete #616): a destructive escape hatch that purges every
     // row stored under the "apple-health" source via DeviceRegistryStore.deleteAllData. Two-step (a
     // confirmation alert) since it can't be undone. Local to this screen; no live strap data is touched.
@@ -81,8 +66,8 @@ struct DataSourcesView: View {
         ScreenScaffold(title: "Data Sources",
                        subtitle: "Everything stays on \(Platform.deviceNounPhrase). Bring your history in once, then it's yours.",
                        onRefresh: { await repo.refresh() },
-                       // PERF: a ten-card import/source column (WHOOP, Apple Health, Xiaomi, nutrition,
-                       // lifting, activity files, wearables, Oura cloud, broadcast-out, live strap). The LazyVStack
+                       // PERF: a multi-card import/source column (WHOOP, Apple Health, nutrition, lifting,
+                       // activity files, broadcast-out, live strap). The LazyVStack
                        // path is byte-identical layout. The cards stay in their inner VStack(sectionSpacing)
                        // for pixel-identical spacing, so the lazy win is partial until they're promoted to
                        // direct children. NOTE: this screen still observes `LiveState` for the broadcaster
@@ -92,16 +77,11 @@ struct DataSourcesView: View {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 whoopCard.staggeredAppear(index: 0)
                 appleHealthCard.staggeredAppear(index: 1)
-                xiaomiCard.staggeredAppear(index: 2)
-                nutritionCard.staggeredAppear(index: 3)
-                liftingCard.staggeredAppear(index: 4)
-                activityFileCard.staggeredAppear(index: 5)
-                wearableCard.staggeredAppear(index: 6)
-                #if OURA_CLOUD_IMPORT
-                ouraCloudCard.staggeredAppear(index: 7)
-                #endif
-                broadcastHrCard.staggeredAppear(index: 8)
-                liveCard.staggeredAppear(index: 9)
+                nutritionCard.staggeredAppear(index: 2)
+                liftingCard.staggeredAppear(index: 3)
+                activityFileCard.staggeredAppear(index: 4)
+                broadcastHrCard.staggeredAppear(index: 5)
+                liveCard.staggeredAppear(index: 6)
             }
         }
         .onAppear {
@@ -199,26 +179,6 @@ struct DataSourcesView: View {
         }
     }
 
-    private var xiaomiCard: some View {
-        card(title: "Xiaomi Smart Band (Mi Band)", icon: "figure.walk.motion",
-             tint: StrandPalette.metricAmber,
-             subtitle: String(localized: "Import your Mi Band history (steps, heart rate, resting HR, sleep stages, SpO₂, stress and sleep score) straight from the Mi Fitness app. On your iPhone: Files → On My iPhone → Mi Fitness, long-press the folder → Compress, then choose the .zip here. Fully offline; no Xiaomi account or Bluetooth needed. Smart Band 8/9/10.")) {
-            let importingXiaomi = model.isImporting(.xiaomi)
-            HStack(spacing: NoopMetrics.space3) {
-                Button { presentImporter(.xiaomi) } label: {
-                    Label(importingXiaomi ? "Importing…" : "Choose Mi Fitness export…", systemImage: "tray.and.arrow.down")
-                }
-                .buttonStyle(NoopButtonStyle(.primary))
-                .disabled(model.hasActiveImport || nutritionImporting || liftingImporting || activityFileImporting)
-                if importingXiaomi { ProgressView().controlSize(.small) }
-            }
-            if let s = model.xiaomiImportSummary {
-                Text(s).font(StrandFont.subhead)
-                    .foregroundStyle(model.xiaomiImportFailed ? StrandPalette.statusWarning : StrandPalette.statusPositive)
-            }
-        }
-    }
-
     private var nutritionCard: some View {
         card(title: String(localized: "Nutrition (.csv)"), icon: "fork.knife",
              tint: StrandPalette.metricAmber,
@@ -276,59 +236,6 @@ struct DataSourcesView: View {
         }
     }
 
-    private var wearableCard: some View {
-        card(title: String(localized: "Oura / Fitbit / Garmin export"), icon: "figure.mind.and.body",
-             tint: StrandPalette.metricPurple,
-             subtitle: String(localized: "Import your own data export from Oura, Fitbit or Garmin: sleep, resting heart rate, HRV, steps and more, where the export has them. Download it from the brand's app (Oura: Account → Export Data; Fitbit: Google Takeout; Garmin: Export Your Data), then choose the file here. Fully offline; nothing leaves \(Platform.deviceNounPhrase). Each brand's own readiness or sleep score is kept for reference only. Your scores stay yours.")) {
-            HStack(spacing: NoopMetrics.space3) {
-                Button { presentImporter(.wearable) } label: {
-                    Label(wearableImporting ? "Importing…" : "Choose export…", systemImage: "tray.and.arrow.down")
-                }
-                .buttonStyle(NoopButtonStyle(.primary))
-                .disabled(model.hasActiveImport || nutritionImporting || liftingImporting || activityFileImporting || wearableImporting)
-                if wearableImporting { ProgressView().controlSize(.small) }
-            }
-            if let s = wearableSummary {
-                Text(s).font(StrandFont.subhead)
-                    .foregroundStyle(wearableFailed ? StrandPalette.statusWarning : StrandPalette.statusPositive)
-            }
-        }
-    }
-
-    #if OURA_CLOUD_IMPORT
-    /// Oura history import: a one-time, user-initiated, foreground OAuth + API backfill of the user's
-    /// own history — an *import* in the same family as the export-file importers above, not a sync
-    /// (nothing runs in the background, on a timer, or at launch). `oura.connectAndImport(repo:)`/
-    /// `disconnect(repo:)` take `repo` at call time (see the `@StateObject` declaration's note)
-    /// rather than storing it in `OuraConnectModel` at construction.
-    private var ouraCloudCard: some View {
-        card(title: String(localized: "Oura history import"), icon: "circle.circle", tint: StrandPalette.metricPurple,
-             subtitle: String(localized: "A one-time import of your own Oura history over the Oura API. Runs only when you tap it.")) {
-            VStack(alignment: .leading, spacing: 8) {
-                if oura.isConnected {
-                    HStack {
-                        Button { oura.connectAndImport(repo: repo) } label: { Label("Import again", systemImage: "arrow.clockwise") }
-                            .buttonStyle(NoopButtonStyle(.primary))
-                        Button(role: .destructive) { oura.disconnect(repo: repo) } label: { Label("Forget Oura access", systemImage: "xmark.circle") }
-                            .buttonStyle(NoopButtonStyle(.destructive))
-                    }.disabled(oura.busy)
-                } else {
-                    Button { oura.connectAndImport(repo: repo) } label: {
-                        Label(oura.busy ? "Working…" : "Import your Oura history", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(NoopButtonStyle(.primary))
-                    .disabled(oura.busy || !oura.isConfigured)
-                    if !oura.isConfigured {
-                        Text("Add your Oura app credentials to OuraSecrets.xcconfig to enable this.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if let s = oura.statusText { Text(s).font(.caption).foregroundStyle(.secondary) }
-            }
-        }
-    }
-    #endif // OURA_CLOUD_IMPORT
-
     private func presentImporter(_ target: ImportTarget) {
         importTarget = target
         #if os(iOS)
@@ -363,16 +270,12 @@ struct DataSourcesView: View {
             model.importWhoop(url: url)
         case .appleHealth:
             model.importAppleHealth(url: url)
-        case .xiaomi:
-            model.importXiaomi(url: url)
         case .nutrition:
             importNutrition(url: url)
         case .lifting:
             importLifting(url: url)
         case .activityFile:
             importActivityFile(url: url)
-        case .wearable:
-            importWearable(url: url)
         }
     }
 
@@ -642,62 +545,6 @@ struct DataSourcesView: View {
         }
     }
 
-    /// Parse a user's own Oura / Fitbit / Garmin data export and upsert it under the brand's own source
-    /// (daily metrics + sleep sessions + reference-only metric series). The brand's own readiness/sleep
-    /// score is NEVER mapped to a NOOP Charge/Effort/Rest — NOOP recomputes its own from the raw inputs.
-    private func importWearable(url: URL) {
-        wearableImporting = true
-        wearableSummary = nil
-        wearableFailed = false
-        Task {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            do {
-                guard let store = await repo.storeHandle() else {
-                    wearableSummary = String(localized: "Couldn't open the local store.")
-                    wearableFailed = true
-                    wearableImporting = false
-                    return
-                }
-                // Import & Data Ingest test mode: a gated trace sink. The sink is nil when the mode is off
-                // (the importer then takes its byte-identical untraced path). The brand is auto-detected, so
-                // the kind-bearing file-meta line is emitted AFTER the result lands, with the real detected
-                // kind; the size is bucketed in ImportTrace so no path, name or byte-exact size leaves.
-                // The importer runs nonisolated, so the sink hops each batch to the main actor (LiveState is
-                // @MainActor) before appending, keeping the tagged log append race-free and ordered.
-                // Import & Data Ingest test mode: read the gate ONCE for this completion (the trace sink AND
-                // the post-result file-meta line below share it), so a mid-import toggle can't make the two
-                // reads disagree and the bool is read a single time.
-                let importTracing = TestCentre.active(.dataImport)
-                let result = try await WearableImporter.importExport(
-                    url: url, into: store,
-                    trace: importTracing
-                        ? { @Sendable [weak live] lines in
-                            Task { @MainActor [weak live] in
-                                lines.forEach { live?.append(log: $0, domain: .dataImport) }
-                            }
-                          }
-                        : nil)
-                if importTracing {
-                    let ext = url.pathExtension
-                    let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
-                    live.append(log: ImportTrace.fileMetaLine(sourceKind: result.brand.dataSourceKind,
-                                                              ext: ext, sizeBytes: size),
-                                domain: .dataImport)
-                }
-                await repo.refresh()
-                wearableSummary = WearableExportImporter.summaryText(result)
-                wearableFailed = false
-                logImport("\(result.brand.displayName) export: \(result.days.count) days, \(result.sleeps.count) sleeps, \(result.summary.skippedSpans) rejected")
-            } catch {
-                wearableSummary = String(localized: "Import failed: \(error.localizedDescription)")
-                wearableFailed = true
-                logImport("Wearable export failed: \(error.localizedDescription)")
-            }
-            wearableImporting = false
-        }
-    }
-
     /// ah-delete (#616): purge every row stored under the "apple-health" source by calling
     /// `DeviceRegistryStore.deleteAllData(deviceId:)` (via the device registry's `deleteDeviceData`,
     /// which clears all `deviceId`-keyed tables in one transaction). The registry row itself is the
@@ -751,11 +598,9 @@ struct DataSourcesView: View {
     private enum ImportTarget {
         case whoop
         case appleHealth
-        case xiaomi
         case nutrition
         case lifting
         case activityFile
-        case wearable
 
         var allowedContentTypes: [UTType] {
             // `.folder` lets macOS users point at an *unzipped* export directory. On iOS the Files
@@ -775,15 +620,6 @@ struct DataSourcesView: View {
                 #else
                 return [.zip, .xml]
                 #endif
-            case .xiaomi:
-                // The Mi Fitness sandbox is shared as a .zip (or, on macOS, an unzipped
-                // folder); the bare `<user_id>.db` is also accepted directly.
-                let db = UTType(filenameExtension: "db") ?? .data
-                #if os(macOS)
-                return [.zip, .folder, db]
-                #else
-                return [.zip, db]
-                #endif
             case .nutrition:
                 return [.commaSeparatedText, .plainText]
             case .lifting:
@@ -798,14 +634,6 @@ struct DataSourcesView: View {
                 let tcx = UTType(filenameExtension: "tcx") ?? .xml
                 let fit = UTType(filenameExtension: "fit") ?? .data
                 return [gpx, tcx, fit, .xml, .data]
-            case .wearable:
-                // Oura is a single .json; Fitbit (Google Takeout) and Garmin (GDPR) are .zip bundles.
-                // On macOS an unzipped folder is also accepted. The importer sniffs the brand by content.
-                #if os(macOS)
-                return [.json, .zip, .folder, .data]
-                #else
-                return [.json, .zip, .data]
-                #endif
             }
         }
     }

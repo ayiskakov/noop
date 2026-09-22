@@ -3,24 +3,14 @@ import XCTest
 
 /// #761: the read-only feature-flag enumeration probe's parse + report contract.
 ///
-/// Fixtures are SYNTHETIC and built with real CRCs by the two helpers below (the WHOOP 4.0 harvard
+/// Fixtures are SYNTHETIC and built with real CRCs by the two helpers below (the WHOOP 5/MG harvard
 /// envelope and the 5/MG puffin envelope), because the layout is reverse-engineered and not yet
 /// answered by a strap in this project's hands. They pin the decode/report contract — including every
 /// failure path the BLE handler must survive — so `swift test` covers the whole probe without hardware.
 final class FeatureFlagProbeTests: XCTestCase {
 
-    // MARK: - Frame builders (mirror the two envelopes verifyFrame(_:family:) validates)
+    // MARK: - Frame builder (mirrors the envelope verifyFrame(_:family:) validates)
 
-    /// WHOOP 4.0 COMMAND_RESPONSE: [0xAA][len u16 LE][crc8(len)][type=36][seq][cmd][payload…][crc32 LE].
-    private func whoop4Response(cmd: UInt8, payload: [UInt8], seq: UInt8 = 1) -> [UInt8] {
-        let inner: [UInt8] = [36, seq, cmd] + payload
-        let length = UInt16(inner.count + 4)
-        let lenBytes: [UInt8] = [UInt8(length & 0xFF), UInt8(length >> 8)]
-        var frame: [UInt8] = [0xAA] + lenBytes + [crc8(lenBytes)] + inner
-        let c = crc32(inner)
-        frame += [UInt8(c & 0xFF), UInt8((c >> 8) & 0xFF), UInt8((c >> 16) & 0xFF), UInt8((c >> 24) & 0xFF)]
-        return frame
-    }
 
     /// WHOOP 5/MG COMMAND_RESPONSE in the puffin envelope (same shape `puffinCommandFrame` builds, with
     /// the COMMAND_RESPONSE type byte): type @8, seq @9, cmd @10, record from @11.
@@ -60,17 +50,6 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     // MARK: - START_FF_KEY_EXCHANGE (117)
 
-    func testStartDecodesRevisionAndCountOnWhoop4() {
-        // record = [revision=1][count=11 u16 LE] — the published 4.0 dump's shape (`0a 01 | 01 0b 00`).
-        let frame = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
-        guard case .success(let r) = FeatureFlagProbe.parseStart(frame: frame, family: .whoop4) else {
-            return XCTFail("expected a decoded START response")
-        }
-        XCTAssertEqual(r.revision, 1)
-        XCTAssertEqual(r.count, 11)
-        XCTAssertNil(r.resultCode, "the result byte's meaning is only established on 5/MG")
-        XCTAssertTrue(r.countIsPlausible)
-    }
 
     func testStartDecodesOnWhoop5AndSurfacesTheResultCode() {
         let frame = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x10, 0x00]))
@@ -95,13 +74,13 @@ final class FeatureFlagProbeTests: XCTestCase {
     }
 
     func testImplausibleCountIsFlaggedNotTrusted() {
-        let frame = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0xFF, 0xFF]))
-        guard case .success(let r) = FeatureFlagProbe.parseStart(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0xFF, 0xFF]))
+        guard case .success(let r) = FeatureFlagProbe.parseStart(frame: frame, family: .whoop5) else {
             return XCTFail("expected a decoded START response")
         }
         XCTAssertEqual(r.count, 65535)
         XCTAssertFalse(r.countIsPlausible)
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         report.noteStart(r)
         XCTAssertTrue(report.render().contains("count outside 1…128"))
     }
@@ -111,8 +90,8 @@ final class FeatureFlagProbeTests: XCTestCase {
     func testNextDecodesTheKeyName() {
         // record = [revision=1][index=0][validKey=1]["enable_r22_packets"\0…]
         let record: [UInt8] = [0x01, 0x00, 0x01] + keyBytes("enable_r22_packets")
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: record))
-        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: record))
+        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop5) else {
             return XCTFail("expected a decoded NEXT response")
         }
         XCTAssertEqual(r.index, 0)
@@ -134,13 +113,13 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     func testExhaustedCursorIsTheEndMarker() {
         // The published 4.0 dump's end marker: `0a 01 | 01 ff …`.
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0xFF, 0x00, 0x00]))
-        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0xFF, 0x00, 0x00]))
+        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop5) else {
             return XCTFail("expected a decoded NEXT response")
         }
         XCTAssertEqual(r.index, 0xFF)
         XCTAssertTrue(r.isExhausted)
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         XCTAssertFalse(report.noteNext(r), "an exhausted cursor must stop the walk")
         XCTAssertEqual(report.stopReason, "cursor exhausted (index 0xFF)")
     }
@@ -150,14 +129,14 @@ final class FeatureFlagProbeTests: XCTestCase {
     func testValidKeyFalseIsAnEmptySlotNotTheEndMarker() {
         // validKey=0 with a plausible-looking name after it: still not a key, still not the end.
         let record: [UInt8] = [0x01, 0x04, 0x00] + keyBytes("stale_buffer_leftover")
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: record))
-        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: record))
+        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop5) else {
             return XCTFail("expected a decoded NEXT response")
         }
         XCTAssertFalse(r.validKey)
         XCTAssertFalse(r.isExhausted, "only index=0xFF is the strap's unambiguous end marker")
         XCTAssertTrue(r.isEmptySlot)
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         XCTAssertTrue(report.noteNext(r), "validKey=0 without 0xFF must not end the walk")
         XCTAssertNil(report.stopReason)
         XCTAssertEqual(report.emptySlots, 1)
@@ -246,7 +225,7 @@ final class FeatureFlagProbeTests: XCTestCase {
     /// the consecutive-empty cap stops it, and names itself a CLIENT-side bound so the run is never read
     /// as a complete list.
     func testAnUnendingRunOfEmptySlotsStopsAtTheConsecutiveCap() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         var index = 0
         var sent = 0
         while report.noteNext(FeatureFlagProbe.NextResponse(
@@ -265,7 +244,7 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     /// A valid entry resets the run, so scattered holes cost nothing against the cap.
     func testAValidEntryResetsTheConsecutiveEmptySlotRun() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         func empty(_ i: Int) -> FeatureFlagProbe.NextResponse {
             FeatureFlagProbe.NextResponse(resultCode: 1, revision: 1, index: i, validKey: false, key: nil,
                                           record: [0x01, UInt8(i), 0x00])
@@ -287,8 +266,8 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     func testNonPrintableNameIsNotReportedAsAKey() {
         let record: [UInt8] = [0x01, 0x02, 0x01, 0xDE, 0xAD, 0xBE, 0xEF]
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: record))
-        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: record))
+        guard case .success(let r) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop5) else {
             return XCTFail("expected a decoded NEXT response")
         }
         XCTAssertNil(r.key, "a non-printable run is never invented into a name")
@@ -302,7 +281,7 @@ final class FeatureFlagProbeTests: XCTestCase {
     /// with a bad byte in the middle reported only the keys BEFORE it. The first real capture is the
     /// expensive one to obtain, and it is exactly the run that must not be truncated by our own strictness.
     func testAnUndecodableEntryDoesNotHideTheKeysAfterIt() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         report.noteStart(FeatureFlagProbe.StartResponse(resultCode: 1, revision: 1, count: 4))
 
         func next(_ index: Int, _ key: String?) -> FeatureFlagProbe.NextResponse {
@@ -398,7 +377,7 @@ final class FeatureFlagProbeTests: XCTestCase {
     /// printable-ASCII/length filter DID name them; reporting "named none" points at the strap and is the
     /// sentence someone would paste into #103.
     func testVerdictBlamesOurParserNotTheStrapWhenEveryNameFails() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         report.noteStart(FeatureFlagProbe.StartResponse(resultCode: 1, revision: 1, count: 3))
         for i in 0..<3 {
             _ = report.noteNext(FeatureFlagProbe.NextResponse(
@@ -414,7 +393,7 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     /// A partial success says so in the headline too, not only in the flag-count line.
     func testVerdictReportsSkippedAlongsideTheKeysItDidGet() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         report.noteStart(FeatureFlagProbe.StartResponse(resultCode: 1, revision: 1, count: 3))
         _ = report.noteNext(FeatureFlagProbe.NextResponse(
             resultCode: 1, revision: 1, index: 0, validKey: true, key: "enable_r22_packets"))
@@ -427,7 +406,7 @@ final class FeatureFlagProbeTests: XCTestCase {
     /// The skip cannot become an unbounded walk: `maxFlags` still terminates a firmware that answers
     /// forever with entries whose names never decode.
     func testEveryReplyUndecodableStillStopsAtTheSafetyCap() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         var sent = 0
         while report.noteNext(FeatureFlagProbe.NextResponse(resultCode: 1, revision: 1, index: 0,
                                                             validKey: true, key: nil)) {
@@ -449,9 +428,9 @@ final class FeatureFlagProbeTests: XCTestCase {
     // MARK: - Failure paths (the handler must survive every one)
 
     func testBadCRCIsRejected() {
-        var frame = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
+        var frame = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
         frame[frame.count - 1] ^= 0xFF          // corrupt the CRC32 trailer
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop4), .failure(.crc))
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop5), .failure(.crc))
 
         var five = whoop5Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0x00, 0x01] + keyBytes("x")))
         five[7] ^= 0xFF                          // corrupt the CRC16 header
@@ -460,39 +439,35 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     func testCorruptPayloadBytesFailCRCBeforeAnyFieldIsRead() {
         // A single flipped bit inside the record must be rejected, not decoded into a bogus key.
-        var frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0x00, 0x01] + keyBytes("enable_r22_packets")))
+        var frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0x00, 0x01] + keyBytes("enable_r22_packets")))
         frame[10] ^= 0x01
-        XCTAssertEqual(FeatureFlagProbe.parseNext(frame: frame, family: .whoop4), .failure(.crc))
+        XCTAssertEqual(FeatureFlagProbe.parseNext(frame: frame, family: .whoop5), .failure(.crc))
     }
 
     func testWrongCommandIsRejected() {
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0x00, 0x01] + keyBytes("x")))
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop4), .failure(.wrongCommand))
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: [0x01, 0x00, 0x01] + keyBytes("x")))
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop5), .failure(.wrongCommand))
     }
 
     func testNonCommandResponseTypeIsRejected() {
         // Same bytes, but the packet type is COMMAND (35) rather than COMMAND_RESPONSE (36).
-        var inner: [UInt8] = [35, 1, 117] + payload(result: 1, record: [0x01, 0x0B, 0x00])
-        let length = UInt16(inner.count + 4)
-        let lenBytes: [UInt8] = [UInt8(length & 0xFF), UInt8(length >> 8)]
-        var frame: [UInt8] = [0xAA] + lenBytes + [crc8(lenBytes)] + inner
-        let c = crc32(inner)
-        frame += [UInt8(c & 0xFF), UInt8((c >> 8) & 0xFF), UInt8((c >> 16) & 0xFF), UInt8((c >> 24) & 0xFF)]
-        inner = []
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop4), .failure(.envelope))
+        let frame = w5Frame(payload(result: 1, record: [0x01, 0x0B, 0x00]), type: 35, seq: 1, cmd: 117)
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop5), .failure(.envelope))
     }
 
     func testTruncatedRecordsAreRejected() {
+        // w5Frame, not whoop5Response: the strap pads a real record to a 4-byte boundary, and padding
+        // a fixture whose SHORTNESS is the thing under test would make it parse.
         // START with only the revision byte (no u16 count).
-        let short = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01]))
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: short, family: .whoop4), .failure(.truncated))
+        let short = w5Frame(payload(result: 1, record: [0x01]), type: 36, seq: 1, cmd: 117)
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: short, family: .whoop5), .failure(.truncated))
         // NEXT with a header but no record at all.
-        let header = whoop4Response(cmd: 118, payload: [0x0A, 0x01])
-        XCTAssertEqual(FeatureFlagProbe.parseNext(frame: header, family: .whoop4), .failure(.truncated))
+        let header = w5Frame([0x0A, 0x01], type: 36, seq: 1, cmd: 118)
+        XCTAssertEqual(FeatureFlagProbe.parseNext(frame: header, family: .whoop5), .failure(.truncated))
         // A frame chopped mid-envelope can't even be verified.
         let full = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x02, 0x00]))
         XCTAssertEqual(FeatureFlagProbe.parseStart(frame: Array(full.prefix(9)), family: .whoop5), .failure(.crc))
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: [], family: .whoop4), .failure(.crc))
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: [], family: .whoop5), .failure(.crc))
     }
 
     // MARK: - Report
@@ -558,7 +533,7 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     /// A reply that failed to decode is the one whose raw bytes matter most, so the whole frame goes in.
     func testUndecodedReplyLogsTheWholeRawFrame() {
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         report.noteFailure(.crc, command: 118, frame: [0xAA, 0x05, 0x00, 0x2B, 0x24])
         XCTAssertTrue(report.render().contains("raw frame=aa 05 00 2b 24"), report.render())
         XCTAssertEqual(report.stopCode, .parseFailure)
@@ -744,10 +719,10 @@ final class FeatureFlagProbeTests: XCTestCase {
 
     func testRepeatedKeysCannotDriveAnUnboundedWalk() {
         // A firmware whose cursor never advances repeats one entry: the reply-count cap must stop it.
-        var report = FeatureFlagProbeReport(family: .whoop4)
+        var report = FeatureFlagProbeReport(family: .whoop5)
         let record: [UInt8] = [0x01, 0x00, 0x01] + keyBytes("stuck_cursor")
-        let frame = whoop4Response(cmd: 118, payload: payload(result: 1, record: record))
-        guard case .success(let n) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop4) else {
+        let frame = whoop5Response(cmd: 118, payload: payload(result: 1, record: record))
+        guard case .success(let n) = FeatureFlagProbe.parseNext(frame: frame, family: .whoop5) else {
             return XCTFail("next")
         }
         var steps = 0
@@ -768,7 +743,7 @@ final class FeatureFlagProbeTests: XCTestCase {
         XCTAssertTrue(text.contains("no usable reply — the enumerate path is unconfirmed"))
         XCTAssertTrue(text.contains("(none)"))
 
-        var other = FeatureFlagProbeReport(family: .whoop4)
+        var other = FeatureFlagProbeReport(family: .whoop5)
         other.noteFailure(.crc, command: 118)
         XCTAssertTrue(other.render().contains("CRC failed — frame rejected (never decoded)"))
     }
@@ -878,10 +853,10 @@ final class FeatureFlagProbeTests: XCTestCase {
     /// well-formed replies of BOTH families still decode — and that the classes the verifier newly
     /// rejects come back as `.crc`, its own refusal, rather than being read as data.
     func testTheOrdinaryReplyStillDecodesUnderTheTightenedVerifier() {
-        let four = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
-        XCTAssertTrue(verifyFrame(four, family: .whoop4).ok, "precondition: an ordinary 4.0 reply is intact")
-        XCTAssertEqual(verifyFrame(four, family: .whoop4).reason, .none)
-        guard case .success = FeatureFlagProbe.parseStart(frame: four, family: .whoop4) else {
+        let four = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
+        XCTAssertTrue(verifyFrame(four, family: .whoop5).ok, "precondition: an ordinary 4.0 reply is intact")
+        XCTAssertEqual(verifyFrame(four, family: .whoop5).reason, .none)
+        guard case .success = FeatureFlagProbe.parseStart(frame: four, family: .whoop5) else {
             return XCTFail("the 4.0 useful path must still decode")
         }
         let five = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x10, 0x00]))
@@ -892,15 +867,15 @@ final class FeatureFlagProbeTests: XCTestCase {
     }
 
     func testAReplyWithTrailingBytesIsRefusedNotRead() {
-        let frame = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00])) + [0x00]
-        XCTAssertEqual(verifyFrame(frame, family: .whoop4).reason, .lengthMismatch)
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop4), .failure(.crc))
+        let frame = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00])) + [0x00]
+        XCTAssertEqual(verifyFrame(frame, family: .whoop5).reason, .lengthMismatch)
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop5), .failure(.crc))
     }
 
     func testAReplyWithABrokenHeaderChecksumIsRefusedNotRead() {
-        var frame = whoop4Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
-        frame[3] ^= 0xFF
-        XCTAssertEqual(verifyFrame(frame, family: .whoop4).crc32OK, true, "the payload CRC32 still verifies")
-        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop4), .failure(.crc))
+        var frame = whoop5Response(cmd: 117, payload: payload(result: 1, record: [0x01, 0x0B, 0x00]))
+        frame[6] ^= 0xFF
+        XCTAssertEqual(verifyFrame(frame, family: .whoop5).crc32OK, true, "the payload CRC32 still verifies")
+        XCTAssertEqual(FeatureFlagProbe.parseStart(frame: frame, family: .whoop5), .failure(.crc))
     }
 }

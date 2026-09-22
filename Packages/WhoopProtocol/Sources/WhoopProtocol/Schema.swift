@@ -227,7 +227,6 @@ public func loadSchema() -> Schema {
             versions: versions)
     }
     let schema = Schema(enums: raw.enums, envelope: raw.envelope, packets: packets)
-    registerPostHooks()
     _cachedSchema = schema
     return schema
 }

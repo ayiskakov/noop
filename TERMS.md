@@ -16,7 +16,7 @@ remove it.
 
 ## 1. What NOOP is — and who provides it
 
-NOOP is a free, independent, **non-commercial** application for macOS, Android and iOS that pairs directly
+NOOP is a free, independent, **non-commercial** application for macOS and iOS that pairs directly
 with a WHOOP® strap you own over Bluetooth and stores your data **only on your own device**. There is
 no NOOP server, no NOOP account, and no telemetry — the maintainers cannot see your data and never
 receive it.

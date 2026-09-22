@@ -1,38 +1,5 @@
 import Foundation
 
-// CRC8 lookup table (poly 0x07). Ported verbatim from framing.py.
-private let crc8Table: [UInt8] = [
-    0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15, 0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
-    0x70, 0x77, 0x7E, 0x79, 0x6C, 0x6B, 0x62, 0x65, 0x48, 0x4F, 0x46, 0x41, 0x54, 0x53, 0x5A, 0x5D,
-    0xE0, 0xE7, 0xEE, 0xE9, 0xFC, 0xFB, 0xF2, 0xF5, 0xD8, 0xDF, 0xD6, 0xD1, 0xC4, 0xC3, 0xCA, 0xCD,
-    0x90, 0x97, 0x9E, 0x99, 0x8C, 0x8B, 0x82, 0x85, 0xA8, 0xAF, 0xA6, 0xA1, 0xB4, 0xB3, 0xBA, 0xBD,
-    0xC7, 0xC0, 0xC9, 0xCE, 0xDB, 0xDC, 0xD5, 0xD2, 0xFF, 0xF8, 0xF1, 0xF6, 0xE3, 0xE4, 0xED, 0xEA,
-    0xB7, 0xB0, 0xB9, 0xBE, 0xAB, 0xAC, 0xA5, 0xA2, 0x8F, 0x88, 0x81, 0x86, 0x93, 0x94, 0x9D, 0x9A,
-    0x27, 0x20, 0x29, 0x2E, 0x3B, 0x3C, 0x35, 0x32, 0x1F, 0x18, 0x11, 0x16, 0x03, 0x04, 0x0D, 0x0A,
-    0x57, 0x50, 0x59, 0x5E, 0x4B, 0x4C, 0x45, 0x42, 0x6F, 0x68, 0x61, 0x66, 0x73, 0x74, 0x7D, 0x7A,
-    0x89, 0x8E, 0x87, 0x80, 0x95, 0x92, 0x9B, 0x9C, 0xB1, 0xB6, 0xBF, 0xB8, 0xAD, 0xAA, 0xA3, 0xA4,
-    0xF9, 0xFE, 0xF7, 0xF0, 0xE5, 0xE2, 0xEB, 0xEC, 0xC1, 0xC6, 0xCF, 0xC8, 0xDD, 0xDA, 0xD3, 0xD4,
-    0x69, 0x6E, 0x67, 0x60, 0x75, 0x72, 0x7B, 0x7C, 0x51, 0x56, 0x5F, 0x58, 0x4D, 0x4A, 0x43, 0x44,
-    0x19, 0x1E, 0x17, 0x10, 0x05, 0x02, 0x0B, 0x0C, 0x21, 0x26, 0x2F, 0x28, 0x3D, 0x3A, 0x33, 0x34,
-    0x4E, 0x49, 0x40, 0x47, 0x52, 0x55, 0x5C, 0x5B, 0x76, 0x71, 0x78, 0x7F, 0x6A, 0x6D, 0x64, 0x63,
-    0x3E, 0x39, 0x30, 0x37, 0x22, 0x25, 0x2C, 0x2B, 0x06, 0x01, 0x08, 0x0F, 0x1A, 0x1D, 0x14, 0x13,
-    0xAE, 0xA9, 0xA0, 0xA7, 0xB2, 0xB5, 0xBC, 0xBB, 0x96, 0x91, 0x98, 0x9F, 0x8A, 0x8D, 0x84, 0x83,
-    0xDE, 0xD9, 0xD0, 0xD7, 0xC2, 0xC5, 0xCC, 0xCB, 0xE6, 0xE1, 0xE8, 0xEF, 0xFA, 0xFD, 0xF4, 0xF3,
-]
-
-/// CRC-8 (poly 0x07) over `bytes[from..<(to ?? count)]`. The optional range defaults to the whole
-/// array, so existing callers are unchanged; passing a range lets the frame validator checksum a slice
-/// in place rather than slicing out a fresh `Array(frame[...])` for every frame on the offload path.
-public func crc8(_ bytes: [UInt8], _ from: Int = 0, _ to: Int? = nil) -> UInt8 {
-    let upper = to ?? bytes.count
-    var crc: UInt8 = 0
-    var i = from
-    while i < upper {
-        crc = crc8Table[Int(crc ^ bytes[i])]
-        i += 1
-    }
-    return crc
-}
 
 // Standard zlib CRC-32 (reflected, poly 0xEDB88320), table built in code.
 private let crc32Table: [UInt32] = {
@@ -98,30 +65,26 @@ public enum FrameRejectReason: String, Codable, Equatable, Sendable, CaseIterabl
     /// The byte count does not equal the total derived from the declared length field: the frame is
     /// truncated, or it carries trailing bytes past its own end.
     case lengthMismatch
-    /// The header checksum (CRC-8 on WHOOP 4.0, CRC-16-Modbus on WHOOP 5.0/MG) disagreed.
+    /// The CRC-16-Modbus header checksum disagreed.
     case headerChecksumMismatch
     /// The payload CRC32 was computed and disagreed.
     case payloadCRCMismatch
 }
 
-/// The family lower bounds a frame must clear before any of its bytes are read as fields.
+/// The lower bound a frame must clear before any of its bytes are read as fields.
 ///
-/// WHOOP 4.0: `[SOF][len u16][crc8][type][seq][cmd] + [crc32 u32]` = 11 bytes. The zero-payload
-/// metadata frames at this bound are valid and intentional; the minimum preserves the old `length >= 7` rule.
 /// WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
-/// Unlike the 4.0 bound, 13 is an empirical acceptance policy, not an envelope necessity: Goose's
-/// `v5Payload` accepts a 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately
-/// requires the inner type byte. Real fixtures include 20-byte command responses plus 24- and
-/// 32-byte frames, but no captured 12-byte zero-payload frame; those observations do not prove the
-/// boundary. Keep this assumption explicit until hardware evidence changes it.
+/// 13 is an empirical acceptance policy, not an envelope necessity: Goose's `v5Payload` accepts a
+/// 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately requires the inner type
+/// byte. Real fixtures include 20-byte command responses plus 24- and 32-byte frames, but no captured
+/// 12-byte zero-payload frame; those observations do not prove the boundary. Keep this assumption
+/// explicit until hardware evidence changes it.
 public enum FrameLimits {
-    public static let whoop4MinimumFrameBytes = 11
     public static let whoop5MinimumFrameBytes = 13
 
     /// The minimum total frame size for `family`, in bytes.
     public static func minimumFrameBytes(for family: DeviceFamily) -> Int {
         switch family {
-        case .whoop4: return whoop4MinimumFrameBytes
         case .whoop5: return whoop5MinimumFrameBytes
         }
     }
@@ -132,6 +95,8 @@ public struct FrameCheck: Equatable {
     /// CRC32 together. True only when `reason == .none`.
     public let ok: Bool
     public let length: Int?
+    /// The HEADER checksum outcome (CRC-16-Modbus over the first six bytes). Named `crc8OK` for
+    /// source compatibility with every existing reader of this struct.
     public let crc8OK: Bool?
     public let crc32OK: Bool?
     /// Why `ok` is false; `.none` exactly when `ok` is true.
@@ -166,49 +131,7 @@ private func u32le(_ bytes: [UInt8], _ off: Int) -> UInt32 {
         | (UInt32(bytes[off + 2]) << 16) | (UInt32(bytes[off + 3]) << 24)
 }
 
-/// Validate a complete frame envelope: structure, header checksum and payload CRC32 together.
-/// Frame: [0xAA][len u16 LE][crc8(len)][...inner...][crc32 u32 LE], total = len + 4.
-///
-/// A frame is accepted only when it is at least `FrameLimits.whoop4MinimumFrameBytes` long, carries
-/// EXACTLY `len + 4` bytes (so a truncated frame and one with trailing bytes are both rejected), its
-/// CRC-8 over the length field matches, and its CRC32 over the inner record matches. The individual
-/// outcomes stay on the result as diagnostics; `reason` says which rule failed first.
-public func verifyFrame(_ frame: [UInt8]) -> FrameCheck {
-    guard frame.first == 0xAA else {
-        return FrameCheck(ok: false, reason: .noStartOfFrame)
-    }
-    guard frame.count >= FrameLimits.whoop4MinimumFrameBytes else {
-        // Below the smallest real 4.0 inner record (type + sequence + command): no field is read, and
-        // the length word it may carry is not worth reporting as a length.
-        return FrameCheck(ok: false, reason: .belowMinimumLength)
-    }
-    let length = u16le(frame, 1)
-    let total = length + 4
-    // Ranged CRCs checksum the frame in place, with no per-frame sub-array allocation.
-    let crc8OK = crc8(frame, 1, 3) == frame[3]
-    if total < FrameLimits.whoop4MinimumFrameBytes {
-        return FrameCheck(ok: false, length: length, crc8OK: crc8OK, reason: .belowMinimumLength)
-    }
-    if total != frame.count {
-        // A surplus tail does not stop the declared payload CRC from being computed. Preserve that
-        // diagnostic because "payload CRC right, envelope wrong" is the class the hardware gate reads.
-        let crc32OK = total <= frame.count
-            ? crc32(frame, 4, length) == u32le(frame, length)
-            : nil
-        return FrameCheck(ok: false, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
-                          reason: .lengthMismatch)
-    }
-    // The structural checks prove length >= 7 and leave a complete four-byte trailer in bounds.
-    let crc32OK = crc32(frame, 4, length) == u32le(frame, length)
-    let reason = integrityRejectReason(headerCRCOK: crc8OK, payloadCRCOK: crc32OK)
-    return FrameCheck(ok: reason == .none, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
-                      reason: reason)
-}
-
-/// Family-aware frame validation.
-///
-/// `whoop4` behaves EXACTLY like the no-family `verifyFrame(_:)` above (back-compat). `whoop5`
-/// uses the Whoop 5.0 envelope reverse-engineered from Goose:
+/// Family-aware frame validation. The Whoop 5.0 envelope, reverse-engineered from Goose:
 ///
 ///   [0]   SOF 0xAA
 ///   [1]   format byte (0x01)
@@ -219,12 +142,10 @@ public func verifyFrame(_ frame: [UInt8]) -> FrameCheck {
 ///   tail  CRC32 (zlib, LE) over the payload, 4 bytes
 ///   total = declaredLength + 8
 ///
-/// For whoop5 the `crc8OK` field of the result carries the CRC16 header outcome (so callers get a
-/// single uniform "header CRC ok?" signal regardless of family).
+/// The `crc8OK` field of the result carries the CRC16 header outcome, so callers keep a single
+/// uniform "header CRC ok?" signal.
 public func verifyFrame(_ frame: [UInt8], family: DeviceFamily) -> FrameCheck {
     switch family {
-    case .whoop4:
-        return verifyFrame(frame)
     case .whoop5:
         return verifyFrameWhoop5(frame)
     }
@@ -272,28 +193,6 @@ private func verifyFrameWhoop5(_ frame: [UInt8]) -> FrameCheck {
                       crc32OK: crc32OK, reason: reason)
 }
 
-/// Reconstruct a complete frame from a bare payload (data == frame[7:]).
-/// Some captures store only the data portion; rebuild the envelope with a correct zlib crc32 AND a
-/// correct CRC-8 header checksum. Mirrors framing.py frame_from_payload.
-///
-/// The CRC-8 byte used to be a 0x00 placeholder. That was harmless while the gates only asked
-/// whether the payload CRC32 was *demonstrably* wrong, but a frame built this way is rejected the
-/// moment the header checksum counts — so every rebuilt frame is now a frame a strap could have
-/// sent, and the round-trip through `verifyFrame` is positive end to end.
-public func frameFromPayload(_ data: [UInt8], type: UInt8, seq: UInt8 = 0, cmd: UInt8 = 0) -> [UInt8] {
-    let inner: [UInt8] = [type, seq, cmd] + data
-    let length = inner.count + 4
-    var frame: [UInt8] = [0xAA, UInt8(length & 0xFF), UInt8((length >> 8) & 0xFF)]
-    frame.append(crc8(frame, 1, 3))
-    frame.append(contentsOf: inner)
-    let c = crc32(inner)
-    frame.append(UInt8(c & 0xFF))
-    frame.append(UInt8((c >> 8) & 0xFF))
-    frame.append(UInt8((c >> 16) & 0xFF))
-    frame.append(UInt8((c >> 24) & 0xFF))
-    return frame
-}
-
 /// EXPERIMENTAL: build a WHOOP 5.0/MG ("puffin") command frame in the CRC16 envelope (docs/PROTOCOL.md
 /// §2.2). The inner record is `[type][seq][cmd] + payload`; `declLen = innerLen + 4` (the CRC32 tail);
 /// the CRC16-Modbus covers the first six header bytes. `type` defaults to 35 (COMMAND) and `header`
@@ -324,9 +223,9 @@ public func puffinCommandFrame(cmd: UInt8, seq: UInt8, payload: [UInt8] = [0x00]
 }
 
 /// Accumulate BLE notification fragments into complete frames.
-/// A complete frame is `length + 4` bytes where length = u16 LE at buf[1..3], and never smaller than
-/// the family minimum in `FrameLimits` — a start-of-frame declaring less is dropped and the stream
-/// resyncs on the next one. Mirrors framing.py Reassembler.
+/// A complete frame is `declLength + 8` bytes where declLength = u16 LE at buf[2..4], and never
+/// smaller than the family minimum in `FrameLimits` — a start-of-frame declaring less is dropped and
+/// the stream resyncs on the next one.
 public final class Reassembler {
     // Backed by a flat byte buffer plus a read cursor rather than draining off the front. The earlier
     // form called buf.removeFirst(n), which shifts the whole tail down on every completed frame, so
@@ -350,14 +249,10 @@ public final class Reassembler {
     /// frames nothing else can read. Monotonic for the lifetime of the reassembler.
     public private(set) var belowMinimumLengthDrops = 0
 
-    /// `family` selects the frame-length convention:
-    /// - WHOOP 4.0 reads a u16 length at `buf[1..3]`, total = `length + 4`.
-    /// - WHOOP 5.0 ("puffin") reads a u16 declared length at `buf[2..4]` (after the `0xAA` SOF and
-    ///   the `0x01` format byte), total = `declLength + 8` — the extra 4 covers the format byte and
-    ///   the CRC16 header that 5.0 inserts ahead of the inner record.
-    ///
-    /// Defaults to `.whoop4` so existing callers and tests are byte-for-byte unchanged.
-    public init(family: DeviceFamily = .whoop4) {
+    /// WHOOP 5.0 ("puffin") reads a u16 declared length at `buf[2..4]` (after the `0xAA` SOF and the
+    /// `0x01` format byte), total = `declLength + 8` — the extra 4 covers the format byte and the
+    /// CRC16 header that 5.0 inserts ahead of the inner record.
+    public init(family: DeviceFamily = .whoop5) {
         self.family = family
     }
 
@@ -374,14 +269,12 @@ public final class Reassembler {
             // Skip any leading bytes ahead of the SOF instead of physically removing them.
             if sof > head { head = sof }
             let avail = buf.count - head
-            // Both families need at least 4 bytes to read their declared length.
+            // At least 4 bytes are needed to read the declared length.
             if avail < 4 {
                 break
             }
             let total: Int
             switch family {
-            case .whoop4:
-                total = (Int(buf[head + 1]) | (Int(buf[head + 2]) << 8)) + 4
             case .whoop5:
                 total = (Int(buf[head + 2]) | (Int(buf[head + 3]) << 8)) + 8
             }

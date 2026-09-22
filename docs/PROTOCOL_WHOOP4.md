@@ -2,6 +2,12 @@
 
 Read the [scope and compatibility](PROTOCOL.md#scope-and-compatibility) before applying this page.
 
+> **Status: protocol reference only.** NOOP connects to WHOOP 5.0 / MG straps only. A WHOOP 4.0 is
+> recognised on the air by its `61080001-…` service and reported as detected-but-unsupported; NOOP does
+> not connect to it, does not implement the CRC8 envelope below, and sends it no commands. This page is
+> retained so the legacy wire facts stay documented and so the design decisions recorded on the
+> [implementation page](PROTOCOL_IMPLEMENTATION.md) keep their context.
+
 ## Version and validation boundary
 
 This profile combines version-labelled device observations with supported
@@ -128,8 +134,8 @@ The ordered command sequence that follows is:
 
 **Observed in device captures:** re-running this sequence in the middle of an
 offload stopped type-47 streaming. Run it once per connection. Scheduling around
-the sequence is application policy, not required protocol timing; the NOOP policy
-is recorded on the [implementation page](PROTOCOL_IMPLEMENTATION.md#noop-connection-policy).
+the sequence is application policy, not required protocol timing; NOOP's current WHOOP 5/MG
+policy is recorded on the [implementation page](PROTOCOL_IMPLEMENTATION.md#noop-connection-policy).
 
 > WHOOP 5/MG instead writes the fixed `CLIENT_HELLO` [frame](PROTOCOL_WHOOP5.md#connection-and-frame-format) to its `…0002` command
 > characteristic immediately after discovery.

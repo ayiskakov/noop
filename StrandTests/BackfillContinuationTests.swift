@@ -432,9 +432,8 @@ final class BackfillContinuationTests: XCTestCase {
 
     /// A 5/MG must never chase or DERIVE a GET_CLOCK correlation: its records already carry real-unix
     /// seconds, so `wall - strapNewestTs` is how long the strap went unrecorded, NOT an RTC skew.
-    /// Seeding it as one shifted that offload's history forward by the gap. WHOOP 4.0 keeps #700.
-    func testOnlyWhoop4DerivesClockCorrelation() {
-        XCTAssertTrue(BackfillContinuation.derivesClockCorrelation(.whoop4))
+    /// Seeding it as one shifted that offload's history forward by the gap.
+    func testNoSupportedFamilyDerivesClockCorrelation() {
         XCTAssertFalse(BackfillContinuation.derivesClockCorrelation(.whoop5))
     }
 }

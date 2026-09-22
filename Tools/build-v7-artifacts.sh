@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-shot v7.0.0 release-artifact build: mac universal + iOS unsigned + Android full,
-# each anonymized + leak-checked. Writes dist/NOOP-v7.0.0-{macos.zip,.ipa,.apk}.
+# One-shot v7.0.0 release-artifact build: mac universal + iOS unsigned,
+# each anonymized + leak-checked. Writes dist/NOOP-v7.0.0-{macos.zip,.ipa}.
 set -uo pipefail
 cd ~/Documents/Strand
 
@@ -9,16 +9,16 @@ cd ~/Documents/Strand
 # source project, so the SOURCE (not just the compiled binary) has to stay clean.
 # Abort before building if a real identity has leaked into tracked code/docs.
 # (A first-name leak in code comments shipped silently for weeks once; never again.)
-LEAK="$(git grep -niE 'aaron|iinde|phull' -- '*.swift' '*.kt' '*.md' '*.py' '*.sh' '*.yml' '*.json' '*.xcstrings' 2>/dev/null | grep -ivE 'aaronson' || true)"
+LEAK="$(git grep -niE 'aaron|iinde|phull' -- '*.swift' '*.md' '*.py' '*.sh' '*.yml' '*.json' '*.xcstrings' 2>/dev/null | grep -ivE 'aaronson' || true)"
 if [ -n "$LEAK" ]; then
   echo "✗ ANONYMITY LEAK in tracked source, refusing to build:" >&2
   echo "$LEAK" | head -20 >&2
   exit 1
 fi
-# Codename guard: the word "Strand" must never reach a USER-FACING string literal (a shipped Android
+# Codename guard: the word "Strand" must never reach a USER-FACING string literal (a shipped
 # toast said "reopen Strand" until v8.2.0). Identifier prefixes (StrandFont/StrandPalette/…) and
 # path/comment mentions are fine; a quoted standalone-word use is not.
-CODENAME="$(git grep -nE '"[^"]*\bStrand\b[^"]*"' -- '*.swift' '*.kt' 2>/dev/null | grep -vE 'Strand(Font|Palette|Design|Analytics|Tests|iOS)|Strand/|/Strand|scheme|CFBundle|xcodeproj|\.swift"' || true)"
+CODENAME="$(git grep -nE '"[^"]*\bStrand\b[^"]*"' -- '*.swift' 2>/dev/null | grep -vE 'Strand(Font|Palette|Design|Analytics|Tests|iOS)|Strand/|/Strand|scheme|CFBundle|xcodeproj|\.swift"' || true)"
 if [ -n "$CODENAME" ]; then
   echo "✗ CODENAME LEAK in a user-facing string, refusing to build:" >&2
   echo "$CODENAME" | head -20 >&2
@@ -29,7 +29,7 @@ echo "✓ anonymity source-scan clean"
 VER="${1:-7.0.1}"
 DIST="dist"; mkdir -p "$DIST"
 HOMEPATH="$HOME"
-ok_mac=0; ok_ios=0; ok_apk=0
+ok_mac=0; ok_ios=0
 
 echo "═══ xcodegen ═══"
 xcodegen generate >/tmp/v7a-xcodegen.log 2>&1 && echo "xcodegen OK" || { echo "xcodegen FAILED"; tail -5 /tmp/v7a-xcodegen.log; }
@@ -86,17 +86,7 @@ if [ -d "$IOSAPP" ]; then
   [ -f "$DIST/NOOP-v$VER.ipa" ] && ok_ios=1 && echo "  ✓ dist/NOOP-v$VER.ipa ($(( $(stat -f '%z' "$DIST/NOOP-v$VER.ipa")/1024/1024 ))MB)"
 else echo "  ✗ iOS build FAILED"; grep -E 'error:' /tmp/v7a-ios.log | sed 's#.*Strand/##' | sort -u | head; fi
 
-# ── Android full release ───────────────────────────────────────────────────────
-echo "═══ Android (assembleFullRelease) ═══"
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
-( cd android && ./gradlew assembleFullRelease ) >/tmp/v7a-android.log 2>&1
-APK="android/app/build/outputs/apk/full/release/app-full-release.apk"
-if [ -f "$APK" ]; then
-  cp "$APK" "$DIST/NOOP-v$VER.apk" && ok_apk=1
-  echo "  ✓ dist/NOOP-v$VER.apk ($(( $(stat -f '%z' "$DIST/NOOP-v$VER.apk")/1024/1024 ))MB)"
-else echo "  ✗ Android build FAILED"; grep -iE 'error|FAILURE|what went wrong' /tmp/v7a-android.log | head; fi
-
 echo ""
-echo "═══ ARTIFACT SUMMARY ═══  mac=$ok_mac ios=$ok_ios apk=$ok_apk"
+echo "═══ ARTIFACT SUMMARY ═══  mac=$ok_mac ios=$ok_ios"
 ls -la "$DIST"/NOOP-v$VER* 2>/dev/null
 echo "═══ V7 ARTIFACTS DONE ═══"

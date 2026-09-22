@@ -59,7 +59,6 @@ private func metricAccent(_ m: MetricDescriptor) -> Color {
     default:
         switch m.source {
         case "apple-health": return StrandPalette.metricCyan
-        case "xiaomi-band":  return StrandPalette.metricAmber
         default:             return StrandPalette.textPrimary
         }
     }
@@ -314,11 +313,11 @@ struct VitalReading: Equatable {
 let vo2MaxAttributionPrefix = "vo2max-estimator:"
 
 /// #103/queue-11a follow-up: a display-source token for a `spo2` reading that came from the
-/// `spo2_candidate` fallback (WHOOP `spo2_candidate_82` or Oura ceiling@100 `0x6F`, device-conditional)
+/// `spo2_candidate` fallback (WHOOP `spo2_candidate_82`)
 /// rather than a calibrated `spo2Pct` import. Every OTHER surface that shows this fallback (Today's Key
 /// Metrics tile, `VitalSignsSummary`, `LiquidTodayView`) already labels it "strap estimate (unverified)"
 /// — this Explorer/"Your Cards" drill-down had no candidate fallback at all until now (found 2026-08-24:
-/// an Oura-only or WHOOP-4.0-only install with the toggle ON saw nothing here past the last calibrated
+/// an install with the toggle ON saw nothing here past the last calibrated
 /// import, even though the Key Metrics tile right next to it showed a real number). Same
 /// prefix-token idiom as `vo2MaxAttributionSource` just below, so the existing readings-table plumbing
 /// needs no new machinery — only `TodayView.provenanceDisplayLabel` gains one more case.
@@ -1096,16 +1095,14 @@ struct MetricDetailView: View {
         // #103/queue-11a follow-up: fill in the spo2 candidate fallback for any day this Explorer's
         // calibrated `spo2` series has no reading for — the SAME fallback Today's Key Metrics tile,
         // `VitalSignsSummary`, and `LiquidTodayView` already show, which this generic catalog-driven
-        // screen never got when #1568 added it everywhere else (found 2026-08-24: an Oura-only or
-        // WHOOP-4.0-only install with the toggle ON saw a real number on the tile but an empty/stale
-        // screen here). Calibrated days always win — this only ADDS days the calibrated series is
-        // missing, never overwrites one. Gated on the same toggle every other candidate site checks.
+        // screen never got when #1568 added it everywhere else (found 2026-08-24: an install with the
+        // toggle ON saw a real number on the tile but an empty/stale screen here). Calibrated days
+        // always win — this only ADDS days the calibrated series is missing, never overwrites one.
+        // Gated on the same toggle every other candidate site checks.
         //
-        // The source is part of the gate, not just the key. The catalog carries TWO `spo2` descriptors —
-        // `my-whoop` and `xiaomi-band` — and `MetricDescriptor.id` is `source + ":" + key`, so they are
-        // different metrics that happen to share a key. Only the WHOOP/Oura partition has a candidate
-        // series behind it; without this a Xiaomi Band's Blood Oxygen card would be asking for a strap
-        // estimate that is not its own.
+        // The source is part of the gate, not just the key: `MetricDescriptor.id` is `source + ":" + key`,
+        // so a `spo2` descriptor under another source is a different metric that happens to share a key,
+        // and only the WHOOP partition has a candidate series behind it.
         if metric.key == "spo2", metric.source == "my-whoop", PuffinExperiment.spo2CandidateDisplayEnabled {
             let candidateSeries = await repo.exploreSeries(key: "spo2_candidate", source: metric.source)
             if !candidateSeries.isEmpty {

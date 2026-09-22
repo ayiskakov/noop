@@ -56,30 +56,6 @@ final class SkinTempBackfillTests: XCTestCase {
         XCTAssertEqual(SkinTempBackfill.sessionsForDay([], dayStart: 0).count, 0)
     }
 
-    // MARK: Rule 3 — the WHOOP 4.0 anchor comes from the current window
-
-    /// A WHOOP 4.0 with a per-device anchor from the current window uses it.
-    func testResolveAnchor_whoop4WithAnchorReturnsIt() {
-        let anchor = SkinTempBackfill.resolveAnchor(family: .whoop4, windowAnchorRaw: 1290.0)
-        XCTAssertEqual(anchor, 1290.0)
-    }
-
-    /// A WHOOP 4.0 with NO per-device anchor returns nil → the night DECLINES. The global 826 is NOT
-    /// a fallback here — a re-learned anchor puts backfilled nights on a different offset from the
-    /// stored ones and the chart plots two scales as one line.
-    func testResolveAnchor_whoop4WithoutAnchorDeclines() {
-        let anchor = SkinTempBackfill.resolveAnchor(family: .whoop4, windowAnchorRaw: nil)
-        XCTAssertNil(anchor, "rule 3: no anchor ⇒ decline, never the global default")
-    }
-
-    /// A WHOOP 5/MG always returns nil anchor (centidegree path, no anchor) — and does NOT decline on
-    /// anchor grounds (the decline check in `computeNight` is `family == .whoop4 && anchor == nil`).
-    func testResolveAnchor_whoop5ReturnsNilButDoesNotDecline() {
-        let anchor = SkinTempBackfill.resolveAnchor(family: .whoop5, windowAnchorRaw: nil)
-        XCTAssertNil(anchor)
-        // The computeNight test below confirms a 5/MG night proceeds without an anchor.
-    }
-
     // MARK: computeNight — the full per-night plan
 
     /// A 5/MG night with enough worn samples fills. The centidegree path needs no anchor.
@@ -99,33 +75,10 @@ final class SkinTempBackfillTests: XCTestCase {
         let hr = (0..<400).map { i in HRSample(ts: dayStart - 1 * 3_600 + i, bpm: 60) }
         let result = SkinTempBackfill.computeNight(
             candidate: candidate, sessions: sessions, hr: hr, skinTemp: skinTemp,
-            family: .whoop5, windowAnchorRaw: nil, dayStart: dayStart)
+            family: .whoop5, dayStart: dayStart)
         XCTAssertNotNil(result.skinTempC)
         XCTAssertEqual(result.skinTempC!, 30.57, accuracy: 0.01)
         XCTAssertNil(result.declineReason)
-    }
-
-    /// A WHOOP 4.0 night with no per-device anchor DECLINES (rule 3). Even with enough samples the
-    /// night is not filled — the global 826 is NOT a fallback.
-    func testComputeNight_whoop4WithoutAnchorDeclines() {
-        let dayStart = 1_789_632_000
-        let candidate = SkinTempBackfill.NightCandidate(
-            day: "2026-08-25", from: dayStart - 30 * 3_600, to: dayStart + 24 * 3_600, owner: "my-whoop")
-        let sessions = [
-            SleepSession(start: dayStart - 1 * 3_600, end: dayStart + 7 * 3_600, efficiency: 0.9,
-                         stages: [], restingHR: nil, avgHRV: nil, hrOnly: false),
-        ]
-        // Enough samples to fill IF the anchor were allowed — but rule 3 declines before the funnel.
-        let skinTemp = (0..<400).map { i in
-            SkinTempSample(ts: dayStart - 1 * 3_600 + i, raw: 826)
-        }
-        let hr = (0..<400).map { i in HRSample(ts: dayStart - 1 * 3_600 + i, bpm: 60) }
-        let result = SkinTempBackfill.computeNight(
-            candidate: candidate, sessions: sessions, hr: hr, skinTemp: skinTemp,
-            family: .whoop4, windowAnchorRaw: nil, dayStart: dayStart)
-        XCTAssertNil(result.skinTempC, "rule 3: no anchor ⇒ decline, never the global default")
-        XCTAssertNotNil(result.declineReason)
-        XCTAssertTrue(result.declineReason!.contains("anchor"), "decline reason names the anchor")
     }
 
     /// A night with no sessions ending on the day declines.
@@ -135,7 +88,7 @@ final class SkinTempBackfillTests: XCTestCase {
             day: "2026-08-25", from: dayStart - 30 * 3_600, to: dayStart + 24 * 3_600, owner: "my-whoop")
         let result = SkinTempBackfill.computeNight(
             candidate: candidate, sessions: [], hr: [], skinTemp: [],
-            family: .whoop5, windowAnchorRaw: nil, dayStart: dayStart)
+            family: .whoop5, dayStart: dayStart)
         XCTAssertNil(result.skinTempC)
         XCTAssertEqual(result.declineReason, "no sleep session ends on this day")
     }
@@ -156,7 +109,7 @@ final class SkinTempBackfillTests: XCTestCase {
         let hr = (0..<100).map { i in HRSample(ts: dayStart - 1 * 3_600 + i, bpm: 60) }
         let result = SkinTempBackfill.computeNight(
             candidate: candidate, sessions: sessions, hr: hr, skinTemp: skinTemp,
-            family: .whoop5, windowAnchorRaw: nil, dayStart: dayStart)
+            family: .whoop5, dayStart: dayStart)
         XCTAssertNil(result.skinTempC)
         XCTAssertNotNil(result.declineReason)
         XCTAssertTrue(result.declineReason!.contains("worn samples"), "decline reason names the sample floor")
@@ -181,7 +134,7 @@ final class SkinTempBackfillTests: XCTestCase {
         let hr = (0..<400).map { i in HRSample(ts: dayStart - 9 * 3_600 + i, bpm: 60) }
         let result = SkinTempBackfill.computeNight(
             candidate: candidate, sessions: sessions, hr: hr, skinTemp: skinTemp,
-            family: .whoop5, windowAnchorRaw: nil, dayStart: dayStart)
+            family: .whoop5, dayStart: dayStart)
         XCTAssertNil(result.skinTempC, "rule 1: a session ending in the previous day is not this day's")
         XCTAssertEqual(result.declineReason, "no sleep session ends on this day")
     }

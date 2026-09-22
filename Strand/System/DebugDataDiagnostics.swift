@@ -71,8 +71,8 @@ enum DebugDataDiagnostics {
         lines.append("Strap & data")
         let d = UserDefaults.standard
         // Parse through the enum, never against string literals. `selectedWhoopModel` stores
-        // `WhoopModel.rawValue` ("WHOOP 4.0" / "WHOOP 5.0 / MG") — both writers use `.rawValue` — but this
-        // switch tested for "whoop5"/"whoop4", which are the CASE names, not the raw values. Neither ever
+        // `WhoopModel.rawValue` ("WHOOP 5.0 / MG") — both writers use `.rawValue` — but this
+        // switch tested for "whoop5", which is the CASE name, not the raw value. It never
         // matched, so this header reported "unknown (never paired)" for every strap, forever, including one
         // actively syncing. The sibling block ~270 lines below already compares `.rawValue` and carries a
         // comment warning about this exact trap; this site never got the same treatment. Going through
@@ -325,22 +325,7 @@ enum DebugDataDiagnostics {
         }
         let det = SleepSession(start: cs.startTs, end: cs.endTs, efficiency: cs.efficiency ?? 0,
                                stages: [], restingHR: cs.restingHr, avgHRV: cs.avgHrv)
-        // Third instance of the same literal bug in this file: "whoop5" is the enum CASE name, while the
-        // pref stores `WhoopModel.rawValue` ("WHOOP 5.0 / MG"). It never matched, so this resolved to
-        // `.whoop4` for EVERY strap — and unlike the two header sites, that is not a label. It picks the
-        // WHOOP-4 device anchor and runs `skinTempFunnel` under the wrong family, so the skin-temp funnel
-        // diagnostic has been reporting 4.0 numbers for every 5/MG on Apple. Parse through the enum.
-        // Unknown still resolves to `.whoop4`: this chooses an analysis default, matching the Kotlin twin.
-        let family: DeviceFamily =
-            WhoopModel(rawValue: UserDefaults.standard.string(forKey: "selectedWhoopModel") ?? "") == .whoop5mg
-            ? .whoop5 : .whoop4
-        // Mirror the real per-device anchor (#404): learn it from the WHOLE recent window's raws — not just
-        // this night — so a single sparse night (<100 in-band) can't misreport under the global fallback when
-        // the window as a whole has enough in-band samples for analyzeDay to learn a device anchor.
-        let windowSkin = (try? await store.skinTempSamples(deviceId: did, from: nowSec - 14 * 86400, to: nowSec, limit: 200_000)) ?? []
-        let devAnchor = family == .whoop4 ? Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { $0.raw }) : nil
-        lines.append(AnalyticsEngine.skinTempFunnel([det], hr: hr, skinTemp: skin,
-                                                    family: family, anchorRaw: devAnchor).summary)
+        lines.append(AnalyticsEngine.skinTempFunnel([det], hr: hr, skinTemp: skin, family: .whoop5).summary)
 
         // #112/#103 — the 5/MG SpO2 CANDIDATE (@82), as one number a wearer can check against the figure
         // the WHOOP app reports for the same night. The candidate cannot be promoted while two straps
@@ -361,10 +346,8 @@ enum DebugDataDiagnostics {
         } else if let cand = AnalyticsEngine.nightlySpo2CandidateMean([det], aux: auxRead ?? []) {
             lines.append("SpO₂ candidate @82 (5/MG): mean \(cand.mean) over \(cand.samples) in-band readings "
                          + "— UNVERIFIED, compare against the WHOOP app's figure for this night (#103).")
-        } else if family == .whoop5 {
-            lines.append("SpO₂ candidate @82 (5/MG): no in-band readings inside this night's span.")
         } else {
-            lines.append("SpO₂ candidate @82: not carried by a WHOOP 4.0 (raw red/IR ADC only).")
+            lines.append("SpO₂ candidate @82 (5/MG): no in-band readings inside this night's span.")
         }
         return lines
     }
@@ -477,16 +460,11 @@ enum DebugDataDiagnostics {
         let mins = (d.object(forKey: "behavior.smartAlarmMinutes") as? Int) ?? 7 * 60
         lines.append("Enabled: \(on ? "yes" : "no") · set \(String(format: "%02d:%02d", mins / 60, mins % 60))")
         // #3: model + the 5/MG experimental gate — a 5/MG firmware alarm is NOT armed unless Experimental is on.
-        // (selectedWhoopModel stores the WhoopModel rawValue — "WHOOP 5.0 / MG" / "WHOOP 4.0" — not "whoop5".)
-        // Same rule as the header above: parse through the enum, and ABSTAIN when nothing is known. This
-        // defaulted to `whoop4.rawValue`, so an unknown family was reported as a WHOOP 4.0 — the very
-        // fabrication this change removes on Android, and it would have left the two platforms disagreeing
-        // about the one case that matters. Three arms, mirroring the Kotlin `when`.
+        // (selectedWhoopModel stores the WhoopModel rawValue — "WHOOP 5.0 / MG" — not "whoop5".)
+        // Same rule as the header above: parse through the enum, and ABSTAIN when nothing is known.
         switch WhoopModel(rawValue: d.string(forKey: "selectedWhoopModel") ?? "") {
         case .whoop5mg:
             lines.append("Model: \(WhoopModel.whoop5mg.displayName) · experimental: \(PuffinExperiment.isEnabled ? "on" : "off → firmware alarm NOT armed")")
-        case .whoop4:
-            lines.append("Model: \(WhoopModel.whoop4.displayName)")
         case nil:
             lines.append("Model: unknown (family not yet detected)")
         }

@@ -6,9 +6,8 @@ import Foundation
 // docs/superpowers/specs/2026-06-19-v5-local-multi-device-fusion-design.md. No I/O, no model, no
 // network — the Repository feeds these rows it already loads, the engine returns a resolved point.
 // These deliberately mirror the existing `DailyMetricSource` / `SourcedDailyMetric` provenance
-// vocabulary (Repository.swift L61-82) but generalised to cover every importer source so a future
-// Polar/Garmin/Oura is a table entry, not a type change. Value-for-value Kotlin twin in
-// android/.../analytics/FusionTypes.kt.
+// vocabulary (Repository.swift L61-82) but generalised to cover every importer source, so a new
+// source is a table entry rather than a type change.
 
 /// Where a fused number came from — a superset of the legacy `DailyMetricSource` (whoopImport /
 /// noopComputed / appleHealth / localCache), extended to every source the importers already write.
@@ -21,10 +20,6 @@ public enum FusionSource: String, Equatable, Sendable, CaseIterable, Codable {
     case noopComputed = "my-whoop-noop"
     /// Apple Health aggregate of a declared-compatible quantity.
     case appleHealth = "apple-health"
-    /// Health Connect aggregate (Android's Apple-equivalent body-metric source).
-    case healthConnect = "health-connect"
-    /// Mi Band / Xiaomi import — a dedicated wrist band (counts steps directly).
-    case xiaomiBand = "xiaomi-band"
     /// Nutrition CSV import (single-source passthrough — calories/macros).
     case nutritionCsv = "nutrition-csv"
     /// Locally-cached fallback row with no richer provenance.
@@ -36,8 +31,6 @@ public enum FusionSource: String, Equatable, Sendable, CaseIterable, Codable {
         case .whoopImport:   return "WHOOP"
         case .noopComputed:  return "NOOP"
         case .appleHealth:   return "Apple Health"
-        case .healthConnect: return "Health Connect"
-        case .xiaomiBand:    return "Mi Band"
         case .nutritionCsv:  return "Nutrition"
         case .localCache:    return "Cached"
         }

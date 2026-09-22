@@ -334,7 +334,7 @@ python3 whoop_sync.py decode --db captures/whoop.db --address AA:BB:.. --full   
 
 **It reuses the Swift `whoop-decode` as the one decoder of record — it does _not_ re-implement
 decoding in Python.** The bridge shells out to `whoop-decode --json`, maps the decoded fields into the
-tables below, and stores nothing the decoder didn't produce. So the iOS/macOS/Android apps, the CLI,
+tables below, and stores nothing the decoder didn't produce. So the iOS/macOS apps, the CLI,
 and this decode step can never drift on frame offsets: there is exactly one decoder, verified against
 real hardware. The decode cursor lives in `sync_state` (`last_decoded_frame_id`), so a run only decodes
 **new** frames; re-runs are **idempotent**.
@@ -459,35 +459,24 @@ $BIN --json capture.json           # machine-readable, for piping into your own 
 $BIN --family whoop5 --hex aa0108000001e67123019101363e5c8d   # one frame ad hoc
 ```
 
-## Import into the noop Android app
+## Exporting one strap's history to a file
 
-The noop Android app's **Data Sources → "Raw capture (.json)"** reads the same `capture.json` this
-tool emits and decodes its frames on-device (HR / RR / gravity / …) through the *same* historical
-decoder a live BLE offload uses — so history captured here on Linux lands in the app exactly as if the
-phone had synced it. Produce one file per device:
+`capture.json` is simply your strap's history saved as one file. `sync` already pulled the data off
+your strap and stored it; `export` just writes a copy of it for one strap. Nothing is re-processed on
+the way out — a reader does all the decoding (heart rate, sleep, and so on) itself.
 
 ```bash
 .venv/bin/python whoop_sync.py export \
   --db captures/whoop.db --address <MAC> --out capture.json
 ```
 
-**What `capture.json` is.** It is simply your strap's history saved as one file. `sync` already pulled
-the data off your strap and stored it; `export` just writes a copy of it for one strap into a file the
-phone app can open. Your data isn't changed or re-processed on the way out — the app does all the
-decoding (heart rate, sleep, and so on) itself, so the file works the same whether you make it here or
-the phone captured it directly.
-
 If you want a smaller file, two optional flags narrow it down:
 
 - `--only-type 47` — just the main once-per-second records.
 - `--since <unix-time>` — only data newer than a given moment.
 
-Then transfer `capture.json` to your phone (any file transfer works), open NOOP, and pick it from
-**Data Sources → Raw capture**. Importing the same file twice is safe — NOOP skips anything it already
-has — so you can re-run it without making duplicates. Export one file per strap; a file is normally a
-single strap, but a mixed one still imports fine. The phone treats the file as untrusted input (size +
-frame-count bounded, malformed rows skipped), so a stray or corrupt file is rejected cleanly rather
-than crashing the import.
+NOTE: the NOOP apps in this repository have no raw-capture import lane. The file is for offline
+analysis with `whoop_decode.py` and the other tools here; nothing on a phone reads it.
 
 ## Troubleshooting
 
@@ -598,7 +587,7 @@ v20 (2140 B) + v21 (1244 B) pair every second alongside the 124-byte v18, and on
 usable records.
 
 > **This is the capture tooling's database, not the app's.** Neither shipped app has a `frames`
-> table — Android uses Room, iOS/macOS uses GRDB — so this cannot be pointed at a phone's store or a
+> table — the apps use GRDB — so this cannot be pointed at a phone's store or a
 > `.noopbak`. Validating a strap still requires a capture.
 
 ```bash

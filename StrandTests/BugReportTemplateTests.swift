@@ -34,8 +34,7 @@ final class BugReportTemplateTests: XCTestCase {
 
     func testSourceDropdownGainsImporters() {
         let t = templateText()
-        for label in ["Oura import", "Fitbit import", "Garmin import",
-                      "Xiaomi import", "FIT / GPX / TCX import"] {
+        for label in ["FIT / GPX / TCX import"] {
             XCTAssertTrue(t.contains(label), "missing source importer: \(label)")
         }
     }

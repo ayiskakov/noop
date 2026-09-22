@@ -7,12 +7,12 @@ final class ReassemblerTests: XCTestCase {
     // total = 1928. Reassembly must reproduce it exactly from 244-byte fragments.
     private func bigFrame() -> [UInt8] {
         let payload = (0..<1917).map { UInt8($0 & 0xFF) }
-        return frameFromPayload(payload, type: 43, seq: 7, cmd: 0)
+        return w5Frame(payload, type: 43, seq: 7, cmd: 0)
     }
 
     func testReassembleFromFragments() {
         let frame = bigFrame()
-        XCTAssertEqual(frame.count, 1928)
+        XCTAssertEqual(frame.count, 1932)
         var fragments: [[UInt8]] = []
         var i = 0
         while i < frame.count {
@@ -35,8 +35,8 @@ final class ReassemblerTests: XCTestCase {
     }
 
     func testTwoFramesInOneFeed() {
-        let a = frameFromPayload([0x01, 0x02], type: 40)
-        let b = frameFromPayload([0x03, 0x04], type: 48)
+        let a = w5Frame([0x01, 0x02], type: 40)
+        let b = w5Frame([0x03, 0x04], type: 48)
         let r = Reassembler()
         let out = r.feed(a + b)
         XCTAssertEqual(out, [a, b])
@@ -46,8 +46,8 @@ final class ReassemblerTests: XCTestCase {
         // Two back-to-back frames, fed a single byte per fragment. This is the worst case for the old
         // removeFirst drain and exercises the offset/compact window hard: head advances byte by byte,
         // compact() slides the tail every feed(). Output must still be the two exact frames, in order.
-        let a = frameFromPayload([0x01, 0x02], type: 40)
-        let b = frameFromPayload([0x03, 0x04], type: 48)
+        let a = w5Frame([0x01, 0x02], type: 40)
+        let b = w5Frame([0x03, 0x04], type: 48)
         let r = Reassembler()
         var out: [[UInt8]] = []
         for byte in a + b {
@@ -57,14 +57,14 @@ final class ReassemblerTests: XCTestCase {
     }
 
     func testLeadingGarbageIsSkipped() {
-        let a = frameFromPayload([0x09], type: 40)
+        let a = w5Frame([0x09], type: 40)
         let r = Reassembler()
         let out = r.feed([0x11, 0x22, 0x33] + a)
         XCTAssertEqual(out, [a])
     }
 
     func testPartialFrameWaitsForRest() {
-        let a = frameFromPayload([0x01, 0x02, 0x03, 0x04], type: 40)
+        let a = w5Frame([0x01, 0x02, 0x03, 0x04], type: 40)
         let r = Reassembler()
         XCTAssertTrue(r.feed(Array(a[0..<5])).isEmpty)        // header + part
         XCTAssertEqual(r.feed(Array(a[5..<a.count])), [a])    // remainder completes it
@@ -75,11 +75,11 @@ final class ReassemblerTests: XCTestCase {
         // mid-frame SOF) must be dropped so the stream resyncs to the next real frame. Without the
         // ceiling, feed() would wait forever for bytes that can never arrive and the live stream
         // would freeze until a reconnect. (Reimplemented from @vulnix0x4's PR #374.)
-        let valid = frameFromPayload([0x09], type: 40)
+        let valid = w5Frame([0x09], type: 40)
         let r = Reassembler()
         // Spurious SOF with a 0xFFFF length (total 65539, far past the 8 KB ceiling), then a real
         // frame. With the cap, the real frame emerges instead of the stream wedging.
-        let out = r.feed([0xAA, 0xFF, 0xFF, 0x00] + valid)
+        let out = r.feed([0xAA, 0x01, 0xFF, 0xFF] + valid)
         XCTAssertEqual(out, [valid], "a garbage oversized SOF must not wedge the stream")
     }
 }

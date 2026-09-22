@@ -1,19 +1,17 @@
 # Catches translation drift BEFORE merge instead of after a user reports it (#326, #342, #448
-# were all the same recurring pattern: new UI text lands without its German translation, or a
-# Kotlin literal never gets wired to stringResource() at all since Compose has no Xcode-style
-# auto-extraction). With the #453 backlog closed, Tools/i18n_audit.py --ci hard-fails on any
-# hardcoded/un-extracted UI literal or any missing German, Spanish, or French translation across
-# Android resources and all four Apple String Catalogs.
-# Pure Python + git, no Xcode/Gradle: runs in seconds on ubuntu-latest, independent of the
-# disabled-by-default app-build.yml / android.yml compile jobs.
+# were all the same recurring pattern: new UI text lands without its German translation). With the
+# #453 backlog closed, Tools/i18n_audit.py --ci hard-fails on any hardcoded/un-extracted UI literal
+# or any missing German, Spanish, or French translation across all four Apple String Catalogs.
+# Pure Python + git, no Xcode: runs in seconds on ubuntu-latest, independent of the
+# disabled-by-default app-build.yml compile job.
 name: i18n Coverage
 
 on:
   pull_request:
     branches: [main]
   # Audit main itself too, not just PRs into it. A RELEASE pushes STRAIGHT to main with no PR, and
-  # Tools/appchangelog-gen.py emits the What's New title as a RAW Kotlin literal that has to be
-  # localized by hand afterwards (Compose has no Xcode-style auto-extraction). With a PR-only
+  # Tools/appchangelog-gen.py emits the What's New title as a RAW literal that has to be
+  # localized by hand afterwards. With a PR-only
   # trigger that landed completely unaudited, and — because --ci is a whole-tree gate, not a diff —
   # it then red-checked EVERY contributor's PR on a line none of them touched (9.0.1, fixed by
   # #514). Auditing the push surfaces it on main the moment it lands, so it is fixed before anyone
@@ -49,7 +47,7 @@ jobs:
       # literal, base=HEAD passes and base=HEAD~1 catches it. That would have quietly retired the
       # case the push trigger exists for, described at the top of this file: a release pushes
       # straight to main with no PR, and appchangelog-gen.py emits the What's New title as a raw
-      # Kotlin literal. So a push diffs against `github.event.before`, the tip before the push,
+      # literal. So a push diffs against `github.event.before`, the tip before the push,
       # which spans every commit the push carried rather than just the last one.
       - name: Resolve the base to diff against
         id: base

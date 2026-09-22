@@ -91,10 +91,8 @@ public struct MenuBarContent: View {
 
     private var recovery: Double? { repo.today?.recovery }
 
-    /// True when the pill should read the green "STREAMING" state. A live Oura ring has no WHOOP-style
-    /// encrypted bond, so it signals via `streamingLiveHR`; the WHOOP path still keys off `bonded` (its
-    /// encrypted-bond + buzz semantics). Either one being true means HR is actively streaming.
-    private var isStreaming: Bool { live.streamingLiveHR || live.bonded }
+    /// True when the pill should read the green "STREAMING" state: the WHOOP path keys off `bonded`.
+    private var isStreaming: Bool { live.bonded }
 
     private var connectionTone: StrandTone {
         isStreaming ? .positive : live.connected ? .accent : .critical

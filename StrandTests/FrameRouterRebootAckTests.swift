@@ -10,18 +10,16 @@ import WhoopProtocol
 @MainActor
 final class FrameRouterRebootAckTests: XCTestCase {
 
-    func testCommandResultByteReadsTheFamilyOffset() {
-        // Distinct sentinels at the two candidate result positions.
+    func testCommandResultByteReadsThePuffinResultOffset() {
+        // Distinct sentinels at the two candidate result positions, so reading the wrong one is visible.
         var frame = [UInt8](repeating: 0, count: 16)
-        frame[8]  = 0x24   // 5/MG inner TYPE byte (COMMAND_RESPONSE) — what the old fixed offset hit
-        frame[12] = 0x01   // 5/MG result = SUCCESS(1)
+        frame[8]  = 0x24   // the inner TYPE byte (COMMAND_RESPONSE) — what a smaller fixed offset hit
+        frame[12] = 0x01   // the result = SUCCESS(1)
 
         XCTAssertEqual(FrameRouter.commandResultByte(in: frame, family: .whoop5), 1,
-                       "5/MG result lives at byte 12, not the 4.0 offset")
-        XCTAssertEqual(FrameRouter.commandResultByte(in: frame, family: .whoop4), 0x24,
-                       "4.0 result lives at byte 8")
-        XCTAssertEqual(FrameRouter.commandResultByte(in: frame), 0x24,
-                       "default family is .whoop4, so the WHOOP-4-only callers are unaffected")
+                       "the result lives at byte 12, past the inner type byte")
+        XCTAssertEqual(FrameRouter.commandResultByte(in: frame), 1,
+                       "the default family reads the same offset")
     }
 
     func testShortFrameHasNoResultByte() {

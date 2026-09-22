@@ -5,24 +5,25 @@ import XCTest
 /// `VitalReadingsTableTest`. Pins the pure projection `vitalReadingRows` the MetricDetailView table
 /// renders: rows and the "N readings" caption derive from the SAME windowed list (so their counts can't
 /// disagree), rows are NEWEST-FIRST, each raw source id resolves through the shared
-/// `TodayView.provenanceDisplayLabel` (strap → "WHOOP", Health Connect → "Health Connect", Apple Health →
-/// "Apple Health", the "-noop" sibling → "On-device"), and each value reuses the model's own formatter +
-/// unit. Blood Oxygen (SpO2) is the acceptance case.
+/// `TodayView.provenanceDisplayLabel` (strap → "WHOOP", Apple Health → "Apple Health", the "-noop"
+/// sibling → "On-device"), and each value reuses the model's own formatter + unit. Blood Oxygen (SpO2)
+/// is the acceptance case.
 final class VitalReadingsTableTests: XCTestCase {
 
-    private let strap = Repository.whoopSource                  // "my-whoop"
-    private let healthConnect = Repository.healthConnectSource  // "health-connect"
-    private let appleHealth = Repository.appleHealthSource      // "apple-health"
+    private let strap = Repository.whoopSource              // "my-whoop"
+    private let appleHealth = Repository.appleHealthSource  // "apple-health"
+    /// The NOOP-computed strap sibling, which resolves to "On-device".
+    private var computed: String { strap + "-noop" }
 
     /// A fixed "now" long after the sample January-2026 readings, so none resolve as Today/Yesterday.
     private let now = ISO8601DateFormatter().date(from: "2026-07-09T00:00:00Z")!
 
-    /// Blood Oxygen: %-formatted, ascending readings from three different sources — a strap reading, a
-    /// Health Connect import (e.g. a Galaxy Watch), and an Apple Health import.
+    /// Blood Oxygen: %-formatted, ascending readings from three different sources — a strap reading, the
+    /// NOOP-computed sibling, and an Apple Health import.
     private func spo2Readings() -> [VitalReading] {
         [
             VitalReading(day: "2026-01-01", value: 96, source: strap),
-            VitalReading(day: "2026-01-02", value: 95, source: healthConnect),
+            VitalReading(day: "2026-01-02", value: 95, source: computed),
             VitalReading(day: "2026-01-03", value: 97, source: appleHealth),
         ]
     }
@@ -45,8 +46,8 @@ final class VitalReadingsTableTests: XCTestCase {
     func testSourceLabelsResolvePerSample() {
         let rows = vitalReadingRows(readings: spo2Readings(), unit: "%", strapDeviceId: strap,
                                     now: now, format: spo2Format)
-        // Newest-first, so: Apple Health (03), Health Connect (02), Whoop strap (01).
-        XCTAssertEqual(rows.map(\.source), ["Apple Health", "Health Connect", "WHOOP"])
+        // Newest-first, so: Apple Health (03), the computed sibling (02), the Whoop strap (01).
+        XCTAssertEqual(rows.map(\.source), ["Apple Health", "On-device", "WHOOP"])
     }
 
     func testComputedStrapSiblingReadsOnDevice() {

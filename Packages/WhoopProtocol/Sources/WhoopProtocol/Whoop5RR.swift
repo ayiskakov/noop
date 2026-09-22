@@ -7,7 +7,6 @@ import Foundation
 /// Transport parity with the standard BLE 0x2A37 characteristic (same raw words on both
 /// channels) means WHOOP 5 sends millisecond values there too, non-compliant with the BLE
 /// spec's 1/1024-second unit.
-/// Keep this separate from WHOOP 4 decoding, whose existing millisecond contract is unchanged.
 public enum Whoop5RR {
     public static func milliseconds(ticks: UInt16) -> Int {
         Int(ticks)
@@ -17,7 +16,6 @@ public enum Whoop5RR {
     public static func usesCanonicalSource(model: String?, brand: String?, hasTaggedIntervals: Bool) -> Bool {
         if let brand, !brand.isEmpty, brand.caseInsensitiveCompare("WHOOP") != .orderedSame { return false }
         switch DeviceFamily.confirmedRegistryFamily(model: model, brand: brand) {
-        case .whoop4: return false
         case .whoop5: return true
         case nil: return hasTaggedIntervals
         }

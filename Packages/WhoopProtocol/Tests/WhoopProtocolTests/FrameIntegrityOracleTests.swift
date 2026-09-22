@@ -84,13 +84,11 @@ final class FrameIntegrityOracleTests: XCTestCase {
     }
 
     private func family(_ name: String) throws -> DeviceFamily {
-        switch name {
-        case "whoop4": return .whoop4
-        case "whoop5": return .whoop5
-        default:
+        guard name == "whoop5" else {
             XCTFail("unknown family \(name) in the oracle")
             throw XCTSkip("unknown family")
         }
+        return .whoop5
     }
 
     /// Render the classification in the fixture's compact form, so one string compares three possible
@@ -156,24 +154,26 @@ final class FrameIntegrityOracleTests: XCTestCase {
                          "evaluation_order", "ecg_path"] {
             XCTAssertGreaterThan(classes[required] ?? 0, 0, "input class \(required) is not covered")
         }
-        // Both families, on both sides of the verdict.
-        for fam in ["whoop4", "whoop5"] {
-            XCTAssertTrue(oracle.cases.contains { $0.family == fam && $0.verdict },
-                          "no accepted \(fam) frame in the oracle")
-            XCTAssertTrue(oracle.cases.contains { $0.family == fam && !$0.verdict },
-                          "no rejected \(fam) frame in the oracle")
-        }
+        // The supported family, on both sides of the verdict.
+        XCTAssertTrue(oracle.cases.contains { $0.family == "whoop5" && $0.verdict },
+                      "no accepted whoop5 frame in the oracle")
+        XCTAssertTrue(oracle.cases.contains { $0.family == "whoop5" && !$0.verdict },
+                      "no rejected whoop5 frame in the oracle")
         // Every declared reason is reachable and therefore pinned by the shared oracle.
         for reason in FrameRejectReason.allCases {
             XCTAssertGreaterThan(reasons[reason.rawValue] ?? 0, 0,
                                  "reason \(reason.rawValue) is not covered by any oracle case")
         }
-        // Each historical-metadata outcome, since that is the third pinned field.
+        // Each historical-metadata outcome the RECORDED 5/MG corpus carries, since that is the third
+        // pinned field. `complete` is deliberately absent: no captured 5/MG frame in this corpus is a
+        // HISTORY_COMPLETE, so asserting one here would pin a fixture that does not exist. That outcome
+        // is covered by `HistoricalMetaTests`, which builds one.
         let metas = Set(oracle.cases.map(\.meta))
         XCTAssertTrue(metas.contains("start"))
-        XCTAssertTrue(metas.contains("complete"))
         XCTAssertTrue(metas.contains("other"))
         XCTAssertTrue(metas.contains { $0.hasPrefix("end(") })
+        XCTAssertFalse(metas.contains("complete"),
+                       "a HISTORY_COMPLETE capture reached the corpus — assert it above instead of here")
     }
 
     func testOracleCopiesAreIdentical() throws {

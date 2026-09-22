@@ -1,7 +1,7 @@
-# NOOP — Cross-Platform Swift Library Reference
+# NOOP — Swift Library Reference
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and
-5.0). It pairs directly with the user's own strap over Bluetooth — **no WHOOP
+NOOP is a standalone, fully **offline** companion app for the WHOOP 5.0 and MG
+straps. It pairs directly with the user's own strap over Bluetooth — **no WHOOP
 cloud or account** — stores everything on-device in SQLite, can
 import WHOOP CSV and Apple Health exports, and computes recovery, strain, HRV,
 and sleep locally.
@@ -22,8 +22,9 @@ independently of the reference macOS app.
 These packages build on prior community reverse-engineering and
 interoperability work:
 
-- **`johnmiddleton12/my-whoop`** — the WHOOP 4.0 BLE framing, command/decode,
-  and collection logic that `WhoopProtocol` and `WhoopStore` are adapted from.
+- **`johnmiddleton12/my-whoop`** — the original WHOOP BLE command/decode and
+  collection logic that `WhoopProtocol` and `WhoopStore` are adapted from (its
+  WHOOP 4.0 envelope is no longer implemented here).
 - **`b-nnett/goose`** — the WHOOP 5.0 / MG protocol work (the `fd4b0001-…`
   service family, CRC16-Modbus header, `CLIENT_HELLO`, and the "puffin" packet
   types) that the WHOOP 5.0 paths are ported from.
@@ -66,23 +67,22 @@ StrandDesign   (standalone — SwiftUI only, no internal deps)
 The reference app target (`Strand/`, macOS SwiftUI) is the integration layer: it
 owns the CoreBluetooth transport, wraps the protocol library's UUID *strings* in
 `CBUUID`, and wires the pure packages together. The macOS and iOS reference apps
-(the iOS target is build-from-source only) consume these packages directly, and
-an Android app ships alongside them; the pure packages run unchanged across macOS
-and iOS.
+(the iOS target is build-from-source only) consume these packages directly; the
+pure packages run unchanged across macOS and iOS.
 
 ---
 
 ## WhoopProtocol
 
 The reverse-engineering core: a schema-driven decoder that turns raw BLE frame
-bytes from a WHOOP 4.0 or 5.0 strap into typed, annotated records. **Pure
+bytes from a WHOOP 5.0 / MG strap into typed, annotated records. **Pure
 Foundation — no CoreBluetooth, no UI.** The library deliberately exposes GATT
 UUIDs as *strings* so the app layer (not this package) wraps them in `CBUUID`,
 keeping the decoder runnable anywhere.
 
 **Sources:** `Framing.swift`, `Schema.swift`, `Interpreter.swift`, `Values.swift`,
 `Streams.swift`, `HistoricalStreams.swift`, `HistoricalMeta.swift`,
-`DeviceFamily.swift`, `PostHooks.swift`, plus the bundled
+`DeviceFamily.swift`, plus the bundled
 `Resources/whoop_protocol.json` canonical decode schema.
 
 ### Depend on it
@@ -102,19 +102,26 @@ targets: [
 **Device families** (`DeviceFamily.swift`)
 
 ```swift
-public enum DeviceFamily: String, Sendable, CaseIterable { case whoop4, whoop5 }
+public enum DeviceFamily: String, Sendable, CaseIterable { case whoop5 }
 ```
 
-`DeviceFamily` carries everything the transport needs without importing
-CoreBluetooth:
+The type has exactly one case — NOOP supports one hardware generation — and is kept
+rather than collapsed so every frame, capture and registry row still states which
+hardware it belongs to. `DeviceFamily` carries everything the transport needs
+without importing CoreBluetooth:
 
 | Member | Meaning |
 |---|---|
-| `headerCRCKind` | `.crc8` (WHOOP 4.0) or `.crc16Modbus` (WHOOP 5.0) |
-| `serviceUUIDString` | primary GATT service UUID *string* (`6108…` / `fd4b…`) |
+| `serviceUUIDString` | primary GATT service UUID *string* (`fd4b0001-…`) |
 | `characteristicUUIDStrings` | characteristic UUID strings in stable order |
 | `commandCharacteristicUUIDString` | the `…0002` write endpoint |
-| `clientHello` | static `CLIENT_HELLO` frame bytes (`nil` for 4.0; a fixed type-35 frame for 5.0) |
+| `clientHello` | the static `CLIENT_HELLO` frame bytes (a fixed type-35 frame) |
+
+`WhoopGattServiceFamily` (same file) names the other WHOOP GATT services seen in
+advertisements — including the WHOOP 4.0 `6108…` service — so a strap NOOP cannot
+connect to is reported as *detected but unsupported* rather than silently ignored;
+`whoopGattScanDecision(selectedServiceUUIDString:advertisedServiceUUIDStrings:)`
+is the scan gate that applies it.
 
 `PuffinPacketType` and `canonicalTypeName(_:schema:)` alias WHOOP 5.0 "puffin"
 types (38 → `COMMAND_RESPONSE`, 56 → `METADATA`) onto their base decode
@@ -123,29 +130,26 @@ semantics.
 **CRC + framing** (`Framing.swift`)
 
 ```swift
-public func crc8(_ bytes: [UInt8]) -> UInt8            // poly 0x07 (WHOOP 4.0 header)
-public func crc32(_ bytes: [UInt8]) -> UInt32          // zlib CRC-32 (payload trailer)
-public func crc16Modbus(_ bytes: [UInt8]) -> UInt16    // poly 0xA001 (WHOOP 5.0 header)
+public func crc32(_ bytes: [UInt8], _ from: Int = 0, _ to: Int? = nil) -> UInt32       // zlib CRC-32 (payload trailer)
+public func crc16Modbus(_ bytes: [UInt8], _ from: Int = 0, _ to: Int? = nil) -> UInt16  // poly 0xA001 (header)
 
-public func verifyFrame(_ frame: [UInt8]) -> FrameCheck
 public func verifyFrame(_ frame: [UInt8], family: DeviceFamily) -> FrameCheck
 
 public final class Reassembler {                       // accumulate BLE fragments → whole frames
-    public init()
+    public init(family: DeviceFamily = .whoop5)
     public func feed(_ fragment: [UInt8]) -> [[UInt8]]
 }
 ```
 
-`FrameCheck` reports `ok` — the **full** verdict: start-of-frame, the family
-minimum size (11 bytes on WHOOP 4.0, 13 on 5.0/MG), the exact size (`length + 4`
-and `declLength + 8` respectively, so trailing bytes and truncation both fail),
+`FrameCheck` reports `ok` — the **full** verdict: start-of-frame, the 13-byte
+minimum size (`FrameLimits.whoop5MinimumFrameBytes`), the exact size
+(`declaredLength + 8`, so trailing bytes and truncation both fail),
 the header checksum and the payload CRC32, all together. Beside it are the
 declared `length`, the individual header/payload CRC outcomes as diagnostics, and
 `reason: FrameRejectReason` — a non-optional enum that is `.none` exactly when
 `ok` is true. If the payload CRC32 cannot be computed safely, the preceding size
 rule supplies the rejection reason; only a computed disagreement is a CRC reason.
 
-The 11-byte 4.0 minimum is structural and admits real zero-data metadata records.
 The 13-byte 5.0/MG minimum is an explicit empirical policy requiring at least the
 inner type byte: Goose permits a 12-byte empty-payload envelope. Real fixtures exist
 at 20 bytes (command responses) and at 24/32 bytes, but no captured boundary case;
@@ -156,8 +160,7 @@ that evidence does not prove the 13-byte floor.
 ```swift
 public func loadSchema() -> Schema                     // loads + caches Resources/whoop_protocol.json
 
-public func parseFrame(_ frame: [UInt8]) -> ParsedFrame
-public func parseFrame(_ frame: [UInt8], family: DeviceFamily) -> ParsedFrame
+public func parseFrame(_ frame: [UInt8], family: DeviceFamily, collectFields: Bool = false) -> ParsedFrame
 ```
 
 A `ParsedFrame` carries `ok`, `typeName`, `seq`, optional `cmdName`, `crcOK`,
@@ -475,7 +478,8 @@ public struct ImportCoordinator {
   (`physiological_cycles.csv`, `sleeps.csv`, `workouts.csv`,
   `journal_entries.csv`) from a folder or `.zip`. Header-name-driven and
   tolerant (columns matched by normalized name, every column optional, BOMs
-  stripped); one parser covers WHOOP 4 / 5 / MG. Returns `WhoopImportResult`
+  stripped); one parser covers every generation's export, so a history that
+  began on a WHOOP 4.0 imports too. Returns `WhoopImportResult`
   (`cycles`, `sleeps`, `workouts`, `journal`, `summary`).
 
 Models: `HealthSample`, `HealthWorkout`, `SleepStageInterval`, `SleepStage`,

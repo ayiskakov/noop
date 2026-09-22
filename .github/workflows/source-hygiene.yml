@@ -9,8 +9,8 @@
 # came adrift was "Byte-parity twin of Swift classifyCoverage" — a parity-contract statement, and
 # parity is the #1 rule in CLAUDE.md. Losing that note is not a cosmetic problem.
 #
-# Pure Python + git, no Xcode/Gradle: runs in seconds on ubuntu-latest, independent of the
-# disabled-by-default app-build.yml / android.yml compile jobs. Same shape as i18n-coverage.yml.
+# Pure Python + git, no Xcode: runs in seconds on ubuntu-latest, independent of the
+# disabled-by-default app-build.yml compile job. Same shape as i18n-coverage.yml.
 name: Source Hygiene
 
 on:

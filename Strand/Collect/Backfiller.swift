@@ -77,10 +77,10 @@ final class Backfiller {
     private var chunk: [[UInt8]] = []
     /// Whether a START has been received and we're accumulating a chunk.
     private var chunkOpen = false
-    /// Strap family for the current offload, set at begin(). Drives family-aware frame parsing (WHOOP 5/MG
-    /// records sit at +4 offsets vs WHOOP 4.0) and the end_data slice the ack needs. Captured at begin()
-    /// rather than init so it's correct even if the Backfiller was constructed before the strap was known.
-    private(set) var family: DeviceFamily = .whoop4
+    /// Strap family for the current offload, set at begin(). Drives family-aware frame parsing and the
+    /// end_data slice the ack needs. Captured at begin() rather than init so it's correct even if the
+    /// Backfiller was constructed before the strap was known.
+    private(set) var family: DeviceFamily = .whoop5
 
     /// Diagnostic sink (strap log). Surfaces historical records whose firmware layout we can't decode.
     private let log: ((String) -> Void)?
@@ -380,10 +380,12 @@ final class Backfiller {
     /// short to contain the field (shouldn't happen for a real HISTORY_END, which is >=14 data
     /// bytes, but guards against a malformed frame).
     static func endData(from frame: [UInt8], family: DeviceFamily) -> [UInt8]? {
-        // metadata.data begins at frame[7] (WHOOP4) / frame[11] (WHOOP5, the +4 puffin envelope); the
-        // ack's end_data = data[10:18] → frame[17:25] (WHOOP4) or frame[21:29] (WHOOP5). The WHOOP5 slice
-        // is verified on a real HISTORY_END (trim=112193 = frame[21..25]) in Whoop5HistoricalTests.
-        let start = family == .whoop5 ? 21 : 17
+        // metadata.data begins at frame[11] (the +4 puffin envelope); the ack's end_data = data[10:18] →
+        // frame[21:29]. Verified on a real HISTORY_END (trim=112193 = frame[21..25]) in
+        // Whoop5HistoricalTests. `family` is carried so the call site states WHICH hardware the slice
+        // belongs to rather than assuming it.
+        _ = family
+        let start = 21
         guard frame.count >= start + 8 else { return nil }
         return Array(frame[start..<(start + 8)])
     }
@@ -445,13 +447,11 @@ final class Backfiller {
         if let device, let wall {
             let offset = wall - device
             let days = offset / 86_400
-            if usedIdentityRef && family == .whoop5 {
+            if usedIdentityRef {
                 // #1598: identity is the DESIGNED ref for a 5/MG — its records carry real-unix seconds, so
                 // offset 0 is correct and there is nothing to correct FOR. Labelling it "IDENTITY fallback"
                 // made every healthy 5/MG log look like the #700 misdating bug.
                 line += " · clock ref: identity - correct for 5/MG (records carry real-unix timestamps, no correlation needed)"
-            } else if usedIdentityRef {
-                line += " · clock ref: IDENTITY fallback (no clock correlation at decode) - stale-record correction OFF"
             } else if abs(offset) > 86_400 {
                 line += " · strap clock \(days >= 0 ? "\(days)d behind" : "\(-days)d ahead") wall - correction engaged"
             } else {

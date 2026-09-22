@@ -16,7 +16,7 @@ import Foundation
 /// complete key dump, which is why the enumerate path is the one built here.
 ///
 /// **Read-only.** The probe writes command frames in order to read — exactly like the Oura feature-status
-/// probe NOOP already ships (`Packages/OuraProtocol/…/Commands.swift`, `spo2ReadStatus()` /
+/// probe NOOP already ships (a prior read-only probe, `spo2ReadStatus()` /
 /// `realStepsReadStatus()`, `2f 02 20 <feature>`) — but sets no value, and 120/119 (the SET verbs) are
 /// never sent from this path. Nothing about strap state changes.
 ///

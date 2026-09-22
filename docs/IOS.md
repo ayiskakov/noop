@@ -9,7 +9,8 @@
 > shared with the widget. The app target (`NOOPiOS` +
 > `NOOPiOSWidgets`) also still builds from source in Xcode if you'd rather (**[Build from source](#build-from-source)**).
 > A CI job ([`app-build.yml`](../.github/workflows/app-build.yml)) compiles both the macOS and iOS
-> targets on every change so iOS can't silently break.
+> targets when dispatched — it is off by default, so build the `NOOPiOS` scheme locally or run it on
+> demand before pushing an app-layer change.
 
 ## Install (sideload)
 
@@ -112,10 +113,9 @@ hunting for the `.ipa` each time.
 >   provision the requested HealthKit and App Group entitlements. Building from source with your own
 >   Apple ID in Xcode and selecting your Team for both targets configures them automatically.
 
-iOS shares the cross-platform Swift packages with macOS, so the number-crunching (recovery, strain,
-HRV, sleep) is the **same code** and produces the same results. iOS is newer and less battle-tested
-than macOS/Android — live BLE on a real iPhone is still being validated by the community, so reports
-are very welcome.
+iOS shares the Swift packages with macOS, so the number-crunching (recovery, strain, HRV, sleep) is
+the **same code** and produces the same results. iOS is newer and less battle-tested than macOS —
+live BLE on a real iPhone is still being validated by the community, so reports are very welcome.
 
 ## Build from source
 
@@ -139,13 +139,14 @@ below.
 > Skip step 1 and the build still works under the default `com.noopapp` identifiers — fine if this is
 > the only NOOP install on your device.
 
-> ℹ️ **Cross-platform engineering lives in [`CROSS_PLATFORM.md`](CROSS_PLATFORM.md)** — the shared-code
-> boundary across the macOS / iOS / Android clients, the `Platform.swift` shim convention, the
-> Swift↔Kotlin parity discipline, and the playbook for adding a feature across all three. Read that
-> first if you're building something that should land on more than one client.
+> ℹ️ **Shared-code boundary.** Most of `Strand/` compiles into both the macOS and iOS targets; the
+> macOS-only files are excluded from `NOOPiOS` in `project.yml`, iOS-only code lives under
+> `StrandiOS/`, and the few platform seams (clipboard, URL open, file pickers) go through the
+> `Platform.swift` shims. See "Lessons from the fold-in" below before building something that should
+> land on both clients, and check the `Strand` (macOS) build whenever you edit a shared file.
 
 This document describes how NOOP — a standalone, fully offline companion app for
-WHOOP straps — is positioned for iOS, what already works, and the concrete plan
+WHOOP 5.0 and MG straps — is positioned for iOS, what already works, and the concrete plan
 for a native iOS app target.
 
 > **Not affiliated with WHOOP.** NOOP is an independent, unofficial project. It is
@@ -157,8 +158,9 @@ for a native iOS app target.
 > and not clinically validated.
 
 The reverse-engineering that makes any of this possible is built on prior
-community work: the WHOOP 4.0 protocol from **`johnmiddleton12/my-whoop`** and
-the WHOOP 5.0 / MG protocol from **`b-nnett/goose`**. See [`../ATTRIBUTION.md`](../ATTRIBUTION.md).
+community work: the original WHOOP 4.0 protocol work from **`johnmiddleton12/my-whoop`**
+(which the framing model descends from) and the WHOOP 5.0 / MG protocol from
+**`b-nnett/goose`**. See [`../ATTRIBUTION.md`](../ATTRIBUTION.md).
 
 ---
 
@@ -195,7 +197,7 @@ declares both platforms in its manifest:
 > **Verify:** see each `Packages/<Name>/Package.swift`. The `platforms:` array carries
 > both `.iOS(.v16)` and `.macOS(.v13)` in all five.
 
-### The one cross-platform shim that already exists
+### The one AppKit/UIKit shim that already exists
 
 `StrandDesign/Sources/StrandDesign/Palette.swift` is the template for how UI-framework
 differences are handled across the codebase:
@@ -229,8 +231,8 @@ charts, and palette render on iOS as-is.
 ## The macOS app today (the reference implementation)
 
 The macOS app target lives in [`Strand/`](../Strand/). It is the reference
-implementation; Android ships as a full app (`android/`), and the iOS app is an
-experimental, build-from-source community port ([PR #42](../../../pull/42)). The macOS app composes
+implementation; the iOS app began as a build-from-source community port ([PR #42](../../../pull/42))
+and now ships as a sideloadable target on `main`. The macOS app composes
 the packages like this:
 
 - `Strand/App/StrandApp.swift` — the `@main` SwiftUI `App`. Declares a `WindowGroup`
@@ -278,11 +280,13 @@ same framework on iOS and macOS. The strap interaction — scan by service → c
 discover → **bond** (one confirmed write) → subscribe → reassemble fragmented frames →
 route — is identical across platforms.
 
-The engine already discovers the WHOOP 4.0 custom service and characteristics, plus
-the standard Heart Rate (`180D` / `2A37`) and Battery (`180F` / `2A19`) services. The
-WHOOP 5.0 / MG service family (`fd4b0001-…`, CRC16-Modbus header, the puffin packet
-types) is modeled in `WhoopProtocol/DeviceFamily.swift` and exposed as UUID strings
-the app wraps in `CBUUID`.
+The engine discovers the WHOOP 5.0 / MG custom service and characteristics
+(`fd4b0001-…`, CRC16-Modbus header, the puffin packet types), plus the standard
+Heart Rate (`180D` / `2A37`) and Battery (`180F` / `2A19`) services. The service
+family is modeled in `WhoopProtocol/DeviceFamily.swift` (`DeviceFamily.whoop5`,
+`WhoopGattServiceFamily`) and exposed as UUID strings the app wraps in `CBUUID`.
+A WHOOP 4.0 strap's `61080001-…` service is recognised by the same classifier so
+it can be reported as detected-but-unsupported; the engine never connects to it.
 
 ### Background BLE — what's already wired
 

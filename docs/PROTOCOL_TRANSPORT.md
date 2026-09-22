@@ -35,8 +35,11 @@ for individual operations.
 
 ## WHOOP 4
 
+> **Protocol reference only.** NOOP no longer implements this envelope or connection; a WHOOP 4.0
+> is reported as detected-but-unsupported. The contracts below are retained as documented wire facts.
+
 The following boundaries combine version-identified WHOOP 4 observations with
-supported interoperability behavior. Neither imports the WHOOP 5/MG contract, and a parsed response does
+earlier interoperability behavior. Neither imports the WHOOP 5/MG contract, and a parsed response does
 not by itself prove a persistent or physical effect.
 
 | Boundary | WHOOP 4 contract |

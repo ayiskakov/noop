@@ -19,7 +19,8 @@ import WhoopProtocol
 //   --hex HEX …     one or more raw frame hex strings instead of a file.
 //
 // Options:
-//   --family F      whoop4 | whoop5 | auto   (default: auto — per-frame from `char`, else whoop5)
+//   --family F      whoop5 | auto   (default: auto; every supported strap is a WHOOP 5.0/MG, so
+//                   both resolve to whoop5 — the flag is kept for capture-tool compatibility)
 //   --json          emit decoded frames as JSON (ParsedFrame + provenance) instead of a text dump.
 //                   Each frame carries `ok` (the FULL integrity verdict) and `rejectReason` (why not);
 //                   a downstream filter that wants only trustworthy frames filters on `ok`.
@@ -40,7 +41,7 @@ struct CaptureRecord: Decodable {
     enum CodingKeys: String, CodingKey { case hex, char, hr; case tsMs = "ts_ms" }
 }
 
-enum FamilyMode { case whoop4, whoop5, auto }
+enum FamilyMode { case whoop5, auto }
 
 // MARK: - Arg parsing (dependency-free)
 
@@ -53,14 +54,14 @@ let helpText = """
 whoop-decode — decode captured WHOOP frames with the WhoopProtocol decoder.
 
 USAGE:
-  whoop-decode [--family whoop4|whoop5|auto] [--json] [--raw-only] [FILE]
+  whoop-decode [--family whoop5|auto] [--json] [--raw-only] [FILE]
   cat capture.json | whoop-decode --family whoop5
   whoop-decode --hex aa0108000001e67123019101363e5c8d
 
 Reads a capture/fixture JSON array of {"hex": …} (the capture tool's richer
 {"hex","char","hr","ts_ms"} records are read too) from FILE or stdin, or raw
-frames from --hex. Family defaults to auto: derived per-frame from `char`
-(fd4b…→whoop5, 6108…→whoop4), falling back to whoop5.
+frames from --hex. Family defaults to auto; every supported strap is a WHOOP
+5.0/MG, so both `whoop5` and `auto` decode as whoop5.
 
 --raw-only selects the frames that are NOT INTACT (ok=false): header checksum,
 payload CRC32 or structural length disagreed. Such a frame is still printed with
@@ -87,10 +88,9 @@ while i < args.count {
         i += 1
         guard i < args.count else { die("--family needs a value") }
         switch args[i] {
-        case "whoop4": familyMode = .whoop4
         case "whoop5": familyMode = .whoop5
         case "auto": familyMode = .auto
-        default: die("--family must be whoop4|whoop5|auto")
+        default: die("--family must be whoop5|auto")
         }
     case "--hex":
         i += 1
@@ -143,16 +143,11 @@ func bytes(fromHex hex: String) -> [UInt8]? {
     return out
 }
 
-func resolveFamily(_ rec: CaptureRecord) -> DeviceFamily {
-    switch familyMode {
-    case .whoop4: return .whoop4
-    case .whoop5: return .whoop5
-    case .auto:
-        if let c = rec.char?.lowercased() {
-            if c.hasPrefix("fd4b") { return .whoop5 }
-            if c.hasPrefix("6108") { return .whoop4 }
-        }
-        return .whoop5   // RE focus is the puffin protocol
+/// Every supported strap is a WHOOP 5.0/MG, so `--family` (either value) and the record's `char`
+/// provenance all resolve to the one family. Kept as a seam so call sites read the same as before.
+func resolveFamily(_ rec: CaptureRecord, _ mode: FamilyMode) -> DeviceFamily {
+    switch mode {
+    case .whoop5, .auto: return .whoop5
     }
 }
 
@@ -198,7 +193,7 @@ for (n, rec) in records.enumerated() {
         FileHandle.standardError.write(Data("skipping bad hex at index \(n)\n".utf8))
         continue
     }
-    let family = resolveFamily(rec)
+    let family = resolveFamily(rec, familyMode)
     // Full diagnostic decode (D#742): the CLI is the annotated-fields inspector, so it opts into
     // the per-field metadata the live pipeline skips.
     let parsed = parseFrame(frame, family: family, collectFields: true)

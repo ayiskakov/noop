@@ -19,7 +19,6 @@ extension WidgetSnapshot {
                 activeId: model.deviceRegistry?.activeDeviceId,
             ),
             whoopPct: model.live.batteryPct,
-            ringPct: model.live.ouraBatteryPct,
         )
     }
 

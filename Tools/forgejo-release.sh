@@ -5,7 +5,7 @@
 #
 #   release/forgejo-release.sh <version> <asset> [<asset> ...] [-- "release notes"]
 #   e.g. release/forgejo-release.sh 4.7.0 \
-#          dist/NOOP-v4.7.0-macos.zip dist/NOOP-v4.7.0-ios.ipa dist/NOOP-v4.7.0-android.apk
+#          dist/NOOP-v4.7.0-macos.zip dist/NOOP-v4.7.0-ios.ipa
 #
 # Creates tag v<version> (server-side, from the current default branch) + the release,
 # then uploads every asset. Token from ~/.config/noop/forge_token. Idempotent on assets.
