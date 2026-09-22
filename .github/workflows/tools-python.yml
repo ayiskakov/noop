@@ -73,9 +73,11 @@ jobs:
           fi
         working-directory: Tools/linux-capture
 
-      # Parity governance has its own path-filtered workflow because that suite scans the repository and
-      # is intentionally much slower. Keep this core floor independent so growth in parity cannot hide
-      # accidental deletion here; these six source-reference checks raise it to 114.
+      # The floor is DELIBERATELY below the current count, not equal to it: it catches discovery breaking
+      # (a wrong working directory, a renamed pattern) rather than tracking every test added. Raise it
+      # when suites are added. Lower it ONLY when suites are deliberately REMOVED, and say which — it was
+      # last lowered from 114 to 70 when the Android app was removed from this fork, taking the
+      # Kotlin-asserting suites in test_home_i18n / test_steps_i18n / test_appchangelog_gen with it.
       - name: Run core Tools/ tests
         run: |
           set -o pipefail
@@ -84,8 +86,8 @@ jobs:
           python3 -m unittest -v "${modules[@]}" 2>&1 | tee "$RUNNER_TEMP/out.txt"
           ran=$(grep -oE '^Ran [0-9]+ test' "$RUNNER_TEMP/out.txt" | grep -oE '[0-9]+')
           echo "collected ${ran:-0} tests"
-          if [ "${ran:-0}" -lt 114 ]; then
-            echo "::error::expected at least 114 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
+          if [ "${ran:-0}" -lt 70 ]; then
+            echo "::error::expected at least 70 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
         working-directory: Tools
