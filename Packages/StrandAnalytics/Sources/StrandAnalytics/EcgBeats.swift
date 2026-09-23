@@ -251,19 +251,25 @@ public enum EcgBeats {
     ///
     /// The levels are learned from the start of the stretch, as in the original, but robustly: the
     /// signal level is the median of the highest point in each of the first three two-second blocks (at
-    /// 30 bpm every block still holds a beat, and one block of artefact does not move a median of
-    /// three), and the noise level is the stretch's median, which lies between complexes. Learned from
-    /// the whole stretch instead, a recording whose complexes grow threefold partway starts above every
-    /// complex before the growth.
+    /// 30 bpm every block still holds a beat), and the noise level is the stretch's median, which lies
+    /// between complexes. Learned from the whole stretch instead, a recording whose complexes grow
+    /// threefold partway starts above every complex before the growth.
+    ///
+    /// The start's level is capped, though, at the same median taken over every block of the stretch.
+    /// The filters carry an artefact across a block boundary, so one second of it near the start can
+    /// lift two of the three blocks, and a level learned from those holds every later complex under the
+    /// threshold with no rhythm yet for a search-back: the stretch went silent. Over 510 placements of
+    /// a burst in the first eight seconds (0.3 to 2 s long, 40 to 150 bpm), the uncapped level lost most
+    /// of the stretch 60 times; capped, never, and no beat was added. The cap leaves the growth case
+    /// alone, where the start is the smaller of the two.
     ///
     /// What it cannot follow is an abrupt fall to under about a third of the amplitude: those complexes
     /// sit below even the search-back threshold, and go unmarked on the strip.
     static func classify(_ candidates: [Int], height h: [Double], sampleRate fs: Double) -> [Int] {
         guard !candidates.isEmpty else { return [] }
         let block = max(1, Int(2 * fs))
-        let blockPeaks = stride(from: 0, to: min(h.count, 3 * block), by: block)
-            .map { h[$0..<min(h.count, $0 + block)].max() ?? 0 }
-        var signal = median(blockPeaks) ?? 0
+        let blockPeaks = stride(from: 0, to: h.count, by: block).map { h[$0..<min(h.count, $0 + block)].max() ?? 0 }
+        var signal = min(median(Array(blockPeaks.prefix(3))) ?? 0, median(blockPeaks) ?? 0)
         var noise = median(h) ?? 0
         var threshold: Double { noise + 0.25 * (signal - noise) }
 

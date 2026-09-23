@@ -220,21 +220,24 @@ final class EcgBeatsTests: XCTestCase {
 
     /// A second of artefact raises the threshold for a moment, not for the stretch. At over 3 % of a
     /// 30-second stretch it put a threshold taken from the stretch's 98th percentile above every
-    /// real complex.
+    /// real complex. In record 1 or 3 it lifts two of the three blocks the levels are first learned
+    /// from, which once silenced the stretch the same way: 3 of 37 beats, and no rate.
     func testABriefArtefactDoesNotSilenceTheRestOfTheStretch() {
-        var (records, peaks) = recording(bpm: 75, seconds: 30)
-        var noise = Lcg(state: 7)
-        let r = records[15]
-        records[15] = EcgCandidateSample(ts: r.ts, samples: r.samples.map { $0 + Int(80_000 * noise.next()) },
-                                         recordIndex: r.recordIndex, quality: 3)
-        let result = EcgBeats.analyse(records)
-        let t0 = Double(records[0].ts)
-        let clear: (Double) -> Bool = { abs($0 - 15.5) > 1.5 }
-        for peak in peaks where clear(peak) {
-            XCTAssertTrue(result.beats.contains { abs($0.time - t0 - peak) < 0.010 }, "complex at \(peak) s")
-        }
-        for beat in result.beats where clear(beat.time - t0) {
-            XCTAssertTrue(peaks.contains { abs($0 - (beat.time - t0)) < 0.010 }, "beat at \(beat.time - t0) s")
+        for k in [1, 3, 15] {
+            var (records, peaks) = recording(bpm: 75, seconds: 30)
+            var noise = Lcg(state: 7)
+            let r = records[k]
+            records[k] = EcgCandidateSample(ts: r.ts, samples: r.samples.map { $0 + Int(80_000 * noise.next()) },
+                                            recordIndex: r.recordIndex, quality: 3)
+            let result = EcgBeats.analyse(records)
+            let t0 = Double(records[0].ts)
+            let clear: (Double) -> Bool = { abs($0 - (Double(k) + 0.5)) > 1.5 }
+            for peak in peaks where clear(peak) {
+                XCTAssertTrue(result.beats.contains { abs($0.time - t0 - peak) < 0.010 }, "record \(k): complex at \(peak) s")
+            }
+            for beat in result.beats where clear(beat.time - t0) {
+                XCTAssertTrue(peaks.contains { abs($0 - (beat.time - t0)) < 0.010 }, "record \(k): beat at \(beat.time - t0) s")
+            }
         }
     }
 }
