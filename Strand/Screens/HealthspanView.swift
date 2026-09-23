@@ -210,68 +210,85 @@ private struct HealthspanHeroSection: View {
 
 // MARK: - The one loader both Healthspan and the Health hub's Vitality card read
 
-/// Assembles THIS WEEK's Healthspan drivers, once, for every screen that shows them.
+/// One driver behind the stored Body Age, as the pipeline persisted it for the headline's day.
+struct HealthspanDriver: Equatable {
+    let key: String
+    /// This driver's share of the Body Age offset, years (positive = adds to Body Age).
+    let years: Double
+    /// The six-month value it was scored from, and the target that scores zero.
+    let value: Double
+    let target: Double
+    /// The last-30-day value, when that window had one — the driver behind the pace.
+    let recent: Double?
+}
+
+/// Reads the drivers behind the stored headline, once, for every screen that shows them.
 ///
-/// It exists because there are two such screens, and before it there were two recipes: the Health hub's
-/// Vitality card built its own six-driver inputs inline, so when the engine grew to ten the card kept
-/// naming a "helping most" from a model the headline beside it was no longer computed with. The builder
-/// itself (`IntelligenceEngine.healthspanInputs`) is the same one the analytics pass uses, so what a
-/// screen shows and what the stored number was made of cannot drift apart either.
+/// Every figure comes from the rows `IntelligenceEngine.recomputeHealthspan` wrote for the SAME day as the
+/// headline (`HealthspanSeries`), so a driver's years are exactly the share that headline was summed from.
+/// Nothing is recomputed here: a second computation over a window assembled on a screen would be a second
+/// answer to a question the headline has already answered, free to disagree with it.
 enum HealthspanDrivers {
 
-    /// The per-driver contributions for the last 7 days of `repo`, or empty when nothing is measurable yet.
+    /// The drivers for the newest day carrying a Body Age, sorted most-costly first; empty when none.
     @MainActor
-    static func thisWeek(repo: Repository, age: Int, sex: String,
-                         weightKg: Double) async -> [VitalityEngine.Contribution] {
-        let last7 = Array(repo.days.suffix(7))
-        guard !last7.isEmpty else { return [] }
-        let days = last7.map { $0.day }
-        async let moderateA = repo.exploreSeries(key: "zone_min_2_3", source: "my-whoop")
-        async let vigorousA = repo.exploreSeries(key: "zone_min_4_5", source: "my-whoop")
-        async let strengthA = repo.exploreSeries(key: "strength_min", source: "my-whoop")
-        async let leanA = repo.exploreSeries(key: "lean_mass", source: "apple-health")
-        let (moderate, vigorous, strength, lean) = await (moderateA, vigorousA, strengthA, leanA)
+    static func latest(repo: Repository) async -> [HealthspanDriver] {
+        guard let day = await repo.exploreSeries(key: HealthspanSeries.bodyAge, source: "my-whoop").last?.day
+        else { return [] }
+        func on(_ key: String) async -> Double? {
+            await repo.exploreSeries(key: key, source: "my-whoop").last { $0.day == day }?.value
+        }
+        var out: [HealthspanDriver] = []
+        for key in HealthspanSeries.drivers {
+            guard let years = await on(HealthspanSeries.years(key)),
+                  let value = await on(HealthspanSeries.value(key)),
+                  let target = await on(HealthspanSeries.target(key)) else { continue }
+            out.append(HealthspanDriver(key: key, years: years, value: value, target: target,
+                                        recent: await on(HealthspanSeries.recent(key))))
+        }
+        return out.sorted { $0.years > $1.years }
+    }
 
-        let wanted = Set(days)
-        func byDay(_ points: [(day: String, value: Double)]) -> [String: Double] {
-            Dictionary(points.filter { wanted.contains($0.day) }.map { ($0.day, $0.value) },
-                       uniquingKeysWith: { _, b in b })
+    /// A driver's display name.
+    ///
+    /// Mapped from the key here rather than taken from `VitalityEngine.Contribution.label`: that label is
+    /// authored inside the platform-pure analytics package, which ships no string catalog, so rendering it
+    /// would put the one word naming each row into English on every device regardless of locale.
+    static func label(_ key: String) -> String {
+        switch key {
+        case "rhr":         return String(localized: "Resting heart rate")
+        case "vo2max":      return String(localized: "Cardio fitness")
+        case "sleep":       return String(localized: "Sleep duration")
+        case "consistency": return String(localized: "Sleep regularity")
+        case "steps":       return String(localized: "Daily steps")
+        case "moderate":    return String(localized: "Moderate cardio")
+        case "vigorous":    return String(localized: "Vigorous cardio")
+        case "strength":    return String(localized: "Strength training")
+        case "leanmass":    return String(localized: "Lean mass")
+        default:            return key
         }
-        let moderateByDay = byDay(moderate), vigorousByDay = byDay(vigorous)
-        var zone: [String: (moderate: Double, vigorous: Double)] = [:]
-        for day in days where moderateByDay[day] != nil || vigorousByDay[day] != nil {
-            zone[day] = (moderate: moderateByDay[day] ?? 0, vigorous: vigorousByDay[day] ?? 0)
-        }
-        let inputs = IntelligenceEngine.healthspanInputs(
-            days: last7, zone: zone, strength: byDay(strength),
-            age: Double(age), sex: sex,
-            weightKg: weightKg > 0 ? weightKg : nil,
-            leanMassKg: lean.last?.value)
-        return VitalityEngine.contributions(inputs)
     }
 }
 
 // MARK: - The drivers
 
-/// Each input behind the Body Age: what it measured this week and the reference it is measured against.
-/// Built through `IntelligenceEngine.healthspanInputs`, the SAME builder the analytics pass uses, so the
-/// rows describe the inputs the stored headline was actually computed from rather than a second recipe.
+/// Each driver behind the Body Age: its six-month value against its target, and which side it falls on.
+/// Read from the persisted rows behind the stored headline (`HealthspanDrivers.latest`).
 private struct HealthspanDriversSection: View {
     @EnvironmentObject var repo: Repository
-    @EnvironmentObject var profile: ProfileStore
 
-    @State private var contributions: [VitalityEngine.Contribution] = []
+    @State private var drivers: [HealthspanDriver] = []
     @State private var loaded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            SectionHeader("What's behind it", overline: "Last 7 days")
-            if contributions.isEmpty {
+            SectionHeader("What's behind it", overline: "6 months")
+            if drivers.isEmpty {
                 ComingSoon(what: loaded
                     ? "Wear the strap for a few days and your drivers will appear here."
                     : "Reading your drivers…", symbol: "list.bullet")
             } else {
-                ForEach(contributions, id: \.key) { row(for: $0) }
+                ForEach(drivers, id: \.key) { row(for: $0) }
                 if missing.isEmpty == false {
                     Text("Not measured: \(missing.joined(separator: ", ")). Connect Apple Health or add the missing profile details to include them.")
                         .font(StrandFont.footnote)
@@ -283,99 +300,71 @@ private struct HealthspanDriversSection: View {
         .task(id: repo.refreshSeq) { await load() }
     }
 
-    private func row(for c: VitalityEngine.Contribution) -> some View {
+    private func row(for d: HealthspanDriver) -> some View {
         NoopCard {
             HStack(alignment: .center, spacing: NoopMetrics.space3) {
                 VStack(alignment: .leading, spacing: NoopMetrics.space1) {
-                    Text(Self.driverLabel(c))
+                    Text(HealthspanDrivers.label(d.key))
                         .font(StrandFont.headline)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Text("\(format(c.value, c)) · target \(format(c.target, c))")
+                    Text("\(Self.format(d.value, d.key)) · target \(Self.format(d.target, d.key))")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                 }
                 Spacer(minLength: NoopMetrics.space2)
-                Text(Self.statusLabel(c))
+                Text(Self.statusLabel(d))
                     .font(StrandFont.caption)
-                    .foregroundStyle(statusTint(c))
+                    .foregroundStyle(statusTint(d))
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(Self.driverLabel(c)). \(format(c.value, c)), target \(format(c.target, c)). \(Self.statusLabel(c))")
+        .accessibilityLabel("\(HealthspanDrivers.label(d.key)). \(Self.format(d.value, d.key)), target \(Self.format(d.target, d.key)). \(Self.statusLabel(d))")
     }
 
-    /// A driver's display name.
+    /// A driver's standing against its own target, from the sign of its persisted years — the same
+    /// quantity the headline was summed from, so the chip cannot disagree with the number.
     ///
-    /// Mapped from the key here rather than taken from `Contribution.label`: that label is authored inside
-    /// the platform-pure analytics package, which ships no string catalog, so rendering it would put the
-    /// one word naming each row into English on every device regardless of locale. The key is the stable
-    /// identifier; the name belongs to the screen.
-    static func driverLabel(_ c: VitalityEngine.Contribution) -> String {
-        switch c.key {
-        case "rhr":         return String(localized: "Resting heart rate")
-        case "vo2max":      return String(localized: "Cardio fitness")
-        case "sleep":       return String(localized: "Sleep duration")
-        case "consistency": return String(localized: "Sleep regularity")
-        case "hrv":         return String(localized: "Heart-rate variability")
-        case "steps":       return String(localized: "Daily steps")
-        case "moderate":    return String(localized: "Moderate cardio")
-        case "vigorous":    return String(localized: "Vigorous cardio")
-        case "strength":    return String(localized: "Strength training")
-        case "leanmass":    return String(localized: "Lean mass")
-        default:            return c.label
-        }
-    }
-
-    /// A driver's standing against its own reference, from the sign of its log-hazard — the same quantity
-    /// the engine scored it on, so the chip cannot disagree with the verdict behind the number.
-    ///
-    /// The costly side names the DIRECTION the value sits from its target rather than a fixed word. The
-    /// chip read "Below target" for every costly driver, which is false for the lower-is-better and
-    /// two-sided ones: a resting HR of 72 against 65, or 9.4 h of sleep against 7.5 h, printed "Below
-    /// target" beside a number plainly above it. The helping side says "Better than target" because for
-    /// resting HR "better" is below and for steps it is above — only the verdict is the same.
-    static func statusLabel(_ c: VitalityEngine.Contribution) -> String {
-        if c.lnHazard < -0.001 { return String(localized: "Better than target") }
-        if c.lnHazard > 0.001 {
-            return c.value > c.target
+    /// The costly side names the DIRECTION the value sits from its target rather than a fixed word: a
+    /// resting HR above target and steps below target are both costly, and saying "Below target" for
+    /// both would be false for one of them.
+    static func statusLabel(_ d: HealthspanDriver) -> String {
+        if d.years < -0.01 { return String(localized: "Better than target") }
+        if d.years > 0.01 {
+            return d.value > d.target
                 ? String(localized: "Above target")
                 : String(localized: "Below target")
         }
         return String(localized: "On target")
     }
 
-    private func statusTint(_ c: VitalityEngine.Contribution) -> Color {
-        if c.lnHazard < -0.001 { return StrandPalette.statusPositive }
-        if c.lnHazard > 0.001 { return StrandPalette.statusWarning }
+    private func statusTint(_ d: HealthspanDriver) -> Color {
+        if d.years < -0.01 { return StrandPalette.statusPositive }
+        if d.years > 0.01 { return StrandPalette.statusWarning }
         return StrandPalette.textSecondary
     }
 
-    private func format(_ value: Double, _ c: VitalityEngine.Contribution) -> String {
-        let rounded: String
-        switch c.key {
-        case "steps":       rounded = "\(Int(value.rounded()))"
-        case "consistency": return "\(Int((value * 100).rounded()))%"
-        case "sleep":       rounded = String(format: "%.1f", value)
-        default:            rounded = "\(Int(value.rounded()))"
+    static func format(_ value: Double, _ key: String) -> String {
+        switch key {
+        case "steps":       return "\(Int(value.rounded())) steps/day"
+        case "sleep":       return String(format: "%.1f h", value)
+        case "consistency": return "SRI \(Int(value.rounded()))"
+        case "rhr":         return "\(Int(value.rounded())) bpm"
+        case "vo2max":      return String(format: "%.1f ml/kg/min", value)
+        case "leanmass":    return "\(Int(value.rounded()))%"
+        default:            return "\(Int(value.rounded())) min/wk"
         }
-        return c.unit.isEmpty ? rounded : "\(rounded) \(c.unit)"
     }
 
-    /// Drivers with no reading at all this week, named so the absence is visible rather than silent.
+    /// Drivers with no reading at all, named so the absence is visible rather than silent.
     private var missing: [String] {
-        let present = Set(contributions.map { $0.key })
-        return [("moderate", String(localized: "Moderate cardio")),
-                ("vigorous", String(localized: "Vigorous cardio")),
-                ("strength", String(localized: "Strength training")),
-                ("leanmass", String(localized: "Lean mass")),
-                ("vo2max", String(localized: "Cardio fitness"))]
-            .filter { !present.contains($0.0) }
-            .map { $0.1 }
+        let present = Set(drivers.map { $0.key })
+        return ["moderate", "vigorous", "strength", "leanmass", "vo2max"]
+            .filter { !present.contains($0) }
+            .map(HealthspanDrivers.label)
     }
 
     private func load() async {
-        contributions = await HealthspanDrivers.thisWeek(
-            repo: repo, age: profile.age, sex: profile.sex, weightKg: profile.weightKg)
+        drivers = await HealthspanDrivers.latest(repo: repo)
         loaded = true
     }
 }
