@@ -296,7 +296,7 @@ enum BodyVitalSigns {
                 return "\(n) \(SkinTempDisplay.unitSymbol(kind: .deviation, fahrenheit: fahrenheit))"
             }
 
-        return [
+        let all = [
             BodyVitalReading(
                 key: "resp",
                 label: String(localized: "Resp Rate"),
@@ -433,6 +433,11 @@ enum BodyVitalSigns {
                 secondary: skinSecondary
             ),
         ]
+        // The Raw SpO₂ tile reads the WHOOP 4.0 red/IR channels, which a 5.0/MG never sends. With no such
+        // row anywhere in the window it could only ever say "No raw SpO₂ decode for the night" — a constant
+        // dressed as a finding, beside a strap whose own per-second estimate is banked and shown in the
+        // strap-estimate card below the grid. Omit it until a strap has produced one.
+        return spo2rawPoints.isEmpty ? all.filter { $0.key != "spo2raw" } : all
     }
 
     /// The newest day any resolved reading was sourced from — drives the section's "Latest" trailing label.

@@ -249580,6 +249580,186 @@
           }
         }
       }
+    },
+    "Through the night": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Lauf der Nacht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A lo largo de la noche"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au fil de la nuit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nel corso della notte"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "W ciągu nocy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ao longo da noite"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В течение ночи"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整晚"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整晚"
+          }
+        }
+      }
+    },
+    "Each point is one reading. The dashed line is %@, where a dip starts.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each point is one reading. The dashed line is %@, where a dip starts."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Punkt ist ein Messwert. Die gestrichelte Linie liegt bei %@, wo ein Abfall beginnt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada punto es una lectura. La línea discontinua está en %@, donde empieza una caída."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque point est une mesure. La ligne pointillée est à %@, là où commence une baisse."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni punto è una lettura. La linea tratteggiata è a %@, dove inizia un calo."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy punkt to jeden odczyt. Linia przerywana to %@, od której zaczyna się spadek."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ponto é uma leitura. A linha tracejada está em %@, onde começa uma descida."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая точка — одно измерение. Пунктирная линия — %@, с неё начинается провал."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点是一次读数。虚线为 %@，低于它即为一次下降。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個點是一次讀數。虛線為 %@，低於它即為一次下降。"
+          }
+        }
+      }
+    },
+    "Blood oxygen strap estimate through the night": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blutsauerstoff-Schätzung des Bands im Lauf der Nacht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimación de oxígeno en sangre de la banda a lo largo de la noche"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimation de l'oxygène sanguin par le bracelet au fil de la nuit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stima dell'ossigeno nel sangue della fascia nel corso della notte"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szacunek natlenienia krwi z opaski w ciągu nocy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimativa de oxigénio no sangue da pulseira ao longo da noite"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценка кислорода в крови от браслета в течение ночи"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环整晚的血氧估算"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環整晚的血氧估算"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
