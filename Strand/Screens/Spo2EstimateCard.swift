@@ -37,6 +37,10 @@ struct Spo2EstimateCard: View {
     /// The threshold the dips were cut at, named rather than assumed. Carried from
     /// `AnalyticsEngine.spo2CandidateDipThreshold` by the caller.
     let dipThreshold: Int
+    /// The night's in-band per-second readings, the raw figures behind the tiles. Empty while loading, or
+    /// when the night's session could not be matched to its day; the chart is then omitted rather than
+    /// drawn as a flat or empty frame.
+    var trace: [TrendPoint] = []
 
     var body: some View {
         if let night {
@@ -67,6 +71,9 @@ struct Spo2EstimateCard: View {
                              caption: String(localized: "in-band, this night"),
                              accent: StrandPalette.textPrimary)
                 }
+                if trace.count >= 2 {
+                    traceCard
+                }
                 Text("Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
@@ -74,6 +81,48 @@ struct Spo2EstimateCard: View {
             }
         }
     }
+
+    // MARK: - Night trace
+
+    /// Every in-band reading of the night, plotted as the strap reported it. The dashed rule is the dip
+    /// threshold the Low and Dips tiles are cut at, so a dip on the chart and a dip in the count are the
+    /// same line. Out-of-band seconds were dropped by the reader, never zeroed.
+    private var traceCard: some View {
+        NoopCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space2) {
+                Text("Through the night").strandOverline()
+                TrendChart(points: trace,
+                           gradient: Gradient(colors: [StrandPalette.metricCyan.opacity(0.55),
+                                                       StrandPalette.metricCyan]),
+                           valueRange: Double(AnalyticsEngine.spo2CandidateInBand.lowerBound)...100,
+                           showsArea: false,
+                           baselineValue: Double(dipThreshold),
+                           height: 160,
+                           valueFormat: { "\(Int($0.rounded()))%" },
+                           dateFormat: { Self.traceTimeFormatter.string(from: $0) },
+                           accessibilityLabel: String(localized: "Blood oxygen strap estimate through the night"),
+                           yDomain: traceDomain)
+                Text("Each point is one reading. The dashed line is \(thresholdLabel), where a dip starts.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Fitted to the night with the threshold always in view, so a flat 96–98 % night is not stretched
+    /// into apparent swings and the dip line never falls off the plot.
+    private var traceDomain: ClosedRange<Double> {
+        let lo = min(trace.map(\.value).min() ?? Double(dipThreshold), Double(dipThreshold))
+        return max(Double(AnalyticsEngine.spo2CandidateInBand.lowerBound), lo - 2)...100
+    }
+
+    private static let traceTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("jm")
+        f.locale = AppLanguage.activeLocale
+        return f
+    }()
 
     // MARK: - Captions
 

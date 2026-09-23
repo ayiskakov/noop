@@ -1341,6 +1341,8 @@ private struct VitalsSection: View {
     @State private var spo2CandidateDipsByDay: [String: Double] = [:]
     @State private var spo2CandidateDipSecondsByDay: [String: Double] = [:]
     @State private var spo2CandidateSamplesByDay: [String: Double] = [:]
+    /// The resolved night's per-second in-band readings, for the card's chart. Keyed to that night's day.
+    @State private var spo2NightTrace: [TrendPoint] = []
 
     var body: some View {
         let readings = BodyVitalSigns.readings(
@@ -1378,7 +1380,11 @@ private struct VitalsSection: View {
             // an empty `if`.
             Spo2EstimateCard(night: spo2CandidateNight,
                              meanTrend: spo2CandidateMeanTrend,
-                             dipThreshold: AnalyticsEngine.spo2CandidateDipThreshold)
+                             dipThreshold: AnalyticsEngine.spo2CandidateDipThreshold,
+                             trace: spo2NightTrace)
+        }
+        .task(id: spo2CandidateNight?.day) {
+            spo2NightTrace = await Self.loadNightTrace(repo, day: spo2CandidateNight?.day)
         }
         .task(id: PuffinExperiment.spo2CandidateDisplayEnabled) {
             // #1118: load the per-night HRV over-count flags (always — no toggle) so the HRV tile can
@@ -1415,6 +1421,25 @@ private struct VitalsSection: View {
     private static func loadCandidateSeries(_ repo: Repository, _ key: String) async -> [String: Double] {
         let pts = await repo.exploreSeries(key: key, source: "my-whoop", days: 14)
         return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// The per-second in-band readings of the sleep session that `day` was scored from — the same night
+    /// the card's figures describe, so the chart cannot plot a different night than its tiles. The
+    /// session is the longest one waking on `day` (the day key is the wake day); raw seconds are read
+    /// (`targetPoints` above a night's length keeps the bucket at 1 s) so a short dip is not averaged
+    /// away before the chart's own min/max downsampling sees it.
+    private static func loadNightTrace(_ repo: Repository, day: String?) async -> [TrendPoint] {
+        guard let day else { return [] }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        let session = repo.sleeps
+            .filter { fmt.string(from: Date(timeIntervalSince1970: TimeInterval($0.endTs))) == day }
+            .max { ($0.endTs - $0.effectiveStartTs) < ($1.endTs - $1.effectiveStartTs) }
+        guard let session, session.endTs > session.effectiveStartTs else { return [] }
+        let series = await repo.timelineSeries(metric: .spo2Candidate, from: session.effectiveStartTs,
+                                               to: session.endTs, targetPoints: 100_000)
+        return series.points
     }
 
     /// The night the strap-estimate card describes, resolved through the ONE funnel (pure + CI-tested in
