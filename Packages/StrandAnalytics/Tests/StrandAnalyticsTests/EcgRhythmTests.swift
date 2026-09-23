@@ -79,6 +79,14 @@ final class EcgRhythmTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 40, accuracy: 1e-9)
     }
 
+    func testAShortStretchIsStillCheckedForArtefacts() {
+        // Four intervals, one of them half a beat: fewer than the artefact rule's reach either side. Once
+        // passed unchecked for that, the 400 entered RMSSD.
+        let f = facts([Array(repeating: 800, count: 12), [800, 800, 800, 400]])
+        XCTAssertEqual(f.setAsideIntervals, 1)
+        XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 0, accuracy: 1e-9)
+    }
+
     func testTheRangeTakesInTheRate() {
         // Eight uneven intervals: the median of all of them (847 ms, 70.8 bpm) lies outside the 5th–95th
         // percentiles of their four five-interval windows (67.5–68.3 bpm).

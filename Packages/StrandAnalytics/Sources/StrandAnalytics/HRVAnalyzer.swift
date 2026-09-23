@@ -166,7 +166,9 @@ public enum HRVAnalyzer {
     /// of `HrvAnalyzer.cleanRRGapAware`.
     ///
     /// `radius` widens the local-median window for a caller that needs it; left at its default the
-    /// result is the one above, and the equality with `cleanRR` holds only at that default.
+    /// result is the one above, and the equality with `cleanRR` holds only at that default. A wider
+    /// radius still checks a series no longer than itself, each interval against all the others; only
+    /// one of at most `ectopicWindowRadius` passes unchecked, as at the default.
     public static func cleanRRGapAware(_ rr: [Double], radius: Int = ectopicWindowRadius) -> CleanSeries {
         // Pass 1: range filter, keeping each survivor's index in the ORIGINAL series.
         var rangedIdx: [Int] = []; rangedIdx.reserveCapacity(rr.count)
@@ -180,7 +182,7 @@ public enum HRVAnalyzer {
         // carrying each survivor's original index forward.
         var keptOrig: [Int] = []; keptOrig.reserveCapacity(rangedVal.count)
         var keptVal: [Double] = []; keptVal.reserveCapacity(rangedVal.count)
-        if rangedVal.count <= radius {
+        if rangedVal.count <= min(radius, ectopicWindowRadius) {
             // rejectEctopic returns the input unchanged for a series this short.
             for k in 0..<rangedVal.count { keptOrig.append(rangedIdx[k]); keptVal.append(rangedVal[k]) }
         } else {
