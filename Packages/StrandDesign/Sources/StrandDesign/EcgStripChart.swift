@@ -8,8 +8,8 @@ import SwiftUI
 //
 // UNVALIDATED INSTRUMENTATION. This view renders a shape and labels nothing. There is no amplitude axis
 // because there is no calibration to put on one — `docs/PROTOCOL_ECG.md` is explicit that the front
-// end's configuration does not establish volts per count — and there is deliberately no heart rate, no
-// interval and no rhythm annotation anywhere in it.
+// end's configuration does not establish volts per count — and no rhythm annotation. The only marks it
+// draws on the trace are the beat ticks a caller passes in, so a derived count can be checked by eye.
 //
 // The view takes COLUMNS, not samples. Reducing a waveform to pixel columns is arithmetic with a
 // correctness property (a narrow deflection must survive it), so it lives in `StrandAnalytics.EcgStrip`
@@ -44,16 +44,20 @@ public struct EcgStripChart: View {
     /// The slower contact/lead-state entries under this window, or `[]` for none. Rendered as the strap's
     /// own flag — never as a quality score, which `docs/PROTOCOL_ECG.md` says these codes are not.
     public var contactFlags: [Bool]
+    /// Beat marks along the top edge, each a fraction (0…1) of the strip's width. Empty draws none. The
+    /// caller places them on the same sample axis as `columns`; this view only draws the ticks.
+    public var markers: [Double]
     public var height: CGFloat
 
     public init(columns: [EcgStripColumn], breakAfter: Set<Int> = [],
                 range: (min: Double, max: Double), seconds: Double,
-                contactFlags: [Bool] = [], height: CGFloat = 200) {
+                contactFlags: [Bool] = [], markers: [Double] = [], height: CGFloat = 200) {
         self.columns = columns
         self.breakAfter = breakAfter
         self.range = range
         self.seconds = seconds
         self.contactFlags = contactFlags
+        self.markers = markers
         self.height = height
     }
 
@@ -72,6 +76,7 @@ public struct EcgStripChart: View {
                 ZStack {
                     grid(size: geo.size)
                     trace(size: geo.size)
+                    if !markers.isEmpty { markerTicks }
                 }
             }
             .frame(height: height)
@@ -168,6 +173,24 @@ public struct EcgStripChart: View {
             ctx.stroke(path, with: .color(StrandPalette.textPrimary),
                        style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
         }
+    }
+
+    // MARK: - Beat markers
+
+    private var markerTicks: some View {
+        Canvas { ctx, s in
+            let size = NoopMetrics.space2
+            var path = Path()
+            for m in markers where m >= 0 && m <= 1 {
+                let x = m * s.width
+                path.move(to: CGPoint(x: x - size / 2, y: 1))
+                path.addLine(to: CGPoint(x: x + size / 2, y: 1))
+                path.addLine(to: CGPoint(x: x, y: 1 + size))
+                path.closeSubpath()
+            }
+            ctx.fill(path, with: .color(StrandPalette.accent))
+        }
+        .allowsHitTesting(false)
     }
 
     // MARK: - Contact band

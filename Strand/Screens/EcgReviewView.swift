@@ -7,13 +7,12 @@ import WhoopProtocol
 ///
 /// ## What this screen is, and the line it does not cross
 ///
-/// It shows the SHAPE of what the strap recorded and nothing derived from it. No heart rate, no
-/// interval, no rhythm classification, no voltage, no "normal" or "abnormal". That is not caution for
-/// its own sake — `ECG_FEATURE_NOTES.md` §5 records that beat-to-beat accuracy against the strap's own
-/// optical heart rate was never established (r ≈ 0.43 at best, and WORSE with a better detector), for a
-/// structural reason rather than a fixable one: wrist single-lead ECG needs stillness, stillness means
-/// the heart rate barely moves, and anything that moves it properly destroys the trace with motion
-/// artifact. A number on this screen would be the withdrawn #194 PPG→HR estimate all over again.
+/// It shows the SHAPE of what the strap recorded, plus one derived figure: a heart rate counted from R
+/// peaks (`EcgBeats`), with the peaks marked on the strip so the count can be checked by eye. No
+/// interval analysis beyond R-R, no rhythm classification, no voltage, no "normal" or "abnormal". The
+/// rate is shown only from records the strap itself rated quality 3, where it tracked the strap's
+/// optical HR across 82–116 bpm (see `EcgBeats` for the comparison). It is experimental and feeds
+/// nothing else.
 ///
 /// The same rule governs what IS shown. The strap's own status codes appear as the raw codes they are,
 /// because `docs/PROTOCOL_ECG.md` says the quality values are "partial observed outcomes, not an
@@ -32,6 +31,8 @@ struct EcgReviewView: View {
     @State private var recordings: [EcgStrip.Recording] = []
     @State private var selected: EcgStrip.Recording?
     @State private var records: [EcgCandidateSample] = []
+    /// Beats for the selected recording, nil while they are being found.
+    @State private var beats: EcgBeats.Result?
     @State private var loading = true
     @State private var loadingWaveform = false
     /// Display-only baseline removal. ON by default because the captures need it — a ten-second window
@@ -91,7 +92,7 @@ struct EcgReviewView: View {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(StrandPalette.statusWarning)
                 }
-                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. No heart rate or rhythm is shown, because nothing here has been validated to produce one. If you have symptoms or a concern about your heart, talk to a doctor.")
+                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -129,6 +130,7 @@ struct EcgReviewView: View {
                                   range: window.range,
                                   seconds: Double(window.seconds),
                                   contactFlags: window.contactFlags,
+                                  markers: window.markers,
                                   height: NoopMetrics.chartHeight)
                     // The axis carries SECONDS, which are a wire fact (one record per second), and no
                     // amplitude axis at all, because there is no calibration to put on one.
@@ -142,10 +144,37 @@ struct EcgReviewView: View {
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                 }
 
+                heartRateBlock
                 scrubber(recording)
                 controls
                 if !recording.isComplete { incompleteNotice(recording) }
                 factsRow(recording)
+            }
+        }
+    }
+
+    /// The one derived figure, and the evidence for it: beats are marked on the strip above.
+    @ViewBuilder private var heartRateBlock: some View {
+        if let beats, !loadingWaveform {
+            VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                if let rate = beats.heartRate, let rr = beats.medianRRMs {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Heart rate from ECG")
+                            .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                        Spacer()
+                        Text("\(Int(rate.rounded())) bpm")
+                            .font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                    }
+                    Text("R-R median \(Int(rr.rounded())) ms · \(beats.beats.count) beats in \(beats.analysedSeconds) s of clean signal")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                } else {
+                    Text("Not enough clean signal for a heart rate. The strap marked \(beats.analysedSeconds) s of this recording as clean.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Experimental. Counted from the R peaks (marked on the strip) only where the strap rated the signal clean. Not a medical measurement.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -188,8 +217,8 @@ struct EcgReviewView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// The recording's facts, each stated as what it is. Note what is absent: no heart rate, and no
-    /// word-label for the quality code — see the type doc.
+    /// The recording's facts, each stated as what it is. Note what is absent: no word-label for the
+    /// quality code — see the type doc.
     @ViewBuilder private func factsRow(_ recording: EcgStrip.Recording) -> some View {
         VStack(alignment: .leading, spacing: NoopMetrics.space1) {
             Text("\(recording.durationSeconds) s · \(recording.recordCount) records · \(recording.storedSamples) samples")
@@ -258,6 +287,7 @@ struct EcgReviewView: View {
         let range: (min: Double, max: Double)
         let seconds: Int
         let contactFlags: [Bool]
+        let markers: [Double]
     }
 
     private func window(_ recording: EcgStrip.Recording) -> Window {
@@ -266,7 +296,7 @@ struct EcgReviewView: View {
         let visible = records.filter { $0.ts >= from && $0.ts <= to }
         let seconds = max(1, min(windowSeconds, recording.endTs - from + 1))
         guard !visible.isEmpty else {
-            return Window(columns: [], breaks: [], range: (-1, 1), seconds: seconds, contactFlags: [])
+            return Window(columns: [], breaks: [], range: (-1, 1), seconds: seconds, contactFlags: [], markers: [])
         }
         let (samples, gaps) = EcgStrip.concatenate(visible.map {
             (ts: $0.ts, samples: $0.samples.map(Double.init))
@@ -287,7 +317,11 @@ struct EcgReviewView: View {
                       breaks: breaks,
                       range: EcgStrip.verticalRange(columns),
                       seconds: seconds,
-                      contactFlags: visible.flatMap(\.contactFlags))
+                      contactFlags: visible.flatMap(\.contactFlags),
+                      markers: EcgStrip.markerFractions(
+                          beatTimes: (beats?.beats ?? []).map(\.time),
+                          records: visible.map { (ts: $0.ts, sampleCount: $0.samples.count) },
+                          samplesPerSecond: Self.nominalSamplesPerSecond))
     }
 
     // MARK: - Loading
@@ -303,7 +337,13 @@ struct EcgReviewView: View {
         selected = recording
         windowStart = 0
         loadingWaveform = true
-        records = await model.repo.ecgRecords(for: recording)
+        beats = nil
+        let loaded = await model.repo.ecgRecords(for: recording)
+        records = loaded
+        // Off the main actor: a long recording is hundreds of thousands of samples.
+        let found = await Task.detached(priority: .userInitiated) { EcgBeats.analyse(loaded) }.value
+        guard selected?.id == recording.id else { return }
+        beats = found
         loadingWaveform = false
     }
 

@@ -83220,6 +83220,70 @@
         }
       }
     },
+    "Experimental. Counted from the R peaks (marked on the strip) only where the strap rated the signal clean. Not a medical measurement.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. Gezählt aus den R-Zacken (auf dem Streifen markiert), nur wo das Band das Signal als sauber bewertet hat. Keine medizinische Messung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Counted from the R peaks (marked on the strip) only where the strap rated the signal clean. Not a medical measurement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Se cuenta a partir de los picos R (marcados en la tira) solo donde la pulsera calificó la señal como limpia. No es una medición médica."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. Compté à partir des pics R (marqués sur la bande), uniquement là où le bracelet a jugé le signal propre. Pas une mesure médicale."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. Conteggiata dai picchi R (segnati sulla traccia) solo dove il cinturino ha valutato il segnale pulito. Non è una misura medica."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. Liczone z załamków R (zaznaczonych na pasku) tylko tam, gdzie opaska oceniła sygnał jako czysty. To nie jest pomiar medyczny."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Contado a partir dos picos R (marcados na tira) apenas onde a pulseira classificou o sinal como limpo. Não é uma medição médica."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. Считается по зубцам R (отмечены на ленте) только там, где браслет оценил сигнал как чистый. Не медицинское измерение."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性功能。仅在手环判定信号清晰的片段中，根据 R 波（已在波形条上标出）计数。并非医疗测量。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性功能。僅在手環判定訊號清晰的片段中，根據 R 波（已在波形條上標出）計數。並非醫療測量。"
+          }
+        }
+      }
+    },
     "Experimental. NOOP is not a medical device: this shows the waveform your strap records, with no heart rate, rhythm or diagnosis.": {
       "localizations": {
         "de": {
@@ -95669,6 +95733,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tętno podczas %@"
+          }
+        }
+      }
+    },
+    "Heart rate from ECG": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herzfrequenz aus dem EKG"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heart rate from ECG"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frecuencia cardiaca del ECG"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fréquence cardiaque issue de l'ECG"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequenza cardiaca dall'ECG"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tętno z EKG"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequência cardíaca do ECG"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пульс по ЭКГ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心电图心率"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心電圖心率"
           }
         }
       }
@@ -137491,6 +137619,70 @@
         }
       }
     },
+    "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu wenig sauberes Signal für eine Herzfrequenz. Das Band hat %lld s dieser Aufzeichnung als sauber markiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay suficiente señal limpia para una frecuencia cardiaca. La pulsera marcó %lld s de esta grabación como limpios."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas assez de signal propre pour une fréquence cardiaque. Le bracelet a jugé %lld s de cet enregistrement propres."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Segnale pulito insufficiente per una frequenza cardiaca. Il cinturino ha segnato come pulito %lld s di questa registrazione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Za mało czystego sygnału, by podać tętno. Opaska oznaczyła %lld s tego nagrania jako czyste."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinal limpo insuficiente para uma frequência cardíaca. A pulseira marcou %lld s desta gravação como limpos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недостаточно чистого сигнала для расчёта пульса. Браслет отметил как чистые %lld с этой записи."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清晰信号不足，无法计算心率。手环将本次记录中的 %lld 秒标记为清晰。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清晰訊號不足，無法計算心率。手環將本次記錄中的 %lld 秒標記為清晰。"
+          }
+        }
+      }
+    },
     "Not enough data": {
       "localizations": {
         "de": {
@@ -155242,6 +155434,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Odstępy R-R"
+          }
+        }
+      }
+    },
+    "R-R median %lld ms · %lld beats in %lld s of clean signal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R-Median %lld ms · %lld Schläge in %lld s sauberem Signal"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R median %lld ms · %lld beats in %lld s of clean signal"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mediana R-R %lld ms · %lld latidos en %lld s de señal limpia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R médian %lld ms · %lld battements sur %lld s de signal propre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R mediano %lld ms · %lld battiti in %lld s di segnale pulito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mediana R-R %lld ms · %lld uderzeń w %lld s czystego sygnału"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R mediano %lld ms · %lld batimentos em %lld s de sinal limpo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Медиана R-R %lld мс · %lld ударов за %lld с чистого сигнала"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R 中位数 %1$lld 毫秒 · %3$lld 秒清晰信号中 %2$lld 次心跳"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R-R 中位數 %1$lld 毫秒 · %3$lld 秒清晰訊號中 %2$lld 次心跳"
           }
         }
       }
@@ -203806,6 +204062,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "這是從你自己的手環解碼出的未經驗證的感測器波形。NOOP 不是醫療裝置，這也不是心電圖檢查。它無法偵測、診斷、排除或監測任何心臟疾病。這裡不顯示心率或節律，因為沒有任何內容經過驗證可以得出這些結果。如果你有症狀或對心臟有疑慮，請諮詢醫師。"
+          }
+        }
+      }
+    },
+    "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies ist eine nicht validierte Sensorkurve, dekodiert von deinem eigenen Band. NOOP ist kein Medizinprodukt, und dies ist kein EKG-Test. Es kann keine Herzerkrankung erkennen, diagnostizieren, ausschließen oder überwachen. Die angezeigte Herzfrequenz ist eine experimentelle Zählung der Schläge, keine Rhythmusanalyse. Wenn du Beschwerden oder Bedenken wegen deines Herzens hast, sprich mit einer Ärztin oder einem Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta es una forma de onda de sensor no validada, decodificada de tu propia pulsera. NOOP no es un dispositivo médico y esto no es una prueba de ECG. No puede detectar, diagnosticar, descartar ni vigilar ninguna afección cardiaca. La frecuencia cardiaca mostrada es un recuento experimental de latidos, no un análisis del ritmo. Si tienes síntomas o te preocupa tu corazón, habla con un médico."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ceci est une courbe de capteur non validée, décodée depuis ton propre bracelet. NOOP n'est pas un dispositif médical et ceci n'est pas un test ECG. Il ne peut détecter, diagnostiquer, exclure ni surveiller aucune maladie cardiaque. La fréquence cardiaque affichée est un comptage expérimental des battements, pas une analyse du rythme. En cas de symptômes ou d'inquiétude pour ton cœur, parle à un médecin."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa è una forma d'onda del sensore non validata, decodificata dal tuo cinturino. NOOP non è un dispositivo medico e questo non è un test ECG. Non può rilevare, diagnosticare, escludere né monitorare alcuna condizione cardiaca. La frequenza cardiaca mostrata è un conteggio sperimentale dei battiti, non un'analisi del ritmo. Se hai sintomi o dubbi sul tuo cuore, parlane con un medico."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To niezweryfikowany przebieg z czujnika, odczytany z Twojej opaski. NOOP nie jest wyrobem medycznym, a to nie jest badanie EKG. Nie wykrywa, nie diagnozuje, nie wyklucza ani nie monitoruje żadnej choroby serca. Pokazane tętno to eksperymentalne zliczenie uderzeń, a nie analiza rytmu. Jeśli masz objawy lub obawy dotyczące serca, porozmawiaj z lekarzem."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta é uma forma de onda de sensor não validada, descodificada da tua própria pulseira. O NOOP não é um dispositivo médico e isto não é um teste de ECG. Não consegue detetar, diagnosticar, excluir nem monitorizar qualquer doença cardíaca. A frequência cardíaca mostrada é uma contagem experimental de batimentos, não uma análise do ritmo. Se tiveres sintomas ou preocupações com o coração, fala com um médico."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это непроверенная кривая датчика, расшифрованная с вашего браслета. NOOP — не медицинское изделие, и это не ЭКГ-обследование. Он не может выявить, диагностировать, исключить или отслеживать заболевания сердца. Показанный пульс — экспериментальный подсчёт ударов, а не анализ ритма. Если у вас есть симптомы или беспокойство о сердце, обратитесь к врачу."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是从你自己的手环解码出的未经验证的传感器波形。NOOP 不是医疗设备，这也不是心电图检查。它无法检测、诊断、排除或监测任何心脏疾病。显示的心率是实验性的心跳计数，而非心律分析。如有症状或对心脏有疑虑，请咨询医生。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這是從你自己的手環解碼出的未經驗證的感測器波形。NOOP 不是醫療裝置，這也不是心電圖檢查。它無法偵測、診斷、排除或監測任何心臟疾病。顯示的心率是實驗性的心跳計數，而非心律分析。如有症狀或對心臟有疑慮，請諮詢醫生。"
           }
         }
       }
