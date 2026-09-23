@@ -1193,10 +1193,10 @@ private struct ReadinessChecklistCard: View {
 
 // MARK: - Vitality / Body Age
 
-/// The "Vitality" section: a weekly wellness score (0–100) + a Body Age in years, computed by
+/// The "Vitality" section: a wellness score (0–100) + a six-month Body Age in years, computed by
 /// IntelligenceEngine from the published mortality-hazard model and read back from the metricSeries.
-/// A wellness trend from your habits — NOT a clinical biological age. Recomputes the live best/worst
-/// factor the same way the engine does, for the plain-English "why".
+/// A wellness trend from your habits — NOT a clinical biological age. The best/worst driver comes from
+/// the persisted per-driver years behind the same stored number, for the plain-English "why".
 private struct VitalitySection: View {
     @EnvironmentObject var repo: Repository
     @EnvironmentObject var profile: ProfileStore
@@ -1204,16 +1204,14 @@ private struct VitalitySection: View {
     @State private var bodyAge: Double?
     @State private var loaded = false
 
-    /// The "what's driving it" inputs, from the ONE shared loader (`HealthspanDrivers.thisWeek`).
-    ///
-    /// This card used to assemble its own six-driver inputs here. That was already a second recipe for the
-    /// number beside it, and it broke outright when the engine grew to ten drivers: the card would have gone
-    /// on naming a "helping most" chosen from six, while the Body Age it sits under was computed from ten.
-    @State private var contributions: [VitalityEngine.Contribution] = []
+    /// The "what's driving it" drivers, from the ONE shared loader (`HealthspanDrivers.latest`): the
+    /// persisted per-driver years behind the same stored Body Age this card shows, so "helping most" is
+    /// chosen from exactly the shares that number was summed from.
+    @State private var drivers: [HealthspanDriver] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            SectionHeader("Vitality", overline: "Weekly",
+            SectionHeader("Vitality", overline: "6 months",
                           trailing: bodyAge != nil ? String(localized: "Body Age \(Int((bodyAge ?? 0).rounded()))") : nil)
             if let v = vitality, let ba = bodyAge {
                 hero(vitality: v, bodyAge: ba)
@@ -1230,7 +1228,7 @@ private struct VitalitySection: View {
         let delta = Double(profile.age) - ba
         let younger = delta >= 0
         let yrs = Int(abs(delta).rounded())
-        let sorted = contributions.sorted { $0.lnHazard < $1.lnHazard }
+        let sorted = drivers.sorted { $0.years < $1.years }
         let best = sorted.first
         let worst = sorted.last
         return VStack(alignment: .leading, spacing: NoopMetrics.space4) {
@@ -1266,14 +1264,14 @@ private struct VitalitySection: View {
                         .foregroundStyle(younger ? StrandPalette.statusPositive : StrandPalette.statusWarning)
                 }
             }
-            if (best?.lnHazard ?? 0) < 0 || (worst?.lnHazard ?? 0) > 0 {
+            if (best?.years ?? 0) < 0 || (worst?.years ?? 0) > 0 {
                 Divider().overlay(StrandPalette.hairline)
-                if let best, best.lnHazard < 0 {
-                    Text("Helping most: \(best.label)")
+                if let best, best.years < 0 {
+                    Text("Helping most: \(HealthspanDrivers.label(best.key))")
                         .font(StrandFont.footnote).foregroundStyle(StrandPalette.statusPositive)
                 }
-                if let worst, worst.lnHazard > 0 {
-                    Text("Holding you back: \(worst.label)")
+                if let worst, worst.years > 0 {
+                    Text("Holding you back: \(HealthspanDrivers.label(worst.key))")
                         .font(StrandFont.footnote).foregroundStyle(StrandPalette.statusWarning)
                 }
             }
@@ -1305,8 +1303,7 @@ private struct VitalitySection: View {
     private func load() async {
         vitality = (await repo.exploreSeries(key: "vitality", source: "my-whoop")).last?.value
         bodyAge = (await repo.exploreSeries(key: "body_age", source: "my-whoop")).last?.value
-        contributions = await HealthspanDrivers.thisWeek(
-            repo: repo, age: profile.age, sex: profile.sex, heightCm: profile.heightCm)
+        drivers = await HealthspanDrivers.latest(repo: repo)
         loaded = true
     }
 }

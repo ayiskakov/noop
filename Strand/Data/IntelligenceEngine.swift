@@ -240,6 +240,10 @@ final class IntelligenceEngine: ObservableObject {
         /// person's activity, not the part they remembered to label as a session. Empty when the day
         /// banked no heart rate.
         let zoneMinutes: [Double]
+        /// Healthspan: whole-day minutes in the five heart-rate-RESERVE zones (Karvonen, from this night's
+        /// resting HR and the profile's max HR) — the unit the Healthspan zone targets are stated in. Same
+        /// `dayHr` stream as `zoneMinutes`. Empty when the day banked no heart rate or has no resting HR.
+        let zoneMinutesHRR: [Double]
         /// #1118: whether this night's in-sleep R-R is OVER-COUNTED (`crossSecondOverCount` /
         /// `sameSecondOverCount`) — the WHOOP-4.0 two-optical-channel artifact that inflates R-R and
         /// contaminates the displayed HRV. nil when the night has no in-sleep R-R (no HRV to caveat).
@@ -520,17 +524,6 @@ final class IntelligenceEngine: ObservableObject {
         return fmt.string(from: sat)
     }
 
-    /// Scored nights (a resting HR) a week needs before a weekly Vitality / Body Age is written. Matches
-    /// Fitness Age's `FitnessAgeEngine.minCoverageDays`. `VitalityEngine.minFactors` counts FACTORS, and one
-    /// night alone supplies four of them (resting HR, sleep, regularity, HRV), so without a night count a
-    /// single partial first day became a whole week's Body Age.
-    nonisolated static let healthspanMinWeekNights = FitnessAgeEngine.minCoverageDays
-
-    /// Whether `days` (the week's rows) carry enough scored nights for a weekly Vitality / Body Age.
-    nonisolated static func healthspanWeekIsScorable<C: Collection>(_ days: C) -> Bool where C.Element == DailyMetric {
-        days.filter { $0.restingHr != nil }.count >= healthspanMinWeekNights
-    }
-
     /// Days in the persisted window whose `sleep_performance` point was not produced by this pass, i.e.
     /// the day no longer has a scored night. A point written by an earlier pass for a session that was
     /// later dropped (a short evening block re-detected away) would otherwise outlive the sleep it
@@ -541,120 +534,9 @@ final class IntelligenceEngine: ObservableObject {
         return persisted.map { $0.day }.filter { !producedDays.contains($0) }.sorted()
     }
 
-    // MARK: - Healthspan (Body Age + Pace of Aging) inputs
+    // MARK: - Healthspan
     //
-    // One resolver builds the Vitality inputs for EVERY window — this week's headline and each rolling
-    // window the pace is fitted through. Two builders would let the Body Age and the pace that predicts it
-    // be computed from differently-shaped people.
-
-    /// Observed days out of a window before an activity dose is claimed at all. Below this, one logged day
-    /// would become a whole week's dose.
-    static let healthspanMinActivityDays = 4
-
-    /// Per-day moderate (zones 2–3) and vigorous (zones 4–5) minutes from the raw five-zone split.
-    static func healthspanZoneDose(_ zoneMinutesByDay: [String: [Double]])
-        -> [String: (moderate: Double, vigorous: Double)] {
-        var out: [String: (moderate: Double, vigorous: Double)] = [:]
-        for (day, zones) in zoneMinutesByDay where zones.count >= 5 {
-            out[day] = (moderate: zones[1] + zones[2], vigorous: zones[3] + zones[4])
-        }
-        return out
-    }
-
-    /// Scale an activity dose observed on `observedDays` of a `windowDays` window up to the whole window.
-    ///
-    /// A week rarely has seven observed days, and the published references are stated per week — so the
-    /// observed days are averaged and scaled, the same treatment the sleep and step means already get.
-    /// Nil below `healthspanMinActivityDays`, because scaling one day by seven is not a measurement.
-    static func healthspanScaledDose(total: Double, observedDays: Int, windowDays: Int) -> Double? {
-        guard observedDays >= healthspanMinActivityDays, observedDays > 0, windowDays > 0 else { return nil }
-        return total / Double(observedDays) * Double(windowDays)
-    }
-
-    /// Build the Vitality inputs for one window of days.
-    ///
-    /// A day counts as OBSERVED for activity when it banked a zone reading, i.e. the strap saw its heart
-    /// rate. On such a day, no strength entry means genuinely no strength training — absent and zero are
-    /// different facts, and only a day we watched can distinguish them.
-    static func healthspanInputs(days: [DailyMetric],
-                                 zone: [String: (moderate: Double, vigorous: Double)],
-                                 strength: [String: Double],
-                                 age: Double, sex: String,
-                                 heightCm: Double?, leanMassKg: Double?) -> VitalityEngine.Inputs {
-        let rhrs = days.compactMap { $0.restingHr }.map(Double.init)
-        let nights = days.compactMap { $0.totalSleepMin }.map { Double($0) / 60.0 }.filter { $0 > 0 }
-        let hrvs = days.compactMap { $0.avgHrv }
-        let steps = days.compactMap { $0.steps }.map(Double.init)
-        let observed = days.map { $0.day }.filter { zone[$0] != nil }
-        let moderate = observed.reduce(0.0) { $0 + (zone[$1]?.moderate ?? 0) }
-        let vigorous = observed.reduce(0.0) { $0 + (zone[$1]?.vigorous ?? 0) }
-        let strengthTotal = observed.reduce(0.0) { $0 + (strength[$1] ?? 0) }
-        // Doses are stated per WEEK whatever the window is, so a 30-day window is scaled to seven days.
-        return VitalityEngine.Inputs(
-            chronoAge: age,
-            restingHR: rhrs.isEmpty ? nil : IntelligenceEngine.medianOf(rhrs),
-            sleepHours: nights.isEmpty ? nil : nights.reduce(0, +) / Double(nights.count),
-            sleepConsistency: VitalityEngine.sleepConsistency(nightlyHours: nights),
-            rmssd: hrvs.isEmpty ? nil : IntelligenceEngine.medianOf(hrvs),
-            rmssdNorm: VitalityEngine.rmssdNorm(forAge: age),
-            steps: steps.isEmpty ? nil : steps.reduce(0, +) / Double(steps.count),
-            moderateMinPerWeek: healthspanScaledDose(total: moderate, observedDays: observed.count,
-                                                     windowDays: 7),
-            vigorousMinPerWeek: healthspanScaledDose(total: vigorous, observedDays: observed.count,
-                                                     windowDays: 7),
-            strengthMinPerWeek: healthspanScaledDose(total: strengthTotal, observedDays: observed.count,
-                                                     windowDays: 7),
-            leanMassKg: leanMassKg,
-            heightCm: heightCm,
-            sex: sex)
-    }
-
-    /// One rolling-30-day Vitality sample per day across the pace engine's trend window.
-    ///
-    /// The factor signature carried on each sample is the sorted set of contribution keys behind it, so the
-    /// engine can drop a stretch where the factor set differed rather than reading "you connected a step
-    /// source" as "you aged".
-    static func healthspanPaceSamples(days: [DailyMetric],
-                                      zone: [String: (moderate: Double, vigorous: Double)],
-                                      strength: [String: Double],
-                                      age: Double, sex: String,
-                                      heightCm: Double?, leanMassKg: Double?)
-        -> [PaceOfAgingEngine.Sample] {
-        let sorted = days.sorted { $0.day < $1.day }
-        guard let newest = sorted.last, let newestIndex = PaceOfAgingEngine.dayIndex(newest.day) else {
-            return []
-        }
-        var byIndex: [Int: DailyMetric] = [:]
-        for d in sorted { if let i = PaceOfAgingEngine.dayIndex(d.day) { byIndex[i] = d } }
-
-        var out: [PaceOfAgingEngine.Sample] = []
-        for offset in 0..<PaceOfAgingEngine.trendWindowDays {
-            let end = newestIndex - offset
-            let start = end - PaceOfAgingEngine.recentWindowDays + 1
-            let window = (start...end).compactMap { byIndex[$0] }
-            // A thin window is not a habit — see `PaceOfAgingEngine.minWindowDays`. Skipping it here rather
-            // than letting it through as an equal sample is what stops the ragged start of someone's
-            // history being fitted as a trend.
-            guard window.count >= PaceOfAgingEngine.minWindowDays else { continue }
-            let inputs = healthspanInputs(days: window, zone: zone, strength: strength,
-                                          age: age, sex: sex, heightCm: heightCm, leanMassKg: leanMassKg)
-            guard let result = VitalityEngine.compute(inputs) else { continue }
-            out.append(PaceOfAgingEngine.Sample(
-                dayIndex: end, lnHazardSum: result.lnHazardSum,
-                factorSignature: result.contributions.map { $0.key }.sorted().joined(separator: ",")))
-        }
-        return out.sorted { $0.dayIndex < $1.dayIndex }
-    }
-
-    /// The most recent imported lean-mass reading (kg), or nil when none exists.
-    ///
-    /// Read-only, from whatever Apple Health / body-composition import already banked it — NOOP measures
-    /// no body composition of its own, and the Healthspan lean-mass driver stays absent without one.
-    static func latestLeanMassKg(repo: Repository) async -> Double? {
-        let series = await repo.exploreSeries(key: "lean_mass", source: "apple-health")
-        guard let latest = series.last?.value, latest > 0 else { return nil }
-        return latest
-    }
+    // The resolver, the windows and the persisted points live in `HealthspanPipeline.swift`.
 
     /// The "yyyy-MM-dd" key `count` days before `before`. Falls back to `before` on an unparseable key.
     static func dayKey(daysBefore count: Int, before: String) -> String {
@@ -1808,6 +1690,11 @@ final class IntelligenceEngine: ObservableObject {
                 // stated in minutes per week, so minutes is the unit that leaves this loop.
                 let zoneMinutes = dayHr.isEmpty ? []
                     : HRZones.timeInZone(dayHr, zoneSet: healthspanZoneSet).seconds.map { $0 / 60.0 }
+                let hrrZoneSet = res.daily.restingHr.flatMap {
+                    HRZones.heartRateReserveZones(restingHR: Double($0), maxHR: healthspanZoneSet.maxHR)
+                }
+                let zoneMinutesHRR = dayHr.isEmpty ? []
+                    : hrrZoneSet.map { HRZones.timeInZone(dayHr, zoneSet: $0).seconds.map { $0 / 60.0 } } ?? []
                 let scan = DayScan(result: res, rhrLine: rhrLine, rhrBinLine: rhrBinLine,
                                    respLine: respLine,
                                    readOwner: owner, hrRows: hr.count,
@@ -1815,6 +1702,7 @@ final class IntelligenceEngine: ObservableObject {
                                    hrvDiag: Self.mergedDayDiag(hrvDiag, strainDiagLines),
                                    spo2Candidate: spo2CandidateNight,
                                    zoneMinutes: zoneMinutes,
+                                   zoneMinutesHRR: zoneMinutesHRR,
                                    hrvOverCounted: hrvOverCounted,
                                    primarySessionRHR: primarySessionRHR,
                                    primarySessionRHRCoverage: primarySessionRHRCoverage)
@@ -1912,6 +1800,7 @@ final class IntelligenceEngine: ObservableObject {
         var primarySessionRHRCoverageByDay: [String: PrimarySessionRestingHR.Coverage] = [:]
         // Healthspan: per-day zone minutes carried from pass 1 for metricSeries persistence.
         var zoneMinutesByDay: [String: [Double]] = [:]
+        var zoneMinutesHRRByDay: [String: [Double]] = [:]
 
         // Back on the main actor: fold the off-actor results into the pass-2 state in the SAME order the
         // loop produced them. Pure assignment / appends , no further store reads , so this is cheap and the
@@ -1943,6 +1832,9 @@ final class IntelligenceEngine: ObservableObject {
             // Healthspan: carry the day's time-in-zone into pass 2 for metricSeries persistence.
             if !scan.zoneMinutes.isEmpty {
                 zoneMinutesByDay[res.daily.day] = scan.zoneMinutes
+            }
+            if !scan.zoneMinutesHRR.isEmpty {
+                zoneMinutesHRRByDay[res.daily.day] = scan.zoneMinutesHRR
             }
             if let line = scan.rhrLine { diagnosticSink?(line, nil) }
             if let line = scan.rhrBinLine { diagnosticSink?(line, nil) }
@@ -2407,6 +2299,16 @@ final class IntelligenceEngine: ObservableObject {
                 restPoints.append(MetricPoint(day: daily.day, key: "zone_min_4_5",
                                               value: zones[3] + zones[4]))
             }
+            // The heart-rate-RESERVE pair the Healthspan drivers read: zones 1–3 (50–80 % HRR) and 4–5
+            // (≥ 80 % HRR), the model WHOOP's zone targets are stated in. Unlike the %HRmax pair above,
+            // zone 1 belongs here: 50 % of the RESERVE is already a moderate effort. 0 written rather than
+            // omitted on a watched day, for the same absent-versus-none reason.
+            if let zones = zoneMinutesHRRByDay[daily.day], zones.count >= 5 {
+                restPoints.append(MetricPoint(day: daily.day, key: HealthspanSeries.zoneModerate,
+                                              value: zones[0] + zones[1] + zones[2]))
+                restPoints.append(MetricPoint(day: daily.day, key: HealthspanSeries.zoneVigorous,
+                                              value: zones[3] + zones[4]))
+            }
             // Muscle-strengthening minutes for the day, from the workout rows already read for the
             // detected-bout dedup. Lift Log sessions are NOT summed separately: a logged session always
             // carries a paired workout row at the same instant (`LiftSessionRow.startTs`), so adding both
@@ -2640,15 +2542,12 @@ final class IntelligenceEngine: ObservableObject {
         // optional VO₂max when a waist is set) under the same "-noop" source. Idempotent on the Saturday
         // key, so the number refines through the week and finalises on Saturday. Engine = FitnessAgeEngine
         // (StrandAnalytics), fully unit-tested; the body term cancels so the headline needs no body metric.
-        let fa7 = dailies.sorted { $0.day < $1.day }.suffix(7)
-        let faRHRs = fa7.compactMap { $0.restingHr }.map(Double.init)
         // The Fitness Age gate + compute read the PERSISTED/MERGED last-7 days , the SAME history the
         // readiness card + dashboard show , NOT this pass's freshly scored `dailies`. A recompute only
         // re-scores nights whose raw HR still lives in the store, so a nightly wearer whose card reads
         // "7 of 7 nights" could still leave the engine seeing <4 RHR nights on `dailies`, and Fitness Age
         // never computed (Vitality did , it needs only 3 of ANY input, which is why Body Age showed but
-        // Fitness Age did not). Kept SEPARATE from `fa7` so Vitality (below), which already computes, is
-        // untouched. Gate on the UNION of the pre-rewrite persisted history and THIS pass's fresh scores
+        // Fitness Age did not). Gate on the UNION of the pre-rewrite persisted history and THIS pass's fresh scores
         // (by day, fresh wins), so an RHR night counts whether it survives in the store, was just scored,
         // or came from an import. The gate + compute live in `fitnessAgeRows`, shared with the manual
         // "refresh Fitness Age" button so the two can never drift.
@@ -2668,68 +2567,19 @@ final class IntelligenceEngine: ObservableObject {
             )
         }
 
-        // ── Vitality / Body Age (Phase 7) , weekly, keyed to the week's Saturday ────────────────────
-        // Roll the last 7 days' wearable signals into the mortality-hazard model and upsert a weekly
-        // Vitality (0–100) + Body Age. VitalityEngine gates on ≥3 inputs, so a sparse week writes nothing.
-        // (VO₂max is omitted here , fitness is already its own Fitness Age headline; Vitality leans on
-        // resting HR, sleep duration + regularity, HRV-vs-age-norm, and steps.)
-        // Vitality and the pace of aging are built from the SAME input resolver
-        // (`healthspanInputs`) over different windows — this week for the headline, one rolling 30-day
-        // window per day for the trend. Two builders would let the two numbers describe different people.
-        let vLeanMass = await Self.latestLeanMassKg(repo: repo)
-        let vZone = Self.healthspanZoneDose(zoneMinutesByDay)
-        let vInputs = Self.healthspanInputs(
-            days: Array(fa7), zone: vZone, strength: strengthMinutesByDay,
-            age: Double(profile.age), sex: profile.sex,
-            heightCm: profile.heightCm > 0 ? profile.heightCm : nil, leanMassKg: vLeanMass)
-        if Self.healthspanWeekIsScorable(fa7), let vRes = VitalityEngine.compute(vInputs) {
-            let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
-            _ = try? await store.upsertMetricSeries([
-                MetricPoint(day: satKey, key: "vitality", value: vRes.vitality),
-                MetricPoint(day: satKey, key: "body_age", value: vRes.bodyAge),
-            ], deviceId: computedId)
+        // ── Healthspan (Body Age + Pace of Aging) , one point per day ────────────────────────────────
+        // Six-month Body Age, the 30-day pace projection and each driver's years, from the one resolver in
+        // HealthspanPipeline.swift. This pass's fresh %HRR zone minutes and strength minutes win over their
+        // persisted copies; a model upgrade re-derives the stored history once.
+        var hsZones: [String: (moderate: Double, vigorous: Double)] = [:]
+        for (day, zones) in zoneMinutesHRRByDay where zones.count >= 5 {
+            hsZones[day] = (moderate: zones[0] + zones[1] + zones[2], vigorous: zones[3] + zones[4])
         }
-
-        // ── Pace of Aging , weekly, keyed to the same Saturday ──────────────────────────────────────
-        // Body Age answers "where am I"; the pace answers "where am I heading", which one weekly number
-        // cannot. `PaceOfAgingEngine` fits the drift of the SAME summed log-hazard the Body Age comes from,
-        // so the two cannot tell different stories: a pace above 1 IS a Body Age on its way up.
-        //
-        // It needs months rather than a week, so it reads the persisted history instead of this pass's
-        // 21-day scan — the daily rows plus the three activity series this pass has been writing. The
-        // freshly-computed days win over their persisted copies where both exist.
-        let paceFromDay = Self.dayKey(daysBefore: PaceOfAgingEngine.recentWindowDays
-                                        + PaceOfAgingEngine.trendWindowDays + 2, before: newestDay)
-        let paceDaily = await repo.dailyMetrics(fromDay: paceFromDay, toDay: newestDay)
-        var paceZone: [String: (moderate: Double, vigorous: Double)] = [:]
-        let storedModerate = (try? await store.metricSeries(deviceId: computedId, key: "zone_min_2_3",
-                                                            from: paceFromDay, to: newestDay)) ?? []
-        let storedVigorous = (try? await store.metricSeries(deviceId: computedId, key: "zone_min_4_5",
-                                                            from: paceFromDay, to: newestDay)) ?? []
-        let vigorousByDay = Dictionary(storedVigorous.map { ($0.day, $0.value) }, uniquingKeysWith: { _, b in b })
-        for point in storedModerate {
-            paceZone[point.day] = (moderate: point.value, vigorous: vigorousByDay[point.day] ?? 0)
-        }
-        for (day, dose) in vZone { paceZone[day] = dose }        // this pass's fresh scores win
-        var paceStrength = Dictionary(
-            ((try? await store.metricSeries(deviceId: computedId, key: "strength_min",
-                                            from: paceFromDay, to: newestDay)) ?? [])
-                .map { ($0.day, $0.value) }, uniquingKeysWith: { _, b in b })
-        for (day, minutes) in strengthMinutesByDay { paceStrength[day] = minutes }
-        let paceSamples = Self.healthspanPaceSamples(
-            days: paceDaily, zone: paceZone, strength: paceStrength,
-            age: Double(profile.age), sex: profile.sex,
-            heightCm: profile.heightCm > 0 ? profile.heightCm : nil, leanMassKg: vLeanMass)
-        if let pace = PaceOfAgingEngine.compute(samples: paceSamples) {
-            let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
-            _ = try? await store.upsertMetricSeries([
-                MetricPoint(day: satKey, key: "pace_of_aging", value: pace.pace),
-                // The margin travels WITH the pace, keyed to the same day. A pace read back without it
-                // cannot tell a real trend from a fit through noise, and a dial that cannot tell the
-                // difference will state a direction the data does not support.
-                MetricPoint(day: satKey, key: "pace_of_aging_margin", value: pace.paceMargin),
-            ], deviceId: computedId)
-        }
+        await Self.recomputeHealthspan(store: store, repo: repo, computedId: computedId, newestDay: newestDay,
+                                       age: Double(profile.age), sex: profile.sex,
+                                       profileWeightKg: profile.weightKg > 0 ? profile.weightKg : nil,
+                                       freshDays: dailies, freshZones: hsZones,
+                                       freshStrength: strengthMinutesByDay, tzOffset: tzOffset)
 
         markPostLoopPhase("weekly")
         // ── Steps ESTIMATE (WHOOP 4.0) , DAILY, keyed to each strap-only day ────────────────────────

@@ -152,6 +152,21 @@ public enum HRZones {
         return HRZoneSet(zones: built, maxHR: maxHR, source: custom == nil ? source : "custom")
     }
 
+    /// The five Karvonen heart-rate-RESERVE zones (50/60/70/80/90 % HRR), as bpm bounds: lower =
+    /// restingHR + pct · (maxHR − restingHR). The model WHOOP's Healthspan zone targets are stated in and
+    /// the one `StrainScorer` already uses for strain, so a Healthspan zone minute and a strain zone
+    /// minute are the same minute. Nil when the reserve is not positive.
+    public static func heartRateReserveZones(restingHR: Double, maxHR: Double) -> HRZoneSet? {
+        let reserve = maxHR - restingHR
+        guard restingHR > 0, reserve > 0 else { return nil }
+        let bounds = zoneEdges.map { restingHR + $0 * reserve }
+        let built = (0..<5).map { i in
+            HRZone(number: i + 1, lower: bounds[i], upper: bounds[i + 1],
+                   lowerPct: bounds[i] / maxHR, upperPct: bounds[i + 1] / maxHR)
+        }
+        return HRZoneSet(zones: built, maxHR: maxHR, source: "hrr")
+    }
+
     /// The conventional five inclusive lower bounds, rounded up to whole BPM for an editor. Rounding
     /// up preserves the existing integer-sample classification (e.g. a 93.5 edge starts at 94 bpm).
     public static func defaultLowerBounds(maxHR: Double) -> [Int] {

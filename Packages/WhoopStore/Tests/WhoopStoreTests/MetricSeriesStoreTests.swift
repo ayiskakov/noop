@@ -210,3 +210,33 @@ final class MetricSeriesStoreTests: XCTestCase {
         XCTAssertNil(span)
     }
 }
+
+extension MetricSeriesStoreTests {
+
+    /// A recomputed window that produces fewer keys than last time clears the dropped ones — inside the
+    /// range, for the named keys, for this device only — and leaves everything else alone.
+    func testReplaceMetricSeriesClearsOnlyTheNamedKeysInRange() async throws {
+        let store = try await WhoopStore.inMemory()
+        try await store.upsertMetricSeries([
+            MetricPoint(day: "2026-09-01", key: "a", value: 1),
+            MetricPoint(day: "2026-09-02", key: "a", value: 2),
+            MetricPoint(day: "2026-09-02", key: "b", value: 3),
+            MetricPoint(day: "2026-09-02", key: "keep", value: 4),
+            MetricPoint(day: "2026-09-03", key: "b", value: 5),
+        ], deviceId: "d")
+        try await store.upsertMetricSeries([MetricPoint(day: "2026-09-02", key: "b", value: 9)], deviceId: "other")
+
+        let n = try await store.replaceMetricSeries([MetricPoint(day: "2026-09-02", key: "a", value: 20)],
+                                                    deviceId: "d", keys: ["a", "b"],
+                                                    from: "2026-09-02", to: "2026-09-02")
+        XCTAssertEqual(n, 1)
+        let a = try await store.metricSeries(deviceId: "d", key: "a", from: "0000", to: "9999")
+        XCTAssertEqual(a.map(\.value), [1, 20], "outside the range untouched, inside replaced")
+        let b = try await store.metricSeries(deviceId: "d", key: "b", from: "0000", to: "9999")
+        XCTAssertEqual(b.map(\.day), ["2026-09-03"], "the dropped key is cleared inside the range only")
+        let keep = try await store.metricSeries(deviceId: "d", key: "keep", from: "0000", to: "9999")
+        XCTAssertEqual(keep.count, 1, "an unnamed key is never cleared")
+        let other = try await store.metricSeries(deviceId: "other", key: "b", from: "0000", to: "9999")
+        XCTAssertEqual(other.count, 1, "another device is never touched")
+    }
+}

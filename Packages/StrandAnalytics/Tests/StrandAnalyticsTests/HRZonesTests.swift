@@ -126,3 +126,20 @@ final class HRZonesTests: XCTestCase {
         XCTAssertEqual(tiz.seconds(inZone: 1), tiz.total, accuracy: 1e-9)  // all of it is zone 1
     }
 }
+
+extension HRZonesTests {
+
+    /// Heart-rate-reserve zones: lower bound = rest + pct · (max − rest), the Karvonen model the Healthspan
+    /// zone targets are stated in.
+    func testHeartRateReserveZones() {
+        let z = HRZones.heartRateReserveZones(restingHR: 60, maxHR: 190)!
+        XCTAssertEqual(z.zones.map(\.lower), [125, 138, 151, 164, 177])
+        XCTAssertEqual(z.zones.last!.upper, 190)
+        XCTAssertEqual(z.zoneNumber(forBPM: 124), 0)
+        XCTAssertEqual(z.zoneNumber(forBPM: 151), 3)
+        XCTAssertEqual(z.zoneNumber(forBPM: 164), 4)
+        XCTAssertEqual(z.source, "hrr")
+        XCTAssertNil(HRZones.heartRateReserveZones(restingHR: 190, maxHR: 190))
+        XCTAssertNil(HRZones.heartRateReserveZones(restingHR: 0, maxHR: 190))
+    }
+}
