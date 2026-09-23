@@ -276,11 +276,12 @@ public enum EcgStrip {
     /// Where each beat falls along a strip built by `concatenate`, as a fraction of its width.
     ///
     /// Positions follow the SAMPLE axis the strip draws, not wall time, so a marker stays on its
-    /// complex even when a gap has closed the strip up. A beat at unix time `t` sits in the record
-    /// stamped `floor(t)`, at `(t - ts) * samplesPerSecond` samples in. Beats in records not on the
-    /// strip are dropped.
-    public static func markerFractions(beatTimes: [Double], records: [(ts: Int, sampleCount: Int)],
-                                       samplesPerSecond: Double) -> [Double] {
+    /// complex even when a gap has closed the strip up. Each beat names the record it lies in (by that
+    /// record's `ts`, the key the strip itself is built on) and its sample within that record, so no
+    /// sample rate and no clock arithmetic enters the placement. Beats in records not on the strip are
+    /// dropped.
+    public static func markerFractions(beats: [(ts: Int, sample: Int)],
+                                       records: [(ts: Int, sampleCount: Int)]) -> [Double] {
         let ordered = records.sorted { $0.ts < $1.ts }
         let total = ordered.reduce(0) { $0 + $1.sampleCount }
         guard total > 0 else { return [] }
@@ -290,10 +291,9 @@ public enum EcgStrip {
             offset[r.ts] = (running, r.sampleCount)
             running += r.sampleCount
         }
-        return beatTimes.compactMap { t in
-            let ts = Int((t + 1e-9).rounded(.down))
-            guard let o = offset[ts], o.count > 0 else { return nil }
-            let within = min(o.count - 1, max(0, Int(((t - Double(ts)) * samplesPerSecond).rounded())))
+        return beats.compactMap { beat in
+            guard let o = offset[beat.ts], o.count > 0 else { return nil }
+            let within = min(o.count - 1, max(0, beat.sample))
             return (Double(o.start + within) + 0.5) / Double(total)
         }
     }

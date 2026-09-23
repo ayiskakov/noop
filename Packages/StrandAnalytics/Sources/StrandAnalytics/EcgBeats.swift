@@ -45,10 +45,17 @@ public enum EcgBeats {
 
     /// One detected R peak.
     public struct Beat: Equatable, Sendable {
-        /// Unix seconds, fractional: the record's timestamp plus the sample's offset within it.
-        public let time: Double
+        /// Timestamp of the stored record the peak lies in.
+        public let recordTs: Int
+        /// The peak's sample index within that record.
+        public let sample: Int
         /// Which contiguous gated stretch it came from.
         public let segment: Int
+
+        /// Unix seconds, fractional: the record's timestamp plus the sample's offset within it. Taken
+        /// from the peak's own record, never from the stretch's first one, because a stretch is
+        /// contiguous by record index and the strap's clock can be corrected partway through it.
+        public var time: Double { Double(recordTs) + Double(sample) / EcgBeats.sampleRate }
     }
 
     /// The gap between two successive beats of one stretch.
@@ -98,11 +105,12 @@ public enum EcgBeats {
     /// Detect beats across a recording's stored records, in any order.
     public static func analyse(_ records: [EcgCandidateSample]) -> Result {
         let ordered = records.sorted { ($0.recordIndex ?? $0.ts, $0.ts) < ($1.recordIndex ?? $1.ts, $1.ts) }
+        let perRecord = Int(sampleRate)
         var segments: [[EcgCandidateSample]] = []
         var current: [EcgCandidateSample] = []
         for record in ordered {
             let usable = record.quality >= requiredQuality
-                && record.samples.count == Int(sampleRate)
+                && record.samples.count == perRecord
                 && record.declaredCount == record.samples.count
             guard usable else {
                 if !current.isEmpty { segments.append(current); current = [] }
@@ -123,13 +131,15 @@ public enum EcgBeats {
         for (s, segment) in segments.enumerated() {
             let samples = segment.flatMap { $0.samples.map(Double.init) }
             let peaks = detect(samples, sampleRate: sampleRate)
-            let start = Double(segment[0].ts)
-            let times = peaks.map { start + Double($0) / sampleRate }
-            beats += times.map { Beat(time: $0, segment: s) }
-            for i in times.indices.dropFirst() {
-                let ms = (times[i] - times[i - 1]) * 1_000
+            // Every record here holds exactly `perRecord` samples, so a peak's record is its index over
+            // that. Intervals are counted in samples: the stretch is continuous on the strap's sample
+            // clock even where its wall clock was corrected.
+            let stretch = peaks.map { Beat(recordTs: segment[$0 / perRecord].ts, sample: $0 % perRecord, segment: s) }
+            beats += stretch
+            for i in peaks.indices.dropFirst() {
+                let ms = Double(peaks[i] - peaks[i - 1]) / sampleRate * 1_000
                 if rrRangeMs.contains(ms) {
-                    intervals.append(Interval(endTime: times[i], ms: ms, segment: s))
+                    intervals.append(Interval(endTime: stretch[i].time, ms: ms, segment: s))
                 } else {
                     rejected += 1
                 }

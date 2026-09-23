@@ -378,9 +378,8 @@ struct EcgReviewView: View {
                       seconds: seconds,
                       contactFlags: visible.flatMap(\.contactFlags),
                       markers: EcgStrip.markerFractions(
-                          beatTimes: (beats?.beats ?? []).map(\.time),
-                          records: visible.map { (ts: $0.ts, sampleCount: $0.samples.count) },
-                          samplesPerSecond: Self.nominalSamplesPerSecond))
+                          beats: (beats?.beats ?? []).map { (ts: $0.recordTs, sample: $0.sample) },
+                          records: visible.map { (ts: $0.ts, sampleCount: $0.samples.count) }))
     }
 
     // MARK: - Loading

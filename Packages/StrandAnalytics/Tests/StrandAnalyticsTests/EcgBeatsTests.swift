@@ -18,8 +18,12 @@ final class EcgBeatsTests: XCTestCase {
 
     /// `seconds` full records of a synthetic ECG at `bpm`, with ±3 % alternating R-R jitter. Returns the
     /// records and the injected R-peak times (seconds from the start).
+    ///
+    /// `clockJump` moves every record from `at` onwards by `seconds` of wall clock, leaving the record
+    /// index running on, as a clock correction partway through a session does.
     private func recording(bpm: Double, seconds: Int, polarity: Double = -1, hum: Double = 0.5,
-                           quality: Int = 3, startIndex: Int = 1_000, ts0: Int = 1_790_000_000)
+                           quality: Int = 3, startIndex: Int = 1_000, ts0: Int = 1_790_000_000,
+                           clockJump: (at: Int, seconds: Int)? = nil)
         -> (records: [EcgCandidateSample], rPeaks: [Double]) {
         let fs = EcgBeats.sampleRate
         let n = seconds * Int(fs)
@@ -46,7 +50,7 @@ final class EcgBeatsTests: XCTestCase {
             x[i] = v
         }
         let records = (0..<seconds).map { s in
-            EcgCandidateSample(ts: ts0 + s,
+            EcgCandidateSample(ts: ts0 + s + (clockJump.map { s >= $0.at ? $0.seconds : 0 } ?? 0),
                                samples: x[(s * 500)..<((s + 1) * 500)].map { Int($0.rounded()) },
                                recordIndex: startIndex + s, quality: quality)
         }
@@ -121,11 +125,36 @@ final class EcgBeatsTests: XCTestCase {
     func testMarkersFollowTheSampleAxisAcrossAGap() {
         // Records at t=10, 11 and (after a gap) 20, 500 samples each: 1,500 samples on the strip.
         let records = [(ts: 10, sampleCount: 500), (ts: 11, sampleCount: 500), (ts: 20, sampleCount: 500)]
-        let f = EcgStrip.markerFractions(beatTimes: [10.0, 11.5, 20.998, 15.0], records: records,
-                                         samplesPerSecond: 500)
-        XCTAssertEqual(f.count, 3)   // 15.0 lies in the gap and has no place on the strip
+        let f = EcgStrip.markerFractions(beats: [(ts: 10, sample: 0), (ts: 11, sample: 250),
+                                                 (ts: 20, sample: 499), (ts: 15, sample: 0)],
+                                         records: records)
+        XCTAssertEqual(f.count, 3)   // record 15 lies in the gap and has no place on the strip
         XCTAssertEqual(f[0], 0.5 / 1_500, accuracy: 1e-12)
         XCTAssertEqual(f[1], 750.5 / 1_500, accuracy: 1e-12)
         XCTAssertEqual(f[2], 1_499.5 / 1_500, accuracy: 1e-12)
+    }
+
+    /// A clock correction partway through a session leaves the record index running on, so the stretch
+    /// stays one. Each beat must still be stamped from its own record: stamped from the stretch's start,
+    /// the beats after the correction named records five seconds early and their markers landed on
+    /// other complexes or on none.
+    func testAClockCorrectionMidStretchKeepsEveryBeatOnItsComplex() throws {
+        let (records, peaks) = recording(bpm: 80, seconds: 20, clockJump: (at: 10, seconds: 5))
+        let result = EcgBeats.analyse(records)
+        XCTAssertEqual(Set(result.beats.map(\.segment)), [0])
+        XCTAssertEqual(result.beats.count, peaks.count)
+        // Intervals are counted on the sample clock, so the one spanning the correction is ordinary.
+        XCTAssertEqual(result.rejectedIntervals, 0)
+        XCTAssertLessThan(try XCTUnwrap(result.rrMs.max()), 60_000 / 80 * 1.1)
+        for (beat, peak) in zip(result.beats, peaks) {
+            let record = try XCTUnwrap(records.firstIndex { $0.ts == beat.recordTs })
+            XCTAssertEqual(Double(record * 500 + beat.sample), peak * 500, accuracy: 5)
+        }
+        let marks = EcgStrip.markerFractions(beats: result.beats.map { (ts: $0.recordTs, sample: $0.sample) },
+                                             records: records.map { (ts: $0.ts, sampleCount: $0.samples.count) })
+        XCTAssertEqual(marks.count, peaks.count)
+        for (mark, peak) in zip(marks, peaks) {
+            XCTAssertEqual(mark * 10_000, peak * 500, accuracy: 5)
+        }
     }
 }
