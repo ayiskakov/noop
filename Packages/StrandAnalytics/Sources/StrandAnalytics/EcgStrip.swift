@@ -10,12 +10,11 @@ import Foundation
 ///
 /// ## What this does NOT compute
 ///
-/// No heart rate, no interval, no rhythm classification, no volts. `ECG_FEATURE_NOTES.md` §5 records
-/// why: beat-to-beat accuracy against the strap's own optical HR was never established (r ≈ 0.43 at
-/// best, and worse with a better detector), for a reason that is structural rather than fixable — wrist
-/// single-lead ECG needs stillness, stillness means the heart rate barely moves, and anything that moves
-/// it properly destroys the trace. A number on this screen would be the #194 PPG→HR withdrawal again.
-/// The strip shows the SHAPE of what the strap recorded and nothing derived from it.
+/// No beats, rates or intervals, and no volts. Beats and the heart rate come from `EcgBeats`, the
+/// rhythm measurements from `EcgRhythmFacts`; this file only places the beats on the strip's columns
+/// (`markerFractions`), so the count can be checked against the trace by eye. The r ≈ 0.43 against
+/// optical HR once cited here to refuse any rate predates the documented R16 decode; `EcgBeats` has the
+/// comparison that replaced it.
 public enum EcgStrip {
 
     // MARK: - Records in, recordings out

@@ -92,11 +92,18 @@ public struct EcgStripChart: View {
         .accessibilityLabel(Text("Waveform strip", bundle: .module))
         // Says what it is and what it is not. A waveform has no useful VoiceOver rendering as a shape,
         // so the accessible description is the honest summary rather than a described picture. A strip
-        // drawn without a time scale announces none, rather than "0 seconds".
-        .accessibilityValue(seconds > 0
-            ? Text("\(Int(seconds.rounded())) seconds of unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown.",
+        // drawn without a time scale announces none, rather than "0 seconds". The beat ticks, which a
+        // sighted reader checks a count against, are announced as a count.
+        .accessibilityValue(accessibleSummary)
+    }
+
+    private var accessibleSummary: Text {
+        let waveform = seconds > 0
+            ? Text("\(Int(seconds.rounded())) seconds of unvalidated sensor waveform. Uncalibrated amplitude.",
                    bundle: .module)
-            : Text("Unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown.", bundle: .module))
+            : Text("Unvalidated sensor waveform. Uncalibrated amplitude.", bundle: .module)
+        guard !markers.isEmpty else { return waveform }
+        return waveform + Text(verbatim: " ") + Text("Beats marked: \(markers.count).", bundle: .module)
     }
 
     // MARK: - Grid

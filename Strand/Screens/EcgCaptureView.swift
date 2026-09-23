@@ -9,8 +9,8 @@ import WhoopProtocol
 /// ## What the screen draws, and the line it does not cross
 ///
 /// The live trace is the strap's own filtered R17 stream (`LiveState.ecgLive`), paced for display by
-/// `EcgLiveFeed`. Like `EcgReviewView`, it shows a shape and derives nothing from it: no heart rate, no
-/// rhythm, no classification. The trace has no time grid, because the R17 rate is not measured
+/// `EcgLiveFeed`. Unlike `EcgReviewView`, which counts beats in stored R16 records, it shows a shape and
+/// derives nothing from it: no heart rate, no rhythm, no classification. The trace has no time grid, because the R17 rate is not measured
 /// (`docs/PROTOCOL_ECG.md` §Hardware observations), and it breaks where record indices were skipped.
 /// The status line says only whether data is arriving; the strap's presence flag and quality code are
 /// shown beside it as the raw values they are, never as contact or a grade.

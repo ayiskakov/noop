@@ -204770,130 +204770,66 @@
         }
       }
     },
-    "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. No heart rate or rhythm is shown, because nothing here has been validated to produce one. If you have symptoms or a concern about your heart, talk to a doctor.": {
+    "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate and rhythm details shown are experimental measurements of the beats, not a diagnosis. If you have symptoms or a concern about your heart, talk to a doctor.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dies ist eine unvalidierte Sensor-Wellenform, dekodiert von deinem eigenen Band. NOOP ist kein Medizinprodukt und dies ist kein EKG-Test. Es kann keine Herzerkrankung erkennen, diagnostizieren, ausschließen oder überwachen. Es werden weder Herzfrequenz noch Rhythmus angezeigt, weil hier nichts validiert wurde, um so etwas zu liefern. Bei Symptomen oder Sorgen um dein Herz sprich mit einer Ärztin oder einem Arzt."
+            "value": "Dies ist eine nicht validierte Sensorkurve, dekodiert von deinem eigenen Band. NOOP ist kein Medizinprodukt, und dies ist kein EKG-Test. Es kann keine Herzerkrankung erkennen, diagnostizieren, ausschließen oder überwachen. Die angezeigte Herzfrequenz und die Rhythmusdetails sind experimentelle Messungen der Schläge, keine Diagnose. Wenn du Beschwerden oder Bedenken wegen deines Herzens hast, sprich mit einer Ärztin oder einem Arzt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. No heart rate or rhythm is shown, because nothing here has been validated to produce one. If you have symptoms or a concern about your heart, talk to a doctor."
+            "value": "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate and rhythm details shown are experimental measurements of the beats, not a diagnosis. If you have symptoms or a concern about your heart, talk to a doctor."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta es una forma de onda del sensor sin validar, descodificada de tu propia pulsera. NOOP no es un dispositivo médico y esto no es una prueba de ECG. No puede detectar, diagnosticar, descartar ni monitorizar ninguna afección cardiaca. No se muestra frecuencia cardiaca ni ritmo, porque nada aquí se ha validado para producirlos. Si tienes síntomas o dudas sobre tu corazón, habla con un médico."
+            "value": "Esta es una forma de onda de sensor no validada, decodificada de tu propia pulsera. NOOP no es un dispositivo médico y esto no es una prueba de ECG. No puede detectar, diagnosticar, descartar ni vigilar ninguna afección cardiaca. La frecuencia cardiaca y los detalles del ritmo mostrados son mediciones experimentales de los latidos, no un diagnóstico. Si tienes síntomas o te preocupa tu corazón, habla con un médico."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il s'agit d'une forme d'onde de capteur non validée, décodée depuis votre propre bracelet. NOOP n'est pas un dispositif médical et ceci n'est pas un test ECG. Cela ne peut ni détecter, ni diagnostiquer, ni écarter, ni surveiller une affection cardiaque. Aucune fréquence cardiaque ni aucun rythme n'est affiché, car rien ici n'a été validé pour en produire. En cas de symptômes ou d'inquiétude concernant votre cœur, consultez un médecin."
+            "value": "Ceci est une courbe de capteur non validée, décodée depuis ton propre bracelet. NOOP n'est pas un dispositif médical et ceci n'est pas un test ECG. Il ne peut détecter, diagnostiquer, exclure ni surveiller aucune maladie cardiaque. La fréquence cardiaque et les détails du rythme affichés sont des mesures expérimentales des battements, pas un diagnostic. En cas de symptômes ou d'inquiétude pour ton cœur, parle à un médecin."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa è una forma d'onda del sensore non convalidata, decodificata dal tuo stesso cinturino. NOOP non è un dispositivo medico e questo non è un test ECG. Non può rilevare, diagnosticare, escludere o monitorare alcuna condizione cardiaca. Non viene mostrata alcuna frequenza cardiaca né alcun ritmo, perché nulla qui è stato convalidato per produrli. Se hai sintomi o dubbi sul tuo cuore, parla con un medico."
+            "value": "Questa è una forma d'onda del sensore non validata, decodificata dal tuo cinturino. NOOP non è un dispositivo medico e questo non è un test ECG. Non può rilevare, diagnosticare, escludere né monitorare alcuna condizione cardiaca. La frequenza cardiaca e i dettagli del ritmo mostrati sono misurazioni sperimentali dei battiti, non una diagnosi. Se hai sintomi o dubbi sul tuo cuore, parlane con un medico."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "To niezweryfikowany przebieg z czujnika, zdekodowany z Twojej własnej opaski. NOOP nie jest wyrobem medycznym, a to nie jest badanie EKG. Nie wykrywa, nie diagnozuje, nie wyklucza ani nie monitoruje żadnej choroby serca. Nie pokazujemy tętna ani rytmu, ponieważ nic tutaj nie zostało zweryfikowane, aby je wyznaczać. W razie objawów lub obaw o serce skontaktuj się z lekarzem."
+            "value": "To niezweryfikowany przebieg z czujnika, odczytany z Twojej opaski. NOOP nie jest wyrobem medycznym, a to nie jest badanie EKG. Nie wykrywa, nie diagnozuje, nie wyklucza ani nie monitoruje żadnej choroby serca. Pokazane tętno i szczegóły rytmu to eksperymentalne pomiary uderzeń, a nie diagnoza. Jeśli masz objawy lub obawy dotyczące serca, porozmawiaj z lekarzem."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta é uma forma de onda do sensor não validada, descodificada da sua própria pulseira. A NOOP não é um dispositivo médico e isto não é um exame de ECG. Não deteta, diagnostica, exclui nem monitoriza qualquer problema cardíaco. Não é apresentada frequência cardíaca nem ritmo, porque nada aqui foi validado para os produzir. Se tiver sintomas ou preocupações com o seu coração, fale com um médico."
+            "value": "Esta é uma forma de onda de sensor não validada, descodificada da tua própria pulseira. O NOOP não é um dispositivo médico e isto não é um teste de ECG. Não consegue detetar, diagnosticar, excluir nem monitorizar qualquer doença cardíaca. A frequência cardíaca e os detalhes do ritmo mostrados são medições experimentais dos batimentos, não um diagnóstico. Se tiveres sintomas ou preocupações com o coração, fala com um médico."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это непроверенный сигнал датчика, декодированный с вашего собственного браслета. NOOP не является медицинским устройством, и это не ЭКГ-исследование. Он не может выявить, диагностировать, исключить или контролировать какое-либо заболевание сердца. Пульс и ритм не показываются, поскольку ничто здесь не проверено для их определения. При симптомах или беспокойстве о сердце обратитесь к врачу."
+            "value": "Это непроверенная кривая датчика, расшифрованная с вашего браслета. NOOP — не медицинское изделие, и это не ЭКГ-обследование. Он не может выявить, диагностировать, исключить или отслеживать заболевания сердца. Показанные пульс и детали ритма — экспериментальные измерения ударов, а не диагноз. Если у вас есть симптомы или беспокойство о сердце, обратитесь к врачу."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这是从你自己的手环解码出的未经验证的传感器波形。NOOP 不是医疗设备，这也不是心电图检查。它无法检测、诊断、排除或监测任何心脏疾病。这里不显示心率或节律，因为没有任何内容经过验证可以得出这些结果。如果你有症状或对心脏有顾虑，请咨询医生。"
+            "value": "这是从你自己的手环解码出的未经验证的传感器波形。NOOP 不是医疗设备，这也不是心电图检查。它无法检测、诊断、排除或监测任何心脏疾病。显示的心率和节律详情是对心跳的实验性测量，而非诊断。如有症状或对心脏有疑虑，请咨询医生。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這是從你自己的手環解碼出的未經驗證的感測器波形。NOOP 不是醫療裝置，這也不是心電圖檢查。它無法偵測、診斷、排除或監測任何心臟疾病。這裡不顯示心率或節律，因為沒有任何內容經過驗證可以得出這些結果。如果你有症狀或對心臟有疑慮，請諮詢醫師。"
-          }
-        }
-      }
-    },
-    "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dies ist eine nicht validierte Sensorkurve, dekodiert von deinem eigenen Band. NOOP ist kein Medizinprodukt, und dies ist kein EKG-Test. Es kann keine Herzerkrankung erkennen, diagnostizieren, ausschließen oder überwachen. Die angezeigte Herzfrequenz ist eine experimentelle Zählung der Schläge, keine Rhythmusanalyse. Wenn du Beschwerden oder Bedenken wegen deines Herzens hast, sprich mit einer Ärztin oder einem Arzt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta es una forma de onda de sensor no validada, decodificada de tu propia pulsera. NOOP no es un dispositivo médico y esto no es una prueba de ECG. No puede detectar, diagnosticar, descartar ni vigilar ninguna afección cardiaca. La frecuencia cardiaca mostrada es un recuento experimental de latidos, no un análisis del ritmo. Si tienes síntomas o te preocupa tu corazón, habla con un médico."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ceci est une courbe de capteur non validée, décodée depuis ton propre bracelet. NOOP n'est pas un dispositif médical et ceci n'est pas un test ECG. Il ne peut détecter, diagnostiquer, exclure ni surveiller aucune maladie cardiaque. La fréquence cardiaque affichée est un comptage expérimental des battements, pas une analyse du rythme. En cas de symptômes ou d'inquiétude pour ton cœur, parle à un médecin."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa è una forma d'onda del sensore non validata, decodificata dal tuo cinturino. NOOP non è un dispositivo medico e questo non è un test ECG. Non può rilevare, diagnosticare, escludere né monitorare alcuna condizione cardiaca. La frequenza cardiaca mostrata è un conteggio sperimentale dei battiti, non un'analisi del ritmo. Se hai sintomi o dubbi sul tuo cuore, parlane con un medico."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "To niezweryfikowany przebieg z czujnika, odczytany z Twojej opaski. NOOP nie jest wyrobem medycznym, a to nie jest badanie EKG. Nie wykrywa, nie diagnozuje, nie wyklucza ani nie monitoruje żadnej choroby serca. Pokazane tętno to eksperymentalne zliczenie uderzeń, a nie analiza rytmu. Jeśli masz objawy lub obawy dotyczące serca, porozmawiaj z lekarzem."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta é uma forma de onda de sensor não validada, descodificada da tua própria pulseira. O NOOP não é um dispositivo médico e isto não é um teste de ECG. Não consegue detetar, diagnosticar, excluir nem monitorizar qualquer doença cardíaca. A frequência cardíaca mostrada é uma contagem experimental de batimentos, não uma análise do ritmo. Se tiveres sintomas ou preocupações com o coração, fala com um médico."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это непроверенная кривая датчика, расшифрованная с вашего браслета. NOOP — не медицинское изделие, и это не ЭКГ-обследование. Он не может выявить, диагностировать, исключить или отслеживать заболевания сердца. Показанный пульс — экспериментальный подсчёт ударов, а не анализ ритма. Если у вас есть симптомы или беспокойство о сердце, обратитесь к врачу."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这是从你自己的手环解码出的未经验证的传感器波形。NOOP 不是医疗设备，这也不是心电图检查。它无法检测、诊断、排除或监测任何心脏疾病。显示的心率是实验性的心跳计数，而非心律分析。如有症状或对心脏有疑虑，请咨询医生。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "這是從你自己的手環解碼出的未經驗證的感測器波形。NOOP 不是醫療裝置，這也不是心電圖檢查。它無法偵測、診斷、排除或監測任何心臟疾病。顯示的心率是實驗性的心跳計數，而非心律分析。如有症狀或對心臟有疑慮，請諮詢醫生。"
+            "value": "這是從你自己的手環解碼出的未經驗證的感測器波形。NOOP 不是醫療裝置，這也不是心電圖檢查。它無法偵測、診斷、排除或監測任何心臟疾病。顯示的心率和節律詳情是對心跳的實驗性測量，而非診斷。如有症狀或對心臟有疑慮，請諮詢醫生。"
           }
         }
       }
@@ -215079,66 +215015,66 @@
         }
       }
     },
-    "View the raw waveform your WHOOP MG recorded, as a scrollable strip. UNVALIDATED instrumentation, not a medical ECG — no heart rate or rhythm is shown, because nothing here has been validated to produce one. Read-only; never writes to the strap.": {
+    "View the raw waveform your WHOOP MG recorded, as a scrollable strip, with the beats marked, an experimental heart rate and rhythm measurements. UNVALIDATED instrumentation, not a medical ECG or a diagnosis. Read-only; never writes to the strap.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeigt die Rohwellenform, die dein WHOOP MG aufgezeichnet hat, als scrollbaren Streifen. UNVALIDIERTE Instrumentierung, kein medizinisches EKG – weder Herzfrequenz noch Rhythmus werden angezeigt, weil hier nichts validiert wurde, um so etwas zu liefern. Nur lesend; schreibt nie auf das Band."
+            "value": "Zeigt die Rohwellenform, die dein WHOOP MG aufgezeichnet hat, als scrollbaren Streifen, mit markierten Schlägen, einer experimentellen Herzfrequenz und Rhythmusmessungen. UNVALIDIERTE Instrumentierung, kein medizinisches EKG und keine Diagnose. Nur lesend; schreibt nie auf das Band."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View the raw waveform your WHOOP MG recorded, as a scrollable strip. UNVALIDATED instrumentation, not a medical ECG — no heart rate or rhythm is shown, because nothing here has been validated to produce one. Read-only; never writes to the strap."
+            "value": "View the raw waveform your WHOOP MG recorded, as a scrollable strip, with the beats marked, an experimental heart rate and rhythm measurements. UNVALIDATED instrumentation, not a medical ECG or a diagnosis. Read-only; never writes to the strap."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muestra como una franja desplazable la forma de onda sin procesar que grabó tu WHOOP MG. Instrumentación SIN VALIDAR, no es un ECG médico: no se muestra frecuencia cardiaca ni ritmo, porque nada aquí se ha validado para producirlos. Solo lectura; nunca escribe en la pulsera."
+            "value": "Muestra como una franja desplazable la forma de onda sin procesar que grabó tu WHOOP MG, con los latidos marcados, una frecuencia cardiaca experimental y mediciones del ritmo. Instrumentación SIN VALIDAR, no es un ECG médico ni un diagnóstico. Solo lectura; nunca escribe en la pulsera."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiche la forme d'onde brute enregistrée par votre WHOOP MG sous forme de bande défilante. Instrumentation NON VALIDÉE, pas un ECG médical — aucune fréquence cardiaque ni aucun rythme n'est affiché, car rien ici n'a été validé pour en produire. Lecture seule ; n'écrit jamais sur le bracelet."
+            "value": "Affiche la forme d'onde brute enregistrée par votre WHOOP MG sous forme de bande défilante, avec les battements marqués, une fréquence cardiaque expérimentale et des mesures du rythme. Instrumentation NON VALIDÉE, ni un ECG médical ni un diagnostic. Lecture seule ; n'écrit jamais sur le bracelet."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra la forma d'onda grezza registrata dal tuo WHOOP MG come striscia scorrevole. Strumentazione NON CONVALIDATA, non un ECG medico: non viene mostrata alcuna frequenza cardiaca né alcun ritmo, perché nulla qui è stato convalidato per produrli. Sola lettura; non scrive mai sul cinturino."
+            "value": "Mostra la forma d'onda grezza registrata dal tuo WHOOP MG come striscia scorrevole, con i battiti segnati, una frequenza cardiaca sperimentale e misure del ritmo. Strumentazione NON CONVALIDATA, non un ECG medico né una diagnosi. Sola lettura; non scrive mai sul cinturino."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pokazuje surowy przebieg zarejestrowany przez WHOOP MG jako przewijany pasek. NIEZWERYFIKOWANE oprzyrządowanie, nie medyczne EKG — nie pokazujemy tętna ani rytmu, ponieważ nic tutaj nie zostało zweryfikowane, aby je wyznaczać. Tylko odczyt; nigdy nie zapisuje do opaski."
+            "value": "Pokazuje surowy przebieg zarejestrowany przez WHOOP MG jako przewijany pasek, z zaznaczonymi uderzeniami, eksperymentalnym tętnem i pomiarami rytmu. NIEZWERYFIKOWANE oprzyrządowanie, nie medyczne EKG ani diagnoza. Tylko odczyt; nigdy nie zapisuje do opaski."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra a forma de onda bruta gravada pelo seu WHOOP MG como uma faixa deslizável. Instrumentação NÃO VALIDADA, não é um ECG médico — não é apresentada frequência cardíaca nem ritmo, porque nada aqui foi validado para os produzir. Apenas leitura; nunca escreve na pulseira."
+            "value": "Mostra a forma de onda bruta gravada pelo seu WHOOP MG como uma faixa deslizável, com os batimentos marcados, uma frequência cardíaca experimental e medições do ritmo. Instrumentação NÃO VALIDADA, não é um ECG médico nem um diagnóstico. Apenas leitura; nunca escreve na pulseira."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Показывает исходный сигнал, записанный вашим WHOOP MG, в виде прокручиваемой полосы. НЕПРОВЕРЕННАЯ диагностика, не медицинская ЭКГ — пульс и ритм не показываются, поскольку ничто здесь не проверено для их определения. Только чтение; никогда не пишет в браслет."
+            "value": "Показывает исходный сигнал, записанный вашим WHOOP MG, в виде прокручиваемой полосы с отмеченными ударами, экспериментальным пульсом и измерениями ритма. НЕПРОВЕРЕННЫЕ измерительные данные, не медицинская ЭКГ и не диагноз. Только чтение; никогда не пишет в браслет."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "以可滚动的波形条查看 WHOOP MG 记录的原始波形。未经验证的检测数据，不是医用心电图 — 不显示心率或节律，因为没有任何内容经过验证可以得出这些结果。只读；绝不写入手环。"
+            "value": "以可滚动的波形条查看 WHOOP MG 记录的原始波形，并标出心跳，附实验性心率和节律测量。未经验证的检测数据，不是医用心电图，也不是诊断。只读；绝不写入手环。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "以可捲動的波形條檢視 WHOOP MG 記錄的原始波形。未經驗證的檢測資料，不是醫用心電圖 — 不顯示心率或節律，因為沒有任何內容經過驗證可以得出這些結果。唯讀；絕不寫入手環。"
+            "value": "以可捲動的波形條檢視 WHOOP MG 記錄的原始波形，並標出心跳，附實驗性心率和節律測量。未經驗證的檢測資料，不是醫用心電圖，也不是診斷。唯讀；絕不寫入手環。"
           }
         }
       }

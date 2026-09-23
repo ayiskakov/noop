@@ -7,12 +7,13 @@ import WhoopProtocol
 ///
 /// ## What this screen is, and the line it does not cross
 ///
-/// It shows the SHAPE of what the strap recorded, plus one derived figure: a heart rate counted from R
-/// peaks (`EcgBeats`), with the peaks marked on the strip so the count can be checked by eye. No
-/// interval analysis beyond R-R, no rhythm classification, no voltage, no "normal" or "abnormal". The
-/// rate is shown only from records the strap itself rated quality 3, where it tracked the strap's
-/// optical HR across 82–116 bpm (see `EcgBeats` for the comparison). It is experimental and feeds
-/// nothing else.
+/// It shows the SHAPE of what the strap recorded, and what is counted from its R peaks (`EcgBeats`): a
+/// heart rate, with the peaks marked on the strip so the count can be checked by eye, and rhythm
+/// measurements (`EcgRhythmFacts`): the rate's range, the share of the analysed time above and below
+/// fixed rates, beat-to-beat variation, and the R-R intervals in order. No voltage, and no rhythm is
+/// named: nothing is called "normal", "abnormal" or a condition. Only records the strap itself rated
+/// quality 3 are counted, where the rate tracked the strap's optical HR across 82–116 bpm (see
+/// `EcgBeats` for the comparison). It is experimental and feeds nothing else.
 ///
 /// The same rule governs what IS shown. The strap's own status codes appear as the raw codes they are,
 /// because `docs/PROTOCOL_ECG.md` says the quality values are "partial observed outcomes, not an
@@ -95,7 +96,7 @@ struct EcgReviewView: View {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(StrandPalette.statusWarning)
                 }
-                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate shown is an experimental count of beats, not a rhythm analysis. If you have symptoms or a concern about your heart, talk to a doctor.")
+                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate and rhythm details shown are experimental measurements of the beats, not a diagnosis. If you have symptoms or a concern about your heart, talk to a doctor.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }

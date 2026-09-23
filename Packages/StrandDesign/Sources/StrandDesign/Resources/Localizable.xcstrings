@@ -407,66 +407,66 @@
         }
       }
     },
-    "%lld seconds of unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown.": {
+    "%lld seconds of unvalidated sensor waveform. Uncalibrated amplitude.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld Sekunden unvalidierter Sensor-Wellenform. Amplitude unkalibriert, keine Herzfrequenz angezeigt."
+            "value": "%lld Sekunden unvalidierter Sensor-Wellenform. Amplitude unkalibriert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld seconds of unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown."
+            "value": "%lld seconds of unvalidated sensor waveform. Uncalibrated amplitude."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld segundos de forma de onda del sensor sin validar. Amplitud sin calibrar, no se muestra frecuencia cardiaca."
+            "value": "%lld segundos de forma de onda del sensor sin validar. Amplitud sin calibrar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld secondes de forme d'onde du capteur, non validée. Amplitude non étalonnée, aucune fréquence cardiaque affichée."
+            "value": "%lld secondes de forme d'onde du capteur, non validée. Amplitude non étalonnée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld secondi di forma d'onda del sensore non convalidata. Ampiezza non calibrata, nessuna frequenza cardiaca mostrata."
+            "value": "%lld secondi di forma d'onda del sensore non convalidata. Ampiezza non calibrata."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld s niezweryfikowanego przebiegu z czujnika. Amplituda nieskalibrowana, tętno nie jest pokazywane."
+            "value": "%lld s niezweryfikowanego przebiegu z czujnika. Amplituda nieskalibrowana."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld segundos de forma de onda do sensor não validada. Amplitude não calibrada, sem frequência cardíaca apresentada."
+            "value": "%lld segundos de forma de onda do sensor não validada. Amplitude não calibrada."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld с непроверенного сигнала датчика. Амплитуда не откалибрована, пульс не показан."
+            "value": "%lld с непроверенного сигнала датчика. Амплитуда не откалибрована."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld 秒未经验证的传感器波形。振幅未校准，不显示心率。"
+            "value": "%lld 秒未经验证的传感器波形。振幅未校准。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld 秒未經驗證的感測器波形。振幅未校準，不顯示心率。"
+            "value": "%lld 秒未經驗證的感測器波形。振幅未校準。"
           }
         }
       }
@@ -1304,6 +1304,70 @@
         }
       },
       "shouldTranslate": false
+    },
+    "Beats marked: %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierte Schläge: %lld."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beats marked: %lld."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latidos marcados: %lld."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battements marqués : %lld."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battiti segnati: %lld."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaznaczone uderzenia: %lld."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batimentos marcados: %lld."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмечено ударов: %lld."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已标记心跳：%lld。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已標記心跳：%lld。"
+          }
+        }
+      }
     },
     "Body / Regular 15 — the thread of you, read in full.": {
       "comment": "Xcode #Preview specimen: this literal exists only inside an `#if DEBUG` preview block, so no release build can reach it and it is not user-facing copy. Translating it produced nonsense in the locales held to zero tolerance (fr rendered \"Bold\" as \"Or\", four languages read the animation \"lift\" as an elevator), which is what this flag prevents.",
@@ -5700,66 +5764,66 @@
         }
       }
     },
-    "Unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown.": {
+    "Unvalidated sensor waveform. Uncalibrated amplitude.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unvalidierte Sensor-Wellenform. Amplitude unkalibriert, keine Herzfrequenz angezeigt."
+            "value": "Unvalidierte Sensor-Wellenform. Amplitude unkalibriert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown."
+            "value": "Unvalidated sensor waveform. Uncalibrated amplitude."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Forma de onda del sensor sin validar. Amplitud sin calibrar, no se muestra frecuencia cardiaca."
+            "value": "Forma de onda del sensor sin validar. Amplitud sin calibrar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Forme d'onde du capteur, non validée. Amplitude non étalonnée, aucune fréquence cardiaque affichée."
+            "value": "Forme d'onde du capteur, non validée. Amplitude non étalonnée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Forma d'onda del sensore non convalidata. Ampiezza non calibrata, nessuna frequenza cardiaca mostrata."
+            "value": "Forma d'onda del sensore non convalidata. Ampiezza non calibrata."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niezweryfikowany przebieg z czujnika. Amplituda nieskalibrowana, tętno nie jest pokazywane."
+            "value": "Niezweryfikowany przebieg z czujnika. Amplituda nieskalibrowana."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Forma de onda do sensor não validada. Amplitude não calibrada, sem frequência cardíaca apresentada."
+            "value": "Forma de onda do sensor não validada. Amplitude não calibrada."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Непроверенный сигнал датчика. Амплитуда не откалибрована, пульс не показан."
+            "value": "Непроверенный сигнал датчика. Амплитуда не откалибрована."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "未经验证的传感器波形。振幅未校准，不显示心率。"
+            "value": "未经验证的传感器波形。振幅未校准。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "未經驗證的感測器波形。振幅未校準，不顯示心率。"
+            "value": "未經驗證的感測器波形。振幅未校準。"
           }
         }
       }
