@@ -235,6 +235,25 @@ public enum EcgStrip {
         return out
     }
 
+    /// The column each gap position falls in, for a series of `sampleCount` samples reduced to `columns`
+    /// columns by `envelope(_:columns:)`: the indices a strip must break the trace after.
+    ///
+    /// Exact against `envelope`'s own column bounds. Scaling the index (`i * columns / sampleCount`) can
+    /// land one column early where a column boundary falls between two samples, which moves the break
+    /// off the gap it marks.
+    public static func breakColumns(gapAfter: Set<Int>, sampleCount: Int, columns: Int) -> Set<Int> {
+        guard sampleCount > 0, columns > 0 else { return [] }
+        let n = Swift.min(columns, sampleCount)
+        return Set(gapAfter.compactMap { i -> Int? in
+            guard i >= 0, i < sampleCount else { return nil }
+            // `envelope` column c starts at c * sampleCount / n; take the last start at or before i.
+            var c = i * n / sampleCount
+            while c + 1 < n, (c + 1) * sampleCount / n <= i { c += 1 }
+            while c > 0, c * sampleCount / n > i { c -= 1 }
+            return c
+        })
+    }
+
     /// The vertical range to draw `columns` in: the data's own extent, padded, and never zero-height.
     ///
     /// Self-scaling to the window rather than to the amplifier rail, because the rail is ±126,976 and a

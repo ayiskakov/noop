@@ -59,6 +59,50 @@ final class EcgLiveFeedTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(feed.window(endingAt: end, count: 1).first ?? -1, 86)
     }
 
+    func testAFasterStrapNeverFreezesAfterASkip() {
+        // The old skip left only the pre-roll undrawn, so the trace ran dry 0.4 s later and froze for about
+        // a second after every skip. 125 samples a second, delivered two ways; after warm-up every 0.1 s of
+        // wall time must draw something new.
+        for (perRecord, interval) in [(100, 0.8), (125, 1.0)] {
+            var feed = EcgLiveFeed()
+            var index: UInt32 = 0
+            var previous = 0
+            for step in 0..<600 {
+                let t = Double(step) / 10
+                while Double(index) * interval <= t + 1e-9 {
+                    feed.append(record(index + 1, samples: Array(repeating: 0, count: perRecord)),
+                                at: t0.addingTimeInterval(Double(index) * interval))
+                    index += 1
+                }
+                let end = feed.displayedEnd(at: t0.addingTimeInterval(t))
+                if t >= 3 { XCTAssertGreaterThan(end, previous, "\(perRecord) per \(interval) s stalled at \(t) s") }
+                previous = end
+            }
+        }
+    }
+
+    func testASkippedRecordIndexBreaksTheTraceWhereItHappened() {
+        var feed = EcgLiveFeed()
+        feed.append(record(1, samples: Array(0..<100)), at: t0)
+        feed.append(record(2, samples: Array(100..<200)), at: t0.addingTimeInterval(1))
+        feed.append(record(4, samples: Array(200..<300)), at: t0.addingTimeInterval(2))
+        XCTAssertEqual(feed.gapAfterSamples, [199])
+        let end = t0.addingTimeInterval(3.4)   // 300 samples drawn
+        XCTAssertEqual(feed.window(endingAt: end, count: 150), Array(150..<300))
+        XCTAssertEqual(feed.gapsInWindow(endingAt: end, count: 150), [49])
+        // Drawn only up to the gap: there is nothing after it to break from.
+        XCTAssertEqual(feed.gapsInWindow(endingAt: t0.addingTimeInterval(2.4), count: 150), [])
+    }
+
+    func testAGapIsForgottenOnceItsSampleIsTrimmed() {
+        var feed = EcgLiveFeed(capacity: 150)
+        feed.append(record(1, samples: Array(0..<100)), at: t0)
+        feed.append(record(3, samples: Array(100..<200)), at: t0)
+        XCTAssertEqual(feed.gapAfterSamples, [99])
+        feed.append(record(4, samples: Array(200..<300)), at: t0)
+        XCTAssertEqual(feed.gapAfterSamples, [])
+    }
+
     func testAnOnTimeStrapNeverSkips() {
         var feed = EcgLiveFeed()
         for k in 0..<30 {

@@ -282,10 +282,7 @@ struct EcgReviewView: View {
         let columns = EcgStrip.envelope(series, columns: 900)
         // Gap positions are sample indices; map them onto column indices so the view breaks the trace in
         // the right place at any column count.
-        let breaks = Set(gaps.compactMap { sampleIndex -> Int? in
-            guard !series.isEmpty, !columns.isEmpty else { return nil }
-            return min(columns.count - 1, sampleIndex * columns.count / series.count)
-        })
+        let breaks = EcgStrip.breakColumns(gapAfter: gaps, sampleCount: series.count, columns: columns.count)
         return Window(columns: columns,
                       breaks: breaks,
                       range: EcgStrip.verticalRange(columns),

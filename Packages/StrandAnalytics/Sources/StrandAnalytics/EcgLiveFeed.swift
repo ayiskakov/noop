@@ -16,7 +16,9 @@ import WhoopProtocol
 /// measured, so the buffer corrects in both directions: a slower strap stalls the trace and re-anchors at
 /// the next burst, and a faster one is caught up by skipping ahead whenever the undrawn backlog passes
 /// `maxBacklog`, so the trace never lags the status line by more than a few records and never falls off
-/// the end of the kept samples. Nothing here labels an axis in seconds.
+/// the end of the kept samples. A skip leaves one record plus the pre-roll undrawn, so the trace keeps
+/// moving until the next burst instead of running dry right after it. Nothing here labels an axis in
+/// seconds: the R17 rate is not measured (`docs/PROTOCOL_ECG.md` §Hardware observations).
 ///
 /// Pure and clock-free: every method takes the time it should reason about, so the pacing is covered
 /// by `swift test` with no timer and no strap.
@@ -41,9 +43,11 @@ public struct EcgLiveFeed: Equatable, Sendable {
     public private(set) var records = 0
     /// Records skipped because they repeated the previous record index (a re-sent notification).
     public private(set) var duplicates = 0
-    /// Records after which one or more record indices were skipped. The trace does not break for them,
-    /// but the count is kept so a missing stretch is visible rather than silently joined.
+    /// Records after which one or more record indices were skipped.
     public private(set) var gaps = 0
+    /// Sample numbers after which a record index was skipped, oldest first, kept only while that sample
+    /// is still held. A trace breaks there instead of joining across records the strap never delivered.
+    public private(set) var gapAfterSamples: [Int] = []
     /// The newest record's packed status: quality, presence, progress, classifier codes, all raw.
     public private(set) var status: Whoop5EcgRawRecord.Status?
     public private(set) var lastRecordIndex: UInt32?
@@ -68,7 +72,10 @@ public struct EcgLiveFeed: Equatable, Sendable {
                 return false
             }
             // Only forward jumps count as gaps. A lower index is a new session or a wrap, not a hole.
-            if record.recordIndex > last, record.recordIndex - last > 1 { gaps += 1 }
+            if record.recordIndex > last, record.recordIndex - last > 1 {
+                gaps += 1
+                if totalSamples > 0 { gapAfterSamples.append(totalSamples - 1) }
+            }
         }
         lastRecordIndex = record.recordIndex
         status = record.status
@@ -86,12 +93,16 @@ public struct EcgLiveFeed: Equatable, Sendable {
         samples.append(contentsOf: record.samples)
         totalSamples += record.samples.count
         if samples.count > capacity { samples.removeFirst(samples.count - capacity) }
+        let firstKept = totalSamples - samples.count
+        gapAfterSamples.removeAll { $0 < firstKept }
 
-        // A strap sending faster than the playback rate leaves a growing backlog. Skip ahead so the
-        // trace stays one pre-roll behind the newest sample, rather than drawing an ever-older past and,
-        // once the lag passes `capacity`, nothing at all.
+        // A strap sending faster than the playback rate leaves a growing backlog. Skip ahead rather than
+        // draw an ever-older past and, once the lag passes `capacity`, nothing at all. The skip leaves
+        // this record plus the pre-roll undrawn: leaving only the pre-roll ran the trace dry well before
+        // the next burst and froze it for about a second after every skip.
         if Double(totalSamples) - playhead(at: at) > Double(min(Self.maxBacklog, capacity)) {
-            anchorSample = max(0, totalSamples - Int(Self.preroll * Self.playbackRate))
+            let runway = record.samples.count + Int(Self.preroll * Self.playbackRate)
+            anchorSample = max(0, totalSamples - runway)
             anchorTime = at
         }
         return true
@@ -112,10 +123,24 @@ public struct EcgLiveFeed: Equatable, Sendable {
 
     /// The `count` samples ending at `displayedEnd(at:)`, oldest first. Shorter at the start of a capture.
     public func window(endingAt now: Date, count: Int) -> [Int] {
-        let end = displayedEnd(at: now)
-        let firstKept = totalSamples - samples.count
-        let lo = max(firstKept, end - max(0, count))
+        let (lo, end) = windowBounds(endingAt: now, count: count)
         guard end > lo else { return [] }
+        let firstKept = totalSamples - samples.count
         return Array(samples[(lo - firstKept)..<(end - firstKept)])
+    }
+
+    /// Positions in `window(endingAt:count:)` after which the trace must break, one per skipped stretch
+    /// of record indices inside that window.
+    public func gapsInWindow(endingAt now: Date, count: Int) -> Set<Int> {
+        let (lo, end) = windowBounds(endingAt: now, count: count)
+        // A gap after the window's last sample is not inside it: nothing past it is drawn yet.
+        return Set(gapAfterSamples.filter { $0 >= lo && $0 < end - 1 }.map { $0 - lo })
+    }
+
+    /// Sample numbers `[lo, end)` the window covers.
+    private func windowBounds(endingAt now: Date, count: Int) -> (lo: Int, end: Int) {
+        let end = displayedEnd(at: now)
+        let lo = max(totalSamples - samples.count, end - max(0, count))
+        return (lo, max(lo, end))
     }
 }
