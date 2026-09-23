@@ -285,15 +285,32 @@ jobs:
             echo "::warning::no altstore-source.json on main — skipping AltStore update."; exit 0
           fi
           IPA="NOOP-ios-unsigned-v${VER}.ipa"
-          # The freshly-uploaded IPA's byte size, straight off the release asset (the `ios` job just pushed it).
-          SIZE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[] | select(.name=="'"$IPA"'") | .size' || true)
+          # The freshly-uploaded IPA's byte size (the `ios` job just pushed it). Read it from the release's
+          # ASSETS endpoint by release id, not `gh release view --json assets`: on v11.9.0 that view kept
+          # returning an empty asset list minutes after both uploads had landed (the /assets endpoint and
+          # releases/latest listed them, and the download URL served them), so the job skipped the AltStore
+          # entry for a release whose IPA was live. Retry briefly, then fall back to the download URL's
+          # Content-Length, which is the byte count AltStore itself will see.
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${IPA}"
+          SIZE=""
+          RID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id' 2>/dev/null || true)
+          for attempt in 1 2 3 4 5 6; do
+            if [ -n "${RID:-}" ]; then
+              SIZE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RID}/assets?per_page=100" \
+                --jq '.[] | select(.name=="'"$IPA"'" and .state=="uploaded") | .size' 2>/dev/null || true)
+            fi
+            [ -n "${SIZE:-}" ] && break
+            SIZE=$(curl -sIL --fail "$URL" | tr -d '\r' | awk 'tolower($1)=="content-length:"{v=$2} END{print v}' || true)
+            [ -n "${SIZE:-}" ] && [ "${SIZE}" != "0" ] && break
+            SIZE=""
+            echo "IPA $IPA not visible on release $TAG yet (attempt $attempt) — retrying in 10 s."
+            sleep 10
+          done
           if [ -z "${SIZE:-}" ]; then
             echo "::warning::IPA asset $IPA not found on release $TAG — skipping AltStore update."; exit 0
           fi
           [ -n "${BUILD:-}" ] || BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION:' project.yml | sed -E 's/.*"([0-9]+)".*/\1/')
           DATE=$(date -u +%Y-%m-%d)
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${IPA}"
           DESC="NOOP ${VER}. See the release notes for what changed."
           MINOS=$(jq -r '.apps[0].minOSVersion // "17.0"' altstore-source.json)
 
