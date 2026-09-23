@@ -93,6 +93,8 @@ public enum ResilienceEngine {
     public static let knockBaselineMinDays = 14
     /// Post-peak observed days a half-life fit needs.
     public static let minKnockFitPoints = 3
+    /// Share of a knock's path its fitted return must explain before a half-life is reported.
+    public static let minKnockFitExplained = 0.5
     /// Days an estimate of a knock's decay constant is bounded to.
     public static let knockTauFloor = 0.25
     public static let knockTauCeiling = 60.0
@@ -208,7 +210,8 @@ public enum ResilienceEngine {
         /// Observed days from the peak to the first day back within `baselineBand`; nil if not yet back.
         public let daysToBaseline: Int?
         /// Half-life of the fitted return P·exp(−t/τₖ), days; nil with too few points to fit, or when the
-        /// fitted height P is already inside the baseline band.
+        /// fit does not describe the path (height inside the baseline band, τₖ on a search bound, or
+        /// under `minKnockFitExplained` of the path explained).
         public let halfLifeDays: Double?
         /// Fitted height P of the return curve, in the path's sign-aligned units; nil with no fit.
         public let returnAmplitude: Double?
@@ -302,9 +305,15 @@ public enum ResilienceEngine {
                 if back == nil, k > peak, z(k) < baselineBand { back = t }
                 k += 1
             }
-            // A fit whose height is back inside the band found no decaying excursion to time.
+            // Only a fit that describes the path is timed: its height must be outside the band, its
+            // decay constant off the search bounds, and the curve must explain most of the path. A flat
+            // fit pinned at the ceiling would otherwise print a weeks-long half-life beside a return
+            // observed in two days.
             let decay = path.count - 1 >= minKnockFitPoints ? fitReturn(path) : nil
-            let timed = decay.flatMap { $0.amplitude >= baselineBand ? $0 : nil }
+            let timed = decay.flatMap { d in
+                d.amplitude >= baselineBand && d.explained >= minKnockFitExplained
+                    && d.tau < knockTauCeiling * 0.99 && d.tau > knockTauFloor * 1.01 ? d : nil
+            }
             knocks.append(Knock(startDay: days[i], peakDay: days[peak], peakDeviation: sign * z(peak),
                                 path: path, daysToBaseline: back,
                                 halfLifeDays: timed.map { $0.tau * Foundation.log(2) },
@@ -572,8 +581,9 @@ public enum ResilienceEngine {
     }
 
     /// Least-squares P·exp(−t/τₖ) through a knock's sign-aligned path: τₖ by golden-section search in
-    /// ln τₖ over [knockTauFloor, knockTauCeiling], P in closed form per τₖ.
-    static func fitReturn(_ path: [DayValue]) -> (tau: Double, amplitude: Double) {
+    /// ln τₖ over [knockTauFloor, knockTauCeiling], P in closed form per τₖ; and the share of the path
+    /// the curve explains.
+    static func fitReturn(_ path: [DayValue]) -> (tau: Double, amplitude: Double, explained: Double) {
         func solve(_ logTau: Double) -> (sse: Double, p: Double) {
             let tau = Foundation.exp(logTau)
             var sze = 0.0, see = 0.0, szz = 0.0
@@ -595,7 +605,11 @@ public enum ResilienceEngine {
             else { a = x1; x1 = x2; f1 = f2; x2 = a + g * (b - a); f2 = solve(x2).sse }
         }
         let logTau = (a + b) / 2
-        return (Foundation.exp(logTau), solve(logTau).p)
+        let best = solve(logTau)
+        // Share of the path's (uncentred) sum of squares the curve accounts for; the model's baseline
+        // is zero, so zero is the reference.
+        let total = path.reduce(0) { $0 + $1.value * $1.value }
+        return (Foundation.exp(logTau), best.p, total > 0 ? 1 - best.sse / total : 0)
     }
 
     /// An OU process with correlation time `tau` carrying share `amplitude` of the variance, plus

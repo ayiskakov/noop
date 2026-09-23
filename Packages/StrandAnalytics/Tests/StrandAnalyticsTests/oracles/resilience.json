@@ -789,7 +789,6 @@
     "knocks" : [
       {
         "daysToBaseline" : 6,
-        "halfLifeDays" : 41.58883083352309,
         "pathDays" : [
           0,
           2,
@@ -832,7 +831,6 @@
         ],
         "peakDay" : 130,
         "peakDeviation" : 2.5761997595259292,
-        "returnAmplitude" : 1.8349877247006912,
         "startDay" : 130
       }
     ],

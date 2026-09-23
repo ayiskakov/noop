@@ -63,7 +63,9 @@ autocorrelation of these fluctuations as a minimal biomarker set. No consumer ap
 9. **Knocks.** Detect perturbations (a day > 2σ from the rolling baseline, e.g. an RHR spike during
    illness) and measure the observed return-to-baseline half-life for each one. *As built:* the baseline
    is the median of the prior 28 days (weekday pattern removed), frozen at the knock's start; the scale
-   is a MAD; the day after the peak must still be > 1σ out, so a lone outlier day is not a knock. This is concrete evidence
+   is a MAD; the day after the peak must still be > 1σ out, so a lone outlier day is not a knock. A
+   half-life is reported only when the fitted return explains ≥ 50 % of the path and its decay constant is
+   off the search bounds (a flat fit pinned at the ceiling read 41.6 days beside a 2-day observed return). This is concrete evidence
    of the same quantity, and the UI's most intuitive element.
 
 ## PR R1 — Engine (`Packages/StrandAnalytics/ResilienceEngine.swift`, pure)

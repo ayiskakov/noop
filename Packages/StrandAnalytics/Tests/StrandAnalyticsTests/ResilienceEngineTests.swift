@@ -168,6 +168,23 @@ final class ResilienceEngineTests: XCTestCase {
         XCTAssertNil(last?.halfLifeDays)
     }
 
+    /// A two-day blip followed, two weeks on, by a second excursion: the return is observed, but no
+    /// single decay describes the path, so no half-life is printed beside it.
+    func testAPathNoDecayDescribesGetsNoHalfLife() throws {
+        var rng = E.SplitMix64(seed: 13)
+        let series = (0..<120).map { d -> E.DayValue in
+            var v = 55 + rng.nextGaussian()
+            if d == 60 { v += 5 }
+            if d == 61 { v += 2.5 }
+            if (74...80).contains(d) { v += 4 }
+            return E.DayValue(dayIndex: d, value: v)
+        }
+        let knock = try XCTUnwrap(E.knocks(series: series, signal: .restingHR).first { $0.startDay == 60 })
+        XCTAssertNotNil(knock.daysToBaseline)
+        XCTAssertNil(knock.halfLifeDays)
+        XCTAssertNil(knock.fittedReturn(atDay: 1))
+    }
+
     func testALoneOutlierDayIsNotAKnock() {
         var rng = E.SplitMix64(seed: 9)
         let series = (0..<90).map { d -> E.DayValue in
