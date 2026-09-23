@@ -1120,7 +1120,9 @@ final class AppModel: ObservableObject {
     var isWhoop5MG: Bool { ble.isWhoop5MG }
     /// PERSISTENT strap write, deliberately its own action rather than part of the start flow.
     func ecgSelectWrist(_ wrist: Whoop5Ecg.WristSelection) { ble.ecgSelectWrist(wrist) }
-    func ecgStartCapture() { ble.ecgStartCapture() }
+    func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) {
+        ble.ecgStartCapture(wrist: wrist, reportsResult: reportsResult)
+    }
     /// `reportsResult: false` for the Settings-toggle path, so switching the experiment off doesn't pop
     /// the Devices result sheet from another screen.
     func ecgStopCapture(reportsResult: Bool = true) { ble.ecgStopCapture(reportsResult: reportsResult) }

@@ -1077,6 +1077,12 @@ public final class BLEManager: NSObject, ObservableObject {
     private var ecgProbeDeadline: Date?
     /// Supersedes a previous run's pending verdict timer when the user taps again.
     private var ecgProbeRunToken = 0
+    /// False for the guided capture, whose screen draws the stream itself: the verdict is logged but not
+    /// raised as the Devices result sheet.
+    private var ecgProbePublishesResult = true
+    /// One raw dump of the first live R17 frame per capture, so a strap log alone can re-check the
+    /// decode. Always on: it is one line per capture and it is the evidence a decode dispute needs.
+    private var ecgLiveFrameLogged = false
     private var clockRequested = false
     /// #700: retry count for GET_CLOCK when no correlation establishes before backfill. Capped at 3.
     private var clockRetries = 0
@@ -2189,6 +2195,12 @@ public final class BLEManager: NSObject, ObservableObject {
     private func stopUnexpectedRealtimeImu(_ frame: [UInt8], isOffload: Bool, now: Date = Date()) {
         guard selectedModel.deviceFamily == .whoop5, !isOffload, frame.count > 8,
               frame[8] == 43 || frame[8] == 51,
+              // Type 43 also carries the MG's live ECG. Its records are the stream an ECG capture asked
+              // for, not a stray IMU producer, and stopping raw data on them can clear the ECG session's
+              // companion requests (docs/PROTOCOL_ECG.md). An ECG record is recognised by its layout
+              // byte and exact length, so the fail-safe still fires on any other type-43 shape.
+              !Whoop5EcgFilteredRecord.isFilteredRecord(frame),
+              !(frame.count == Whoop5EcgRawRecord.frameLength && frame[9] == 16),
               !rawCaptureInFlight, !UserDefaults.standard.bool(forKey: "enableRawCapture"),
               now.timeIntervalSince(rawCaptureStoppedAt) >= 3,
               now.timeIntervalSince(unexpectedImuStopAt) >= 30 else { return }
@@ -4201,13 +4213,27 @@ public final class BLEManager: NSObject, ObservableObject {
         scheduleEcgProbeVerdict()
     }
 
-    /// The documented turn-on sequence MINUS `selectWrist` (which the user runs separately, above):
-    /// toggleRealtimeFilteredECG(on) → toggleSaveRawECG(on) → mainControlECGDataGeneration(start).
-    public func ecgStartCapture() {
+    /// The documented turn-on sequence: optional selectWrist → toggleRealtimeFilteredECG(on) →
+    /// toggleSaveRawECG(on) → mainControlECGDataGeneration(start).
+    ///
+    /// `wrist` is sent first because `docs/PROTOCOL_ECG.md` says to select the wrist before start; the
+    /// guided capture always passes it, since persistence of an earlier selection is not established.
+    /// A refused wrist does not abort the start — it is reported through `LiveState.ecgWristAccepted`.
+    ///
+    /// `reportsResult: false` is the guided capture: it draws the live stream itself, so the probe's
+    /// 30 s verdict sheet must not pop over it. The steps are still tracked and the verdict still logged.
+    public func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) {
         guard ecgGatesAllow() else { return }
         ecgMayBeRunning = true      // latched BEFORE the sends, so a mid-sequence drop still leaves Stop offered
-        beginEcgProbeRun(clearingSteps: true)
+        beginEcgProbeRun(clearingSteps: true, publishesResult: reportsResult)
+        state.ecgLive = nil
+        state.ecgWristAccepted = nil
+        ecgLiveFrameLogged = false
         log("ECG probe: starting the ECG turn-on sequence on an MG (experimental, unvalidated instrumentation)")
+        if let wrist {
+            log("ECG probe: SELECT_WRIST=\(wrist.token) (arg \(wrist.rawValue))")
+            sendEcgCommand(.selectWrist, arg: wrist.rawValue)
+        }
         sendEcgCommand(.toggleLabradorFiltered, arg: 1)
         sendEcgCommand(.toggleLabradorRawSave, arg: 1)
         sendEcgCommand(.toggleLabradorDataGeneration, arg: Whoop5Ecg.ControlSignal.start.rawValue)
@@ -4244,7 +4270,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Clear the probe result (dialog dismissed).
     public func clearEcgProbe() { state.ecgProbe = nil }
 
-    private func beginEcgProbeRun(clearingSteps: Bool) {
+    private func beginEcgProbeRun(clearingSteps: Bool, publishesResult: Bool = true) {
         if clearingSteps {
             ecgProbeSteps = []
             ecgProbeCandidates = []
@@ -4252,7 +4278,8 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         ecgProbeRunToken &+= 1
         ecgProbeDeadline = Date().addingTimeInterval(BLEManager.ecgProbeWindow)
-        state.ecgProbe = BLEManager.ecgProbeWaiting
+        ecgProbePublishesResult = publishesResult
+        if publishesResult { state.ecgProbe = BLEManager.ecgProbeWaiting }
     }
 
     /// Render the verdict once the listen window closes. BLE callbacks and this timer both run on the
@@ -4267,7 +4294,7 @@ public final class BLEManager: NSObject, ObservableObject {
                                              candidateFrames: self.ecgProbeCandidates,
                                              windowSeconds: Int(BLEManager.ecgProbeWindow))
             self.log("ECG probe:\n\(text)")
-            self.state.ecgProbe = text
+            if self.ecgProbePublishesResult { self.state.ecgProbe = text }
         }
     }
 
@@ -4318,6 +4345,7 @@ public final class BLEManager: NSObject, ObservableObject {
                 requestsRealtimeData: ecgProbeSteps[idx].requestsRealtimeData,
                 replyHex: replyHex)
             log("ECG probe: ← \(label) \(outcome.token)")
+            if command == .selectWrist { state.ecgWristAccepted = outcome == .success }
         } else if ecgProbeSteps.count < BLEManager.ecgProbeMaxSteps {
             // An UNSOLICITED reply for one of our opcodes. Recorded, but capped for the same reason the
             // candidate list is: each Step carries a full-frame hex string that is rendered into both the
@@ -4333,9 +4361,35 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// Feed one live 5/MG frame to the guided capture's waveform when it is a CRC-valid R17 record.
+    /// Runs on every live frame, so the non-ECG path is two byte compares and a length check.
+    private func noteEcgLiveFrame(_ frame: [UInt8], now: Date = Date()) {
+        guard isWhoop5MG, Whoop5EcgFilteredRecord.isFilteredRecord(frame),
+              verifyFrame(frame, family: .whoop5).ok,
+              let record = Whoop5EcgFilteredRecord.decode(frame) else { return }
+        if !ecgLiveFrameLogged {
+            ecgLiveFrameLogged = true
+            log("ECG live: first R17 record (\(frame.count) B, count \(record.status.declaredSampleCount), "
+                + "quality \(record.status.quality), state 0x\(String(format: "%02x", record.status.stateBits))): "
+                + hex(frame))
+        }
+        if !record.anomalies.isEmpty { log("ECG live: R17 anomalies \(record.anomalies)") }
+        var feed = state.ecgLive ?? EcgLiveFeed()
+        feed.append(record, at: now)
+        state.ecgLive = feed
+    }
+
     /// Structural triage for the packet TYPE the ECG records arrive under, which no table in this repo
     /// holds. A hit is a CANDIDATE, never a confirmed mapping.
     private func noteEcgProbeCandidate(_ frame: [UInt8]) {
+        // The documented live record (R17, layout 17) is ECG data, not a candidate to triage: count it.
+        // It is decoded and drawn by `noteEcgLiveFrame`; the old plausibility test below models the
+        // generic Labrador payload and never matched it, which is why the probe reported zero packets
+        // while the strap streamed.
+        if Whoop5EcgFilteredRecord.isFilteredRecord(frame) {
+            ecgProbePacketsSeen += 1
+            return
+        }
         guard frame.count >= 12, Whoop5Ecg.plausibleFilteredFrame(frame) else { return }
         ecgProbePacketsSeen += 1
         guard ecgProbeCandidates.count < BLEManager.ecgProbeMaxCandidates,
@@ -5805,6 +5859,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         featureFlagReport = nil
         featureFlagAwaiting = nil
         state.ecgProbe = nil          // MG ECG: drop a stale probe result on disconnect
+        state.ecgLive = nil
+        state.ecgWristAccepted = nil
         // Close any open ECG listen window. The strap forgets the ECG toggles across a disconnect, and a
         // half-finished run must not fold its steps into the next one or render a verdict for a link that
         // is already gone.
@@ -6937,6 +6993,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // the ECG records arrive under. `ecgProbeArmed` is false outside a user-initiated
                     // run, so this costs one Bool read on every other frame.
                     if ecgProbeArmed { noteEcgProbeFrame(frame) }
+                    noteEcgLiveFrame(frame)
                     // Gated on the FULL verdict for the same reason as the 4.0 path: this reply sets the
                     // window the offload judges its records against. The verdict is taken here rather
                     // than threaded from the seam because the 5/MG loop hands the router raw bytes; a

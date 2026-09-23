@@ -364,6 +364,13 @@ public final class LiveState: ObservableObject {
     /// explicitly not a medical measurement.
     @Published public var ecgProbe: String? = nil
 
+    /// The live R17 waveform streamed during an MG ECG capture, for the guided capture screen to draw.
+    /// Reset at each guided start and on disconnect; nil until the first R17 record lands.
+    @Published public var ecgLive: EcgLiveFeed? = nil
+
+    /// The strap's answer to the guided capture's SELECT_WRIST: nil until a reply settles it.
+    @Published public var ecgWristAccepted: Bool? = nil
+
     /// The 5-generation hardware variant resolved from the strap's Device Information Service
     /// (`Whoop5Variant.label`: "MG" / "5.0" / "—"), nil before any DIS string has landed. Published so an
     /// MG-only capability can gate on POSITIVELY identified hardware instead of guessing from a model
