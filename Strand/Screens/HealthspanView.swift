@@ -28,6 +28,7 @@ struct HealthspanView: View {
     @EnvironmentObject var profile: ProfileStore
 
     @State private var snapshot: HealthspanSnapshot?
+    @State private var soFar: [HealthspanTargetSoFar] = []
     @State private var unlock = HealthspanUnlock(scoredDays: 0, age: 0)
     @State private var hrv: (value: Double, norm: Double)?
     @State private var loaded = false
@@ -42,6 +43,8 @@ struct HealthspanView: View {
                     HealthspanLeverSection(snapshot: snapshot)
                     HealthspanDriversSection(snapshot: snapshot, age: Double(profile.age), sex: profile.sex)
                     HealthspanTrendSection(snapshot: snapshot)
+                } else if !soFar.isEmpty {
+                    HealthspanTargetsSection(rows: soFar)
                 }
                 if let hrv { HealthspanContextSection(hrv: hrv.value, norm: hrv.norm) }
                 if resilienceEnabled { ResilienceSection() }
@@ -53,6 +56,7 @@ struct HealthspanView: View {
 
     private func load() async {
         snapshot = await HealthspanSnapshot.load(repo: repo)
+        soFar = snapshot == nil ? await HealthspanTargetSoFar.load(repo: repo) : []
         unlock = HealthspanUnlock.current(days: repo.days, age: Double(profile.age))
         let last30 = repo.days.suffix(30).compactMap { $0.avgHrv }
         hrv = IntelligenceEngine.healthspanMedian(last30).map {
@@ -128,6 +132,48 @@ struct HealthspanSnapshot {
     }
 }
 
+/// One driver's average so far against its target, while Body Age is still locked: the value, target and
+/// 30-day rows the pipeline writes for a locked day, which carry no years.
+struct HealthspanTargetSoFar: Equatable {
+    let key: String
+    let value: Double
+    let target: Double
+    let recent: Double?
+
+    /// Whether the average so far meets the target: at or under it for resting HR, inside the band for
+    /// sleep, at or over it for the rest.
+    var met: Bool {
+        switch key {
+        case "rhr":   return value <= target
+        case "sleep": return value >= VitalityEngine.sleepTargetLow && value <= VitalityEngine.sleepTargetHigh
+        default:      return value >= target
+        }
+    }
+
+    /// The rows for the newest day any driver was written, in `HealthspanSeries.drivers` order. Read only
+    /// when there is no Body Age snapshot, so it never stands beside a headline.
+    @MainActor
+    static func load(repo: Repository) async -> [HealthspanTargetSoFar] {
+        var series: [String: (value: [(day: String, value: Double)], target: [(day: String, value: Double)],
+                              recent: [(day: String, value: Double)])] = [:]
+        for key in HealthspanSeries.drivers {
+            func read(_ k: String) async -> [(day: String, value: Double)] {
+                await repo.exploreSeries(key: k, source: "my-whoop", days: 14)
+            }
+            series[key] = (await read(HealthspanSeries.value(key)), await read(HealthspanSeries.target(key)),
+                           await read(HealthspanSeries.recent(key)))
+        }
+        guard let newest = series.values.compactMap({ $0.value.last?.day }).max() else { return [] }
+        return HealthspanSeries.drivers.compactMap { key in
+            guard let s = series[key],
+                  let value = s.value.last(where: { $0.day == newest })?.value,
+                  let target = s.target.last(where: { $0.day == newest })?.value else { return nil }
+            return HealthspanTargetSoFar(key: key, value: value, target: target,
+                                         recent: s.recent.last { $0.day == newest }?.value)
+        }
+    }
+}
+
 /// The drivers behind the stored headline, for screens other than this one (the Health hub's card).
 enum HealthspanDrivers {
 
@@ -170,10 +216,12 @@ enum HealthspanDrivers {
     }
 
     /// The target as a user reads it: sleep's is a band, the others a single value.
-    static func formatTarget(_ d: HealthspanDriver) -> String {
-        d.key == "sleep"
+    static func formatTarget(_ d: HealthspanDriver) -> String { formatTarget(d.target, d.key) }
+
+    static func formatTarget(_ target: Double, _ key: String) -> String {
+        key == "sleep"
             ? String(format: "%.0f–%.0f h", VitalityEngine.sleepTargetLow, VitalityEngine.sleepTargetHigh)
-            : format(d.target, d.key)
+            : format(target, key)
     }
 
     /// A signed years figure ("+1.2 yrs", "−0.4 yrs").
@@ -224,20 +272,24 @@ enum HealthspanReadout {
     /// driver behind the pace. Nil when the change is too small to call (under 3 % of the target) or the
     /// 30-day window had no reading.
     static func trend(_ d: HealthspanDriver) -> Trend? {
-        guard let recent = d.recent else { return nil }
-        let tolerance = abs(d.target) * 0.03
+        trend(key: d.key, value: d.value, target: d.target, recent: d.recent)
+    }
+
+    static func trend(key: String, value: Double, target: Double, recent: Double?) -> Trend? {
+        guard let recent else { return nil }
+        let tolerance = abs(target) * 0.03
         let change: Double
-        switch d.key {
+        switch key {
         case "rhr":
-            change = d.value - recent                      // lower is better
+            change = value - recent                        // lower is better
         case "sleep":
             // Better is closer to the 7–9 h band.
             func gap(_ h: Double) -> Double {
                 max(0, VitalityEngine.sleepTargetLow - h, h - VitalityEngine.sleepTargetHigh)
             }
-            change = gap(d.value) - gap(recent)
+            change = gap(value) - gap(recent)
         default:
-            change = recent - d.value                      // higher is better
+            change = recent - value                        // higher is better
         }
         if abs(change) < tolerance { return nil }
         return change > 0 ? .better : .worse
@@ -572,6 +624,71 @@ private struct HealthspanDriversSection: View {
 
     private var missing: [String] {
         let present = Set(snapshot.drivers.map { $0.key })
+        return ["moderate", "vigorous", "strength", "leanmass", "vo2max"]
+            .filter { !present.contains($0) }
+            .map(HealthspanDrivers.label)
+    }
+}
+
+/// Before Body Age unlocks: each driver's average so far against its target, and whether it meets it. No
+/// years: those need the six-month model the unlock gates.
+private struct HealthspanTargetsSection: View {
+    let rows: [HealthspanTargetSoFar]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+            SectionHeader("Your targets", overline: "So far")
+            ForEach(rows, id: \.key) { row($0) }
+            Text("Averages over the days recorded so far. Once Body Age unlocks, each shows the years it adds or takes off.")
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if missing.isEmpty == false {
+                Text("Not measured: \(missing.joined(separator: ", ")). Connect Apple Health or add the missing profile details to include them.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func row(_ r: HealthspanTargetSoFar) -> some View {
+        let tint = r.met ? StrandPalette.statusPositive : StrandPalette.statusWarning
+        return NoopCard {
+            HStack(alignment: .center, spacing: NoopMetrics.space3) {
+                VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                    HStack(spacing: NoopMetrics.space1) {
+                        Text(HealthspanDrivers.label(r.key))
+                            .font(StrandFont.headline)
+                            .foregroundStyle(StrandPalette.textPrimary)
+                        if let trend = HealthspanReadout.trend(key: r.key, value: r.value, target: r.target,
+                                                               recent: r.recent) {
+                            Image(systemName: trend == .better ? "arrow.up.right" : "arrow.down.right")
+                                .font(StrandFont.caption)
+                                .foregroundStyle(trend == .better ? StrandPalette.statusPositive
+                                                                  : StrandPalette.statusWarning)
+                                .accessibilityLabel(trend == .better ? Text("Last 30 days: better")
+                                                                     : Text("Last 30 days: worse"))
+                        }
+                    }
+                    Text("\(HealthspanDrivers.format(r.value, r.key)) · target \(HealthspanDrivers.formatTarget(r.target, r.key))")
+                        .font(StrandFont.footnote)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                }
+                Spacer(minLength: NoopMetrics.space2)
+                Text(r.met ? String(localized: "On target") : String(localized: "Not yet"))
+                    .font(StrandFont.caption)
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, NoopMetrics.space2)
+                    .padding(.vertical, NoopMetrics.spaceHalf)
+                    .background(tint.opacity(0.14), in: Capsule(style: .continuous))
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var missing: [String] {
+        let present = Set(rows.map { $0.key })
         return ["moderate", "vigorous", "strength", "leanmass", "vo2max"]
             .filter { !present.contains($0) }
             .map(HealthspanDrivers.label)
