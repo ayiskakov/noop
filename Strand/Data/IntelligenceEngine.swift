@@ -2205,21 +2205,26 @@ final class IntelligenceEngine: ObservableObject {
                                          habitualMidsleepSec: habitualMidsleepSec)
             daily = DayCycleIntelligenceIntegration.applying(physiologicalSteps, to: daily)
             daily = Self.recomputeRecoveryDaily(daily, nightlySkinTempC: night.nightlySkin,
-                                               baselines: baselines2)
+                                               baselines: baselines2, restNeedHours: sleepNeedHours,
+                                               restConsistency: sleepConsistency)
             let recovery = daily.recovery
             let skinDev = daily.skinTempDevC
             // Charge term-breakdown trace (Group G): only when the Recovery test mode is on. Emits which
             // term moved Charge and which was nil and forced the renorm, tagged `.recovery`. The trace's
             // score is RecoveryScorer.recovery verbatim, so the `recovery` written above is unchanged.
             if recoveryTraceActive {
-                for line in recoveryTraceLines(daily, baselines2) { diagnosticSink?(line, .recovery) }
+                for line in recoveryTraceLines(daily, baselines2, restNeedHours: sleepNeedHours,
+                                               restConsistency: sleepConsistency) {
+                    diagnosticSink?(line, .recovery)
+                }
             }
             let source = DaySource.classify(day: daily.day, importedWhoopDays: importedWhoopDays,
                                             appleHealthDays: appleHealthDays)
             // SHARED CONTRACT enrichment: the ordered Charge driver list + the relative skin-temp marker,
             // built from the SAME inputs `recomputeRecovery` reads so the rows can never disagree with the
             // headline. Both are empty/nil pre-baseline (cold-start), matching the score's own null-honesty.
-            let drivers = recomputeChargeDrivers(daily, baselines2)
+            let drivers = recomputeChargeDrivers(daily, baselines2, restNeedHours: sleepNeedHours,
+                                                 restConsistency: sleepConsistency)
             let skinRel = RecoveryScorer.skinTempRelative(deviationC: skinDev)
             // Honest per-day Charge confidence (A3): the strap night reads `.solid`/`.building`/`.calibrating`
             // off the HRV baseline state rather than a blanket `.solid`, so a thin/provisional baseline shows
@@ -2295,7 +2300,10 @@ final class IntelligenceEngine: ObservableObject {
             // same `night.nightlySkin` the line above takes the deviation from — so the two can never
             // describe different nights, and no second derivation exists to drift.
             dailies.append(daily)
-            if let rest = AnalyticsEngine.Rest.composite(daily: daily) {
+            // The SAME personal need + consistency pass 1 scored Rest with (and that `recomputeRecovery`
+            // feeds Charge below), so the persisted series and the Charge input are one number.
+            if let rest = AnalyticsEngine.Rest.composite(daily: daily, needHours: sleepNeedHours,
+                                                         consistency: sleepConsistency) {
                 restPoints.append(MetricPoint(day: daily.day, key: "sleep_performance", value: rest))
             }
             if let onset = physiologicalSteps.onsetByWakeDay[daily.day] {
@@ -3229,10 +3237,14 @@ final class IntelligenceEngine: ObservableObject {
     /// Pass 1 has no seeded skin baseline. Attach the deviation before scoring so the score,
     /// explanation, trace and persisted row all consume the same temperature. Internal for regression tests.
     static func recomputeRecoveryDaily(_ daily: DailyMetric, nightlySkinTempC: Double?,
-                                       baselines: AnalyticsEngine.ProfileBaselines) -> DailyMetric {
+                                       baselines: AnalyticsEngine.ProfileBaselines,
+                                       restNeedHours: Double = AnalyticsEngine.Rest.defaultNeedHours,
+                                       restConsistency: Double? = nil) -> DailyMetric {
         let skinDev = recomputeSkinTempDev(nightlySkinTempC, baselines.skinTemp)
         let input = daily.with(recovery: daily.recovery, skinTempDevC: skinDev, skinTempC: nightlySkinTempC)
-        return input.with(recovery: recomputeRecovery(input, baselines), skinTempDevC: skinDev,
+        return input.with(recovery: recomputeRecovery(input, baselines, restNeedHours: restNeedHours,
+                                                      restConsistency: restConsistency),
+                          skinTempDevC: skinDev,
                           skinTempC: nightlySkinTempC)
     }
 
@@ -3280,12 +3292,15 @@ final class IntelligenceEngine: ObservableObject {
     /// baseline is usable (RecoveryScorer gates on `hrvBaseline.usable`, i.e. ≥ minNightsSeed valid
     /// nights) , so the honest null-until-4-nights cold-start is free. Mirrors AnalyticsEngine's own
     /// recovery call + Android IntelligenceEngine.recomputeRecovery. (#78)
-    private static func recomputeRecovery(_ daily: DailyMetric, _ baselines: AnalyticsEngine.ProfileBaselines) -> Double? {
+    private static func recomputeRecovery(_ daily: DailyMetric, _ baselines: AnalyticsEngine.ProfileBaselines,
+                                          restNeedHours: Double, restConsistency: Double?) -> Double? {
         guard let hrvVal = daily.avgHrv, let rhrVal = daily.restingHr, let hrvBase = baselines.hrv else { return nil }
         // Charge enrichment: feed the Rest COMPOSITE (÷100) as the sleep-quality term instead of raw
         // efficiency, and fold in the night's skin-temp deviation. Both come from the persisted daily
         // fields (the raw streams are gone in pass 2). (Charge/Effort/Rest scoring redesign.)
-        let restQuality = AnalyticsEngine.Rest.composite(daily: daily).map { $0 / 100.0 } ?? daily.efficiency
+        let restQuality = AnalyticsEngine.Rest.composite(daily: daily, needHours: restNeedHours,
+                                                         consistency: restConsistency)
+            .map { $0 / 100.0 } ?? daily.efficiency
         return RecoveryScorer.recovery(hrv: hrvVal, rhr: Double(rhrVal), resp: daily.respRateBpm,
                                        hrvBaseline: hrvBase, rhrBaseline: baselines.restingHR,
                                        respBaseline: baselines.resp, sleepPerf: restQuality,
@@ -3299,11 +3314,14 @@ final class IntelligenceEngine: ObservableObject {
     /// (HRV / RHR / HRV-baseline) is missing or the baseline isn't usable yet, mirroring `recomputeRecovery`'s
     /// own early-nil so a cold-start night shows the calibrating state rather than fabricated rows.
     private func recomputeChargeDrivers(_ daily: DailyMetric,
-                                        _ baselines: AnalyticsEngine.ProfileBaselines) -> [ChargeDriver] {
+                                        _ baselines: AnalyticsEngine.ProfileBaselines,
+                                        restNeedHours: Double, restConsistency: Double?) -> [ChargeDriver] {
         guard let hrvVal = daily.avgHrv, let rhrVal = daily.restingHr, let hrvBase = baselines.hrv else {
             return []
         }
-        let restQuality = AnalyticsEngine.Rest.composite(daily: daily).map { $0 / 100.0 } ?? daily.efficiency
+        let restQuality = AnalyticsEngine.Rest.composite(daily: daily, needHours: restNeedHours,
+                                                         consistency: restConsistency)
+            .map { $0 / 100.0 } ?? daily.efficiency
         return RecoveryScorer.chargeDrivers(hrv: hrvVal, rhr: Double(rhrVal), resp: daily.respRateBpm,
                                             hrvBaseline: hrvBase, rhrBaseline: baselines.restingHR,
                                             respBaseline: baselines.resp, sleepPerf: restQuality,
@@ -3316,12 +3334,15 @@ final class IntelligenceEngine: ObservableObject {
     /// trace can never diverge from the Charge number written for the day. Empty when a hard input
     /// (HRV / RHR / HRV-baseline) is missing, mirroring `recomputeRecovery`'s own early-nil. Only CALLED
     /// when `TestCentre.active(.recovery)` is true, so it costs nothing when the mode is off.
-    private func recoveryTraceLines(_ daily: DailyMetric, _ baselines: AnalyticsEngine.ProfileBaselines) -> [String] {
+    private func recoveryTraceLines(_ daily: DailyMetric, _ baselines: AnalyticsEngine.ProfileBaselines,
+                                    restNeedHours: Double, restConsistency: Double?) -> [String] {
         guard let hrvVal = daily.avgHrv, let rhrVal = daily.restingHr, let hrvBase = baselines.hrv else {
             return ["charge day=\(daily.day) nilScore reason=missingInput "
                 + "(hrv/rhr/hrvBaseline required)"]
         }
-        let restQuality = AnalyticsEngine.Rest.composite(daily: daily).map { $0 / 100.0 } ?? daily.efficiency
+        let restQuality = AnalyticsEngine.Rest.composite(daily: daily, needHours: restNeedHours,
+                                                         consistency: restConsistency)
+            .map { $0 / 100.0 } ?? daily.efficiency
         let (_, trace) = RecoveryScorer.recoveryTrace(
             hrv: hrvVal, rhr: Double(rhrVal), resp: daily.respRateBpm,
             hrvBaseline: hrvBase, rhrBaseline: baselines.restingHR,

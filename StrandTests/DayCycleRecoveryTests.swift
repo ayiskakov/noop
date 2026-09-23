@@ -137,6 +137,21 @@ final class DayCycleRecoveryTests: XCTestCase {
         }
     }
 
+    /// Pass 2 scores Charge's Rest term with the SAME personal need + consistency the persisted
+    /// `sleep_performance` point uses, never the flat 8 h / neutral-consistency default.
+    func testPass2RecoveryUsesThePersonalRestNeedAndConsistency() throws {
+        let daily = recoveryDailyFixture()   // 7 h asleep
+        let baselines = AnalyticsEngine.ProfileBaselines(hrv: recoveryBaseline(50, spread: 6))
+        let personal = IntelligenceEngine.recomputeRecoveryDaily(
+            daily, nightlySkinTempC: nil, baselines: baselines, restNeedHours: 9.0, restConsistency: 0.9)
+        let restPersonal = try XCTUnwrap(AnalyticsEngine.Rest.composite(daily: daily, needHours: 9.0,
+                                                                        consistency: 0.9))
+        XCTAssertNotEqual(restPersonal, AnalyticsEngine.Rest.composite(daily: daily))
+        XCTAssertEqual(personal.recovery, RecoveryScorer.recovery(
+            hrv: 48, rhr: 58, resp: 15, hrvBaseline: baselines.hrv!, rhrBaseline: nil, respBaseline: nil,
+            sleepPerf: restPersonal / 100.0, skinTempDev: nil))
+    }
+
     private func recoveryBaseline(_ mean: Double, spread: Double,
                                   status: BaselineStatus = .trusted) -> BaselineState {
         BaselineState(baseline: mean, spread: spread,

@@ -383,7 +383,8 @@ Source: assembled in `AnalyticsEngine` from the `SleepStager` outputs above. Res
 | Restorative share (deep + REM) / asleep | 0.20 | how much of the night was restorative |
 | Consistency (sleep/wake regularity) | 0.10 | how consistent your sleep and wake timing is |
 
-- **Personal sleep need:** 8 h default, refined by your recent average; the hours-vs-need term clamps at 100.
+- **Personal sleep need:** the upper quartile of your nightly hours, floored at the age-appropriate population target (8 h adults, 9 h under 18) and capped at 9.5 h; the population target until 7 nights exist. The hours-vs-need term clamps at 100. The consistency term is 1 − CV of the last 28 nights (neutral 0.5 until 3 nights exist).
+- **One Rest number:** the persisted `sleep_performance` point and Charge's Rest-quality term both use that personal need and consistency. The `Repository.dailyColumn` fallback for a just-synced day, before the series point exists, uses the population defaults until the pass projects the point.
 - Rest consumes whatever stages each device provides (v25 motion on 4.0; PPG/IMU on 5/MG as it unlocks) — the sleep-staging algorithm itself is unchanged.
 - The `sleep_performance` key now stores this 0–100 composite. The **Charge** "Rest quality" driver reads it (÷100) instead of raw efficiency.
 
