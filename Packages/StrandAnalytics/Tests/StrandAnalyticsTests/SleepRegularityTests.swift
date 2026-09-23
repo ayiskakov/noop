@@ -74,3 +74,18 @@ final class SleepRegularityTests: XCTestCase {
         XCTAssertTrue(SleepRegularity.dailyAgreement(sessions: [], tzOffsetSec: tz).isEmpty)
     }
 }
+
+extension SleepRegularityTests {
+
+    /// A stored computed block's "wake" segments become wake spans; an imported minute dictionary keeps
+    /// the span and carries no wake.
+    func testSessionFromStoredBlock() {
+        let json = #"[{"start":1000,"end":1600,"stage":"light"},{"start":1600,"end":1900,"stage":"wake"},{"start":1900,"end":4000,"stage":"deep"}]"#
+        let s = SleepRegularity.session(startTs: 1000, endTs: 4000, stagesJSON: json)!
+        XCTAssertEqual(s.wake, [.init(start: 1600, end: 1900)])
+        let imported = SleepRegularity.session(startTs: 1000, endTs: 4000, stagesJSON: #"{"awake":12,"light":200}"#)!
+        XCTAssertTrue(imported.wake.isEmpty)
+        XCTAssertEqual(imported.span, .init(start: 1000, end: 4000))
+        XCTAssertNil(SleepRegularity.session(startTs: 4000, endTs: 4000, stagesJSON: nil))
+    }
+}
