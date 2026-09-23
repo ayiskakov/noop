@@ -222,7 +222,7 @@ enum HealthspanDrivers {
     /// The per-driver contributions for the last 7 days of `repo`, or empty when nothing is measurable yet.
     @MainActor
     static func thisWeek(repo: Repository, age: Int, sex: String,
-                         heightCm: Double) async -> [VitalityEngine.Contribution] {
+                         weightKg: Double) async -> [VitalityEngine.Contribution] {
         let last7 = Array(repo.days.suffix(7))
         guard !last7.isEmpty else { return [] }
         let days = last7.map { $0.day }
@@ -245,7 +245,7 @@ enum HealthspanDrivers {
         let inputs = IntelligenceEngine.healthspanInputs(
             days: last7, zone: zone, strength: byDay(strength),
             age: Double(age), sex: sex,
-            heightCm: heightCm > 0 ? heightCm : nil,
+            weightKg: weightKg > 0 ? weightKg : nil,
             leanMassKg: lean.last?.value)
         return VitalityEngine.contributions(inputs)
     }
@@ -375,7 +375,7 @@ private struct HealthspanDriversSection: View {
 
     private func load() async {
         contributions = await HealthspanDrivers.thisWeek(
-            repo: repo, age: profile.age, sex: profile.sex, heightCm: profile.heightCm)
+            repo: repo, age: profile.age, sex: profile.sex, weightKg: profile.weightKg)
         loaded = true
     }
 }

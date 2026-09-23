@@ -35,7 +35,7 @@ final class HealthspanInputsTests: XCTestCase {
         let zone = Dictionary(uniqueKeysWithValues: keys.map { ($0, (moderate: 20.0, vigorous: 5.0)) })
         let inputs = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: zone, strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         XCTAssertEqual(try XCTUnwrap(inputs.moderateMinPerWeek), 140, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(inputs.vigorousMinPerWeek), 35, accuracy: 1e-9)
     }
@@ -47,7 +47,7 @@ final class HealthspanInputsTests: XCTestCase {
         let zone = Dictionary(uniqueKeysWithValues: keys.map { ($0, (moderate: 60.0, vigorous: 30.0)) })
         let inputs = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: zone, strength: [keys[0]: 45], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         XCTAssertNil(inputs.moderateMinPerWeek)
         XCTAssertNil(inputs.vigorousMinPerWeek)
         XCTAssertNil(inputs.strengthMinPerWeek)
@@ -62,7 +62,7 @@ final class HealthspanInputsTests: XCTestCase {
         let zone = Dictionary(uniqueKeysWithValues: keys.map { ($0, (moderate: 10.0, vigorous: 0.0)) })
         let inputs = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: zone, strength: [keys[2]: 35], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         // 35 minutes across seven observed days, scaled to a seven-day week, is still 35.
         XCTAssertEqual(try XCTUnwrap(inputs.strengthMinPerWeek), 35, accuracy: 1e-9)
     }
@@ -74,23 +74,23 @@ final class HealthspanInputsTests: XCTestCase {
         let zone = Dictionary(uniqueKeysWithValues: keys.prefix(4).map { ($0, (moderate: 30.0, vigorous: 0.0)) })
         let inputs = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: zone, strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         // 120 minutes over 4 observed days is 30/day, so a 210-minute week — not the 120 actually seen.
         XCTAssertEqual(try XCTUnwrap(inputs.moderateMinPerWeek), 210, accuracy: 1e-9)
     }
 
-    /// Lean mass needs both halves of the index; a mass with no height contributes nothing rather than a
-    /// wrong one.
-    func testLeanMassNeedsHeightAndMass() {
+    /// Lean mass needs both halves of the percentage; a mass with no weight contributes nothing rather
+    /// than a wrong one.
+    func testLeanMassNeedsWeightAndMass() {
         let keys = consecutiveDayKeys(from: "2026-09-01", count: 7)
         let withBoth = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: [:], strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: 60)
+            weightKg: 80, leanMassKg: 60)
         XCTAssertNotNil(VitalityEngine.contributions(withBoth).first { $0.key == "leanmass" })
-        let noHeight = IntelligenceEngine.healthspanInputs(
+        let noWeight = IntelligenceEngine.healthspanInputs(
             days: keys.map(day), zone: [:], strength: [:], age: 40, sex: "male",
-            heightCm: nil, leanMassKg: 60)
-        XCTAssertNil(VitalityEngine.contributions(noHeight).first { $0.key == "leanmass" })
+            weightKg: nil, leanMassKg: 60)
+        XCTAssertNil(VitalityEngine.contributions(noWeight).first { $0.key == "leanmass" })
     }
 
     // MARK: - Rolling samples for the pace fit
@@ -101,7 +101,7 @@ final class HealthspanInputsTests: XCTestCase {
         let keys = consecutiveDayKeys(from: "2026-03-01", count: 200)
         let samples = IntelligenceEngine.healthspanPaceSamples(
             days: keys.map(day), zone: [:], strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         XCTAssertEqual(samples.count, PaceOfAgingEngine.trendWindowDays)
         XCTAssertEqual(Set(samples.map { $0.factorSignature }).count, 1,
                        "an unchanging history must produce one signature, or the fit drops its own samples")
@@ -118,7 +118,7 @@ final class HealthspanInputsTests: XCTestCase {
         let keys = consecutiveDayKeys(from: "2026-08-01", count: 40)
         let samples = IntelligenceEngine.healthspanPaceSamples(
             days: keys.map(day), zone: [:], strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil)
+            weightKg: 80, leanMassKg: nil)
         XCTAssertEqual(samples.count, 40 - PaceOfAgingEngine.minWindowDays + 1)
         XCTAssertNil(PaceOfAgingEngine.compute(samples: samples),
                      "26 samples is below the pace engine's own floor, so no pace is reported")
@@ -127,7 +127,7 @@ final class HealthspanInputsTests: XCTestCase {
     func testNoHistoryYieldsNoSamples() {
         XCTAssertTrue(IntelligenceEngine.healthspanPaceSamples(
             days: [], zone: [:], strength: [:], age: 40, sex: "male",
-            heightCm: 180, leanMassKg: nil).isEmpty)
+            weightKg: 80, leanMassKg: nil).isEmpty)
     }
 
     /// `dayKey` walks the calendar both ways and lands on real dates across a month boundary.

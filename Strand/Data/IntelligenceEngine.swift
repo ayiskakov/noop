@@ -580,10 +580,9 @@ final class IntelligenceEngine: ObservableObject {
                                  zone: [String: (moderate: Double, vigorous: Double)],
                                  strength: [String: Double],
                                  age: Double, sex: String,
-                                 heightCm: Double?, leanMassKg: Double?) -> VitalityEngine.Inputs {
+                                 weightKg: Double?, leanMassKg: Double?) -> VitalityEngine.Inputs {
         let rhrs = days.compactMap { $0.restingHr }.map(Double.init)
         let nights = days.compactMap { $0.totalSleepMin }.map { Double($0) / 60.0 }.filter { $0 > 0 }
-        let hrvs = days.compactMap { $0.avgHrv }
         let steps = days.compactMap { $0.steps }.map(Double.init)
         let observed = days.map { $0.day }.filter { zone[$0] != nil }
         let moderate = observed.reduce(0.0) { $0 + (zone[$1]?.moderate ?? 0) }
@@ -592,11 +591,9 @@ final class IntelligenceEngine: ObservableObject {
         // Doses are stated per WEEK whatever the window is, so a 30-day window is scaled to seven days.
         return VitalityEngine.Inputs(
             chronoAge: age,
+            sex: sex,
             restingHR: rhrs.isEmpty ? nil : IntelligenceEngine.medianOf(rhrs),
             sleepHours: nights.isEmpty ? nil : nights.reduce(0, +) / Double(nights.count),
-            sleepConsistency: VitalityEngine.sleepConsistency(nightlyHours: nights),
-            rmssd: hrvs.isEmpty ? nil : IntelligenceEngine.medianOf(hrvs),
-            rmssdNorm: VitalityEngine.rmssdNorm(forAge: age),
             steps: steps.isEmpty ? nil : steps.reduce(0, +) / Double(steps.count),
             moderateMinPerWeek: healthspanScaledDose(total: moderate, observedDays: observed.count,
                                                      windowDays: 7),
@@ -605,8 +602,7 @@ final class IntelligenceEngine: ObservableObject {
             strengthMinPerWeek: healthspanScaledDose(total: strengthTotal, observedDays: observed.count,
                                                      windowDays: 7),
             leanMassKg: leanMassKg,
-            heightCm: heightCm,
-            sex: sex)
+            weightKg: weightKg)
     }
 
     /// One rolling-30-day Vitality sample per day across the pace engine's trend window.
@@ -618,7 +614,7 @@ final class IntelligenceEngine: ObservableObject {
                                       zone: [String: (moderate: Double, vigorous: Double)],
                                       strength: [String: Double],
                                       age: Double, sex: String,
-                                      heightCm: Double?, leanMassKg: Double?)
+                                      weightKg: Double?, leanMassKg: Double?)
         -> [PaceOfAgingEngine.Sample] {
         let sorted = days.sorted { $0.day < $1.day }
         guard let newest = sorted.last, let newestIndex = PaceOfAgingEngine.dayIndex(newest.day) else {
@@ -637,7 +633,7 @@ final class IntelligenceEngine: ObservableObject {
             // history being fitted as a trend.
             guard window.count >= PaceOfAgingEngine.minWindowDays else { continue }
             let inputs = healthspanInputs(days: window, zone: zone, strength: strength,
-                                          age: age, sex: sex, heightCm: heightCm, leanMassKg: leanMassKg)
+                                          age: age, sex: sex, weightKg: weightKg, leanMassKg: leanMassKg)
             guard let result = VitalityEngine.compute(inputs) else { continue }
             out.append(PaceOfAgingEngine.Sample(
                 dayIndex: end, lnHazardSum: result.lnHazardSum,
@@ -2681,7 +2677,7 @@ final class IntelligenceEngine: ObservableObject {
         let vInputs = Self.healthspanInputs(
             days: Array(fa7), zone: vZone, strength: strengthMinutesByDay,
             age: Double(profile.age), sex: profile.sex,
-            heightCm: profile.heightCm > 0 ? profile.heightCm : nil, leanMassKg: vLeanMass)
+            weightKg: profile.weightKg > 0 ? profile.weightKg : nil, leanMassKg: vLeanMass)
         if Self.healthspanWeekIsScorable(fa7), let vRes = VitalityEngine.compute(vInputs) {
             let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
             _ = try? await store.upsertMetricSeries([
@@ -2719,7 +2715,7 @@ final class IntelligenceEngine: ObservableObject {
         let paceSamples = Self.healthspanPaceSamples(
             days: paceDaily, zone: paceZone, strength: paceStrength,
             age: Double(profile.age), sex: profile.sex,
-            heightCm: profile.heightCm > 0 ? profile.heightCm : nil, leanMassKg: vLeanMass)
+            weightKg: profile.weightKg > 0 ? profile.weightKg : nil, leanMassKg: vLeanMass)
         if let pace = PaceOfAgingEngine.compute(samples: paceSamples) {
             let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
             _ = try? await store.upsertMetricSeries([

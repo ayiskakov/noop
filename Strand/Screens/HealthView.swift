@@ -1306,7 +1306,7 @@ private struct VitalitySection: View {
         vitality = (await repo.exploreSeries(key: "vitality", source: "my-whoop")).last?.value
         bodyAge = (await repo.exploreSeries(key: "body_age", source: "my-whoop")).last?.value
         contributions = await HealthspanDrivers.thisWeek(
-            repo: repo, age: profile.age, sex: profile.sex, heightCm: profile.heightCm)
+            repo: repo, age: profile.age, sex: profile.sex, weightKg: profile.weightKg)
         loaded = true
     }
 }
