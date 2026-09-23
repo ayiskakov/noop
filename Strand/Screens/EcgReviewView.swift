@@ -231,11 +231,12 @@ struct EcgReviewView: View {
         }
     }
 
-    /// A share of the recording, worded so none of it reads as a verdict.
+    /// A share of the analysed time, worded so none of it reads as a verdict. Rounded, but to 0 % or
+    /// 100 % only when it is exactly that.
     private func share(_ fraction: Double) -> Text {
         if fraction <= 0 { return Text("No") }
-        if fraction >= 0.95 { return Text("Whole recording") }
-        return Text("\(max(1, Int((fraction * 100).rounded())))% of the recording")
+        let percent = fraction >= 1 ? 100 : min(99, max(1, Int((fraction * 100).rounded())))
+        return Text("\(percent)% of the analysed time")
     }
 
     @ViewBuilder private func scrubber(_ recording: EcgStrip.Recording) -> some View {

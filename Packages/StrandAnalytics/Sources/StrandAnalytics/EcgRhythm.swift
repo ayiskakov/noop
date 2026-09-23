@@ -15,8 +15,9 @@ import WhoopProtocol
 /// established interpretation, so it is shown as a number and never mapped to a word.
 public struct EcgRhythmFacts: Equatable, Sendable {
 
-    /// Intervals per rolling window for the rate series. Five, so one missed or doubled beat moves a
-    /// window's median by at most one position rather than setting its value.
+    /// Intervals in the window an interval's local rate is the median of: the five centred on it, the
+    /// nearest five at a stretch's ends, or all of a shorter stretch. Five, so one missed or doubled
+    /// beat moves a window's median by at most one position rather than setting its value.
     public static let rollingWindow = 5
     /// Intervals either side that form an interval's reference median for the artefact rule, which is
     /// `HRVAnalyzer`'s (an interval more than `HRVAnalyzer.ectopicThreshold` from that median is set
@@ -30,14 +31,17 @@ public struct EcgRhythmFacts: Equatable, Sendable {
 
     /// Median rate over the recording.
     public let heartRate: Double
-    /// 5th and 95th percentiles of the rolling rate: the range the rate moved through, without the
-    /// single-window extremes an artefact produces. Widened where needed to take in `heartRate`: over a
-    /// short or uneven series the median of every interval can fall outside the percentiles of its
-    /// five-interval windows ([889, 656, 805, 896, 905, 878, 746, 816] ms gives 70.8 bpm against
+    /// 5th and 95th percentiles of the intervals' local rates: the range the rate moved through,
+    /// without the single-window extremes an artefact produces. Widened where needed to take in
+    /// `heartRate`: over a short or uneven series the median of every interval can fall outside the
+    /// percentiles of the local rates ([889, 656, 805, 896, 905, 878, 746, 816] ms gave 70.8 bpm against
     /// 67.5–68.3), and a rate shown outside its own range contradicts itself.
     public let rateLow: Double
     public let rateHigh: Double
-    /// Share of rolling-rate windows above `highRate` / below `lowRate`, 0…1.
+    /// Share of the analysed time (the usable intervals, summed) whose local rate was above `highRate`
+    /// / below `lowRate`, 0…1. By time rather than by count: at a fast rate each interval is short, so a
+    /// count overstates the time spent there (30 intervals of 400 ms then 10 of 1,000 ms are 75 % of the
+    /// intervals but 55 % of the time).
     public let fractionAboveHigh: Double
     public let fractionBelowLow: Double
     /// Coefficient of variation of the kept intervals, in percent: the standard deviation within each
@@ -62,7 +66,8 @@ public struct EcgRhythmFacts: Equatable, Sendable {
         let bySegment = Dictionary(grouping: beats.intervals, by: \.segment)
             .sorted { $0.key < $1.key }.map { $0.value.map(\.ms) }
 
-        var rolling: [Double] = []
+        // One local rate per usable interval, with the interval's length as its weight in time.
+        var local: [(bpm: Double, ms: Double)] = []
         var nn: [Double] = []
         var contiguous: [Bool] = []
         var pooledSquares = 0.0, pooledDegrees = 0
@@ -70,12 +75,10 @@ public struct EcgRhythmFacts: Equatable, Sendable {
         for raw in bySegment {
             let ms = raw.filter(EcgBeats.rrRangeMs.contains)
             if ms.isEmpty { continue }
-            if ms.count < rollingWindow {
-                rolling.append(60_000 / (EcgBeats.median(ms) ?? ms[0]))
-            } else {
-                for start in 0...(ms.count - rollingWindow) {
-                    rolling.append(60_000 / (EcgBeats.median(Array(ms[start..<(start + rollingWindow)])) ?? 1))
-                }
+            for i in ms.indices {
+                let start = max(0, min(i - rollingWindow / 2, ms.count - rollingWindow))
+                let window = Array(ms[start..<min(ms.count, start + rollingWindow)])
+                local.append((60_000 / (EcgBeats.median(window) ?? ms[i]), ms[i]))
             }
             let clean = HRVAnalyzer.cleanRRGapAware(raw, radius: neighbourReach)
             setAside += ms.count - clean.nn.count
@@ -93,13 +96,19 @@ public struct EcgRhythmFacts: Equatable, Sendable {
         let sd = pooledDegrees > 0 ? (pooledSquares / Double(pooledDegrees)).squareRoot() : 0
         let rmssd = HRVAnalyzer.rmssdGapAware(nn, contiguous)
 
+        let rates = local.map(\.bpm)
+        let analysedMs = local.reduce(0) { $0 + $1.ms }
+        func shareOfTime(_ include: (Double) -> Bool) -> Double {
+            analysedMs > 0 ? local.filter { include($0.bpm) }.reduce(0) { $0 + $1.ms } / analysedMs : 0
+        }
+
         let completed = records.sorted { $0.ts < $1.ts }.first { $0.classifierState == 2 }
         return EcgRhythmFacts(
             heartRate: rate,
-            rateLow: min(rate, EcgBeats.percentile(rolling, 0.05) ?? rate),
-            rateHigh: max(rate, EcgBeats.percentile(rolling, 0.95) ?? rate),
-            fractionAboveHigh: Double(rolling.filter { $0 > highRate }.count) / Double(max(1, rolling.count)),
-            fractionBelowLow: Double(rolling.filter { $0 < lowRate }.count) / Double(max(1, rolling.count)),
+            rateLow: min(rate, EcgBeats.percentile(rates, 0.05) ?? rate),
+            rateHigh: max(rate, EcgBeats.percentile(rates, 0.95) ?? rate),
+            fractionAboveHigh: shareOfTime { $0 > highRate },
+            fractionBelowLow: shareOfTime { $0 < lowRate },
             variationPercent: mean > 0 ? sd / mean * 100 : 0,
             rmssdMs: rmssd,
             setAsideIntervals: setAside,

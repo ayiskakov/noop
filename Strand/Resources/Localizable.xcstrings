@@ -16192,66 +16192,66 @@
         }
       }
     },
-    "%lld%% of the recording": {
+    "%lld%% of the analysed time": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld %% der Aufzeichnung"
+            "value": "%lld %% der analysierten Zeit"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld%% of the recording"
+            "value": "%lld%% of the analysed time"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld %% de la grabación"
+            "value": "%lld %% del tiempo analizado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld %% de l'enregistrement"
+            "value": "%lld %% du temps analysé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld%% della registrazione"
+            "value": "%lld%% del tempo analizzato"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld%% nagrania"
+            "value": "%lld%% analizowanego czasu"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld%% da gravação"
+            "value": "%lld%% do tempo analisado"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld %% записи"
+            "value": "%lld %% проанализированного времени"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "记录的 %lld%%"
+            "value": "分析时长的 %lld%%"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "記錄的 %lld%%"
+            "value": "分析時長的 %lld%%"
           }
         }
       }
@@ -224092,70 +224092,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Domyślną miarą NOOP jest cała noc; Głęboki sen łączy HRV tylko w czasie snu wolnofalowego, odczyt jest niższy i odpowiada WHOOP. Przełączenie ponownie rejestruje ostatnie noce w nowym oknie i zaczyna obowiązywać natychmiast, gdy będziesz mieć dane z kilku nocy."
-          }
-        }
-      }
-    },
-    "Whole recording": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gesamte Aufzeichnung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Whole recording"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toda la grabación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout l'enregistrement"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tutta la registrazione"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Całe nagranie"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toda a gravação"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Вся запись"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "整段记录"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "整段記錄"
           }
         }
       }

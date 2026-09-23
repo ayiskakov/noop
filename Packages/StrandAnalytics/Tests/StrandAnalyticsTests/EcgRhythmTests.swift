@@ -29,14 +29,19 @@ final class EcgRhythmTests: XCTestCase {
         XCTAssertEqual(f.setAsideIntervals, 0)
     }
 
-    func testHighAndLowAreSharesOfTheRollingRate() {
+    func testHighAndLowAreSharesOfTheAnalysedTime() {
         XCTAssertEqual(facts([Array(repeating: 500, count: 20)]).fractionAboveHigh, 1)      // 120 bpm
         XCTAssertEqual(facts([Array(repeating: 1_500, count: 20)]).fractionBelowLow, 1)     // 40 bpm
-        // 10 intervals at 120 bpm then 10 at 75: of the 16 five-interval windows, window k holds
-        // min(5, 10 − k) intervals of 500 ms, and its median is 500 when that is at least 3 — k = 0…7.
+        // 10 intervals at 120 bpm then 10 at 75. Each interval's local rate is the median of the five
+        // centred on it, so the window of the last 500 holds three 500s and two 800s, and that of the
+        // first 800 two and three: every 500 reads 120 and every 800 reads 75. The 500s are half the
+        // intervals but 5 of the 13 seconds.
         let mixed = facts([Array(repeating: 500, count: 10) + Array(repeating: 800, count: 10)])
-        XCTAssertEqual(mixed.fractionAboveHigh, 8.0 / 16.0, accuracy: 1e-12)
+        XCTAssertEqual(mixed.fractionAboveHigh, 5_000.0 / 13_000.0, accuracy: 1e-12)
         XCTAssertEqual(mixed.fractionBelowLow, 0)
+        // The example in `fractionAboveHigh`'s doc: 75 % of the intervals, 55 % of the time.
+        let fast = facts([Array(repeating: 400, count: 30) + Array(repeating: 1_000, count: 10)])
+        XCTAssertEqual(fast.fractionAboveHigh, 12_000.0 / 22_000.0, accuracy: 1e-12)
     }
 
     func testAlternatingIntervalsGiveTheirKnownRmssdAndVariation() {
