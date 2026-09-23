@@ -274,7 +274,7 @@ struct TestCentreView: View {
                         Label("Review ECG recordings", systemImage: "waveform.path.ecg")
                     }
                     .buttonStyle(NoopButtonStyle(.secondary, fullWidth: true))
-                    Text("View the raw waveform your WHOOP MG recorded, as a scrollable strip. UNVALIDATED instrumentation, not a medical ECG — no heart rate or rhythm is shown, because nothing here has been validated to produce one. Read-only; never writes to the strap.")
+                    Text("View the raw waveform your WHOOP MG recorded, as a scrollable strip, with the beats marked, an experimental heart rate and rhythm measurements. UNVALIDATED instrumentation, not a medical ECG or a diagnosis. Read-only; never writes to the strap.")
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                     Divider().overlay(StrandPalette.hairline)

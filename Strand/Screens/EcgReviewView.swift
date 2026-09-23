@@ -7,13 +7,13 @@ import WhoopProtocol
 ///
 /// ## What this screen is, and the line it does not cross
 ///
-/// It shows the SHAPE of what the strap recorded and nothing derived from it. No heart rate, no
-/// interval, no rhythm classification, no voltage, no "normal" or "abnormal". That is not caution for
-/// its own sake — `ECG_FEATURE_NOTES.md` §5 records that beat-to-beat accuracy against the strap's own
-/// optical heart rate was never established (r ≈ 0.43 at best, and WORSE with a better detector), for a
-/// structural reason rather than a fixable one: wrist single-lead ECG needs stillness, stillness means
-/// the heart rate barely moves, and anything that moves it properly destroys the trace with motion
-/// artifact. A number on this screen would be the withdrawn #194 PPG→HR estimate all over again.
+/// It shows the SHAPE of what the strap recorded, and what is counted from its R peaks (`EcgBeats`): a
+/// heart rate, with the peaks marked on the strip so the count can be checked by eye, and rhythm
+/// measurements (`EcgRhythmFacts`): the rate's range, the share of the analysed time above and below
+/// fixed rates, beat-to-beat variation, and the R-R intervals in order. No voltage, and no rhythm is
+/// named: nothing is called "normal", "abnormal" or a condition. Only records the strap itself rated
+/// quality 3 are counted, where the rate tracked the strap's optical HR across 82–116 bpm (see
+/// `EcgBeats` for the comparison). It is experimental and feeds nothing else.
 ///
 /// The same rule governs what IS shown. The strap's own status codes appear as the raw codes they are,
 /// because `docs/PROTOCOL_ECG.md` says the quality values are "partial observed outcomes, not an
@@ -32,6 +32,10 @@ struct EcgReviewView: View {
     @State private var recordings: [EcgStrip.Recording] = []
     @State private var selected: EcgStrip.Recording?
     @State private var records: [EcgCandidateSample] = []
+    /// Beats for the selected recording, nil while they are being found.
+    @State private var beats: EcgBeats.Result?
+    /// Measured rhythm facts for the selected recording; nil while loading or with too few beats.
+    @State private var rhythm: EcgRhythmFacts?
     @State private var loading = true
     @State private var loadingWaveform = false
     /// Display-only baseline removal. ON by default because the captures need it — a ten-second window
@@ -72,6 +76,7 @@ struct EcgReviewView: View {
                     emptyCard
                 } else {
                     if let selected { stripCard(selected) }
+                    if let rhythm, let beats, !loadingWaveform { rhythmCard(rhythm, beats: beats) }
                     recordingListCard
                 }
             }
@@ -91,7 +96,7 @@ struct EcgReviewView: View {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(StrandPalette.statusWarning)
                 }
-                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. No heart rate or rhythm is shown, because nothing here has been validated to produce one. If you have symptoms or a concern about your heart, talk to a doctor.")
+                Text("This is an unvalidated sensor waveform decoded from your own strap. NOOP is not a medical device and this is not an ECG test. It cannot detect, diagnose, rule out, or monitor any heart condition. The heart rate and rhythm details shown are experimental measurements of the beats, not a diagnosis. If you have symptoms or a concern about your heart, talk to a doctor.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -129,6 +134,7 @@ struct EcgReviewView: View {
                                   range: window.range,
                                   seconds: Double(window.seconds),
                                   contactFlags: window.contactFlags,
+                                  markers: window.markers,
                                   height: NoopMetrics.chartHeight)
                     // The axis carries SECONDS, which are a wire fact (one record per second), and no
                     // amplitude axis at all, because there is no calibration to put on one.
@@ -142,12 +148,96 @@ struct EcgReviewView: View {
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                 }
 
+                heartRateBlock
                 scrubber(recording)
                 controls
                 if !recording.isComplete { incompleteNotice(recording) }
                 factsRow(recording)
             }
         }
+    }
+
+    /// The one derived figure, and the evidence for it: beats are marked on the strip above.
+    @ViewBuilder private var heartRateBlock: some View {
+        if let beats, !loadingWaveform {
+            VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                if let rate = beats.heartRate, let rr = beats.medianRRMs {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Heart rate from ECG")
+                            .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                        Spacer()
+                        Text("\(Int(rate.rounded())) bpm")
+                            .font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                    }
+                    Text("R-R median \(Int(rr.rounded())) ms · \(beats.beats.count) beats in \(beats.analysedSeconds) s of clean signal")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                } else {
+                    Text("Not enough clean signal for a heart rate. The strap marked \(beats.ratedSeconds) s of this recording as clean; \(beats.analysedSeconds) s of it came in runs long enough to analyse.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Experimental. Counted from the R peaks (marked on the strip) only where the strap rated the signal clean. Not a medical measurement.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Rhythm details
+
+    /// Measurements only. The section deliberately names no rhythm and no condition — see
+    /// `EcgRhythmFacts` for why a "not detected" line is the one this screen must never print.
+    private func rhythmCard(_ facts: EcgRhythmFacts, beats: EcgBeats.Result) -> some View {
+        StrandCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("Rhythm details (experimental)")
+                    .font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                factRow("Heart rate", value: Text("\(Int(facts.heartRate.rounded())) bpm"),
+                        detail: Text("range \(Int(facts.rateLow.rounded()))–\(Int(facts.rateHigh.rounded())) bpm"))
+                factRow("Above \(Int(EcgRhythmFacts.highRate)) bpm", value: share(facts.fractionAboveHigh))
+                factRow("Below \(Int(EcgRhythmFacts.lowRate)) bpm", value: share(facts.fractionBelowLow))
+                factRow("Beat-to-beat variation", value: facts.rmssdMs.map {
+                    Text("\(Int(facts.variationPercent.rounded()))% · RMSSD \(Int($0.rounded())) ms")
+                } ?? Text("\(Int(facts.variationPercent.rounded()))%"))
+                if facts.setAsideIntervals > 0 {
+                    Text("\(facts.setAsideIntervals) intervals set aside as likely missed or extra beats.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                }
+                VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                    Text("R-R intervals")
+                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                    RRDotChart(intervals: beats.intervals)
+                        .frame(height: 120)
+                    Text("Each dot is the gap between two successive beats, in order. A blank is an interval out of range; a line is a break in the analysed signal.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                }
+                factRow("Strap's own result", value: facts.strapResultCode.map {
+                    Text("code \($0) (meaning not known)")
+                } ?? Text("Did not finish"))
+                Text("These are measurements, not a diagnosis. NOOP cannot detect or rule out AFib or any other heart condition. If you feel unwell or notice palpitations, see a doctor.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func factRow(_ label: LocalizedStringKey, value: Text, detail: Text? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+            Spacer()
+            VStack(alignment: .trailing, spacing: NoopMetrics.spaceHalf) {
+                value.font(StrandFont.bodyNumber).foregroundStyle(StrandPalette.textPrimary)
+                if let detail { detail.font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary) }
+            }
+        }
+    }
+
+    /// A share of the analysed time, worded so none of it reads as a verdict. Rounded, but to 0 % or
+    /// 100 % only when it is exactly that.
+    private func share(_ fraction: Double) -> Text {
+        if fraction <= 0 { return Text("No") }
+        let percent = fraction >= 1 ? 100 : min(99, max(1, Int((fraction * 100).rounded())))
+        return Text("\(percent)% of the analysed time")
     }
 
     @ViewBuilder private func scrubber(_ recording: EcgStrip.Recording) -> some View {
@@ -188,8 +278,8 @@ struct EcgReviewView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// The recording's facts, each stated as what it is. Note what is absent: no heart rate, and no
-    /// word-label for the quality code — see the type doc.
+    /// The recording's facts, each stated as what it is. Note what is absent: no word-label for the
+    /// quality code — see the type doc.
     @ViewBuilder private func factsRow(_ recording: EcgStrip.Recording) -> some View {
         VStack(alignment: .leading, spacing: NoopMetrics.space1) {
             Text("\(recording.durationSeconds) s · \(recording.recordCount) records · \(recording.storedSamples) samples")
@@ -258,6 +348,7 @@ struct EcgReviewView: View {
         let range: (min: Double, max: Double)
         let seconds: Int
         let contactFlags: [Bool]
+        let markers: [Double]
     }
 
     private func window(_ recording: EcgStrip.Recording) -> Window {
@@ -266,7 +357,7 @@ struct EcgReviewView: View {
         let visible = records.filter { $0.ts >= from && $0.ts <= to }
         let seconds = max(1, min(windowSeconds, recording.endTs - from + 1))
         guard !visible.isEmpty else {
-            return Window(columns: [], breaks: [], range: (-1, 1), seconds: seconds, contactFlags: [])
+            return Window(columns: [], breaks: [], range: (-1, 1), seconds: seconds, contactFlags: [], markers: [])
         }
         let (samples, gaps) = EcgStrip.concatenate(visible.map {
             (ts: $0.ts, samples: $0.samples.map(Double.init))
@@ -287,7 +378,10 @@ struct EcgReviewView: View {
                       breaks: breaks,
                       range: EcgStrip.verticalRange(columns),
                       seconds: seconds,
-                      contactFlags: visible.flatMap(\.contactFlags))
+                      contactFlags: visible.flatMap(\.contactFlags),
+                      markers: EcgStrip.markerFractions(
+                          beats: (beats?.beats ?? []).map { (ts: $0.recordTs, sample: $0.sample) },
+                          records: visible.map { (ts: $0.ts, sampleCount: $0.samples.count) }))
     }
 
     // MARK: - Loading
@@ -303,7 +397,20 @@ struct EcgReviewView: View {
         selected = recording
         windowStart = 0
         loadingWaveform = true
-        records = await model.repo.ecgRecords(for: recording)
+        beats = nil
+        rhythm = nil
+        let loaded = await model.repo.ecgRecords(for: recording)
+        // Off the main actor: a long recording is hundreds of thousands of samples.
+        let (found, facts) = await Task.detached(priority: .userInitiated) { () -> (EcgBeats.Result, EcgRhythmFacts?) in
+            let found = EcgBeats.analyse(loaded)
+            return (found, EcgRhythmFacts.from(found, records: loaded))
+        }.value
+        // Nothing lands until this load is known to still be the selected one: a superseded load that
+        // finishes late would otherwise put one recording's rows under another's figures.
+        guard selected?.id == recording.id else { return }
+        records = loaded
+        beats = found
+        rhythm = facts
         loadingWaveform = false
     }
 
@@ -322,5 +429,70 @@ struct EcgReviewView: View {
         f.dateStyle = .none
         f.timeStyle = .medium
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts)))
+    }
+}
+
+/// R-R intervals as dots in beat order. A steady rhythm draws a flat band; the chart shows the spread
+/// and leaves what it means to the reader.
+///
+/// Takes every interval, rejected ones included, so each dot sits at its true place in the sequence: a
+/// rejected interval keeps its slot and draws nothing, and a stretch boundary gets a slot of its own
+/// with a line through it. Closing either up would set two intervals side by side that never were.
+private struct RRDotChart: View {
+    let intervals: [EcgBeats.Interval]
+
+    private var usable: [Double] { intervals.filter(\.isUsable).map(\.ms) }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let usable = self.usable
+            guard usable.count > 1, let lo = usable.min(), let hi = usable.max() else { return }
+            let pad = max(20, (hi - lo) * 0.15)
+            let bottom = lo - pad, top = hi + pad
+            // Slots: one per interval, plus one at each change of stretch.
+            var slots: [Double?] = []
+            var breaks: [Int] = []
+            for (i, interval) in intervals.enumerated() {
+                if i > 0, interval.segment != intervals[i - 1].segment {
+                    breaks.append(slots.count)
+                    slots.append(nil)
+                }
+                slots.append(interval.isUsable ? interval.ms : nil)
+            }
+            let step = size.width / Double(max(1, slots.count - 1))
+            var grid = Path()
+            for fraction in [0.25, 0.5, 0.75] {
+                grid.move(to: CGPoint(x: 0, y: size.height * fraction))
+                grid.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+            }
+            ctx.stroke(grid, with: .color(StrandPalette.hairline), lineWidth: 0.5)
+            var separators = Path()
+            for b in breaks {
+                separators.move(to: CGPoint(x: Double(b) * step, y: 0))
+                separators.addLine(to: CGPoint(x: Double(b) * step, y: size.height))
+            }
+            ctx.stroke(separators, with: .color(StrandPalette.textTertiary), lineWidth: 1)
+            let r = NoopMetrics.space1 / 1.5
+            for (i, slot) in slots.enumerated() {
+                guard let ms = slot else { continue }
+                let x = Double(i) * step
+                let y = size.height * (1 - (ms - bottom) / (top - bottom))
+                ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
+                         with: .color(StrandPalette.accent))
+            }
+            // The edges are labelled with the values AT the edges, padding included, so the unlabelled
+            // grid lines between them read as the linear scale they are.
+            ctx.draw(Text("\(Int(top.rounded())) ms").font(StrandFont.caption)
+                        .foregroundColor(StrandPalette.textTertiary),
+                     at: CGPoint(x: 0, y: 0), anchor: .topLeading)
+            ctx.draw(Text("\(Int(bottom.rounded())) ms").font(StrandFont.caption)
+                        .foregroundColor(StrandPalette.textTertiary),
+                     at: CGPoint(x: 0, y: size.height), anchor: .bottomLeading)
+        }
+        .background(StrandPalette.surfaceInset)
+        .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.space1, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("R-R intervals"))
+        .accessibilityValue(Text("\(usable.count) intervals from \(Int((usable.min() ?? 0).rounded())) to \(Int((usable.max() ?? 0).rounded())) ms"))
     }
 }

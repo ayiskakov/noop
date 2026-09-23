@@ -10,12 +10,11 @@ import Foundation
 ///
 /// ## What this does NOT compute
 ///
-/// No heart rate, no interval, no rhythm classification, no volts. `ECG_FEATURE_NOTES.md` §5 records
-/// why: beat-to-beat accuracy against the strap's own optical HR was never established (r ≈ 0.43 at
-/// best, and worse with a better detector), for a reason that is structural rather than fixable — wrist
-/// single-lead ECG needs stillness, stillness means the heart rate barely moves, and anything that moves
-/// it properly destroys the trace. A number on this screen would be the #194 PPG→HR withdrawal again.
-/// The strip shows the SHAPE of what the strap recorded and nothing derived from it.
+/// No beats, rates or intervals, and no volts. Beats and the heart rate come from `EcgBeats`, the
+/// rhythm measurements from `EcgRhythmFacts`; this file only places the beats on the strip's columns
+/// (`markerFractions`), so the count can be checked against the trace by eye. The r ≈ 0.43 against
+/// optical HR once cited here to refuse any rate predates the documented R16 decode; `EcgBeats` has the
+/// comparison that replaced it.
 public enum EcgStrip {
 
     // MARK: - Records in, recordings out
@@ -104,12 +103,7 @@ public enum EcgStrip {
     /// device's records at a time, since two straps' index spaces are unrelated.
     public static func group(deviceId: String, records: [RecordRef]) -> [Recording] {
         guard !records.isEmpty else { return [] }
-        let sorted = records.sorted { a, b in
-            switch (a.recordIndex, b.recordIndex) {
-            case let (x?, y?) where x != y: return x < y
-            default: return a.ts < b.ts
-            }
-        }
+        let sorted = records.sorted { recordOrder(($0.recordIndex, $0.ts), ($1.recordIndex, $1.ts)) }
         var out: [Recording] = []
         var run: [RecordRef] = [sorted[0]]
         for r in sorted.dropFirst() {
@@ -129,11 +123,26 @@ public enum EcgStrip {
     ///
     /// Exposed so the rule can be tested directly rather than only through a grouping result.
     public static func continuesRun(previous: RecordRef, next: RecordRef) -> Bool {
+        continuesRun(previous: (previous.recordIndex, previous.ts), next: (next.recordIndex, next.ts))
+    }
+
+    /// The same rule over bare keys, so every caller that splits records into runs (`EcgBeats` too)
+    /// agrees with the recordings this file groups.
+    static func continuesRun(previous: (recordIndex: Int?, ts: Int), next: (recordIndex: Int?, ts: Int))
+        -> Bool {
         if let a = previous.recordIndex, let b = next.recordIndex { return b == a + 1 }
         // No index on one side or the other: fall back to adjacent seconds. One second of slack, because
         // the records themselves are one per second and an exactly-equal ts would be a duplicate row the
         // primary key does not allow.
         return next.ts == previous.ts + 1
+    }
+
+    /// The order `group` walks records in: by record index where both carry one, else by timestamp.
+    static func recordOrder(_ a: (recordIndex: Int?, ts: Int), _ b: (recordIndex: Int?, ts: Int)) -> Bool {
+        switch (a.recordIndex, b.recordIndex) {
+        case let (x?, y?) where x != y: return x < y
+        default: return a.ts < b.ts
+        }
     }
 
     private static func summarise(deviceId: String, run: [RecordRef]) -> Recording {
@@ -272,6 +281,31 @@ public enum EcgStrip {
     }
 
     // MARK: - Laying records onto a timeline
+
+    /// Where each beat falls along a strip built by `concatenate`, as a fraction of its width.
+    ///
+    /// Positions follow the SAMPLE axis the strip draws, not wall time, so a marker stays on its
+    /// complex even when a gap has closed the strip up. Each beat names the record it lies in (by that
+    /// record's `ts`, the key the strip itself is built on) and its sample within that record, so no
+    /// sample rate and no clock arithmetic enters the placement. Beats in records not on the strip are
+    /// dropped.
+    public static func markerFractions(beats: [(ts: Int, sample: Int)],
+                                       records: [(ts: Int, sampleCount: Int)]) -> [Double] {
+        let ordered = records.sorted { $0.ts < $1.ts }
+        let total = ordered.reduce(0) { $0 + $1.sampleCount }
+        guard total > 0 else { return [] }
+        var offset: [Int: (start: Int, count: Int)] = [:]
+        var running = 0
+        for r in ordered {
+            offset[r.ts] = (running, r.sampleCount)
+            running += r.sampleCount
+        }
+        return beats.compactMap { beat in
+            guard let o = offset[beat.ts], o.count > 0 else { return nil }
+            let within = min(o.count - 1, max(0, beat.sample))
+            return (Double(o.start + within) + 0.5) / Double(total)
+        }
+    }
 
     /// Concatenate a recording's records into one series, inserting nothing for a missing second.
     ///
