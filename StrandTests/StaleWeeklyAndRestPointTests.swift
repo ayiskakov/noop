@@ -3,8 +3,9 @@ import StrandAnalytics
 import WhoopStore
 @testable import Strand
 
-/// A partial first day or a since-dropped session must not leave a score behind: the weekly Vitality /
-/// Body Age needs enough scored nights, and a `sleep_performance` point whose day lost its sleep is stale.
+/// A since-dropped session must not leave a score behind: a `sleep_performance` point whose day lost its
+/// sleep is stale. (The Body Age half of this — too few scored nights — is the 21-of-31 unlock gate, now
+/// covered in `HealthspanInputsTests.testUnlockGate`.)
 final class StaleWeeklyAndRestPointTests: XCTestCase {
 
     private func day(_ key: String, rhr: Int?, sleepMin: Double? = nil) -> DailyMetric {
@@ -14,15 +15,6 @@ final class StaleWeeklyAndRestPointTests: XCTestCase {
                     exerciseCount: nil, spo2Pct: nil, skinTempDevC: nil, respRateBpm: nil, steps: 672,
                     activeKcalEst: nil, spo2Red: nil, spo2Ir: nil, avgSdnn: nil, skinTempC: nil,
                     sleepHrOnly: nil)
-    }
-
-    func testOneScoredNightIsNotAWeeklyBodyAge() {
-        let week = [day("2026-09-18", rhr: 60)]
-        XCTAssertFalse(IntelligenceEngine.healthspanWeekIsScorable(week))
-        let three = (19...21).map { day("2026-09-\($0)", rhr: 52) } + [day("2026-09-22", rhr: nil)]
-        XCTAssertFalse(IntelligenceEngine.healthspanWeekIsScorable(three))
-        let four = (19...22).map { day("2026-09-\($0)", rhr: 52) }
-        XCTAssertTrue(IntelligenceEngine.healthspanWeekIsScorable(four))
     }
 
     func testRestPointForADayWithoutSleepIsStale() {
