@@ -50,6 +50,26 @@ extension WhoopStore {
         return n
     }
 
+    /// Replace every point of `keys` on days in [from, to] with `rows`, in ONE transaction: delete the
+    /// range, then upsert. For a resolver that recomputes a window of days and may legitimately produce
+    /// fewer keys than last time (a driver that lost its data), where an upsert alone would leave the old
+    /// key behind, and a separate delete would expose an empty window between the two writes. Rows whose
+    /// key is not in `keys` are written too; only `keys` are cleared. Returns rows upserted.
+    @discardableResult
+    public func replaceMetricSeries(_ rows: [MetricPoint], deviceId: String, keys: [String],
+                                    from: String, to: String) async throws -> Int {
+        try syncWrite { db in
+            if !keys.isEmpty {
+                let marks = Array(repeating: "?", count: keys.count).joined(separator: ",")
+                try db.execute(sql: """
+                    DELETE FROM metricSeries
+                    WHERE deviceId = ? AND day >= ? AND day <= ? AND key IN (\(marks))
+                    """, arguments: StatementArguments([deviceId, from, to] + keys))
+            }
+            return try Self.upsertMetricSeries(rows, deviceId: deviceId, in: db)
+        }
+    }
+
     // MARK: - Reads
 
     /// Points for a single `key` on days in [from, to] (lexicographic YYYY-MM-DD compare),

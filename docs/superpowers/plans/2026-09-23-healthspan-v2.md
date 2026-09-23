@@ -15,9 +15,9 @@ observational, and nothing here is validated against a mortality outcome (WHOOP'
 
 ## Checklist
 
-- [ ] **PR 1 — Engine** (`Packages/StrandAnalytics`: `VitalityEngine` + `PaceOfAgingEngine`, `swift test`)
-- [ ] **PR 2 — Pipeline** (`Strand/Data/IntelligenceEngine.swift`: windows, inputs, persisted breakdown)
-- [ ] **PR 3 — Healthspan tab** (`Strand/Screens/HealthspanView.swift`, macOS + iOS)
+- [x] **PR 1 — Engine** (`Packages/StrandAnalytics`: `VitalityEngine` + `PaceOfAgingEngine`, `swift test`)
+- [x] **PR 2 — Pipeline** (`Strand/Data/IntelligenceEngine.swift`: windows, inputs, persisted breakdown)
+- [x] **PR 3 — Healthspan tab** (`Strand/Screens/HealthspanView.swift`, macOS + iOS)
 
 ## What is wrong with the current feature (found 2026-09-23)
 
@@ -42,7 +42,7 @@ observational, and nothing here is validated against a mortality outcome (WHOOP'
 | Body Age window | **Last 182 days** | WHOOP Age uses 6 months. |
 | Pace of Aging | **Projection**: hold the last-30-day averages for 6 months → projected Body Age; pace = (projected − current) / 0.5 y, clamped −1…3× | WHOOP's published definition (WP p.19). Keep the current honesty rule: ±margin, and "holding steady" when the margin spans 1×. |
 | Unlock | ≥ 21 scored days in the last 31; age ≥ 18 | WHOOP's gate. |
-| Cadence | Weekly headline (Sunday, like WHOOP) plus a daily point for the trend chart | Comparable to WHOOP while the tab still moves daily. |
+| Cadence | ~~Weekly headline (Sunday, like WHOOP) plus a daily point for the trend chart~~ **One point per day; the headline is the newest point** (revised in PR 2) | A Sunday headline beside a daily chart would put two different "current" Body Ages on one screen, which AGENTS.md forbids. The 182-day window already gives the week-to-week stability the Sunday cadence was for. |
 | HRV | Shown on the tab as context, **not scored** | See gap 7. |
 | Model change on stored rows | Bump a `healthspan_model` version; re-derive the stored `body_age` / `pace_of_aging` history under the new model in one idempotent pass | Otherwise the trend chart would splice two models together at the upgrade date. |
 
@@ -107,7 +107,7 @@ Changes inside `VitalityEngine` / `PaceOfAgingEngine`. Each curve carries its ci
 5. **Trend:** Body Age and pace over 6 months (StrandDesign chart).
 6. **Context (not scored):** HRV.
 7. **Method sheet:** the referent choice, the limits, the references.
-8. The **Resilience** section (sibling plan) mounts below, behind its Experimental toggle.
+8. The **Resilience** section (sibling plan) mounts below, behind its Experimental toggle. *(Not in this PR: it ships with the Resilience plan.)*
 
 The same rule applies to every readout: hero, dial, chips and chart all read one stored point per day.
 Design tokens only. New copy must go into `Strand/Resources/Localizable.xcstrings` with de / es / fr /

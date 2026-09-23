@@ -249760,6 +249760,1920 @@
           }
         }
       }
+    },
+    "Zones 1–3 cardio": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio Zonen 1–3"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zonas 1–3"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zones 1–3"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zone 1–3"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio strefy 1–3"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zonas 1–3"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кардио зоны 1–3"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1–3 区有氧"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1–3 區有氧"
+          }
+        }
+      }
+    },
+    "Zones 4–5 cardio": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio Zonen 4–5"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zonas 4–5"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zones 4–5"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zone 4–5"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio strefy 4–5"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cardio zonas 4–5"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кардио зоны 4–5"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4–5 区有氧"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4–5 區有氧"
+          }
+        }
+      }
+    },
+    "Healthspan is for adults 18 and over.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan ist für Erwachsene ab 18 Jahren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan es para adultos de 18 años o más."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan s’adresse aux adultes de 18 ans et plus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan è per adulti dai 18 anni in su."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan jest dla dorosłych od 18 lat."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Healthspan destina-se a adultos a partir dos 18 anos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan предназначен для взрослых от 18 лет."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan 适用于 18 岁及以上的成年人。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthspan 適用於 18 歲以上的成年人。"
+          }
+        }
+      }
+    },
+    "%lld of %lld scored days in the last 31": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld bewerteten Tagen in den letzten 31"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld días puntuados en los últimos 31"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sur %lld jours évalués sur les 31 derniers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld di %lld giorni valutati negli ultimi 31"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld z %lld ocenionych dni w ostatnich 31"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld dias avaliados nos últimos 31"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld из %lld оценённых дней за последние 31"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 31 天中已评分 %lld/%lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 31 天中已評分 %lld/%lld 天"
+          }
+        }
+      }
+    },
+    "Body Age compares your last six months with health targets. Keep wearing the strap overnight.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Körperalter vergleicht deine letzten sechs Monate mit Gesundheitszielen. Trag das Band weiter über Nacht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La edad corporal compara tus últimos seis meses con objetivos de salud. Sigue llevando la pulsera por la noche."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’âge corporel compare vos six derniers mois à des objectifs de santé. Continuez à porter le bracelet la nuit."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’età corporea confronta gli ultimi sei mesi con obiettivi di salute. Continua a indossare la fascia di notte."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiek ciała porównuje ostatnie sześć miesięcy z celami zdrowotnymi. Noś opaskę dalej w nocy."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A idade corporal compara os teus últimos seis meses com metas de saúde. Continua a usar a pulseira durante a noite."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Возраст тела сравнивает ваши последние шесть месяцев с целями здоровья. Продолжайте носить браслет ночью."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身体年龄将你最近六个月与健康目标对比。请继续在夜间佩戴手环。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身體年齡將你最近六個月與健康目標對比。請繼續在夜間佩戴手環。"
+          }
+        }
+      }
+    },
+    "± %@ · if your last 30 days hold for six months": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · wenn deine letzten 30 Tage sechs Monate lang so bleiben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · si tus últimos 30 días se mantienen seis meses"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · si vos 30 derniers jours se maintiennent six mois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · se gli ultimi 30 giorni restano così per sei mesi"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · jeśli ostatnie 30 dni utrzyma się przez sześć miesięcy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · se os teus últimos 30 dias se mantiverem por seis meses"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · если последние 30 дней сохранятся шесть месяцев"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · 若最近 30 天的状态保持六个月"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "± %@ · 若最近 30 天的狀態維持六個月"
+          }
+        }
+      }
+    },
+    "Projected Body Age in six months: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voraussichtliches Körperalter in sechs Monaten: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edad corporal prevista en seis meses: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Âge corporel projeté dans six mois : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Età corporea prevista tra sei mesi: %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przewidywany wiek ciała za sześć miesięcy: %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idade corporal prevista daqui a seis meses: %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прогноз возраста тела через шесть месяцев: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六个月后的预计身体年龄：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六個月後的預計身體年齡：%@"
+          }
+        }
+      }
+    },
+    "The pace compares your last 30 days with your last six months, so it appears once both can be scored.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Tempo vergleicht deine letzten 30 Tage mit deinen letzten sechs Monaten und erscheint, sobald beide bewertet werden können."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El ritmo compara tus últimos 30 días con tus últimos seis meses, así que aparece cuando ambos se pueden puntuar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rythme compare vos 30 derniers jours à vos six derniers mois ; il apparaît dès que les deux peuvent être évalués."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il ritmo confronta gli ultimi 30 giorni con gli ultimi sei mesi, quindi compare quando entrambi si possono valutare."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo porównuje ostatnie 30 dni z ostatnimi sześcioma miesiącami, więc pojawi się, gdy oba okresy da się ocenić."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ritmo compara os teus últimos 30 dias com os últimos seis meses, por isso aparece quando ambos puderem ser avaliados."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Темп сравнивает последние 30 дней с последними шестью месяцами, поэтому появится, когда оба периода можно будет оценить."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度将你最近 30 天与最近六个月对比，因此两者都可评分后才会显示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度將你最近 30 天與最近六個月對比，因此兩者都可評分後才會顯示。"
+          }
+        }
+      }
+    },
+    "Reversing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umkehrend"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revirtiendo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En inversion"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In inversione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odwracanie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A reverter"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обратный ход"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逆转中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逆轉中"
+          }
+        }
+      }
+    },
+    "Slowing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlangsamt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desacelerando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En ralentissement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In rallentamento"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spowalnianie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A abrandar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Замедление"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放缓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放緩"
+          }
+        }
+      }
+    },
+    "Accelerating": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beschleunigt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acelerando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En accélération"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In accelerazione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przyspieszanie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A acelerar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ускорение"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加速"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加速"
+          }
+        }
+      }
+    },
+    "Biggest lever": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Größter Hebel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mayor palanca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus grand levier"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leva principale"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Największa dźwignia"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maior alavanca"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Главный рычаг"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大杠杆"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大槓桿"
+          }
+        }
+      }
+    },
+    "Reaching your target for %@ would take about %@ years off your Body Age.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn du dein Ziel für %@ erreichst, sinkt dein Körperalter um etwa %@ Jahre."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcanzar tu objetivo de %@ restaría unos %@ años a tu edad corporal."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atteindre votre objectif pour %@ retirerait environ %@ ans à votre âge corporel."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raggiungere il tuo obiettivo per %@ toglierebbe circa %@ anni alla tua età corporea."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Osiągnięcie celu dla %@ odjęłoby około %@ lat od wieku ciała."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atingir a tua meta de %@ tiraria cerca de %@ anos à tua idade corporal."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Достижение цели по %@ снизит возраст тела примерно на %@ лет."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "达到%@的目标可让身体年龄减少约 %@ 岁。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "達到%@的目標可讓身體年齡減少約 %@ 歲。"
+          }
+        }
+      }
+    },
+    "Every driver is on target. Nothing is costing you years.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Faktoren sind im Ziel. Nichts kostet dich Jahre."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los factores están en su objetivo. Nada te está costando años."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tous les facteurs sont dans l’objectif. Rien ne vous coûte d’années."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti i fattori sono sull’obiettivo. Niente ti costa anni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wszystkie czynniki są w celu. Nic nie kosztuje cię lat."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos os fatores estão na meta. Nada te está a custar anos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все факторы в пределах цели. Ничто не прибавляет вам лет."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有因素均达标，没有任何因素让你变老。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有因素均達標，沒有任何因素讓你變老。"
+          }
+        }
+      }
+    },
+    "Last 30 days: better": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte 30 Tage: besser"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos 30 días: mejor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 derniers jours : mieux"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimi 30 giorni: meglio"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ostatnie 30 dni: lepiej"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos 30 dias: melhor"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Последние 30 дней: лучше"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天：更好"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天：更好"
+          }
+        }
+      }
+    },
+    "Last 30 days: worse": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte 30 Tage: schlechter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos 30 días: peor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 derniers jours : moins bien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimi 30 giorni: peggio"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ostatnie 30 dni: gorzej"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos 30 dias: pior"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Последние 30 дней: хуже"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天：更差"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天：更差"
+          }
+        }
+      }
+    },
+    "Risk against your target": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risiko gegenüber deinem Ziel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riesgo frente a tu objetivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risque par rapport à votre objectif"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rischio rispetto al tuo obiettivo"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryzyko względem celu"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risco face à tua meta"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Риск относительно цели"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相对目标的风险"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相對目標的風險"
+          }
+        }
+      }
+    },
+    "1.0 is your target. Above the line costs years; below it helps.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 ist dein Ziel. Oberhalb der Linie kostet es Jahre, darunter hilft es."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 es tu objetivo. Por encima de la línea cuesta años; por debajo ayuda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 correspond à votre objectif. Au-dessus de la ligne, cela coûte des années ; en dessous, cela aide."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 è il tuo obiettivo. Sopra la linea costa anni; sotto aiuta."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 to twój cel. Powyżej linii kosztuje lata, poniżej pomaga."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 é a tua meta. Acima da linha custa anos; abaixo ajuda."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1,0 — ваша цель. Выше линии прибавляет годы, ниже помогает."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1.0 为你的目标。高于该线会增加年龄，低于则有帮助。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1.0 為你的目標。高於該線會增加年齡，低於則有幫助。"
+          }
+        }
+      }
+    },
+    "Hazard ratio curve for %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hazard-Ratio-Kurve für %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curva de razón de riesgo de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courbe du rapport de risque pour %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curva del rapporto di rischio per %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krzywa współczynnika ryzyka dla %@"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curva da razão de risco para %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кривая отношения рисков для %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@的风险比曲线"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@的風險比曲線"
+          }
+        }
+      }
+    },
+    "Body Age over six months": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Körperalter über sechs Monate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edad corporal en seis meses"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Âge corporel sur six mois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Età corporea negli ultimi sei mesi"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiek ciała w ciągu sześciu miesięcy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idade corporal ao longo de seis meses"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Возраст тела за шесть месяцев"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六个月身体年龄"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六個月身體年齡"
+          }
+        }
+      }
+    },
+    "Pace of Aging over six months": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alterungstempo über sechs Monate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritmo de envejecimiento en seis meses"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rythme de vieillissement sur six mois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritmo di invecchiamento negli ultimi sei mesi"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo starzenia w ciągu sześciu miesięcy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritmo de envelhecimento ao longo de seis meses"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Темп старения за шесть месяцев"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六个月衰老速度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "六個月老化速度"
+          }
+        }
+      }
+    },
+    "Context": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontext"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contexto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contexte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contesto"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontekst"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contexto"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Контекст"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考"
+          }
+        }
+      }
+    },
+    "Not scored": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht bewertet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin puntuar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non évalué"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non valutato"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieoceniane"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não avaliado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не оценивается"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不计分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不計分"
+          }
+        }
+      }
+    },
+    "%@ ms over the last 30 days · typical for your age %@ ms": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms in den letzten 30 Tagen · typisch für dein Alter %@ ms"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms en los últimos 30 días · típico para tu edad %@ ms"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms sur les 30 derniers jours · typique pour votre âge %@ ms"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms negli ultimi 30 giorni · tipico per la tua età %@ ms"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms w ostatnich 30 dniach · typowo dla twojego wieku %@ ms"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ms nos últimos 30 dias · típico para a tua idade %@ ms"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ мс за последние 30 дней · типично для вашего возраста %@ мс"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天 %@ 毫秒 · 你这个年龄的典型值 %@ 毫秒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 30 天 %@ 毫秒 · 你這個年齡的典型值 %@ 毫秒"
+          }
+        }
+      }
+    },
+    "Shown for context only. HRV is not a driver: its link to lifespan does not hold up as cause and effect.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur als Kontext angezeigt. HRV ist kein Faktor: Ihr Zusammenhang mit der Lebensdauer hält als Ursache und Wirkung nicht stand."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se muestra solo como contexto. La VFC no es un factor: su relación con la longevidad no se sostiene como causa y efecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiché à titre indicatif uniquement. La VFC n’est pas un facteur : son lien avec la longévité ne tient pas comme relation de cause à effet."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrato solo come contesto. L’HRV non è un fattore: il suo legame con la longevità non regge come causa ed effetto."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pokazane tylko jako kontekst. HRV nie jest czynnikiem: jej związek z długością życia nie potwierdza się jako przyczyna i skutek."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrado apenas como contexto. A VFC não é um fator: a sua ligação à longevidade não se confirma como causa e efeito."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показано только для контекста. ВСР не является фактором: её связь с продолжительностью жизни не подтверждается как причинно-следственная."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅作参考显示。HRV 不是计分因素：它与寿命的关联不能成立为因果关系。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅作參考顯示。HRV 不是計分因素：它與壽命的關聯不能成立為因果關係。"
+          }
+        }
+      }
+    },
+    "Method and references": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Methode und Quellen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Método y referencias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Méthode et références"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metodo e riferimenti"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metoda i źródła"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Método e referências"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Методика и источники"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方法与参考文献"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方法與參考文獻"
+          }
+        }
+      }
+    },
+    "References": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Références"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riferimenti"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Źródła"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referências"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Источники"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考文献"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考文獻"
+          }
+        }
+      }
+    },
+    "%@ yrs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ J."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ años"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ans"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ anni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ lat"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ anos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ лет"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 岁"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 歲"
+          }
+        }
+      }
+    },
+    "Each driver is compared with a health target, not with the average person. Meeting every target reads as your own age; the average adult reads several years older.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Faktor wird mit einem Gesundheitsziel verglichen, nicht mit dem Durchschnitt. Wer alle Ziele erreicht, liegt bei seinem eigenen Alter; ein durchschnittlicher Erwachsener liegt einige Jahre darüber."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada factor se compara con un objetivo de salud, no con la persona media. Cumplir todos los objetivos equivale a tu propia edad; el adulto medio sale varios años mayor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque facteur est comparé à un objectif de santé, et non à la moyenne. Atteindre tous les objectifs correspond à votre propre âge ; l’adulte moyen apparaît plusieurs années plus âgé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni fattore è confrontato con un obiettivo di salute, non con la persona media. Raggiungere tutti gli obiettivi equivale alla tua età; l’adulto medio risulta più vecchio di alcuni anni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy czynnik porównywany jest z celem zdrowotnym, a nie z przeciętną osobą. Spełnienie wszystkich celów daje twój własny wiek; przeciętny dorosły wypada kilka lat starzej."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada fator é comparado com uma meta de saúde, não com a pessoa média. Cumprir todas as metas corresponde à tua própria idade; o adulto médio fica vários anos acima."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждый фактор сравнивается с целью здоровья, а не со средним человеком. Выполнение всех целей соответствует вашему возрасту; средний взрослый выглядит на несколько лет старше."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个因素都与健康目标比较，而不是与普通人比较。达到所有目标即等于你的实际年龄；普通成年人会显示年长数岁。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個因素都與健康目標比較，而不是與一般人比較。達到所有目標即等於你的實際年齡；一般成年人會顯示年長數歲。"
+          }
+        }
+      }
+    },
+    "Each driver's distance from its target is matched to a published all-cause-mortality hazard ratio and converted to years at 10 × ln(hazard ratio).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Abstand jedes Faktors zu seinem Ziel wird einer veröffentlichten Hazard-Ratio für die Gesamtsterblichkeit zugeordnet und mit 10 × ln(Hazard-Ratio) in Jahre umgerechnet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La distancia de cada factor a su objetivo se asocia a una razón de riesgo de mortalidad por cualquier causa publicada y se convierte en años con 10 × ln(razón de riesgo)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’écart de chaque facteur à son objectif est associé à un rapport de risque de mortalité toutes causes publié, puis converti en années par 10 × ln(rapport de risque)."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La distanza di ogni fattore dal suo obiettivo è associata a un rapporto di rischio di mortalità per tutte le cause pubblicato e convertita in anni con 10 × ln(rapporto di rischio)."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odległość każdego czynnika od celu jest przypisana do opublikowanego współczynnika ryzyka zgonu z dowolnej przyczyny i przeliczana na lata jako 10 × ln(współczynnik ryzyka)."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A distância de cada fator à sua meta é associada a uma razão de risco de mortalidade por todas as causas publicada e convertida em anos por 10 × ln(razão de risco)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отклонение каждого фактора от цели сопоставляется с опубликованным отношением рисков общей смертности и переводится в годы как 10 × ln(отношение рисков)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个因素与目标的差距会对应到已发表的全因死亡风险比，并按 10 × ln(风险比) 换算为年数。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個因素與目標的差距會對應到已發表的全因死亡風險比，並按 10 × ln(風險比) 換算為年數。"
+          }
+        }
+      }
+    },
+    "Drivers that measure the same thing are not counted twice: steps, cardio minutes and strength minutes are weighed against each other, and a strap-estimated VO₂max is folded into resting heart rate.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faktoren, die dasselbe messen, zählen nicht doppelt: Schritte, Cardio- und Kraftminuten werden gegeneinander gewichtet, und ein vom Band geschätztes VO₂max wird mit der Ruheherzfrequenz zusammengefasst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los factores que miden lo mismo no se cuentan dos veces: pasos, minutos de cardio y de fuerza se ponderan entre sí, y el VO₂máx estimado por la pulsera se combina con la frecuencia cardiaca en reposo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les facteurs qui mesurent la même chose ne comptent pas deux fois : pas, minutes de cardio et de renforcement sont pondérés entre eux, et une VO₂max estimée par le bracelet est fusionnée avec la fréquence cardiaque au repos."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I fattori che misurano la stessa cosa non si contano due volte: passi, minuti di cardio e di forza si bilanciano tra loro, e un VO₂max stimato dalla fascia è unito alla frequenza cardiaca a riposo."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Czynniki mierzące to samo nie są liczone podwójnie: kroki, minuty cardio i siłowe są ważone względem siebie, a VO₂max szacowane przez opaskę łączy się z tętnem spoczynkowym."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatores que medem o mesmo não contam duas vezes: passos, minutos de cardio e de força são ponderados entre si, e um VO₂máx estimado pela pulseira é combinado com a frequência cardíaca em repouso."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Факторы, измеряющие одно и то же, не учитываются дважды: шаги, минуты кардио и силовых взвешиваются друг против друга, а оценка VO₂max браслетом объединяется с пульсом покоя."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衡量同一事物的因素不会重复计算：步数、有氧分钟与力量分钟相互加权，手环估算的最大摄氧量会与静息心率合并。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衡量同一事物的因素不會重複計算：步數、有氧分鐘與力量分鐘相互加權，手環估算的最大攝氧量會與靜息心率合併。"
+          }
+        }
+      }
+    },
+    "Body Age uses your last six months. Pace of Aging holds your last 30 days for six months: 1× is holding steady.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Körperalter nutzt deine letzten sechs Monate. Das Alterungstempo schreibt deine letzten 30 Tage sechs Monate fort: 1× bedeutet stabil."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La edad corporal usa tus últimos seis meses. El ritmo de envejecimiento mantiene tus últimos 30 días durante seis meses: 1× es mantenerse estable."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’âge corporel utilise vos six derniers mois. Le rythme de vieillissement prolonge vos 30 derniers jours sur six mois : 1× signifie stable."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’età corporea usa gli ultimi sei mesi. Il ritmo di invecchiamento mantiene gli ultimi 30 giorni per sei mesi: 1× significa stabile."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiek ciała wykorzystuje ostatnie sześć miesięcy. Tempo starzenia utrzymuje ostatnie 30 dni przez sześć miesięcy: 1× oznacza stabilnie."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A idade corporal usa os teus últimos seis meses. O ritmo de envelhecimento mantém os teus últimos 30 dias durante seis meses: 1× significa estável."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Возраст тела учитывает последние шесть месяцев. Темп старения продлевает последние 30 дней на шесть месяцев: 1× — без изменений."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身体年龄使用你最近六个月的数据。衰老速度将最近 30 天延续六个月：1× 表示持平。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身體年齡使用你最近六個月的資料。老化速度將最近 30 天延續六個月：1× 表示持平。"
+          }
+        }
+      }
+    },
+    "The hazard ratios come from observational studies, and nothing here has been validated against lifespan. Treat it as a wellness trend, not a clinical biological age.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Hazard-Ratios stammen aus Beobachtungsstudien, und nichts davon wurde an der Lebensdauer validiert. Betrachte es als Wellness-Trend, nicht als klinisches biologisches Alter."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las razones de riesgo proceden de estudios observacionales y nada de esto se ha validado frente a la longevidad. Tómalo como una tendencia de bienestar, no como una edad biológica clínica."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les rapports de risque proviennent d’études observationnelles, et rien ici n’a été validé par rapport à la longévité. Considérez-le comme une tendance de bien-être, pas comme un âge biologique clinique."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I rapporti di rischio provengono da studi osservazionali e nulla di tutto ciò è stato convalidato rispetto alla longevità. Consideralo una tendenza di benessere, non un’età biologica clinica."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Współczynniki ryzyka pochodzą z badań obserwacyjnych i nic tutaj nie zostało zweryfikowane względem długości życia. Traktuj to jako trend samopoczucia, a nie kliniczny wiek biologiczny."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As razões de risco vêm de estudos observacionais e nada aqui foi validado face à longevidade. Encara-o como uma tendência de bem-estar, não como uma idade biológica clínica."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отношения рисков взяты из наблюдательных исследований, и ничто здесь не проверено на продолжительности жизни. Воспринимайте это как тренд самочувствия, а не клинический биологический возраст."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风险比来自观察性研究，这里的内容都未经寿命验证。请将其视为健康趋势，而非临床生物学年龄。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "風險比來自觀察性研究，這裡的內容都未經壽命驗證。請將其視為健康趨勢，而非臨床生物學年齡。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

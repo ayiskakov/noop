@@ -39,6 +39,26 @@ public enum SleepRegularity {
         }
     }
 
+    /// A session from a stored sleep block: its onset/end and the `"wake"` segments of a computed
+    /// `[{start,end,stage}]` staging array. Any other staging shape (an imported minute dictionary, which
+    /// carries no clock times) or unparseable JSON yields a session with no wake stretches — the span is
+    /// still the best timing evidence there is. Nil for an empty or inverted span.
+    public static func session(startTs: Int, endTs: Int, stagesJSON: String?) -> Session? {
+        guard endTs > startTs else { return nil }
+        var wake: [Span] = []
+        if let data = stagesJSON?.data(using: .utf8),
+           let segments = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+            for seg in segments {
+                let stage = (seg["stage"] as? String)?.lowercased()
+                guard stage == "wake" || stage == "awake",
+                      let s = (seg["start"] as? NSNumber)?.doubleValue,
+                      let e = (seg["end"] as? NSNumber)?.doubleValue, e > s else { continue }
+                wake.append(Span(start: s, end: e))
+            }
+        }
+        return Session(start: Double(startTs), end: Double(endTs), wake: wake)
+    }
+
     /// Local sleep day `d` runs from noon of local day `d` (days since 1970-01-01) to the next noon.
     static func dayStart(_ day: Int, tzOffsetSec: Int) -> Double {
         Double(day * 86_400 + 43_200 - tzOffsetSec)
