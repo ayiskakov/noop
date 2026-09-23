@@ -295,13 +295,13 @@ private struct HealthspanDriversSection: View {
                         .foregroundStyle(StrandPalette.textSecondary)
                 }
                 Spacer(minLength: NoopMetrics.space2)
-                Text(statusLabel(c))
+                Text(Self.statusLabel(c))
                     .font(StrandFont.caption)
                     .foregroundStyle(statusTint(c))
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(Self.driverLabel(c)). \(format(c.value, c)), target \(format(c.target, c)). \(statusLabel(c))")
+        .accessibilityLabel("\(Self.driverLabel(c)). \(format(c.value, c)), target \(format(c.target, c)). \(Self.statusLabel(c))")
     }
 
     /// A driver's display name.
@@ -327,10 +327,20 @@ private struct HealthspanDriversSection: View {
     }
 
     /// A driver's standing against its own reference, from the sign of its log-hazard — the same quantity
-    /// the engine scored it on, so the chip cannot disagree with the number it sits beside.
-    private func statusLabel(_ c: VitalityEngine.Contribution) -> String {
-        if c.lnHazard < -0.001 { return String(localized: "Ahead of target") }
-        if c.lnHazard > 0.001 { return String(localized: "Below target") }
+    /// the engine scored it on, so the chip cannot disagree with the verdict behind the number.
+    ///
+    /// The costly side names the DIRECTION the value sits from its target rather than a fixed word. The
+    /// chip read "Below target" for every costly driver, which is false for the lower-is-better and
+    /// two-sided ones: a resting HR of 72 against 65, or 9.4 h of sleep against 7.5 h, printed "Below
+    /// target" beside a number plainly above it. The helping side says "Better than target" because for
+    /// resting HR "better" is below and for steps it is above — only the verdict is the same.
+    static func statusLabel(_ c: VitalityEngine.Contribution) -> String {
+        if c.lnHazard < -0.001 { return String(localized: "Better than target") }
+        if c.lnHazard > 0.001 {
+            return c.value > c.target
+                ? String(localized: "Above target")
+                : String(localized: "Below target")
+        }
         return String(localized: "On target")
     }
 
