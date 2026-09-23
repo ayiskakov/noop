@@ -1,6 +1,6 @@
 # Resilience — physiological recovery time (Experimental)
 
-**Status:** in progress · **Tracking:** 2 PRs · **Started:** 2026-09-23
+**Status:** shipped (Experimental) · **Tracking:** 2 PRs · **Started:** 2026-09-23
 **Lives in:** the Healthspan tab, as its own section with an **Experimental** badge, behind a default-off
 toggle. **Sibling plan:** [Healthspan upgrade](2026-09-23-healthspan-v2.md)
 
@@ -113,6 +113,13 @@ autocorrelation of these fluctuations as a minimal biomarker set. No consumer ap
 main actor) and calls the engine. It is the single funnel every card reads; there is no persistence
 (the computation is cheap).
 
+*As built (R2):* the trend is one point every 14 days over 12 months (27 windows), computed on demand when
+the detail screen opens, in parallel; its newest point is the headline result itself, passed through. Steps
+end yesterday (today's total is still counting); resting HR and HRV end today. The "How your body settles"
+chart draws the measured points with the raw fit and no interval ribbon: the interval belongs to the
+bias-corrected τ, which the raw points are biased against, so drawing both on one chart would show two
+readouts that seem to disagree. The caption explains the correction instead.
+
 **Verification:**
 - design tokens only;
 - new copy in `Strand/Resources/Localizable.xcstrings` with de / es / fr / pt-PT (`i18n-coverage` gate);
@@ -123,7 +130,7 @@ main actor) and calls the engine. It is the single funnel every card reads; ther
 ## Checklist
 
 - [x] PR R1 — `ResilienceEngine` + synthetic-recovery tests + oracle
-- [ ] PR R2 — Settings toggle, Healthspan section, detail screen, loader, translations
+- [x] PR R2 — Settings toggle, Healthspan section, detail screen, loader, translations
 
 ## References
 
