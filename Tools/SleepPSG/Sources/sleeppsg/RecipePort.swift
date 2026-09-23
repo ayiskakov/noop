@@ -466,7 +466,7 @@ enum V2Recipe {
             }
             for s in stageNames { em[s]! += pr[s]! }
             if f.jerkMax > f.jerkScale * cfg.jerkFloorGateMult { em["awake"]! += cfg.motionGateBoost }
-            if let rg = f.respReg { let z = zrg(rg); em["deep"]! += cfg.respWeight * z; em["rem"]! -= cfg.respWeight * z }
+            if let rg = f.respReg { em["rem"]! -= cfg.respWeight * max(0.0, zrg(rg)) }
             seq.append(em)
         }
 

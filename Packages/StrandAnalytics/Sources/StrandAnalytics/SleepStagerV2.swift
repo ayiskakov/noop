@@ -26,7 +26,7 @@ import WhoopProtocol
 //      same fraction, minus a REM-latency guard that decays over the first 60 MINUTES after sleep onset);
 //   4. a peak-motion (jerk) wake gate, thresholded RELATIVE to the night's own quiescent jerk floor — so
 //      it self-calibrates to the strap's gravity-decode scale and the wearer's fit, not a fixed g;
-//   5. an RR-RSA respiration-regularity term (regular breathing → deep, irregular → REM);
+//   5. an RR-RSA respiration-regularity term (regular breathing counts against REM; one-sided, see respWeight);
 //   6. Viterbi/HMM transition smoothing with a sticky transition matrix.
 // All coefficients are fixed a-priori from sleep physiology + population base rates (NOT fit to labels).
 
@@ -189,7 +189,17 @@ public enum SleepStagerV2 {
         f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * jerkFloorGateMult
     }
 
-    /// Weight of the RSA respiration-regularity term (regular → deep, irregular → REM).
+    /// Weight of the RSA respiration-regularity term. ONE-SIDED and REM-only: regular breathing (z > 0) is
+    /// evidence against REM, and nothing else moves. REM breathing is irregular, so regularity argues
+    /// against it; but irregularity is also what motion, arousals and dropped beats produce, so it is not
+    /// evidence FOR REM, and deep already has its own validated separator (the HR-flatness gate).
+    ///
+    /// The term used to be symmetric (`deep += w·z`, `rem −= w·z`). A symmetric z-score over the night hands
+    /// the irregular half of every night a REM boost against light, and on five banked WHOOP 5/MG nights
+    /// (the only strap that feeds this term every epoch) that staged REM at 35–49% of sleep and light at
+    /// 22–39%. Removing the term entirely gave REM 23–30% / deep 22–28%. This form gives REM 20–27%,
+    /// light 44–56%, deep 22–28%. The PSG harness (`Tools/SleepPSG`) cannot score the term either
+    /// way, because PhysioNet sleep-accel carries no R-R. n = 1 wearer; treat as a calibration, not a result.
     static let respWeight = 0.6
 
     /// Transition matrix (rows = from, cols = to). Self-transitions dominate; deep↔rem rare; wake mostly
@@ -587,7 +597,7 @@ public enum SleepStagerV2 {
             let pr = cyclePrior(f.clock, .infinity)
             for s in stageNames { em[s]! += pr[s]! }
             if f.jerkMax > f.jerkScale * jerkFloorGateMult { em["awake"]! += motionGateBoost }
-            if let rg = f.respReg { let z = zrg(rg); em["deep"]! += respWeight * z; em["rem"]! -= respWeight * z }
+            if let rg = f.respReg { em["rem"]! -= respWeight * max(0.0, zrg(rg)) }
             seq.append(em)
         }
 
