@@ -204,7 +204,7 @@ struct EcgCaptureView: View {
                 statusLine(feed: feed, now: now)
                 trace(feed: feed, now: now)
                 progress(feed: feed, now: now)
-                if live.ecgWristAccepted == false {
+                if let outcome = live.ecgSession?.wristOutcome, outcome != .success {
                     Text("The strap did not accept the wrist setting. The recording continues, but the trace may be upside down.")
                         .font(StrandFont.caption)
                         .foregroundStyle(StrandPalette.statusWarning)

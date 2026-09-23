@@ -216,10 +216,10 @@ final class FrameIntegrityGateTests: XCTestCase {
                            payload: [0x42, result, 0x00, 0x00], type: 0x24)
     }
 
-    /// `BLEManager.noteEcgProbeFrame` is the ONE place the app calls `verifyFrame` itself rather than
-    /// going through a parser, and D2 requires each of the five direct callers to have its useful path
-    /// shown intact under the tightened verifier. Here that path is: a well-formed reply verifies, and
-    /// the probe's own decoder reads the outcome the report will state.
+    /// `BLEManager.noteEcgProbeFrame` calls `verifyFrame` itself rather than going through a parser, and
+    /// D2 requires each direct caller to have its useful path shown intact under the tightened verifier.
+    /// Here that path is: a well-formed reply verifies, and the probe's own decoder reads the outcome
+    /// the report will state. `noteEcgSessionReply` gates the same reply with the same call.
     func testTheEcgProbeGateStillAdmitsAWellFormedReply() {
         let frame = ecgProbeReply()
         XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok,

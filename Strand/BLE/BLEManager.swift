@@ -1077,12 +1077,22 @@ public final class BLEManager: NSObject, ObservableObject {
     private var ecgProbeDeadline: Date?
     /// Supersedes a previous run's pending verdict timer when the user taps again.
     private var ecgProbeRunToken = 0
-    /// False for the guided capture, whose screen draws the stream itself: the verdict is logged but not
-    /// raised as the Devices result sheet.
+    /// False once the user has moved on from a probe run (opened the guided capture): the verdict is still
+    /// logged, but it no longer raises the Devices result sheet over whatever is on screen by then.
     private var ecgProbePublishesResult = true
-    /// One raw dump of the first live R17 frame per capture, so a strap log alone can re-check the
-    /// decode. Always on: it is one line per capture and it is the evidence a decode dispute needs.
+    /// The ECG session on this link. Mirrored to `LiveState.ecgSession` on every change, so the screen
+    /// reads the same outcomes the strap log reports.
+    private var ecgSession: Whoop5EcgSession? {
+        didSet { state.ecgSession = ecgSession }
+    }
+    /// Fences a previous session's wrist or stop timer.
+    private var ecgSessionToken = 0
+    /// One raw dump of the first live R17 frame per session, so a strap log alone can re-check the
+    /// decode. Always on: it is one line per session and it is the evidence a decode dispute needs.
     private var ecgLiveFrameLogged = false
+    /// One line per link when a live ECG record arrives with no session running, which means an earlier
+    /// session is still generating. Rare-event evidence, so always on.
+    private var ecgOrphanRecordLogged = false
     private var clockRequested = false
     /// #700: retry count for GET_CLOCK when no correlation establishes before backfill. Capped at 3.
     private var clockRetries = 0
@@ -2195,16 +2205,21 @@ public final class BLEManager: NSObject, ObservableObject {
     private func stopUnexpectedRealtimeImu(_ frame: [UInt8], isOffload: Bool, now: Date = Date()) {
         guard selectedModel.deviceFamily == .whoop5, !isOffload, frame.count > 8,
               frame[8] == 43 || frame[8] == 51,
-              // Type 43 also carries the MG's live ECG. Its records are the stream an ECG capture asked
-              // for, not a stray IMU producer, and stopping raw data on them can clear the ECG session's
-              // companion requests (docs/PROTOCOL_ECG.md). An ECG record is recognised by its layout
-              // byte and exact length, so the fail-safe still fires on any other type-43 shape.
-              !Whoop5EcgFilteredRecord.isFilteredRecord(frame),
-              !(frame.count == Whoop5EcgRawRecord.frameLength && frame[9] == 16),
+              // Type 43 also carries the MG's live ECG. Its records are the stream an ECG session asked
+              // for, not a stray IMU producer. An ECG record is recognised by packet type, layout byte and
+              // exact length, so the fail-safe still fires on any other type-43 shape.
+              !Whoop5EcgFilteredRecord.isLiveRecord(frame), !Whoop5EcgRawRecord.isLiveRecord(frame),
               !rawCaptureInFlight, !UserDefaults.standard.bool(forKey: "enableRawCapture"),
               now.timeIntervalSince(rawCaptureStoppedAt) >= 3,
               now.timeIntervalSince(unexpectedImuStopAt) >= 30 else { return }
         unexpectedImuStopAt = now
+        // While an ECG session runs, a raw stop can clear that session's companion optical/IMU requests
+        // (docs/PROTOCOL_ECG.md §Commands), so the fail-safe leaves it to the session's own stop and says so.
+        if ecgSessionRunning {
+            log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) during an ECG session; "
+                + "not stopping raw data, which could clear the session's companion requests")
+            return
+        }
         send(.stopRawData, payload: [0x01], writeType: .withResponse)
         send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
         log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) while capture was off; stop requested")
@@ -4143,15 +4158,28 @@ public final class BLEManager: NSObject, ObservableObject {
     /// True when the ECG opcodes are allowed through the 5/MG allowlist right now.
     var ecgCommandsAllowed: Bool { PuffinExperiment.ecgEnabled || ecgStopOverride }
 
-    /// Latched by `ecgStartCapture()`, cleared by a completed `ecgStopCapture()`.
+    /// Latched when the turn-on requests go out, cleared when a stop goes out.
     ///
     /// Keeps the Devices "Stop" control reachable after the Experimental opt-in has been switched off:
     /// without it, turning the toggle off while DISCONNECTED silently no-ops (the stop needs a live MG
     /// link) and then the menu entry vanishes with the opt-in, leaving no route to stop a strap that may
-    /// still be streaming. Deliberately NOT persisted — the claim that the strap forgets these toggles
-    /// across a disconnect is unverified, so this survives only as long as the process, and the honest
-    /// remedy after a relaunch is to re-enable the opt-in and hit Stop.
-    private(set) var ecgMayBeRunning = false
+    /// still be streaming. It also holds the next start back until a stop has gone out, because a start
+    /// into a running session can make the later stop omit the companion-off requests
+    /// (`docs/PROTOCOL_ECG.md` §Repeated ECG start). Deliberately NOT persisted — the claim that the strap
+    /// forgets these toggles across a disconnect is unverified, so this survives only as long as the
+    /// process, and the honest remedy after a relaunch is to re-enable the opt-in and hit Stop.
+    private(set) var ecgMayBeRunning = false {
+        didSet { state.ecgMayBeRunning = ecgMayBeRunning }
+    }
+
+    /// True while this link's session has turn-on requests out and no stop settled.
+    private var ecgSessionRunning: Bool {
+        ecgSession?.phase == .started || ecgSession?.phase == .stopping
+    }
+
+    /// How long a session waits for the wrist reply, or for the stop replies, before calling them
+    /// unanswered. Replies normally land within the same second.
+    private static let ecgReplyWait: TimeInterval = 5
 
     /// The conditions an ECG action needs, checked BEFORE a run is opened so a rejected action leaves no
     /// "waiting…" sheet sitting for the length of the listen window. `send()` re-checks independently —
@@ -4188,93 +4216,139 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
-    /// Send one ECG command and register it as a step whose outcome starts at `.noReply`; a matching
-    /// COMMAND_RESPONSE overwrites it.
+    /// Send one ECG command. While a probe run is listening it is also registered as a step whose outcome
+    /// starts at `.noReply`, for a matching COMMAND_RESPONSE to overwrite; outside a run nothing is kept,
+    /// because nothing would ever render it.
     private func sendEcgCommand(_ command: WhoopCommand, arg: UInt8) {
         let label = "\(command.label)(\(command.rawValue))"
-        // Recorded AT SEND TIME, from the opcode AND the argument: the reply carries neither, so this is
-        // the only point where "could this command have produced data" is knowable. Every verdict that
-        // reads silence as evidence depends on it.
-        let requestsData = Whoop5Ecg.requestsRealtimeData(cmd: command.rawValue, arg: arg)
-        ecgProbeSteps.append(Whoop5EcgProbe.Step(label: label,
-                                                 outcome: .noReply,
-                                                 requestsRealtimeData: requestsData))
-        log("ECG probe: → \(label) payload=\(hex(Whoop5Ecg.commandPayload(arg: arg)))")
+        if ecgProbeArmed {
+            // Recorded AT SEND TIME, from the opcode AND the argument: the reply carries neither, so this
+            // is the only point where "could this command have produced data" is knowable. Every verdict
+            // that reads silence as evidence depends on it.
+            let requestsData = Whoop5Ecg.requestsRealtimeData(cmd: command.rawValue, arg: arg)
+            ecgProbeSteps.append(Whoop5EcgProbe.Step(label: label,
+                                                     outcome: .noReply,
+                                                     requestsRealtimeData: requestsData))
+        }
+        log("ECG: → \(label) payload=\(hex(Whoop5Ecg.commandPayload(arg: arg)))")
         send(command, payload: Whoop5Ecg.commandPayload(arg: arg))
     }
 
-    /// Write the wrist selection on its own, outside a capture. The guided capture sends the same command
-    /// as the first step of `ecgStartCapture(wrist:)`; this entry point stays for the Test Centre probe.
-    public func ecgSelectWrist(_ wrist: Whoop5Ecg.WristSelection) {
-        guard ecgGatesAllow() else { return }
-        beginEcgProbeRun(clearingSteps: true)
-        log("ECG probe: SELECT_WRIST=\(wrist.token) (arg \(wrist.rawValue))")
-        sendEcgCommand(.selectWrist, arg: wrist.rawValue)
-        scheduleEcgProbeVerdict()
-    }
-
-    /// The documented turn-on sequence: optional selectWrist → toggleRealtimeFilteredECG(on) →
-    /// toggleSaveRawECG(on) → mainControlECGDataGeneration(start).
+    /// Start an ECG session: optionally select the wrist, then the documented turn-on sequence
+    /// toggleRealtimeFilteredECG(on) → toggleSaveRawECG(on) → mainControlECGDataGeneration(start).
     ///
-    /// `wrist` is sent first because `docs/PROTOCOL_ECG.md` says to select the wrist before start; the
-    /// guided capture always passes it, since persistence of an earlier selection is not established.
-    /// A refused wrist does not abort the start — it is reported through `LiveState.ecgWristAccepted`.
+    /// `docs/PROTOCOL_ECG.md` says to "select and acknowledge the intended wrist before start", so with a
+    /// `wrist` only SELECT_WRIST goes out here, and the turn-on requests follow from
+    /// `noteEcgSessionReply` once it answers SUCCESS. A refused or unanswered wrist starts nothing, and
+    /// the session reports which (`Whoop5EcgSession.summary`).
     ///
-    /// `reportsResult: false` is the guided capture: it draws the live stream itself, so the probe's
-    /// 30 s verdict sheet must not pop over it. The steps are still tracked and the verdict still logged.
-    /// Returns false when a gate refused and nothing was sent, so a caller never shows a capture that
-    /// was not started.
+    /// One session at a time: a start is refused while a session is active on this link or a previous
+    /// one may still be generating, since another start into a running session can make the later stop
+    /// omit the companion-off requests (§Repeated ECG start). The caller stops first.
+    ///
+    /// `reportsResult` runs the probe alongside, for protocol work from the Devices dialog: its 30 s
+    /// verdict is logged and raised as the result sheet. The guided capture passes false, since its own
+    /// screen reports the session. Returns false when nothing was sent, so a caller never shows a session
+    /// that did not begin.
     @discardableResult
     public func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) -> Bool {
         guard ecgGatesAllow() else { return false }
-        ecgMayBeRunning = true      // latched BEFORE the sends, so a mid-sequence drop still leaves Stop offered
-        beginEcgProbeRun(clearingSteps: true, publishesResult: reportsResult)
-        state.ecgLive = nil
-        state.ecgWristAccepted = nil
-        ecgLiveFrameLogged = false
-        log("ECG probe: starting the ECG turn-on sequence on an MG (experimental, unvalidated instrumentation)")
-        if let wrist {
-            log("ECG probe: SELECT_WRIST=\(wrist.token) (arg \(wrist.rawValue))")
-            sendEcgCommand(.selectWrist, arg: wrist.rawValue)
+        if ecgSession?.isActive == true || ecgMayBeRunning {
+            log("ECG: start ignored — an earlier ECG session is still active or may be generating; stop it first")
+            return false
         }
+        ecgSessionToken &+= 1
+        ecgSession = Whoop5EcgSession(wrist: wrist)
+        state.ecgLive = nil
+        ecgLiveFrameLogged = false
+        if reportsResult { beginEcgProbeRun(clearingSteps: true) }
+        log("ECG: starting a session on an MG (experimental, unvalidated instrumentation)")
+        if let wrist {
+            log("ECG: SELECT_WRIST=\(wrist.token) (arg \(wrist.rawValue)); generation waits for its reply")
+            sendEcgCommand(.selectWrist, arg: wrist.rawValue)
+            let token = ecgSessionToken
+            DispatchQueue.main.asyncAfter(deadline: .now() + BLEManager.ecgReplyWait) { [weak self] in
+                guard let self, self.ecgSessionToken == token, self.ecgSession?.phase == .selectingWrist else {
+                    return
+                }
+                self.ecgSession?.noteWristTimeout()
+                self.log("ECG: SELECT_WRIST unanswered after \(Int(BLEManager.ecgReplyWait)) s; nothing was started")
+            }
+        } else {
+            sendEcgStartSequence()
+        }
+        if reportsResult { scheduleEcgProbeVerdict() }
+        return true
+    }
+
+    private func sendEcgStartSequence() {
+        ecgMayBeRunning = true      // latched BEFORE the sends, so a mid-sequence drop still leaves Stop offered
         sendEcgCommand(.toggleLabradorFiltered, arg: 1)
         sendEcgCommand(.toggleLabradorRawSave, arg: 1)
         sendEcgCommand(.toggleLabradorDataGeneration, arg: Whoop5Ecg.ControlSignal.start.rawValue)
-        scheduleEcgProbeVerdict()
-        return true
     }
 
     /// The explicit OFF path: stop generation first, then drop both streams.
     ///
-    /// `reportsResult: false` is the Settings-toggle path — it must not pop the Devices result sheet from
-    /// a different screen, and it must not queue a verdict 30 s after the user simply switched something
-    /// off. The bytes sent are identical either way.
+    /// `reportsResult: true` is the Devices "Stop" control: it always sends, and runs the probe so its
+    /// replies come back as the result sheet. `reportsResult: false` is every other caller (the guided
+    /// capture, the Settings and Test Centre toggles): it sends only when there is something to stop, and
+    /// never pops a sheet or queues a verdict. The bytes sent are identical either way.
+    ///
+    /// A session still waiting on its wrist has started nothing; finishing it ends it without a send.
     public func ecgStopCapture(reportsResult: Bool = true) {
+        // True when this link's session sent turn-on requests and has not stopped yet. A session still
+        // waiting on its wrist is cancelled here and needs nothing sent.
+        let cancelsWrist = ecgSession?.phase == .selectingWrist
+        let stopsSession = ecgSession?.requestStop() == true
         // requiresOptIn: false — see `ecgStopOverride`. The OFF path outlives the opt-in.
         guard ecgGatesAllow(requiresOptIn: false) else {
             // Do NOT clear `ecgMayBeRunning` here: the stop did not reach the strap, so whatever state it
             // is in is unchanged and the Stop control has to stay offered.
+            if stopsSession { ecgSession?.noteStopUnsent() }
             if ecgMayBeRunning {
-                log("ECG probe: stop could not be sent (needs a connected MG) — the strap may still be "
+                log("ECG: stop could not be sent (needs a connected MG) — the strap may still be "
                     + "streaming, so Stop stays available on the Devices card")
+            }
+            return
+        }
+        guard reportsResult || stopsSession || ecgMayBeRunning else {
+            if cancelsWrist {
+                log("ECG: finished before SELECT_WRIST answered; nothing was started, so nothing was stopped")
             }
             return
         }
         ecgStopOverride = true
         defer { ecgStopOverride = false }
-        if reportsResult { beginEcgProbeRun(clearingSteps: true) } else { ecgProbeSteps = [] }
-        log("ECG probe: stopping ECG data generation and both streams")
+        if reportsResult { beginEcgProbeRun(clearingSteps: true) }
+        log("ECG: stopping ECG data generation and both streams")
         sendEcgCommand(.toggleLabradorDataGeneration, arg: Whoop5Ecg.ControlSignal.stop.rawValue)
         sendEcgCommand(.toggleLabradorRawSave, arg: 0)
         sendEcgCommand(.toggleLabradorFiltered, arg: 0)
         ecgMayBeRunning = false
+        if stopsSession {
+            ecgSession?.noteStopSent()
+            let token = ecgSessionToken
+            DispatchQueue.main.asyncAfter(deadline: .now() + BLEManager.ecgReplyWait) { [weak self] in
+                guard let self, self.ecgSessionToken == token, self.ecgSession?.phase == .stopping else { return }
+                self.ecgSession?.noteStopTimeout()
+                self.log("ECG: not every stop request answered within \(Int(BLEManager.ecgReplyWait)) s")
+            }
+        }
         if reportsResult { scheduleEcgProbeVerdict() }
     }
 
     /// Clear the probe result (dialog dismissed).
     public func clearEcgProbe() { state.ecgProbe = nil }
 
-    private func beginEcgProbeRun(clearingSteps: Bool, publishesResult: Bool = true) {
+    /// The user moved on from a probe run to the guided capture: keep logging its verdict, but never raise
+    /// it as a sheet over the capture, which is on screen by the time the verdict lands.
+    public func ecgDetachProbeResult() {
+        ecgProbePublishesResult = false
+        state.ecgProbe = nil
+    }
+
+    private func beginEcgProbeRun(clearingSteps: Bool) {
         if clearingSteps {
             ecgProbeSteps = []
             ecgProbeCandidates = []
@@ -4282,8 +4356,8 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         ecgProbeRunToken &+= 1
         ecgProbeDeadline = Date().addingTimeInterval(BLEManager.ecgProbeWindow)
-        ecgProbePublishesResult = publishesResult
-        if publishesResult { state.ecgProbe = BLEManager.ecgProbeWaiting }
+        ecgProbePublishesResult = true
+        state.ecgProbe = BLEManager.ecgProbeWaiting
     }
 
     /// Render the verdict once the listen window closes. BLE callbacks and this timer both run on the
@@ -4312,7 +4386,8 @@ public final class BLEManager: NSObject, ObservableObject {
         // healthy SUCCESS into "DATA REQUEST REFUSED" — the strongest claim the report can make. So no
         // byte of an unverified frame is read here, on either branch.
         //
-        // This is the app's only DIRECT call into the verifier rather than into a parser, so the
+        // This is one of the app's few DIRECT calls into the verifier rather than into a parser (the
+        // offload verdict, the ECG session's reply gate and the live R17 gate are the others), so the
         // widened verdict lands here first, and it CHANGES WHAT COUNTS AS EVIDENCE. The gate used to
         // mean "the payload CRC32 is not demonstrably wrong"; it now also requires the CRC16 header
         // checksum and the exact declared length. A frame with a damaged envelope therefore no longer
@@ -4349,7 +4424,6 @@ public final class BLEManager: NSObject, ObservableObject {
                 requestsRealtimeData: ecgProbeSteps[idx].requestsRealtimeData,
                 replyHex: replyHex)
             log("ECG probe: ← \(label) \(outcome.token)")
-            if command == .selectWrist { state.ecgWristAccepted = outcome == .success }
         } else if ecgProbeSteps.count < BLEManager.ecgProbeMaxSteps {
             // An UNSOLICITED reply for one of our opcodes. Recorded, but capped for the same reason the
             // candidate list is: each Step carries a full-frame hex string that is rendered into both the
@@ -4365,12 +4439,59 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
-    /// Feed one live 5/MG frame to the guided capture's waveform when it is a CRC-valid R17 record.
-    /// Runs on every live frame, so the non-ECG path is two byte compares and a length check.
+    /// Settle a COMMAND_RESPONSE for one of the ECG opcodes against this link's session, and send the
+    /// turn-on requests when it was the wrist answering SUCCESS.
+    ///
+    /// Runs whenever a session is active, independent of the probe's 30 s window: a guided capture lasts
+    /// longer than that, and its stop replies are the evidence that the stop landed.
+    private func noteEcgSessionReply(_ frame: [UInt8]) {
+        // Integrity gate first, for the same reason as `noteEcgProbeFrame`: the result byte decides what
+        // the screen tells the user the strap did.
+        guard verifyFrame(frame, family: .whoop5).ok, frame.count > 12,
+              frame[8] == 0x24 || Int(frame[8]) == PuffinPacketType.puffinCommandResponse,
+              let command = WhoopCommand(rawValue: frame[10]), isEcgCommand(command),
+              let outcome = Whoop5EcgProbe.outcome(frame: frame),
+              var session = ecgSession else { return }
+        let before = session.phase
+        let action = session.noteReply(opcode: command.rawValue, outcome: outcome)
+        ecgSession = session
+        // The probe logs its own reply lines while it listens; outside it, this is the only record.
+        if !ecgProbeArmed { log("ECG: ← \(command.label)(\(command.rawValue)) \(outcome.token)") }
+        switch action {
+        case .sendStart:
+            log("ECG: SELECT_WRIST accepted; sending the turn-on sequence")
+            sendEcgStartSequence()
+        case .none:
+            if before == .selectingWrist, session.phase == .ended {
+                log("ECG: SELECT_WRIST answered \(outcome.token); nothing was started")
+            } else if before == .stopping, session.phase == .ended {
+                log("ECG: every stop request answered")
+            }
+        }
+    }
+
+    /// Feed one live 5/MG frame to the session's waveform when it is a CRC-valid live R17 record.
+    /// Runs on every live frame, so the non-ECG path is a length check and two byte compares.
+    ///
+    /// Only a LIVE record (type 43) counts: a historical R17 is a finished session's record, and taking
+    /// one here would splice old samples into the trace and stand its status in for the live one. Records
+    /// are drawn only while a session runs, so nothing is published app-wide for a stream no screen asked
+    /// for; one that arrives with no session is logged once per link as evidence of an earlier session
+    /// still generating.
     private func noteEcgLiveFrame(_ frame: [UInt8], now: Date = Date()) {
-        guard isWhoop5MG, Whoop5EcgFilteredRecord.isFilteredRecord(frame),
+        guard Whoop5EcgFilteredRecord.isLiveRecord(frame), isWhoop5MG,
               verifyFrame(frame, family: .whoop5).ok,
               let record = Whoop5EcgFilteredRecord.decode(frame) else { return }
+        guard ecgSessionRunning else {
+            // A session of this link that started and has since stopped can leave a record in flight;
+            // only a record with no started session behind it is evidence of an earlier one.
+            if ecgSession?.startSent != true, !ecgOrphanRecordLogged {
+                ecgOrphanRecordLogged = true
+                log("ECG live: an R17 record arrived with no ECG session on this link; an earlier session "
+                    + "may still be generating (Stop ECG capture on the Devices screen ends it)")
+            }
+            return
+        }
         if !ecgLiveFrameLogged {
             ecgLiveFrameLogged = true
             log("ECG live: first R17 record (\(frame.count) B, count \(record.status.declaredSampleCount), "
@@ -4378,6 +4499,7 @@ public final class BLEManager: NSObject, ObservableObject {
                 + hex(frame))
         }
         if !record.anomalies.isEmpty { log("ECG live: R17 anomalies \(record.anomalies)") }
+        ecgSession?.noteRecord()
         var feed = state.ecgLive ?? EcgLiveFeed()
         feed.append(record, at: now)
         state.ecgLive = feed
@@ -4386,11 +4508,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Structural triage for the packet TYPE the ECG records arrive under, which no table in this repo
     /// holds. A hit is a CANDIDATE, never a confirmed mapping.
     private func noteEcgProbeCandidate(_ frame: [UInt8]) {
-        // The documented live record (R17, layout 17) is ECG data, not a candidate to triage: count it.
-        // It is decoded and drawn by `noteEcgLiveFrame`; the old plausibility test below models the
-        // generic Labrador payload and never matched it, which is why the probe reported zero packets
-        // while the strap streamed.
-        if Whoop5EcgFilteredRecord.isFilteredRecord(frame) {
+        // The documented live records (type 43, layout 17 or 16) are ECG data, not candidates to triage:
+        // count them. R17 is decoded and drawn by `noteEcgLiveFrame`; the old plausibility test below
+        // models the generic Labrador payload and never matched either, which is why the probe reported
+        // zero packets while the strap streamed.
+        if Whoop5EcgFilteredRecord.isLiveRecord(frame) || Whoop5EcgRawRecord.isLiveRecord(frame) {
             ecgProbePacketsSeen += 1
             return
         }
@@ -5864,7 +5986,11 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         featureFlagAwaiting = nil
         state.ecgProbe = nil          // MG ECG: drop a stale probe result on disconnect
         state.ecgLive = nil
-        state.ecgWristAccepted = nil
+        // The session keeps its outcomes for the screen, but nothing more can settle on this link: a
+        // started session that never sent its stop says so.
+        ecgSession?.noteLinkLost()
+        ecgSessionToken &+= 1
+        ecgOrphanRecordLogged = false
         // Close any open ECG listen window. The strap forgets the ECG toggles across a disconnect, and a
         // half-finished run must not fold its steps into the next one or render a verdict for a link that
         // is already gone.
@@ -6997,6 +7123,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // the ECG records arrive under. `ecgProbeArmed` is false outside a user-initiated
                     // run, so this costs one Bool read on every other frame.
                     if ecgProbeArmed { noteEcgProbeFrame(frame) }
+                    // The session settles its own replies for as long as it is active, which outlasts the
+                    // probe window; outside a session this is one optional read per frame.
+                    if ecgSession?.isActive == true { noteEcgSessionReply(frame) }
                     noteEcgLiveFrame(frame)
                     // Gated on the FULL verdict for the same reason as the 4.0 path: this reply sets the
                     // window the offload judges its records against. The verdict is taken here rather

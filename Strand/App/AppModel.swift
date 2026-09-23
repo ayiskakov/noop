@@ -1113,21 +1113,23 @@ final class AppModel: ObservableObject {
     func probeFeatureFlags() { ble.probeFeatureFlags() }
     func clearFeatureFlagProbe() { ble.clearFeatureFlagProbe() }
 
-    // WHOOP MG ECG ("Labrador") experimental probe. Every entry point is user-initiated and
-    // confirmation-gated in DevicesView, and BLEManager gates the sends again on the Experimental opt-in
-    // plus a positively-identified MG. Unvalidated instrumentation, never a medical measurement.
+    // WHOOP MG ECG ("Labrador"), experimental. Every entry point is user-initiated — the guided capture,
+    // or the bare Start / Stop in DevicesView — and BLEManager gates the sends again on the Experimental
+    // opt-in plus a positively-identified MG. Unvalidated instrumentation, never a medical measurement.
     /// True only for a POSITIVELY identified WHOOP MG — the gate the ECG UI is offered behind.
     var isWhoop5MG: Bool { ble.isWhoop5MG }
-    /// PERSISTENT strap write, deliberately its own action rather than part of the start flow.
-    func ecgSelectWrist(_ wrist: Whoop5Ecg.WristSelection) { ble.ecgSelectWrist(wrist) }
+    /// Starts a session: the wrist first when given, the turn-on sequence once it is accepted. False when
+    /// nothing was sent (a gate refused, or an earlier session has not been stopped).
     @discardableResult
     func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) -> Bool {
         ble.ecgStartCapture(wrist: wrist, reportsResult: reportsResult)
     }
-    /// `reportsResult: false` for the Settings-toggle path, so switching the experiment off doesn't pop
-    /// the Devices result sheet from another screen.
+    /// `reportsResult: false` for every path but the Devices Stop control, so stopping from the capture
+    /// screen or a settings toggle never pops the Devices result sheet.
     func ecgStopCapture(reportsResult: Bool = true) { ble.ecgStopCapture(reportsResult: reportsResult) }
     func clearEcgProbe() { ble.clearEcgProbe() }
+    /// The guided capture opened over a probe run: the run's verdict is still logged, but no longer raised.
+    func ecgDetachProbeResult() { ble.ecgDetachProbeResult() }
     /// True once a start has been sent this session and no stop has completed — keeps the Stop control
     /// reachable even after the opt-in has been switched back off.
     var ecgMayBeRunning: Bool { ble.ecgMayBeRunning }

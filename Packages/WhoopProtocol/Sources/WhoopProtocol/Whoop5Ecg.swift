@@ -20,14 +20,12 @@ import Foundation
 // implementation expression is not). Nothing here is copied — every line is NOOP's own code, in NOOP's
 // own style, and no WHOOP code, firmware or asset is present.
 //
+// Since superseded by `docs/PROTOCOL_ECG.md`: the records arrive as type 43 (live) or 47 (historical)
+// with a layout byte, and are decoded by `Whoop5EcgFilteredRecord` (R17) and `Whoop5EcgRawRecord` (R16).
+// The generic payload model below is the older hypothesis; the probe still runs it over any OTHER shape,
+// logging hits as candidates. The wrist arguments are `01 01` right / `01 02` left (`WristSelection`).
+//
 // What is NOT established, and is therefore never asserted:
-//   • The packet TYPE byte these records arrive under. No capture exists, and the repo's `PacketType`
-//     table has no Labrador entry. So this file decodes a PAYLOAD, and the app layer discovers the type
-//     empirically by running `plausibleFilteredPayload` over unclassified frames and logging the hits.
-//   • The `WristSelection` raw values. `right` is listed first in the client's enum, so right=0/left=1 is
-//     the natural reading — but it is an INFERENCE, not an attested fact, and it is labelled as such
-//     everywhere it surfaces (including in the UI, because picking the wrong one writes the wrong
-//     persistent value to the strap).
 //   • The `heartKeyProgress` "timed out" sentinel. The client's type is a union of a percentage and a
 //     timed-out case; the sentinel VALUE is not attested, so an out-of-range byte is carried raw rather
 //     than renamed into a state we cannot prove it means.
@@ -286,6 +284,16 @@ public enum Whoop5Ecg {
         case left = 2
 
         public var token: String { self == .right ? "right" : "left" }
+
+        /// The wrist a stored `token` names, or nil. A client that remembers the wearer's wrist stores the
+        /// token rather than the wire argument, so a remapped argument can never flip a remembered choice.
+        public init?(token: String) {
+            switch token {
+            case "right": self = .right
+            case "left": self = .left
+            default: return nil
+            }
+        }
     }
 
     /// The `mainControlECGDataGeneration` argument.

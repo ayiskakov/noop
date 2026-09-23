@@ -114,15 +114,14 @@ public enum WhoopCommand: UInt8, CaseIterable {
     //
     // All four numbers are already in this repo's protocol table (`CommandNumber` in
     // whoop_protocol.json) from the upstream whoomp/goose work. They are SAFE and REVERSIBLE: three are
-    // data-stream toggles, and the fourth writes one persistent wrist-selection value that is re-writable
-    // at any time. NONE of them wipes data, reflashes, ship-modes, force-trims or otherwise permanently
+    // data-stream toggles, and the fourth selects the wrist, re-writable at any time and not established
+    // to persist. NONE of them wipes data, reflashes, ship-modes, force-trims or otherwise permanently
     // alters the strap, so the curated-safe-subset rule (docs/CONTRIBUTING.md §BLE safety contract) holds.
     //
-    // The number→meaning mapping is a WORKING HYPOTHESIS, not confirmed: §6 of docs/PROTOCOL.md lists
-    // FIVE ECG/HeartKey names against these four codes, 139 is not contiguous with 123–125, and the
-    // table is 4.0-derived while 5/MG is known to remap some opcodes (MAVERICK answers SET_CLOCK at 146,
-    // not 10). See PROTOCOL.md §9.1 for the full caveat. That is precisely why these are probe-only and
-    // why the probe reports UNSUPPORTED as its own outcome rather than folding it into a "blocked" story.
+    // Payloads and outcomes are specified in docs/PROTOCOL_ECG.md, whose §Hardware observations records
+    // one MG (WS50_r00, fw 50.39.1.0) starting generation on 139/125/124 and refusing wrist argument zero.
+    // Other hardware and firmware are unconfirmed (50.40.1.0 is reported to refuse), which is why the
+    // probe still reports UNSUPPORTED as its own outcome rather than folding it into a "blocked" story.
     //
     // NOT hardware-confirmed on any strap — whether an MG's firmware honours them is exactly what the
     // gated, user-initiated probe discovers. Payload for all four is `Whoop5Ecg.commandPayload(arg:)`
@@ -227,7 +226,7 @@ public enum WhoopCommand: UInt8, CaseIterable {
         case .getBodyLocationAndStatus:return "Get Body Location And Status"
         case .startFeatureFlagKeyExchange: return "Start Feature-Flag Key Exchange"
         case .sendNextFeatureFlag:   return "Send Next Feature Flag"
-        case .selectWrist:           return "Select Wrist (MG ECG, persistent)"
+        case .selectWrist:           return "Select Wrist (MG ECG)"
         case .toggleLabradorDataGeneration: return "ECG Data Generation (MG)"
         case .toggleLabradorRawSave: return "ECG Raw Save (MG)"
         case .toggleLabradorFiltered:return "ECG Filtered Stream (MG)"
