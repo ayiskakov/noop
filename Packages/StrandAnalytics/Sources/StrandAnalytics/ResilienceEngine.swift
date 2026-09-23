@@ -35,8 +35,8 @@ import Foundation
 //    and run through the SAME pipeline, giving the τ̂ that τ would produce. The estimate is the τ whose
 //    median τ̂ matches the measured one; the 90 % interval is every τ whose central 90 % of τ̂ covers it.
 //    On synthetic series with τ = 7, 14, 28 and 56 days, weekly structure, noise and 20 % missing days,
-//    the interval covers the truth in 85–92 % of seeds (ResilienceEngineTests). It is wide: that is what
-//    one person's half-year can say.
+//    the interval covers the truth in 86, 88, 89 and 93 of 100 seeds (ResilienceOracleTests). It is
+//    wide: that is what one person's half-year can say.
 // 7. σ, the SD of the de-structured series in the signal's own units, is Pyrkov's second hallmark
 //    (the fluctuation variance also rises with age).
 //
@@ -207,7 +207,8 @@ public enum ResilienceEngine {
         /// Deviation in robust SDs, sign-aligned so the peak is positive, for each observed day from the
         /// peak to `knockHorizonDays` after it (`dayIndex` counts days since the peak).
         public let path: [DayValue]
-        /// Observed days from the peak to the first day back within `baselineBand`; nil if not yet back.
+        /// Days since the peak (calendar days, gaps included, as `path`'s `dayIndex`) to the first observed
+        /// day back within `baselineBand`; nil if not yet back.
         public let daysToBaseline: Int?
         /// Half-life of the fitted return P·exp(−t/τₖ), days; nil with too few points to fit, or when the
         /// fit does not describe the path (height inside the baseline band, τₖ on a search bound, or
@@ -215,6 +216,17 @@ public enum ResilienceEngine {
         public let halfLifeDays: Double?
         /// Fitted height P of the return curve, in the path's sign-aligned units; nil with no fit.
         public let returnAmplitude: Double?
+
+        public init(startDay: Int, peakDay: Int, peakDeviation: Double, path: [DayValue],
+                    daysToBaseline: Int?, halfLifeDays: Double?, returnAmplitude: Double?) {
+            self.startDay = startDay
+            self.peakDay = peakDay
+            self.peakDeviation = peakDeviation
+            self.path = path
+            self.daysToBaseline = daysToBaseline
+            self.halfLifeDays = halfLifeDays
+            self.returnAmplitude = returnAmplitude
+        }
 
         /// The fitted return curve at `t` days after the peak, in the path's sign-aligned units.
         public func fittedReturn(atDay t: Double) -> Double? {
