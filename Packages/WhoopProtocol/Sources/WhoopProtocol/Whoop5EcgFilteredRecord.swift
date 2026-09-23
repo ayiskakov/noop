@@ -8,10 +8,10 @@ import Foundation
 /// TOGGLE_LABRADOR_FILTERED (139) is on and generation is started, the strap streams these 240-byte
 /// records while the R16 raw record is banked to flash.
 ///
-/// ## Why the older 101-sample reading is not reused
+/// ## Why this replaced the older 101-sample reading
 ///
-/// `Whoop5Ecg.realtimeRawSamples` reads the same 240-byte frame as 101 i16 values from byte 34 to 236.
-/// The doc rules that out: bytes 234–235 are two zero alignment bytes, "never a waveform sample", so a
+/// An earlier helper read the same 240-byte frame as 101 i16 values from byte 34 to 236. The doc rules
+/// that out: bytes 234–235 are two zero alignment bytes, "never a waveform sample", so a
 /// 101-value read appends a fake zero to every record — a regular one-per-record artefact at the record
 /// period, the exact shape #194 warned manufactures a false rhythm. It also ignores the declared count at
 /// @32, so a partial record would be padded with slots the strap never filled.

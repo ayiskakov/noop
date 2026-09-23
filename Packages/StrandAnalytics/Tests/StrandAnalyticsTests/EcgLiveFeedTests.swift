@@ -44,6 +44,31 @@ final class EcgLiveFeedTests: XCTestCase {
         XCTAssertEqual(feed.displayedEnd(at: t0.addingTimeInterval(3.9)), 150)
     }
 
+    func testAFasterStrapNeverLetsTheTraceFallBehindOrGoBlank() {
+        // 125 samples per record at one record per second: 25 % faster than the playback rate.
+        var feed = EcgLiveFeed()
+        for k in 0..<90 {
+            let at = t0.addingTimeInterval(Double(k))
+            feed.append(record(UInt32(k + 1), samples: Array(repeating: k, count: 125)), at: at)
+            let backlog = feed.totalSamples - feed.displayedEnd(at: at)
+            XCTAssertLessThanOrEqual(backlog, EcgLiveFeed.maxBacklog + 125, "record \(k)")
+            XCTAssertFalse(feed.window(endingAt: at.addingTimeInterval(0.5), count: 400).isEmpty, "record \(k)")
+        }
+        // At the 90 s cap the trace is drawing samples from the last few records, not from 20 s ago.
+        let end = t0.addingTimeInterval(89.5)
+        XCTAssertGreaterThanOrEqual(feed.window(endingAt: end, count: 1).first ?? -1, 86)
+    }
+
+    func testAnOnTimeStrapNeverSkips() {
+        var feed = EcgLiveFeed()
+        for k in 0..<30 {
+            feed.append(record(UInt32(k + 1), samples: Array(0..<100).map { $0 + k * 100 }),
+                        at: t0.addingTimeInterval(Double(k)))
+        }
+        // Continuous playback from the first anchor: 29.5 s after it, sample 2950 is drawn.
+        XCTAssertEqual(feed.displayedEnd(at: t0.addingTimeInterval(29.9)), 2_950)
+    }
+
     func testARepeatedRecordIndexIsDroppedAndAForwardSkipIsCounted() {
         var feed = EcgLiveFeed()
         XCTAssertTrue(feed.append(record(10, samples: [1, 2]), at: t0))

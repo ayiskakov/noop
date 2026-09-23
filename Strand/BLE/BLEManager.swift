@@ -4222,8 +4222,11 @@ public final class BLEManager: NSObject, ObservableObject {
     ///
     /// `reportsResult: false` is the guided capture: it draws the live stream itself, so the probe's
     /// 30 s verdict sheet must not pop over it. The steps are still tracked and the verdict still logged.
-    public func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) {
-        guard ecgGatesAllow() else { return }
+    /// Returns false when a gate refused and nothing was sent, so a caller never shows a capture that
+    /// was not started.
+    @discardableResult
+    public func ecgStartCapture(wrist: Whoop5Ecg.WristSelection? = nil, reportsResult: Bool = true) -> Bool {
+        guard ecgGatesAllow() else { return false }
         ecgMayBeRunning = true      // latched BEFORE the sends, so a mid-sequence drop still leaves Stop offered
         beginEcgProbeRun(clearingSteps: true, publishesResult: reportsResult)
         state.ecgLive = nil
@@ -4238,6 +4241,7 @@ public final class BLEManager: NSObject, ObservableObject {
         sendEcgCommand(.toggleLabradorRawSave, arg: 1)
         sendEcgCommand(.toggleLabradorDataGeneration, arg: Whoop5Ecg.ControlSignal.start.rawValue)
         scheduleEcgProbeVerdict()
+        return true
     }
 
     /// The explicit OFF path: stop generation first, then drop both streams.

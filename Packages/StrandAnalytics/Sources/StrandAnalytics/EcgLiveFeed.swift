@@ -12,8 +12,11 @@ import WhoopProtocol
 ///
 /// `playbackRate` is a PRESENTATION choice, not a measured sample rate. `docs/PROTOCOL_ECG.md` gives the
 /// filtered output only as one value per five processed inputs; paced at 100 per second the trace keeps
-/// up with a strap delivering 100 samples per record at one record per second, and if the true rate
-/// differs the buffer simply re-anchors instead of drifting. Nothing here labels an axis in seconds.
+/// up with a strap delivering 100 samples per record at one record per second. That figure was never
+/// measured, so the buffer corrects in both directions: a slower strap stalls the trace and re-anchors at
+/// the next burst, and a faster one is caught up by skipping ahead whenever the undrawn backlog passes
+/// `maxBacklog`, so the trace never lags the status line by more than a few records and never falls off
+/// the end of the kept samples. Nothing here labels an axis in seconds.
 ///
 /// Pure and clock-free: every method takes the time it should reason about, so the pacing is covered
 /// by `swift test` with no timer and no strap.
@@ -25,6 +28,9 @@ public struct EcgLiveFeed: Equatable, Sendable {
     public static let preroll: TimeInterval = 0.4
     /// Samples kept. Thirty seconds at the playback rate — longer than any window a view draws.
     public static let defaultCapacity = 3_000
+    /// Undrawn samples allowed to pile up before the trace skips ahead. Two and a half records at the
+    /// nominal size: above the backlog an on-time strap leaves just after a burst, well below capacity.
+    public static let maxBacklog = 250
 
     public let capacity: Int
     /// The newest samples, oldest first, at most `capacity`.
@@ -80,6 +86,14 @@ public struct EcgLiveFeed: Equatable, Sendable {
         samples.append(contentsOf: record.samples)
         totalSamples += record.samples.count
         if samples.count > capacity { samples.removeFirst(samples.count - capacity) }
+
+        // A strap sending faster than the playback rate leaves a growing backlog. Skip ahead so the
+        // trace stays one pre-roll behind the newest sample, rather than drawing an ever-older past and,
+        // once the lag passes `capacity`, nothing at all.
+        if Double(totalSamples) - playhead(at: at) > Double(min(Self.maxBacklog, capacity)) {
+            anchorSample = max(0, totalSamples - Int(Self.preroll * Self.playbackRate))
+            anchorTime = at
+        }
         return true
     }
 

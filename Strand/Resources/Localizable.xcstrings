@@ -210858,6 +210858,70 @@
         }
       }
     },
+    "Turn on WHOOP MG ECG capture (experimental) in Test Centre to start a recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviere „WHOOP MG EKG-Aufzeichnung (experimentell)“ im Testcenter, um aufzuzeichnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on WHOOP MG ECG capture (experimental) in Test Centre to start a recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa «Captura de ECG de WHOOP MG (experimental)» en el Centro de pruebas para grabar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active « Capture ECG WHOOP MG (expérimental) » dans le Centre de test pour enregistrer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva «Acquisizione ECG WHOOP MG (sperimentale)» nel Centro test per registrare."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Włącz „Rejestracja EKG WHOOP MG (eksperymentalna)” w Centrum testów, aby nagrywać."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativa «Captura de ECG WHOOP MG (experimental)» no Centro de testes para gravar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включите «Запись ЭКГ WHOOP MG (экспериментально)» в Центре тестирования, чтобы начать запись."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在测试中心开启“WHOOP MG 心电图采集（实验性）”即可开始记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在測試中心開啟「WHOOP MG 心電圖擷取（實驗性）」即可開始記錄。"
+          }
+        }
+      }
+    },
     "Turn on a test for the thing that's wrong, wear the strap, then tap Report. All on %@.": {
       "localizations": {
         "de": {

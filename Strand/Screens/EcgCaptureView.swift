@@ -29,6 +29,9 @@ struct EcgCaptureView: View {
     /// The wearer's wrist, remembered on this device only. The strap may or may not keep its own copy
     /// (persistence is not established), so the capture re-sends this before every start.
     @AppStorage("noop.ecgWrist") private var wristRaw = Int(Whoop5Ecg.WristSelection.left.rawValue)
+    /// The Experimental ECG opt-in. The Devices menu can still offer this screen with the opt-in off
+    /// while a capture may be running, so Start has to check it too.
+    @AppStorage(PuffinExperiment.ecgKey) private var ecgEnabled = false
 
     @State private var step: Step = .wrist
     @State private var startedAt: Date?
@@ -55,7 +58,7 @@ struct EcgCaptureView: View {
     /// The same gate the Devices menu and `BLEManager.ecgGatesAllow` apply, read here so Start is
     /// disabled rather than silently ignored.
     private var ready: Bool {
-        live.connected && live.encryptedBond && model.isWhoop5MG
+        ecgEnabled && live.connected && live.encryptedBond && model.isWhoop5MG
     }
 
     var body: some View {
@@ -160,7 +163,12 @@ struct EcgCaptureView: View {
                     instruction(4, "Stay still and don't talk. A slightly damp fingertip and unplugged chargers give a cleaner trace.")
                 }
             }
-            if !ready {
+            if !ecgEnabled {
+                Text("Turn on WHOOP MG ECG capture (experimental) in Test Centre to start a recording.")
+                    .font(StrandFont.caption)
+                    .foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !ready {
                 Text("Connect your WHOOP MG and let it finish pairing to start a recording.")
                     .font(StrandFont.caption)
                     .foregroundStyle(StrandPalette.statusWarning)
@@ -304,9 +312,11 @@ struct EcgCaptureView: View {
     // MARK: - Actions
 
     private func start() {
+        // Only a start that actually sent commands moves on. A refused gate leaves this step in place,
+        // so the screen never shows an old trace or another session's frames as this recording.
+        guard model.ecgStartCapture(wrist: wrist, reportsResult: false) else { return }
         finishReason = nil
         startedAt = Date()
-        model.ecgStartCapture(wrist: wrist, reportsResult: false)
         step = .recording
     }
 
