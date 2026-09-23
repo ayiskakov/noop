@@ -252545,60 +252545,60 @@
         }
       }
     },
-    "No knocks in this window: nothing moved this signal more than 2 SD from its usual level for two days running.": {
+    "No knocks in this window: nothing moved this signal 2 SD or more from its usual level and kept it at least 1 SD out on the next reading after the peak, taken within 3 days.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine Ausschläge in diesem Zeitraum: Nichts hat dieses Signal zwei Tage in Folge um mehr als 2 SD von seinem üblichen Niveau entfernt."
+            "value": "Keine Ausschläge in diesem Zeitraum: Nichts hat dieses Signal um 2 SD oder mehr von seinem üblichen Niveau entfernt und es beim nächsten Messwert nach dem Höhepunkt, innerhalb von 3 Tagen, noch mindestens 1 SD davon entfernt gehalten."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin golpes en este periodo: nada movió esta señal más de 2 DE de su nivel habitual durante dos días seguidos."
+            "value": "Sin golpes en este periodo: nada alejó esta señal 2 DE o más de su nivel habitual y la mantuvo al menos a 1 DE en la siguiente lectura tras el pico, tomada en un plazo de 3 días."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun choc sur cette période : rien n'a écarté ce signal de plus de 2 ET de son niveau habituel deux jours de suite."
+            "value": "Aucun choc sur cette période : rien n'a écarté ce signal de 2 ET ou plus de son niveau habituel en le maintenant à au moins 1 ET à la mesure suivant le pic, prise sous 3 jours."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuno scossone in questo periodo: nulla ha spostato questo segnale di oltre 2 DS dal suo livello abituale per due giorni di fila."
+            "value": "Nessuno scossone in questo periodo: nulla ha spostato questo segnale di 2 DS o più dal suo livello abituale mantenendolo ad almeno 1 DS alla lettura successiva al picco, presa entro 3 giorni."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Brak wstrząsów w tym okresie: nic nie odsunęło tego sygnału o ponad 2 SD od zwykłego poziomu przez dwa dni z rzędu."
+            "value": "Brak wstrząsów w tym okresie: nic nie odsunęło tego sygnału o 2 SD lub więcej od zwykłego poziomu tak, by w następnym odczycie po szczycie, w ciągu 3 dni, wciąż był odchylony o co najmniej 1 SD."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sem abalos neste período: nada afastou este sinal mais de 2 DP do seu nível habitual durante dois dias seguidos."
+            "value": "Sem abalos neste período: nada afastou este sinal 2 DP ou mais do seu nível habitual mantendo-o a pelo menos 1 DP na leitura seguinte ao pico, feita no prazo de 3 dias."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "В этом окне встрясок нет: ничто не отклоняло этот сигнал более чем на 2 SD от обычного уровня два дня подряд."
+            "value": "В этом окне встрясок нет: ничто не отклоняло этот сигнал на 2 SD или больше от обычного уровня так, чтобы в следующем после пика измерении, в пределах 3 дней, он всё ещё отклонялся хотя бы на 1 SD."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此窗口内没有冲击：没有任何事件让该信号连续两天偏离常态超过 2 个标准差。"
+            "value": "此窗口内没有冲击：没有任何事件让该信号偏离常态达 2 个标准差或以上，并在峰值后 3 天内的下一次读数中仍偏离至少 1 个标准差。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此窗口內沒有衝擊：沒有任何事件讓該訊號連續兩天偏離常態超過 2 個標準差。"
+            "value": "此窗口內沒有衝擊：沒有任何事件讓該訊號偏離常態達 2 個標準差或以上，並在峰值後 3 天內的下一次讀數中仍偏離至少 1 個標準差。"
           }
         }
       }

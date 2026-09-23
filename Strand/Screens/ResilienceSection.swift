@@ -317,7 +317,7 @@ private struct ResilienceDetail: View {
             let recent = Array(readout.knocks.suffix(3).reversed())
             if recent.isEmpty {
                 NoopCard {
-                    Text("No knocks in this window: nothing moved this signal more than 2 SD from its usual level for two days running.")
+                    Text("No knocks in this window: nothing moved this signal 2 SD or more from its usual level and kept it at least 1 SD out on the next reading after the peak, taken within 3 days.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
