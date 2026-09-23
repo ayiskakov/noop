@@ -38,8 +38,9 @@ public enum EcgBeats {
     public static let requiredQuality = 3
     /// Shortest contiguous gated stretch worth analysing.
     public static let minSegmentSeconds = 3
-    /// R-R intervals outside this range are counted as rejected rather than used (200 and 30 bpm).
-    public static let rrRangeMs: ClosedRange<Double> = 300...2_000
+    /// R-R intervals outside this range are counted as rejected rather than used (200 and 30 bpm). The
+    /// HRV range, so the rhythm facts' cleaning (`HRVAnalyzer.cleanRRGapAware`) rejects the same ones.
+    public static let rrRangeMs: ClosedRange<Double> = HRVAnalyzer.rrMinMs...HRVAnalyzer.rrMaxMs
     /// Fewest usable intervals before a heart rate is reported.
     public static let minIntervalsForRate = 8
 
@@ -60,36 +61,38 @@ public enum EcgBeats {
 
     /// The gap between two successive beats of one stretch.
     public struct Interval: Equatable, Sendable {
-        /// Unix seconds of the beat that ends the interval.
-        public let endTime: Double
         public let ms: Double
         public let segment: Int
 
-        public init(endTime: Double, ms: Double, segment: Int) {
-            self.endTime = endTime
+        public init(ms: Double, segment: Int) {
             self.ms = ms
             self.segment = segment
         }
+
+        /// Inside `rrRangeMs`, and so used for the rate.
+        public var isUsable: Bool { EcgBeats.rrRangeMs.contains(ms) }
     }
 
     public struct Result: Equatable, Sendable {
         public let beats: [Beat]
-        /// Successive intervals within one stretch that fell inside `rrRangeMs`, in beat order.
+        /// EVERY successive interval within one stretch, in beat order, including those outside
+        /// `rrRangeMs`. Kept whole so a successive-difference measure can tell which usable intervals
+        /// were adjacent: dropping a rejected one from this list would splice its neighbours together.
         public let intervals: [Interval]
-        /// Successive intervals within one stretch that fell outside it.
-        public let rejectedIntervals: Int
         /// Seconds of signal that passed the quality gate and were analysed.
         public let analysedSeconds: Int
 
-        public init(beats: [Beat], intervals: [Interval], rejectedIntervals: Int, analysedSeconds: Int) {
+        public init(beats: [Beat], intervals: [Interval], analysedSeconds: Int) {
             self.beats = beats
             self.intervals = intervals
-            self.rejectedIntervals = rejectedIntervals
             self.analysedSeconds = analysedSeconds
         }
 
+        /// Successive intervals that fell outside `rrRangeMs`.
+        public var rejectedIntervals: Int { intervals.count - rrMs.count }
+
         /// The in-range intervals, in milliseconds.
-        public var rrMs: [Double] { intervals.map(\.ms) }
+        public var rrMs: [Double] { intervals.filter(\.isUsable).map(\.ms) }
 
         /// Median-based rate, or nil with fewer than `minIntervalsForRate` usable intervals. The median
         /// keeps one missed or doubled beat from moving the figure.
@@ -127,26 +130,18 @@ public enum EcgBeats {
 
         var beats: [Beat] = []
         var intervals: [Interval] = []
-        var rejected = 0
         for (s, segment) in segments.enumerated() {
             let samples = segment.flatMap { $0.samples.map(Double.init) }
             let peaks = detect(samples, sampleRate: sampleRate)
             // Every record here holds exactly `perRecord` samples, so a peak's record is its index over
             // that. Intervals are counted in samples: the stretch is continuous on the strap's sample
             // clock even where its wall clock was corrected.
-            let stretch = peaks.map { Beat(recordTs: segment[$0 / perRecord].ts, sample: $0 % perRecord, segment: s) }
-            beats += stretch
-            for i in peaks.indices.dropFirst() {
-                let ms = Double(peaks[i] - peaks[i - 1]) / sampleRate * 1_000
-                if rrRangeMs.contains(ms) {
-                    intervals.append(Interval(endTime: stretch[i].time, ms: ms, segment: s))
-                } else {
-                    rejected += 1
-                }
+            beats += peaks.map { Beat(recordTs: segment[$0 / perRecord].ts, sample: $0 % perRecord, segment: s) }
+            for (a, b) in zip(peaks, peaks.dropFirst()) {
+                intervals.append(Interval(ms: Double(b - a) / sampleRate * 1_000, segment: s))
             }
         }
-        return Result(beats: beats, intervals: intervals, rejectedIntervals: rejected,
-                      analysedSeconds: segments.reduce(0) { $0 + $1.count })
+        return Result(beats: beats, intervals: intervals, analysedSeconds: segments.reduce(0) { $0 + $1.count })
     }
 
     /// True when `next` is the record directly after `previous`: the next record index when both carry

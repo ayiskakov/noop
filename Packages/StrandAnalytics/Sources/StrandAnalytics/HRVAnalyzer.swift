@@ -164,7 +164,10 @@ public enum HRVAnalyzer {
     /// tracking which original beats were dropped, so a downstream successive-difference metric can skip
     /// the difference across a removed beat. `CleanSeries.nn` equals `cleanRR` value for value. Kotlin twin
     /// of `HrvAnalyzer.cleanRRGapAware`.
-    public static func cleanRRGapAware(_ rr: [Double]) -> CleanSeries {
+    ///
+    /// `radius` widens the local-median window for a caller that needs it; left at its default the
+    /// result is the one above, and the equality with `cleanRR` holds only at that default.
+    public static func cleanRRGapAware(_ rr: [Double], radius: Int = ectopicWindowRadius) -> CleanSeries {
         // Pass 1: range filter, keeping each survivor's index in the ORIGINAL series.
         var rangedIdx: [Int] = []; rangedIdx.reserveCapacity(rr.count)
         var rangedVal: [Double] = []; rangedVal.reserveCapacity(rr.count)
@@ -177,13 +180,13 @@ public enum HRVAnalyzer {
         // carrying each survivor's original index forward.
         var keptOrig: [Int] = []; keptOrig.reserveCapacity(rangedVal.count)
         var keptVal: [Double] = []; keptVal.reserveCapacity(rangedVal.count)
-        if rangedVal.count <= ectopicWindowRadius {
+        if rangedVal.count <= radius {
             // rejectEctopic returns the input unchanged for a series this short.
             for k in 0..<rangedVal.count { keptOrig.append(rangedIdx[k]); keptVal.append(rangedVal[k]) }
         } else {
             for i in 0..<rangedVal.count {
-                let lo = max(0, i - ectopicWindowRadius)
-                let hi = min(rangedVal.count - 1, i + ectopicWindowRadius)
+                let lo = max(0, i - radius)
+                let hi = min(rangedVal.count - 1, i + radius)
                 var neighbours: [Double] = []; neighbours.reserveCapacity(hi - lo)
                 for j in lo...hi where j != i { neighbours.append(rangedVal[j]) }
                 let keep: Bool

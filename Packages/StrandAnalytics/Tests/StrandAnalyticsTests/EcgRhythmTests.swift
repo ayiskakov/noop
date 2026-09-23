@@ -6,18 +6,10 @@ import WhoopProtocol
 /// worked by hand from the series the test builds.
 final class EcgRhythmTests: XCTestCase {
 
-    /// A result whose stretches carry exactly these intervals, in milliseconds.
+    /// A result whose stretches carry exactly these intervals, in milliseconds, rejected ones included.
     private func result(_ stretches: [[Double]]) -> EcgBeats.Result {
-        var intervals: [EcgBeats.Interval] = []
-        var t = 1_790_000_000.0
-        for (s, ms) in stretches.enumerated() {
-            for v in ms {
-                t += v / 1_000
-                intervals.append(.init(endTime: t, ms: v, segment: s))
-            }
-            t += 5
-        }
-        return EcgBeats.Result(beats: [], intervals: intervals, rejectedIntervals: 0,
+        let intervals = stretches.enumerated().flatMap { s, ms in ms.map { EcgBeats.Interval(ms: $0, segment: s) } }
+        return EcgBeats.Result(beats: [], intervals: intervals,
                                analysedSeconds: Int(intervals.reduce(0) { $0 + $1.ms } / 1_000))
     }
 
@@ -67,6 +59,14 @@ final class EcgRhythmTests: XCTestCase {
         // Each stretch is perfectly steady; only a cross-stretch pair would differ.
         let f = facts([Array(repeating: 800, count: 10), Array(repeating: 600, count: 10)])
         XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 0, accuracy: 1e-9)
+    }
+
+    func testNoDifferenceIsTakenAcrossARejectedInterval() {
+        // A missed beat leaves one 2,200 ms interval, out of range, between a steady 1,180 and a steady
+        // 1,000. The two sides were never adjacent, so no difference joins them.
+        let f = facts([Array(repeating: 1_180, count: 6) + [2_200] + Array(repeating: 1_000, count: 6)])
+        XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 0, accuracy: 1e-9)
+        XCTAssertEqual(f.setAsideIntervals, 0)
     }
 
     func testTooFewIntervalsGiveNoFacts() {

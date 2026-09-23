@@ -205,7 +205,7 @@ struct EcgReviewView: View {
                 VStack(alignment: .leading, spacing: NoopMetrics.space1) {
                     Text("R-R intervals")
                         .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
-                    RRDotChart(intervals: beats.intervals.map(\.ms))
+                    RRDotChart(intervals: beats.rrMs)
                         .frame(height: 120)
                     Text("One dot per beat: the gap since the previous beat, in order.")
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)

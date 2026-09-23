@@ -18,11 +18,11 @@ public struct EcgRhythmFacts: Equatable, Sendable {
     /// Intervals per rolling window for the rate series. Five, so one missed or doubled beat moves a
     /// window's median by at most one position rather than setting its value.
     public static let rollingWindow = 5
-    /// An interval further than this fraction from its neighbours' median is set aside as a likely
-    /// missed or extra detection before variability is measured. 20 % is the usual artefact rule for
-    /// R-R series.
-    public static let artefactFraction = 0.20
-    /// Intervals either side that form an interval's reference median.
+    /// Intervals either side that form an interval's reference median for the artefact rule, which is
+    /// `HRVAnalyzer`'s (an interval more than `HRVAnalyzer.ectopicThreshold` from that median is set
+    /// aside as a likely missed or extra detection). Five rather than HRV's two: with two, a split beat
+    /// (two short intervals) drags the median of its correct neighbours' windows down and sets them
+    /// aside too.
     public static let neighbourReach = 5
     /// The fixed rates the high/low lines report against. Plain thresholds, not diagnoses.
     public static let highRate = 100.0
@@ -40,7 +40,8 @@ public struct EcgRhythmFacts: Equatable, Sendable {
     /// Coefficient of variation of the kept intervals, in percent.
     public let variationPercent: Double
     /// Root mean square of successive differences between kept intervals, in milliseconds. Only pairs
-    /// of adjacent intervals in one stretch count.
+    /// of adjacent intervals in one stretch count: none across a stretch boundary, a rejected interval
+    /// or a set-aside one.
     public let rmssdMs: Double?
     /// Intervals set aside by the artefact rule.
     public let setAsideIntervals: Int
@@ -51,14 +52,18 @@ public struct EcgRhythmFacts: Equatable, Sendable {
     /// Facts for a recording, or nil when `EcgBeats` found too few intervals for a rate.
     public static func from(_ beats: EcgBeats.Result, records: [EcgCandidateSample]) -> EcgRhythmFacts? {
         guard let rate = beats.heartRate else { return nil }
+        // Every interval of each stretch, rejected ones included: the cleaner needs them in place to
+        // know which of the kept ones were adjacent.
         let bySegment = Dictionary(grouping: beats.intervals, by: \.segment)
-            .sorted { $0.key < $1.key }.map(\.value)
+            .sorted { $0.key < $1.key }.map { $0.value.map(\.ms) }
 
         var rolling: [Double] = []
-        var kept: [[Double]] = []
+        var nn: [Double] = []
+        var contiguous: [Bool] = []
         var setAside = 0
-        for segment in bySegment {
-            let ms = segment.map(\.ms)
+        for raw in bySegment {
+            let ms = raw.filter(EcgBeats.rrRangeMs.contains)
+            if ms.isEmpty { continue }
             if ms.count < rollingWindow {
                 rolling.append(60_000 / (EcgBeats.median(ms) ?? ms[0]))
             } else {
@@ -66,34 +71,17 @@ public struct EcgRhythmFacts: Equatable, Sendable {
                     rolling.append(60_000 / (EcgBeats.median(Array(ms[start..<(start + rollingWindow)])) ?? 1))
                 }
             }
-            // Neighbour median: up to `neighbourReach` intervals either side, excluding the interval
-            // itself. Wide enough that a split beat (two short intervals) cannot drag the reference
-            // down and take its correct neighbours out with it.
-            var run: [Double] = []
-            for i in ms.indices {
-                let lo = max(0, i - neighbourReach), hi = min(ms.count, i + neighbourReach + 1)
-                let neighbours = (lo..<hi).filter { $0 != i }.map { ms[$0] }
-                let reference = EcgBeats.median(neighbours) ?? ms[i]
-                if abs(ms[i] - reference) > artefactFraction * reference {
-                    setAside += 1
-                    if !run.isEmpty { kept.append(run); run = [] }
-                } else {
-                    run.append(ms[i])
-                }
-            }
-            if !run.isEmpty { kept.append(run) }
+            let clean = HRVAnalyzer.cleanRRGapAware(raw, radius: neighbourReach)
+            setAside += ms.count - clean.nn.count
+            // Each stretch's first kept interval is marked non-contiguous, so no difference is taken
+            // across a stretch boundary when the stretches are appended.
+            nn += clean.nn
+            contiguous += clean.contiguous
         }
 
-        let all = kept.flatMap { $0 }
-        let mean = all.isEmpty ? 0 : all.reduce(0, +) / Double(all.count)
-        let sd = all.count > 1
-            ? (all.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(all.count - 1)).squareRoot()
-            : 0
-        var squares: [Double] = []
-        for run in kept where run.count > 1 {
-            for i in run.indices.dropFirst() { squares.append((run[i] - run[i - 1]) * (run[i] - run[i - 1])) }
-        }
-        let rmssd = squares.isEmpty ? nil : (squares.reduce(0, +) / Double(squares.count)).squareRoot()
+        let mean = nn.isEmpty ? 0 : nn.reduce(0, +) / Double(nn.count)
+        let sd = HRVAnalyzer.sdnnRaw(nn) ?? 0
+        let rmssd = HRVAnalyzer.rmssdGapAware(nn, contiguous)
 
         let completed = records.sorted { $0.ts < $1.ts }.first { $0.classifierState == 2 }
         return EcgRhythmFacts(
