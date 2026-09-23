@@ -1,6 +1,6 @@
 # Resilience — physiological recovery time (Experimental)
 
-**Status:** planned · **Tracking:** 2 PRs · **Started:** 2026-09-23
+**Status:** shipped (Experimental) · **Tracking:** 2 PRs · **Started:** 2026-09-23
 **Lives in:** the Healthspan tab, as its own section with an **Experimental** badge, behind a default-off
 toggle. **Sibling plan:** [Healthspan upgrade](2026-09-23-healthspan-v2.md)
 
@@ -52,10 +52,20 @@ autocorrelation of these fluctuations as a minimal biomarker set. No consumer ap
 6. **Bias and interval.** Autocorrelation from a few hundred points is biased toward shorter τ. A
    **parametric bootstrap** (simulate OU + noise with the fitted A, τ, σ, the same n and the same missing
    pattern; seeded RNG so it is deterministic) gives a bias-corrected τ and a 90 % interval.
+   *As built (R1):* the plain basic-bootstrap interval covered the truth in only ~50 % of seeds at
+   τ ≥ 14 (the bias depends strongly on τ), so the bootstrap is **inverted** instead: simulate at each τ
+   on a 16-point log grid, with the amplitude re-scaled per τ so its median fit matches the measured one;
+   the estimate is the τ whose median τ̂ equals the measured τ̂, and the interval is every τ whose central
+   90 % of τ̂ covers it. Coverage at τ = 7/14/28/56: 86/88/89/93 of 100 seeds. Intervals are wide (a
+   median high/low ratio of about 30): that is what one person's half-year can support.
 7. **Fluctuation amplitude** σ of the de-structured series: Pyrkov's second hallmark.
 8. **Daily readout.** Recompute for the window ending each day, which gives a τ trend over months.
 9. **Knocks.** Detect perturbations (a day > 2σ from the rolling baseline, e.g. an RHR spike during
-   illness) and measure the observed return-to-baseline half-life for each one. This is concrete evidence
+   illness) and measure the observed return-to-baseline half-life for each one. *As built:* the baseline
+   is the median of the prior 28 days (weekday pattern removed), frozen at the knock's start; the scale
+   is a MAD; the day after the peak must still be > 1σ out, so a lone outlier day is not a knock. A
+   half-life is reported only when the fitted return explains ≥ 50 % of the path and its decay constant is
+   off the search bounds (a flat fit pinned at the ceiling read 41.6 days beside a 2-day observed return). This is concrete evidence
    of the same quantity, and the UI's most intuitive element.
 
 ## PR R1 — Engine (`Packages/StrandAnalytics/ResilienceEngine.swift`, pure)
@@ -103,6 +113,13 @@ autocorrelation of these fluctuations as a minimal biomarker set. No consumer ap
 main actor) and calls the engine. It is the single funnel every card reads; there is no persistence
 (the computation is cheap).
 
+*As built (R2):* the trend is one point every 14 days over 12 months (27 windows), computed on demand when
+the detail screen opens, in parallel; its newest point is the headline result itself, passed through. Steps
+end yesterday (today's total is still counting); resting HR and HRV end today. The "How your body settles"
+chart draws the measured points with the raw fit and no interval ribbon: the interval belongs to the
+bias-corrected τ, which the raw points are biased against, so drawing both on one chart would show two
+readouts that seem to disagree. The caption explains the correction instead.
+
 **Verification:**
 - design tokens only;
 - new copy in `Strand/Resources/Localizable.xcstrings` with de / es / fr / pt-PT (`i18n-coverage` gate);
@@ -112,8 +129,8 @@ main actor) and calls the engine. It is the single funnel every card reads; ther
 
 ## Checklist
 
-- [ ] PR R1 — `ResilienceEngine` + synthetic-recovery tests + oracle
-- [ ] PR R2 — Settings toggle, Healthspan section, detail screen, loader, translations
+- [x] PR R1 — `ResilienceEngine` + synthetic-recovery tests + oracle
+- [x] PR R2 — Settings toggle, Healthspan section, detail screen, loader, translations
 
 ## References
 

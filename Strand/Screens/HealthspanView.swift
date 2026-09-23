@@ -31,6 +31,7 @@ struct HealthspanView: View {
     @State private var unlock = HealthspanUnlock(scoredDays: 0, age: 0)
     @State private var hrv: (value: Double, norm: Double)?
     @State private var loaded = false
+    @AppStorage(ResiliencePrefs.enabledKey) private var resilienceEnabled = false
 
     var body: some View {
         ScreenScaffold(title: "Healthspan", subtitle: "Body Age & Pace of Aging") {
@@ -43,6 +44,7 @@ struct HealthspanView: View {
                     HealthspanTrendSection(snapshot: snapshot)
                 }
                 if let hrv { HealthspanContextSection(hrv: hrv.value, norm: hrv.norm) }
+                if resilienceEnabled { ResilienceSection() }
                 HealthspanAboutSection()
             }
         }
