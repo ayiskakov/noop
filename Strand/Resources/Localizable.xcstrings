@@ -52078,6 +52078,70 @@
         }
       }
     },
+    "Change wrist": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handgelenk ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change wrist"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar muñeca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer de poignet"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia polso"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zmień nadgarstek"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mudar de pulso"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить запястье"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换手腕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更換手腕"
+          }
+        }
+      }
+    },
     "Changes the Bluetooth name your WHOOP 4.0 advertises (what you see when pairing). The strap reboots to apply, so the new name appears the next time it connects. WHOOP 4.0 only.": {
       "localizations": {
         "de": {
@@ -60315,6 +60379,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "連接你的 WHOOP 5/MG 以開始原始資料工作階段。"
+          }
+        }
+      }
+    },
+    "Connect your WHOOP MG and let it finish pairing to start a recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde dein WHOOP MG und warte, bis das Koppeln abgeschlossen ist, um aufzuzeichnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your WHOOP MG and let it finish pairing to start a recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta tu WHOOP MG y espera a que termine el emparejamiento para grabar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecte ton WHOOP MG et laisse l'appairage se terminer pour enregistrer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collega il tuo WHOOP MG e attendi il termine dell'abbinamento per registrare."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Połącz WHOOP MG i poczekaj na zakończenie parowania, aby nagrywać."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liga o teu WHOOP MG e deixa o emparelhamento terminar para gravar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключите WHOOP MG и дождитесь завершения сопряжения, чтобы начать запись."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接你的 WHOOP MG 并等待配对完成后即可开始记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連接你的 WHOOP MG 並等待配對完成後即可開始記錄。"
           }
         }
       }
@@ -74898,6 +75026,70 @@
         }
       }
     },
+    "ECG": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ЭКГ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心电图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心電圖"
+          }
+        }
+      }
+    },
     "ECG capture (MG, experimental)…": {
       "localizations": {
         "de": {
@@ -83028,6 +83220,70 @@
         }
       }
     },
+    "Experimental. NOOP is not a medical device: this shows the waveform your strap records, with no heart rate, rhythm or diagnosis.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. NOOP ist kein Medizinprodukt: Angezeigt wird die Kurve, die dein Band aufzeichnet – ohne Herzfrequenz, Rhythmus oder Diagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. NOOP is not a medical device: this shows the waveform your strap records, with no heart rate, rhythm or diagnosis."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. NOOP no es un dispositivo médico: muestra la forma de onda que registra tu pulsera, sin frecuencia cardiaca, ritmo ni diagnóstico."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. NOOP n'est pas un dispositif médical : il affiche la courbe enregistrée par ton bracelet, sans fréquence cardiaque, rythme ni diagnostic."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. NOOP non è un dispositivo medico: mostra la forma d'onda registrata dal tuo cinturino, senza frequenza cardiaca, ritmo o diagnosi."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. NOOP nie jest wyrobem medycznym: pokazuje przebieg zapisany przez opaskę, bez tętna, rytmu ani diagnozy."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. O NOOP não é um dispositivo médico: mostra a forma de onda que a tua pulseira regista, sem frequência cardíaca, ritmo ou diagnóstico."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. NOOP — не медицинское изделие: здесь показана кривая, которую записывает браслет, без пульса, ритма и диагноза."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性功能。NOOP 不是医疗设备：此处仅显示手环记录的波形，不提供心率、心律或诊断。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性功能。NOOP 不是醫療裝置：此處僅顯示手環記錄的波形，不提供心率、心律或診斷。"
+          }
+        }
+      }
+    },
     "Experimental: at your own risk": {
       "extractionState": "manual",
       "localizations": {
@@ -89869,6 +90125,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Skontaktuj się"
+          }
+        }
+      }
+    },
+    "Get into position": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Position bringen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get into position"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colócate en posición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mets-toi en position"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettiti in posizione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przyjmij pozycję"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coloca-te em posição"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Примите положение"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备姿势"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "準備姿勢"
           }
         }
       }
@@ -126636,6 +126956,70 @@
       "comment": "MEDICAL SAFETY COPY — needs a native speaker, not a machine translation. Deliberately left untranslated: a disclaimer that drifts in meaning is worse than one shown in English. Until a human translates it, the absent localizations make the runtime fall back to this English source text, which is correct and complete. Keep every element when translating: not a medical device, not a diagnosis, and the instruction to see a doctor. The middle paragraph is a RUN INSTRUCTION, not a disclaimer: without the clasp held the electrode circuit is open and the capture returns zero packets for a reason that has nothing to do with the firmware, so a translation that loses it produces false negatives in the very reports #891 is asking people for.",
       "shouldTranslate": false
     },
+    "NOOP is not a medical device and this is not an ECG test. It asks your MG to start its ECG subsystem and shows or logs what comes back — unvalidated instrumentation, never a measurement or a diagnosis, including any heart-rhythm classification the strap happens to send. Don't use it to make a health decision; see a doctor if you have symptoms.\n\n“Record an ECG” walks you through it and draws the live trace. Start and Stop send the bare commands and report to the strap log. Everything here is reversible.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP ist kein Medizinprodukt, und dies ist kein EKG-Test. Es bittet dein MG, sein EKG-Subsystem zu starten, und zeigt oder protokolliert, was zurückkommt – unvalidierte Instrumentierung, nie eine Messung oder Diagnose, auch keine Herzrhythmus-Einstufung, die das Band eventuell sendet. Triff damit keine Gesundheitsentscheidung; geh bei Beschwerden zum Arzt.\n\n„EKG aufzeichnen“ führt dich durch den Ablauf und zeichnet die Live-Kurve. Starten und Stoppen senden nur die Befehle und berichten ins Band-Protokoll. Alles hier ist umkehrbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP is not a medical device and this is not an ECG test. It asks your MG to start its ECG subsystem and shows or logs what comes back — unvalidated instrumentation, never a measurement or a diagnosis, including any heart-rhythm classification the strap happens to send. Don't use it to make a health decision; see a doctor if you have symptoms.\n\n“Record an ECG” walks you through it and draws the live trace. Start and Stop send the bare commands and report to the strap log. Everything here is reversible."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP no es un dispositivo médico y esto no es una prueba de ECG. Pide a tu MG que inicie su subsistema de ECG y muestra o registra lo que devuelve: instrumentación no validada, nunca una medición ni un diagnóstico, incluida cualquier clasificación del ritmo cardiaco que envíe la pulsera. No lo uses para tomar decisiones de salud; consulta a un médico si tienes síntomas.\n\n«Registrar un ECG» te guía paso a paso y dibuja la curva en vivo. Iniciar y Detener envían solo los comandos e informan en el registro de la pulsera. Todo aquí es reversible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP n'est pas un dispositif médical et ceci n'est pas un test ECG. Il demande à ton MG de démarrer son sous-système ECG et affiche ou journalise ce qui revient — une instrumentation non validée, jamais une mesure ni un diagnostic, y compris toute classification du rythme cardiaque que le bracelet enverrait. Ne l'utilise pas pour une décision de santé ; consulte un médecin en cas de symptômes.\n\n« Enregistrer un ECG » te guide et trace la courbe en direct. Démarrer et Arrêter envoient seulement les commandes et consignent le résultat dans le journal du bracelet. Tout ici est réversible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP non è un dispositivo medico e questo non è un test ECG. Chiede al tuo MG di avviare il suo sottosistema ECG e mostra o registra ciò che torna: strumentazione non validata, mai una misurazione o una diagnosi, compresa qualsiasi classificazione del ritmo cardiaco inviata dal cinturino. Non usarlo per decisioni sulla salute; consulta un medico se hai sintomi.\n\n«Registra un ECG» ti guida passo passo e disegna la traccia in tempo reale. Avvia e Interrompi inviano solo i comandi e riportano nel registro del cinturino. Tutto qui è reversibile."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP nie jest wyrobem medycznym, a to nie jest badanie EKG. Prosi MG o uruchomienie podsystemu EKG i pokazuje lub zapisuje to, co wraca — niezweryfikowana instrumentacja, nigdy pomiar ani diagnoza, także żadna klasyfikacja rytmu serca, którą opaska może wysłać. Nie podejmuj na tej podstawie decyzji zdrowotnych; przy objawach idź do lekarza.\n\n„Nagraj EKG” prowadzi krok po kroku i rysuje przebieg na żywo. Start i Stop wysyłają same polecenia i raportują do dziennika opaski. Wszystko tu jest odwracalne."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O NOOP não é um dispositivo médico e isto não é um teste de ECG. Pede ao teu MG que inicie o subsistema de ECG e mostra ou regista o que volta — instrumentação não validada, nunca uma medição nem um diagnóstico, incluindo qualquer classificação do ritmo cardíaco que a pulseira envie. Não o uses para decisões de saúde; consulta um médico se tiveres sintomas.\n\n«Gravar um ECG» guia-te passo a passo e desenha o traçado em tempo real. Iniciar e Parar enviam apenas os comandos e reportam no registo da pulseira. Tudo aqui é reversível."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP — не медицинское изделие, и это не ЭКГ-обследование. Приложение просит MG запустить подсистему ЭКГ и показывает или записывает в журнал то, что приходит, — непроверенная инструментальная функция, а не измерение и не диагноз, включая любую классификацию ритма, которую может прислать браслет. Не принимайте на этой основе решений о здоровье; при симптомах обратитесь к врачу.\n\n«Записать ЭКГ» проведёт по шагам и покажет кривую в реальном времени. «Старт» и «Стоп» отправляют только команды и пишут результат в журнал браслета. Всё здесь обратимо."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 不是医疗设备，这也不是心电图检查。它请求 MG 启动其心电图子系统，并显示或记录返回的内容——这是未经验证的测量工具，绝不是测量结果或诊断，也不包括手环可能发送的任何心律分类。请勿据此做健康决定；如有症状请就医。\n\n“记录心电图”会一步步引导你并绘制实时波形。开始和停止只发送命令，并将结果写入手环日志。这里的所有操作都可撤销。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 不是醫療裝置，這也不是心電圖檢查。它請求 MG 啟動其心電圖子系統，並顯示或記錄傳回的內容——這是未經驗證的測量工具，絕不是測量結果或診斷，也不包括手環可能傳送的任何心律分類。請勿據此做健康決定；如有症狀請就醫。\n\n「記錄心電圖」會一步步引導你並繪製即時波形。開始和停止只傳送命令，並將結果寫入手環日誌。這裡的所有操作都可復原。"
+          }
+        }
+      }
+    },
     "NOOP is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.": {
       "localizations": {
         "de": {
@@ -132875,6 +133259,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dzisiaj nie ma jeszcze danych dotyczących warunków skrajnych w ciągu dnia."
+          }
+        }
+      }
+    },
+    "No live data yet. Check that the strap is connected and your finger is on the clasp.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Live-Daten. Prüfe, ob das Band verbunden ist und dein Finger auf dem Verschluss liegt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No live data yet. Check that the strap is connected and your finger is on the clasp."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay datos en vivo. Comprueba que la pulsera está conectada y que tu dedo está sobre el cierre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore de données en direct. Vérifie que le bracelet est connecté et que ton doigt est sur le fermoir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora nessun dato in tempo reale. Controlla che il cinturino sia collegato e il dito sia sul fermaglio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak jeszcze danych na żywo. Sprawdź, czy opaska jest połączona, a palec leży na zapięciu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda sem dados em tempo real. Verifica se a pulseira está ligada e o dedo está no fecho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данных в реальном времени пока нет. Проверьте, что браслет подключён, а палец лежит на застёжке."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无实时数据。请检查手环是否已连接，手指是否放在扣环上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫無即時資料。請檢查手環是否已連接，手指是否放在扣環上。"
           }
         }
       }
@@ -151858,6 +152306,70 @@
         }
       }
     },
+    "Press a fingertip of your other hand on the clasp's two indents and keep it there until the recording ends.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drücke eine Fingerkuppe der anderen Hand auf die zwei Mulden am Verschluss und lass sie dort, bis die Aufzeichnung endet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a fingertip of your other hand on the clasp's two indents and keep it there until the recording ends."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presiona con la yema de un dedo de la otra mano las dos hendiduras del cierre y mantenlo hasta que termine la grabación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuie le bout d'un doigt de l'autre main sur les deux creux du fermoir et garde-le jusqu'à la fin de l'enregistrement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Premi il polpastrello di un dito dell'altra mano sui due incavi del fermaglio e tienilo lì fino alla fine della registrazione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przyciśnij opuszek palca drugiej ręki do dwóch wgłębień na zapięciu i trzymaj do końca nagrania."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pressiona a ponta de um dedo da outra mão nas duas reentrâncias do fecho e mantém-na até a gravação terminar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прижмите кончик пальца другой руки к двум углублениям на застёжке и держите до конца записи."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用另一只手的指尖按住扣环上的两个凹点，直到记录结束。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用另一隻手的指尖按住扣環上的兩個凹點，直到記錄結束。"
+          }
+        }
+      }
+    },
     "Press the button, or double-tap your strap, when the set is done.": {
       "localizations": {
         "de": {
@@ -160477,6 +160989,198 @@
         }
       }
     },
+    "Record again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut aufzeichnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record again"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabar de nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer à nouveau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra di nuovo"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nagraj ponownie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gravar novamente"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать снова"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次記錄"
+          }
+        }
+      }
+    },
+    "Record an ECG": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG aufzeichnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record an ECG"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar un ECG"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un ECG"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra un ECG"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nagraj EKG"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gravar um ECG"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ЭКГ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录心电图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄心電圖"
+          }
+        }
+      }
+    },
+    "Record an ECG…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG aufzeichnen …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record an ECG…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar un ECG…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un ECG…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra un ECG…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nagraj EKG…"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gravar um ECG…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ЭКГ…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录心电图…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄心電圖…"
+          }
+        }
+      }
+    },
     "Record or inspect the current stream": {
       "localizations": {
         "de": {
@@ -160833,6 +161537,70 @@
         }
       }
     },
+    "Recording finished": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnung beendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording finished"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabación terminada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrement terminé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrazione terminata"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nagrywanie zakończone"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gravação concluída"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запись завершена"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄完成"
+          }
+        }
+      }
+    },
     "Recording status, not shown for a past day": {
       "localizations": {
         "de": {
@@ -160945,6 +161713,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nagrywanie treningu"
+          }
+        }
+      }
+    },
+    "Recording. Keep still and keep your finger on the clasp.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnung läuft. Halte still und lass den Finger auf dem Verschluss."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording. Keep still and keep your finger on the clasp."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabando. Quédate quieto y mantén el dedo en el cierre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrement en cours. Reste immobile et garde le doigt sur le fermoir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrazione in corso. Resta fermo e tieni il dito sul fermaglio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nagrywanie. Nie ruszaj się i trzymaj palec na zapięciu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gravar. Fica quieto e mantém o dedo no fecho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Идёт запись. Не двигайтесь и держите палец на застёжке."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在记录。请保持不动，手指不要离开扣环。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在記錄。請保持不動，手指不要離開扣環。"
           }
         }
       }
@@ -180651,6 +181483,70 @@
         }
       }
     },
+    "Sit down and rest both arms on a table.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setz dich hin und lege beide Arme auf einen Tisch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sit down and rest both arms on a table."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siéntate y apoya ambos brazos en una mesa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assieds-toi et pose les deux bras sur une table."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siediti e appoggia entrambe le braccia su un tavolo."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usiądź i oprzyj obie ręce na stole."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senta-te e apoia os dois braços numa mesa."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сядьте и положите обе руки на стол."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "坐下，双臂放在桌上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "坐下，雙臂放在桌上。"
+          }
+        }
+      }
+    },
     "Sit still and breathe normally. Tap below to take a 60-second reading.": {
       "localizations": {
         "de": {
@@ -186562,6 +187458,70 @@
         }
       }
     },
+    "Start recording": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnung starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start recording"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar a grabar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer l'enregistrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia registrazione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rozpocznij nagrywanie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar gravação"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Начать запись"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始記錄"
+          }
+        }
+      }
+    },
     "Start session": {
       "localizations": {
         "de": {
@@ -186934,6 +187894,70 @@
         }
       }
     },
+    "Starting the ECG sensor…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG-Sensor wird gestartet …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting the ECG sensor…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciando el sensor de ECG…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrage du capteur ECG…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvio del sensore ECG…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uruchamianie czujnika EKG…"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A iniciar o sensor de ECG…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запуск датчика ЭКГ…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在启动心电图传感器…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在啟動心電圖感測器…"
+          }
+        }
+      }
+    },
     "Starting…": {
       "localizations": {
         "de": {
@@ -187174,6 +188198,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bądź na bieżąco"
+          }
+        }
+      }
+    },
+    "Stay still and don't talk. A slightly damp fingertip and unplugged chargers give a cleaner trace.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halte still und sprich nicht. Eine leicht feuchte Fingerkuppe und ausgesteckte Ladegeräte ergeben eine sauberere Kurve."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stay still and don't talk. A slightly damp fingertip and unplugged chargers give a cleaner trace."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quédate quieto y no hables. Una yema ligeramente húmeda y los cargadores desenchufados dan una curva más limpia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reste immobile et ne parle pas. Un doigt légèrement humide et des chargeurs débranchés donnent une courbe plus nette."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resta fermo e non parlare. Un polpastrello leggermente umido e i caricabatterie scollegati danno una traccia più pulita."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie ruszaj się i nie mów. Lekko wilgotny palec i odłączone ładowarki dają czystszy zapis."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fica quieto e não fales. Uma ponta do dedo ligeiramente húmida e carregadores desligados dão um traçado mais limpo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не двигайтесь и не разговаривайте. Слегка влажный палец и отключённые зарядки дают более чистую кривую."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持不动，不要说话。指尖略微湿润并拔掉附近的充电器，波形会更清晰。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持不動，不要說話。指尖略微濕潤並拔掉附近的充電器，波形會更清晰。"
           }
         }
       }
@@ -189008,6 +190096,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "停止語音輸入"
+          }
+        }
+      }
+    },
+    "Stopped at the time limit. The strap saved what it recorded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Am Zeitlimit gestoppt. Das Band hat das Aufgezeichnete gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped at the time limit. The strap saved what it recorded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido al alcanzar el límite de tiempo. La pulsera guardó lo que registró."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté à la limite de temps. Le bracelet a enregistré ce qu'il a capté."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrotta al limite di tempo. Il cinturino ha salvato ciò che ha registrato."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zatrzymano po limicie czasu. Opaska zapisała to, co nagrała."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parado no limite de tempo. A pulseira guardou o que registou."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено по лимиту времени. Браслет сохранил записанное."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到时间上限而停止。手环已保存记录的内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已達到時間上限而停止。手環已儲存記錄的內容。"
           }
         }
       }
@@ -191352,6 +192504,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pasek nie noszony"
+          }
+        }
+      }
+    },
+    "Strap progress": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortschritt am Band"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strap progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progreso de la pulsera"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progression du bracelet"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avanzamento del cinturino"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Postęp opaski"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progresso da pulseira"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прогресс браслета"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环进度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環進度"
           }
         }
       }
@@ -199454,6 +200670,70 @@
         }
       }
     },
+    "The full-resolution waveform comes over with the next sync. Open Review ECG recordings in Test Centre to see it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Kurve in voller Auflösung kommt mit der nächsten Synchronisierung. Öffne „EKG-Aufzeichnungen ansehen“ im Testcenter, um sie zu sehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The full-resolution waveform comes over with the next sync. Open Review ECG recordings in Test Centre to see it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forma de onda en resolución completa llega con la próxima sincronización. Abre «Revisar grabaciones de ECG» en el Centro de pruebas para verla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La courbe en pleine résolution arrive à la prochaine synchronisation. Ouvre « Consulter les enregistrements ECG » dans le Centre de test pour la voir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forma d'onda a piena risoluzione arriva con la prossima sincronizzazione. Apri «Esamina le registrazioni ECG» nel Centro test per vederla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przebieg w pełnej rozdzielczości pojawi się po następnej synchronizacji. Otwórz „Przejrzyj nagrania EKG” w Centrum testów, aby go zobaczyć."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A forma de onda em resolução total chega com a próxima sincronização. Abre «Rever gravações de ECG» no Centro de testes para a ver."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кривая в полном разрешении придёт со следующей синхронизацией. Откройте «Просмотр записей ЭКГ» в Центре тестирования."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整分辨率的波形会在下次同步时传来。在测试中心打开“查看心电图记录”即可查看。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整解析度的波形會在下次同步時傳來。在測試中心開啟「查看心電圖記錄」即可查看。"
+          }
+        }
+      }
+    },
     "The history sync stopped before it finished. Keep the strap nearby and try Sync again.": {
       "localizations": {
         "de": {
@@ -200280,6 +201560,70 @@
         }
       }
     },
+    "The strap did not accept the wrist setting. The recording continues, but the trace may be upside down.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat die Handgelenk-Einstellung nicht angenommen. Die Aufzeichnung läuft weiter, die Kurve kann aber auf dem Kopf stehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not accept the wrist setting. The recording continues, but the trace may be upside down."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no aceptó el ajuste de muñeca. La grabación continúa, pero la curva puede aparecer invertida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas accepté le réglage du poignet. L'enregistrement continue, mais la courbe peut être inversée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha accettato l'impostazione del polso. La registrazione continua, ma la traccia potrebbe essere capovolta."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie przyjęła ustawienia nadgarstka. Nagrywanie trwa, ale przebieg może być odwrócony."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não aceitou a definição de pulso. A gravação continua, mas o traçado pode ficar invertido."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет не принял настройку запястья. Запись продолжается, но кривая может быть перевёрнута."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环未接受手腕设置。记录会继续，但波形可能上下颠倒。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環未接受手腕設定。記錄會繼續，但波形可能上下顛倒。"
+          }
+        }
+      }
+    },
     "The strap keeps banking data on its own, so nothing is lost — NOOP just talks to it less often to help it last until you can charge it.": {
       "localizations": {
         "de": {
@@ -200380,6 +201724,134 @@
           "stringUnit": {
             "state": "translated",
             "value": "手環回報的時間與 NOOP 傳送的時間始終不一致，因此它的韌體鬧鐘不會在你的起床時間響起——通常是手環的時鐘或鬧鐘被重設了。請在官方 WHOOP 應用程式中重設手環（或將其充滿電後重新連線），在此之前請以手機的「時鐘」鬧鐘作為起床提醒。"
+          }
+        }
+      }
+    },
+    "The strap records the heart's signal between your wrist and the finger on the clasp, so it needs to know which way round that is.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band misst das Herzsignal zwischen deinem Handgelenk und dem Finger auf dem Verschluss und muss daher wissen, wie herum das ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap records the heart's signal between your wrist and the finger on the clasp, so it needs to know which way round that is."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera registra la señal del corazón entre tu muñeca y el dedo sobre el cierre, así que necesita saber en qué sentido va."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet enregistre le signal cardiaque entre ton poignet et le doigt posé sur le fermoir ; il doit donc savoir dans quel sens."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino registra il segnale del cuore tra il polso e il dito sul fermaglio, quindi deve sapere in quale verso."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska rejestruje sygnał serca między nadgarstkiem a palcem na zapięciu, więc musi wiedzieć, w którą stronę."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira regista o sinal do coração entre o teu pulso e o dedo no fecho, por isso precisa de saber em que sentido."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет записывает сигнал сердца между запястьем и пальцем на застёжке, поэтому ему нужно знать, с какой стороны что."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环记录的是手腕与扣环上手指之间的心脏信号，因此需要知道方向。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環記錄的是手腕與扣環上手指之間的心臟訊號，因此需要知道方向。"
+          }
+        }
+      }
+    },
+    "The strap saved the recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat die Aufzeichnung gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap saved the recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera guardó la grabación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet a enregistré l'enregistrement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino ha salvato la registrazione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska zapisała nagranie."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira guardou a gravação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет сохранил запись."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环已保存本次记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環已儲存本次記錄。"
           }
         }
       }
@@ -215901,6 +217373,70 @@
         }
       }
     },
+    "Waiting for contact. Press your fingertip on the clasp.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warte auf Kontakt. Drücke deine Fingerkuppe auf den Verschluss."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for contact. Press your fingertip on the clasp."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando contacto. Presiona la yema del dedo sobre el cierre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En attente de contact. Appuie le bout du doigt sur le fermoir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In attesa di contatto. Premi il polpastrello sul fermaglio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oczekiwanie na kontakt. Przyciśnij opuszek palca do zapięcia."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À espera de contacto. Pressiona a ponta do dedo no fecho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание контакта. Прижмите кончик пальца к застёжке."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待接触。请用指尖按住扣环。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待接觸。請用指尖按住扣環。"
+          }
+        }
+      }
+    },
     "Waiting for last night's sleep": {
       "localizations": {
         "de": {
@@ -218061,6 +219597,134 @@
           "stringUnit": {
             "state": "translated",
             "value": "先整夜佩戴手環，才能為一夜評分。"
+          }
+        }
+      }
+    },
+    "Wear the strap snugly on your left wrist, sensor against the skin.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage das Band eng am linken Handgelenk, den Sensor auf der Haut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wear the strap snugly on your left wrist, sensor against the skin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lleva la pulsera ajustada en la muñeca izquierda, con el sensor contra la piel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Porte le bracelet bien ajusté au poignet gauche, capteur contre la peau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indossa il cinturino aderente al polso sinistro, con il sensore sulla pelle."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Załóż opaskę ciasno na lewy nadgarstek, czujnikiem do skóry."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa a pulseira bem ajustada no pulso esquerdo, com o sensor contra a pele."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плотно наденьте браслет на левое запястье, датчиком к коже."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将手环贴紧戴在左手腕上，传感器贴住皮肤。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將手環貼緊戴在左手腕上，感測器貼住皮膚。"
+          }
+        }
+      }
+    },
+    "Wear the strap snugly on your right wrist, sensor against the skin.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage das Band eng am rechten Handgelenk, den Sensor auf der Haut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wear the strap snugly on your right wrist, sensor against the skin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lleva la pulsera ajustada en la muñeca derecha, con el sensor contra la piel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Porte le bracelet bien ajusté au poignet droit, capteur contre la peau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indossa il cinturino aderente al polso destro, con il sensore sulla pelle."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Załóż opaskę ciasno na prawy nadgarstek, czujnikiem do skóry."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa a pulseira bem ajustada no pulso direito, com o sensor contra a pele."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плотно наденьте браслет на правое запястье, датчиком к коже."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将手环贴紧戴在右手腕上，传感器贴住皮肤。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將手環貼緊戴在右手腕上，感測器貼住皮膚。"
           }
         }
       }
@@ -221568,6 +223232,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Na którym nadgarstku go nosisz?"
+          }
+        }
+      }
+    },
+    "Which wrist is your strap on?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An welchem Handgelenk trägst du das Band?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which wrist is your strap on?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿En qué muñeca llevas la pulsera?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quel poignet portes-tu le bracelet ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su quale polso indossi il cinturino?"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na którym nadgarstku nosisz opaskę?"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em que pulso usas a pulseira?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На каком запястье браслет?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环戴在哪只手腕上？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環戴在哪隻手腕上？"
           }
         }
       }
