@@ -1214,7 +1214,11 @@ final class AICoachEngine: ObservableObject {
                      + ", respiration: \(avgOne(last30.compactMap { $0.respRateBpm }))/min"
                      + ", skin-temp deviation: \(avgOne(last30.compactMap { $0.skinTempDevC }))°C"
                      + ", steps: \(avgInt(last30.compactMap { $0.steps.map(Double.init) }))/day"
-                     + ", active energy: \(avgInt(last30.compactMap { $0.activeKcalEst }))kcal/day")
+                     // `activeKcalEst` is the whole-day TOTAL (resting + active) HR estimate despite its
+                     // column name (`Calories.estimateDayCalories(...).totalKcal`); label it as such so the
+                     // coach does not read a ~2,000 kcal total as exercise energy.
+                     + ", total energy expenditure (est., incl. resting): "
+                     + "\(avgInt(last30.compactMap { $0.activeKcalEst }))kcal/day")
 
         return lines.joined(separator: "\n")
     }
