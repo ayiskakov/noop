@@ -2011,18 +2011,18 @@ final class IntelligenceEngine: ObservableObject {
         // before this change and still are. #459's primitive is likewise still unwired for the HRV and
         // resting-HR baselines it was written for; that is #459's own scope, not this change's.
         let respEraEpoch = Baselines.deviceEraEpoch(respDayKeys.map { (day: $0, sourceId: respSourceByDay[$0] ?? deviceId) })
-        let respFold = Baselines.foldHistory(respSeq, dayKeys: respDayKeys, cfg: respCfg,
-                                             baselineEpoch: max(recoveryEpoch, respEraEpoch))
+        let respPrior = Baselines.priorFold(respSeq, dayKeys: respDayKeys, cfg: respCfg,
+                                            baselineEpoch: max(recoveryEpoch, respEraEpoch))
         // Skin-temp gated the same way for consistency: its only use-site re-checks `.usable`
         // (AnalyticsEngine's skinTempDevC guard) so this is belt-and-suspenders, but it stops a
         // future use-site from trusting a CALIBRATING baseline. (PR #97 review.)
-        let skinFold = Baselines.foldHistory(skinSeq, dayKeys: skinDayKeys, cfg: skinCfg, baselineEpoch: recoveryEpoch)
+        let skinPrior = Baselines.priorFold(skinSeq, dayKeys: skinDayKeys, cfg: skinCfg, baselineEpoch: recoveryEpoch)
         // #1614: the per-night HRV fold, traced. HRV ONLY, deliberately: it is Charge's dominant driver
         // and the one whose spread the score divides by, so tracing all four baselines would quadruple
         // the log for the three that are not the question being asked. Capped at the last 14 nights,
         // which is enough to see whether the spread is lifting without an established user's history
-        // burying the rest of the export. The whole history is still folded, so the state is unchanged
-        // and the trace cannot describe a baseline the scorer is not using.
+        // burying the rest of the export. The whole history is still folded, and each traced night's
+        // state is exactly the prior baseline the NEXT day is scored against (`priorBaselines(for:)`).
         //
         // The epoch is read ONCE, here, and handed to BOTH folds. Baselines+Trace is deliberately pure so
         // it cannot read the pref itself, and letting the scored fold take its UserDefaults default while
@@ -2036,13 +2036,23 @@ final class IntelligenceEngine: ObservableObject {
                                                     tail: 14)
             for line in traced.lines { diagnosticSink?(line, .recovery) }
         }
-        let baselines2 = AnalyticsEngine.ProfileBaselines(
-            // HRV honours noop.hrvBaselineEpoch; rhr/resp/skin honour noop.recoveryBaselineEpoch via their
-            // parallel day keys, so the manual Recalibrate restarts the whole Charge build-up together.
-            hrv: Baselines.foldHistory(hrvSeq, dayKeys: hrvDayKeys, cfg: hrvCfg, baselineEpoch: hrvEpoch),
-            restingHR: Baselines.foldHistory(rhrSeq, dayKeys: rhrDayKeys, cfg: rhrCfg, baselineEpoch: recoveryEpoch),
-            resp: respFold.usable ? respFold : nil,
-            skinTemp: skinFold.usable ? skinFold : nil)
+        // HRV honours noop.hrvBaselineEpoch; rhr/resp/skin honour noop.recoveryBaselineEpoch via their
+        // parallel day keys, so the manual Recalibrate restarts the whole Charge build-up together.
+        //
+        // Each day is scored against the baseline of the nights BEFORE it. A single fold over the whole
+        // history, as this used to build, contains the scored night and every later one: on a short
+        // history the first nights were scored against a baseline built mostly from their own future,
+        // and got a Charge before the ≥ 4 prior nights the cold-start gate promises. The fold is still
+        // over the same history with the same epochs; only the cut-off moves.
+        let hrvPrior = Baselines.priorFold(hrvSeq, dayKeys: hrvDayKeys, cfg: hrvCfg, baselineEpoch: hrvEpoch)
+        let rhrPrior = Baselines.priorFold(rhrSeq, dayKeys: rhrDayKeys, cfg: rhrCfg, baselineEpoch: recoveryEpoch)
+        func priorBaselines(for day: String) -> AnalyticsEngine.ProfileBaselines {
+            let resp = respPrior.state(before: day)
+            let skin = skinPrior.state(before: day)
+            return AnalyticsEngine.ProfileBaselines(
+                hrv: hrvPrior.state(before: day), restingHR: rhrPrior.state(before: day),
+                resp: resp.usable ? resp : nil, skinTemp: skin.usable ? skin : nil)
+        }
 
         // Real (non-detected) workouts in the scored window, used to de-duplicate detected bouts so a
         // user who BOTH has real sessions AND wears the strap doesn't see the same session twice (the
@@ -2204,6 +2214,7 @@ final class IntelligenceEngine: ObservableObject {
             var daily = sleepEditedDaily(night.daily, detected: night.cachedSleep, editsByStart: editsByStart,
                                          habitualMidsleepSec: habitualMidsleepSec)
             daily = DayCycleIntelligenceIntegration.applying(physiologicalSteps, to: daily)
+            let baselines2 = priorBaselines(for: daily.day)
             daily = Self.recomputeRecoveryDaily(daily, nightlySkinTempC: night.nightlySkin,
                                                baselines: baselines2, restNeedHours: sleepNeedHours,
                                                restConsistency: sleepConsistency)

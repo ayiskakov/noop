@@ -411,6 +411,8 @@ let newBaseline = lb * clamped + (1 - lb) * state.baseline
 let newSpread   = max(cfg.floorSpread, ls * abs(value - newBaseline) + (1 - ls) * state.spread)
 ```
 
+**Charge is scored against the nights before it.** The stored Charge (pass 2 in `IntelligenceEngine`) takes each day's HRV / resting-HR / resp / skin-temp baseline from `Baselines.priorFold(...).state(before: day)`: the same fold, epochs and gates, cut off at the scored day. It used to be one fold over the whole history, which contains the scored night and every later night. On a short history the first nights were scored mostly against their own future, and had a Charge before they had the 4 prior nights the cold-start gate promises.
+
 ### 2. Trailing-window mean/SD (`rollingMeanSD`)
 
 The simple, maximally auditable path: plain mean and sample SD (ddof = 1) over the trailing N (default 30) valid nights, with the σ floor applied and converted back into abs-dev space (`÷ 1.253`) so `deviation()` recovers the intended Gaussian σ unchanged.
