@@ -129,6 +129,11 @@ public enum Whoop5EcgRawRecord {
         /// capacity: read exactly this many samples, never the capacity.
         public let declaredSampleCount: UInt16
 
+        /// @22 bit 3 — the presence indication (`docs/PROTOCOL_ECG.md` §"Packed status"). Presence is not
+        /// electrode acceptance or signal quality; it is the strap's own report that its input run has
+        /// started, and the one status bit a guided capture can wait on.
+        public var presence: Bool { stateBits & 0x08 != 0 }
+
         public init(quality: UInt8, stateBits: UInt8, classifierResult: UInt8, classifierState: UInt8,
                     progress: UInt8, packedBooleans: UInt8, hrRelated: UInt8, hrRelatedR17: UInt8,
                     hrvRelated: UInt16, reservedZero: UInt8, declaredSampleCount: UInt16) {

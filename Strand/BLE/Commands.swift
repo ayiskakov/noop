@@ -129,16 +129,13 @@ public enum WhoopCommand: UInt8, CaseIterable {
     // = `[revision, arg]`. Driven only by `BLEManager.ecg*`, itself behind the MG-gated Experimental
     // opt-in; never sent automatically, never on a plain 5.0 or a 4.0.
 
-    /// SELECT_WRIST (123 / 0x7B) — tell the strap which wrist it is worn on.
-    ///
-    /// ⚠️ This is a PERSISTENT device-config write: the value survives a disconnect, unlike the three
-    /// stream toggles below. Reversible (send it again with the other wrist), but it is kept as its own
-    /// deliberate, separately-confirmed user action and never bundled into a one-tap flow. The raw
-    /// values (right=0 / left=1) are INFERRED from the client's enum ORDER, not attested — which is
-    /// exactly why the user picks the wrist explicitly and the UI says the inference is unconfirmed.
+    /// SELECT_WRIST (123 / 0x7B) — tell the strap which wrist it is worn on: `01 01` right, `01 02` left
+    /// (`docs/PROTOCOL_ECG.md`; the argument lives in `Whoop5Ecg.WristSelection`). Reversible — send it
+    /// again with the other wrist. Persistence across a reconnect is not established, so the guided ECG
+    /// capture re-sends the wearer's wrist before every start.
     case selectWrist = 123
     /// TOGGLE_LABRADOR_DATA_GENERATION (124 / 0x7C) — the ECG subsystem's main control
-    /// (stop=0 / start=1 / restart=2). Reversible: `stop` is the documented OFF path.
+    /// (`01 01` stop, `01 02` start; see `Whoop5Ecg.ControlSignal`). Reversible: stop is the OFF path.
     case toggleLabradorDataGeneration = 124
     /// TOGGLE_LABRADOR_RAW_SAVE (125 / 0x7D) — ask the strap to PERSIST raw ECG records for later
     /// offload. A data-retention toggle; sending 0 turns it back off. It writes no setting that

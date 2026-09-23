@@ -4191,17 +4191,12 @@ public final class BLEManager: NSObject, ObservableObject {
         send(command, payload: Whoop5Ecg.commandPayload(arg: arg))
     }
 
-    /// Write the PERSISTENT wrist selection. Deliberately its own entry point, never folded into
-    /// `ecgStartCapture()`: it is the only command in this family that changes strap state which outlives
-    /// the session, so the user chooses the wrist explicitly and confirms it on its own.
-    ///
-    /// The raw values are inferred from the client enum's ORDER, not attested — the UI says so, and
-    /// re-sending with the other wrist is the whole remedy if the inference is backwards.
+    /// Write the wrist selection on its own, outside a capture. The guided capture sends the same command
+    /// as the first step of `ecgStartCapture(wrist:)`; this entry point stays for the Test Centre probe.
     public func ecgSelectWrist(_ wrist: Whoop5Ecg.WristSelection) {
         guard ecgGatesAllow() else { return }
         beginEcgProbeRun(clearingSteps: true)
-        log("ECG probe: SELECT_WRIST=\(wrist.token) (raw \(wrist.rawValue)) — PERSISTENT strap write; the "
-            + "right=0/left=1 mapping is inferred from the client enum order, not confirmed on hardware")
+        log("ECG probe: SELECT_WRIST=\(wrist.token) (arg \(wrist.rawValue))")
         sendEcgCommand(.selectWrist, arg: wrist.rawValue)
         scheduleEcgProbeVerdict()
     }
