@@ -85,6 +85,18 @@ final class ResilienceReadoutTests: XCTestCase {
         XCTAssertEqual(ResilienceFormat.sigmaValue(2.4, signal: .restingHR), 2.4)
     }
 
+    /// A day index labels its own calendar date in every zone, including those past UTC+11 where noon
+    /// UTC is already the next day.
+    func testDateLandsOnItsCalendarDayInEveryZone() {
+        let day = PaceOfAgingEngine.dayIndex("2026-03-05")!
+        for zone in ["Pacific/Kiritimati", "Pacific/Auckland", "UTC", "America/Los_Angeles", "Etc/GMT+12"] {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: zone)!
+            let parts = cal.dateComponents([.year, .month, .day], from: ResilienceLoader.date(day, calendar: cal))
+            XCTAssertEqual([parts.year, parts.month, parts.day], [2026, 3, 5], zone)
+        }
+    }
+
     func testOnlyStepsIsLabelledPublished() {
         XCTAssertEqual(ResilienceFormat.provenance(.steps), "Published")
         XCTAssertEqual(ResilienceFormat.provenance(.restingHR), "Extension")

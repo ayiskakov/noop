@@ -135,9 +135,14 @@ enum ResilienceLoader {
         PaceOfAgingEngine.dayIndex(Repository.localDayKey(now)) ?? Int(now.timeIntervalSince1970 / 86_400)
     }
 
-    /// Noon UTC on a day index: a date that lands on the right calendar day in every zone from UTC−12 to
-    /// UTC+11, so a chart's day labels do not slip.
-    nonisolated static func date(_ dayIndex: Int) -> Date {
-        Date(timeIntervalSince1970: (Double(dayIndex) + 0.5) * 86_400)
+    /// Local noon on a day index's calendar date. Day indices come from the local calendar date, so the
+    /// label must be built in the local zone too: noon UTC is already the next day from UTC+12 onwards.
+    nonisolated static func date(_ dayIndex: Int, calendar: Calendar = .current) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        var parts = utc.dateComponents([.year, .month, .day],
+                                       from: Date(timeIntervalSince1970: Double(dayIndex) * 86_400))
+        parts.hour = 12
+        return calendar.date(from: parts) ?? Date(timeIntervalSince1970: (Double(dayIndex) + 0.5) * 86_400)
     }
 }
