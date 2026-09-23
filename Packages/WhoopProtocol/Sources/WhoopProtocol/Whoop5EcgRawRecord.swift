@@ -76,6 +76,17 @@ public enum Whoop5EcgRawRecord {
     public static let leadOffCapacity = 11
     /// The zero alignment byte between the Q array and the CRC32 trailer. Never a sample.
     public static let alignmentOffset = 1579
+    /// Layout selector byte value at @9.
+    public static let layout: UInt8 = 16
+    /// Live transport packet type. The historical record arrives as type 47 through the offload.
+    public static let livePacketType: UInt8 = 43
+
+    /// True for a frame shaped like a LIVE R16 record: type 43, layout 16, exact length. Shape only —
+    /// the caller gates on the frame checksums first. Type 43 alone is not enough (`docs/PROTOCOL_ECG.md`
+    /// §Routing): the live R17 record and other realtime shapes share it.
+    public static func isLiveRecord(_ frame: [UInt8]) -> Bool {
+        frame.count == frameLength && frame[8] == livePacketType && frame[9] == layout
+    }
 
     // MARK: - Packed status (bytes 21–33)
 
@@ -128,6 +139,11 @@ public enum Whoop5EcgRawRecord {
         /// @32–33 — declared waveform sample count. The count is separate from the fixed 500-slot
         /// capacity: read exactly this many samples, never the capacity.
         public let declaredSampleCount: UInt16
+
+        /// @22 bit 3 — the presence indication (`docs/PROTOCOL_ECG.md` §"Packed status"). Presence is not
+        /// electrode acceptance or signal quality; it is the strap's own report that its input run has
+        /// started, and the one status bit a guided capture can wait on.
+        public var presence: Bool { stateBits & 0x08 != 0 }
 
         public init(quality: UInt8, stateBits: UInt8, classifierResult: UInt8, classifierState: UInt8,
                     progress: UInt8, packedBooleans: UInt8, hrRelated: UInt8, hrRelatedR17: UInt8,

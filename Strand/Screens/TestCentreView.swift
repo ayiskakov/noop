@@ -260,6 +260,14 @@ struct TestCentreView: View {
                 // navigation — and read-only: it never writes to the strap. Hidden rather than disabled
                 // when the opt-in is off, so a normal install is not invited to turn it on.
                 if ecgEnabled {
+                    // The guided capture: wrist, position, live trace. It writes ECG commands, so it sits
+                    // behind the same opt-in, and its Start stays disabled until an MG is bonded.
+                    NavigationLink {
+                        EcgCaptureView()
+                    } label: {
+                        Label("Record an ECG", systemImage: "waveform.path.ecg.rectangle")
+                    }
+                    .buttonStyle(NoopButtonStyle(.primary, fullWidth: true))
                     NavigationLink {
                         EcgReviewView()
                     } label: {

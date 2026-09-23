@@ -2,7 +2,6 @@ import SwiftUI
 import StrandDesign
 import StrandAnalytics   // ConnectionReadout - the #987 clock-latch / RTC-epoch readout parsers
 import WhoopStore
-import WhoopProtocol   // Whoop5Ecg.WristSelection — the MG ECG wrist-selection step
 
 // MARK: - Devices
 //
@@ -66,9 +65,8 @@ private struct DevicesContent: View {
     @State private var featureFlagProbeTarget: PairedDevice?
     /// MG ECG (Labrador) probe — the device whose action dialog is open.
     @State private var ecgProbeTarget: PairedDevice?
-    /// The SEPARATE wrist-selection confirm. Its own state (and its own dialog) because SELECT_WRIST is a
-    /// persistent strap write and must never ride along inside a start flow.
-    @State private var ecgWristTarget: PairedDevice?
+    /// The guided ECG capture sheet (wrist → position → live trace), opened from the ECG dialog.
+    @State private var ecgCaptureOpen = false
     /// The Experimental ECG opt-in. Read here so the menu entry appears only once the user has opted in.
     @AppStorage(PuffinExperiment.ecgKey) private var ecgEnabled = false
     /// #103 device-config READ probe (Test Centre → Connection) — the device whose dialog is open.
@@ -345,9 +343,9 @@ private struct DevicesContent: View {
         .modifier(BodyLocationProbeSheets(target: $bodyLocationProbeTarget))
         // #761 feature-flag enumeration probe (confirm + result) — same ViewModifier isolation.
         .modifier(FeatureFlagProbeSheets(target: $featureFlagProbeTarget))
-        // MG ECG probe (actions + the separate wrist confirm + result), isolated into its own
+        // MG ECG (actions + the guided capture + the probe result), isolated into its own
         // ViewModifier for the same iOS type-checker reason as the #690 block above.
-        .modifier(EcgProbeSheets(target: $ecgProbeTarget, wristTarget: $ecgWristTarget))
+        .modifier(EcgProbeSheets(target: $ecgProbeTarget, captureOpen: $ecgCaptureOpen))
         // #103 device-config READ probe (confirm + result) — same ViewModifier isolation.
         .modifier(DeviceConfigProbeSheets(target: $deviceConfigProbeTarget))
         // Second, strongly-worded delete-data confirm (reached from the Remove card's secondary control)
@@ -1376,18 +1374,16 @@ private struct FeatureFlagProbeSheets: ViewModifier {
 
 // MARK: - WHOOP MG ECG (Labrador) probe
 
-/// The MG ECG probe's dialogs as one ViewModifier — the action sheet, the SEPARATE wrist confirm, and
-/// the result sheet — isolated for the same iOS type-checker reason as `BodyLocationProbeSheets`.
+/// The MG ECG dialogs as one ViewModifier — the action sheet, the guided capture, and the probe result —
+/// isolated for the same iOS type-checker reason as `BodyLocationProbeSheets`.
 ///
-/// The wrist selection is deliberately a second, independent confirmation rather than a button inside
-/// the start flow: `SELECT_WRIST` writes strap state that survives a disconnect, and the right/left
-/// mapping is inferred from the client enum's order rather than confirmed on hardware. A persistent
-/// write nobody has verified is exactly the kind of thing that should cost a deliberate extra tap.
+/// The guided capture is the normal way to record: it asks for the wrist, sends it before starting, and
+/// draws the live trace. The bare Start / Stop pair stays for protocol work from the strap log.
 private struct EcgProbeSheets: ViewModifier {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var live: LiveState
     @Binding var target: PairedDevice?
-    @Binding var wristTarget: PairedDevice?
+    @Binding var captureOpen: Bool
 
     func body(content: Content) -> some View {
         content
@@ -1395,24 +1391,26 @@ private struct EcgProbeSheets: ViewModifier {
                                 isPresented: Binding(get: { target != nil },
                                                      set: { if !$0 { target = nil } }),
                                 titleVisibility: .visible,
-                                presenting: target) { device in
+                                presenting: target) { _ in
+                Button("Record an ECG…") { target = nil; captureOpen = true }
                 Button("Start ECG capture") { model.ecgStartCapture(); target = nil }
                 Button("Stop ECG capture") { model.ecgStopCapture(); target = nil }
-                Button("Set which wrist you wear it on…") { target = nil; wristTarget = device }
                 Button("Cancel", role: .cancel) { target = nil }
             } message: { _ in
-                Text("NOOP is not a medical device and this is not an ECG test. It asks your MG to start its ECG subsystem and logs whatever comes back — unvalidated instrumentation for protocol research, never a measurement or a diagnosis, including any heart-rhythm classification the strap happens to send. Don't use it to make a health decision; see a doctor if you have symptoms.\n\nHold the two indents on the clasp with the fingers of your other hand for the whole capture. The MG measures across your wrist AND that clasp, so until you hold it the circuit is open, the strap has nothing to record, and you would see zero packets whatever the firmware did.\n\nNobody has confirmed a strap honours these commands, so the likely outcome is that nothing happens. Everything here is reversible: “Stop” turns the streams back off. Results land in the strap log.")
+                Text("NOOP is not a medical device and this is not an ECG test. It asks your MG to start its ECG subsystem and shows or logs what comes back — unvalidated instrumentation, never a measurement or a diagnosis, including any heart-rhythm classification the strap happens to send. Don't use it to make a health decision; see a doctor if you have symptoms.\n\n“Record an ECG” walks you through it and draws the live trace. Start and Stop send the bare commands and report to the strap log. Everything here is reversible.")
             }
-            // Wrist selection: its own step, with its own confirmation and its own warning.
-            //
-            // A SHEET rather than a second confirmationDialog for two reasons: presenting one dialog from
-            // another in the same runloop tick races (the first is still dismissing, and the second can be
-            // dropped), and a dialog's message truncates on iOS — while the persistence warning here is
-            // the whole point of the step and has to be readable in full.
-            .sheet(isPresented: Binding(get: { wristTarget != nil },
-                                        set: { if !$0 { wristTarget = nil } })) {
-                EcgWristSheet(onPick: { wrist in model.ecgSelectWrist(wrist); wristTarget = nil },
-                              onCancel: { wristTarget = nil })
+            .sheet(isPresented: $captureOpen) {
+                NavigationStack {
+                    EcgCaptureView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close") { captureOpen = false }
+                            }
+                        }
+                }
+                #if os(macOS)
+                .frame(minWidth: 520, minHeight: 640)
+                #endif
             }
             .sheet(isPresented: Binding(get: { live.ecgProbe != nil },
                                         set: { if !$0 { model.clearEcgProbe() } })) {
@@ -1463,40 +1461,6 @@ private struct FeatureFlagProbeResultView: View {
         }
         .padding(20)
         .frame(minWidth: 340, minHeight: 260)
-        .background(NoopChromeSurface())
-    }
-}
-
-/// The wrist-selection step: the one ECG command that writes strap state outliving the session, so it
-/// gets its own screen, its own warning, and its own confirmation rather than a button inside the start
-/// flow. The copy names both caveats plainly — that the value persists on the strap, and that the
-/// left/right mapping is read off the order in WHOOP's own app rather than verified on hardware.
-private struct EcgWristSheet: View {
-    let onPick: (Whoop5Ecg.WristSelection) -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Which wrist do you wear it on?")
-                .font(StrandFont.title2)
-                .foregroundStyle(StrandPalette.textPrimary)
-            Text("This one is different from the other ECG controls: it is a setting written to the strap, and it stays there after you disconnect until you change it again.")
-                .font(StrandFont.subhead)
-                .foregroundStyle(StrandPalette.statusWarning)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("It is also not fully confirmed. Which value means “left” and which means “right” is read off the order they appear in WHOOP's own app, not verified on a strap — so it may set the opposite wrist. You can send it again with the other choice at any time, and it changes nothing about your recorded data.")
-                .font(StrandFont.caption)
-                .foregroundStyle(StrandPalette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: NoopMetrics.space3) {
-                Button("Left wrist") { onPick(.left) }
-                Button("Right wrist") { onPick(.right) }
-                Spacer()
-                Button("Cancel", role: .cancel) { onCancel() }
-            }
-        }
-        .padding(20)
-        .frame(minWidth: 340, minHeight: 220)
         .background(NoopChromeSurface())
     }
 }

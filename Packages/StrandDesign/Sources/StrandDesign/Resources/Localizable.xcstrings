@@ -5699,6 +5699,70 @@
           }
         }
       }
+    },
+    "Unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unvalidierte Sensor-Wellenform. Amplitude unkalibriert, keine Herzfrequenz angezeigt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unvalidated sensor waveform. Uncalibrated amplitude, no heart rate shown."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forma de onda del sensor sin validar. Amplitud sin calibrar, no se muestra frecuencia cardiaca."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forme d'onde du capteur, non validée. Amplitude non étalonnée, aucune fréquence cardiaque affichée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forma d'onda del sensore non convalidata. Ampiezza non calibrata, nessuna frequenza cardiaca mostrata."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niezweryfikowany przebieg z czujnika. Amplituda nieskalibrowana, tętno nie jest pokazywane."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forma de onda do sensor não validada. Amplitude não calibrada, sem frequência cardíaca apresentada."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Непроверенный сигнал датчика. Амплитуда не откалибрована, пульс не показан."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未经验证的传感器波形。振幅未校准，不显示心率。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未經驗證的感測器波形。振幅未校準，不顯示心率。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

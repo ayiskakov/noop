@@ -322,4 +322,16 @@ final class Whoop5EcgR16RecordTests: XCTestCase {
         XCTAssertEqual(p.parsed["ecg_contact_flags"]?.intArrayValue, Array(repeating: 0, count: 10))
         XCTAssertEqual(p.parsed["ecg_sample_flags"]?.intArrayValue?.count, 500)
     }
+
+    func testLiveRecordNeedsTypeFortyThreeLayoutSixteenAndTheExactLength() {
+        // The captured fixtures are historical (type 47). The live transport differs only in byte 8.
+        var live = bytes(pureContactOffHex)
+        XCTAssertFalse(Whoop5EcgRawRecord.isLiveRecord(live))
+        live[8] = 43
+        XCTAssertTrue(Whoop5EcgRawRecord.isLiveRecord(live))
+        var r17Layout = live
+        r17Layout[9] = 17
+        XCTAssertFalse(Whoop5EcgRawRecord.isLiveRecord(r17Layout))
+        XCTAssertFalse(Whoop5EcgRawRecord.isLiveRecord(Array(live.prefix(1583))))
+    }
 }

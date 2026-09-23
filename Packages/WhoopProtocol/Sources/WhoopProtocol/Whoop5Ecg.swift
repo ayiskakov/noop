@@ -20,14 +20,12 @@ import Foundation
 // implementation expression is not). Nothing here is copied — every line is NOOP's own code, in NOOP's
 // own style, and no WHOOP code, firmware or asset is present.
 //
+// Since superseded by `docs/PROTOCOL_ECG.md`: the records arrive as type 43 (live) or 47 (historical)
+// with a layout byte, and are decoded by `Whoop5EcgFilteredRecord` (R17) and `Whoop5EcgRawRecord` (R16).
+// The generic payload model below is the older hypothesis; the probe still runs it over any OTHER shape,
+// logging hits as candidates. The wrist arguments are `01 01` right / `01 02` left (`WristSelection`).
+//
 // What is NOT established, and is therefore never asserted:
-//   • The packet TYPE byte these records arrive under. No capture exists, and the repo's `PacketType`
-//     table has no Labrador entry. So this file decodes a PAYLOAD, and the app layer discovers the type
-//     empirically by running `plausibleFilteredPayload` over unclassified frames and logging the hits.
-//   • The `WristSelection` raw values. `right` is listed first in the client's enum, so right=0/left=1 is
-//     the natural reading — but it is an INFERENCE, not an attested fact, and it is labelled as such
-//     everywhere it surfaces (including in the UI, because picking the wrong one writes the wrong
-//     persistent value to the strap).
 //   • The `heartKeyProgress` "timed out" sentinel. The client's type is a union of a percentage and a
 //     timed-out case; the sentinel VALUE is not attested, so an out-of-range byte is carried raw rather
 //     than renamed into a state we cannot prove it means.
@@ -255,9 +253,11 @@ public enum Whoop5Ecg {
 
     /// SELECT_WRIST (123 / 0x7B).
     ///
-    /// ⚠️ PERSISTENT DEVICE CONFIG. Unlike the three toggles below, this writes strap state that survives
-    /// a disconnect, so it is kept as its own deliberate, separately-confirmed user action and is never
-    /// bundled into a one-tap flow. Reversible — send it again with the other wrist.
+    /// Writes which wrist the strap is worn on. Kept as its own deliberate user step rather than folded
+    /// silently into a start, because the wrist decides the lead orientation the strap records with.
+    /// Persistence across a reconnect or reboot is NOT established (`docs/PROTOCOL_ECG.md`), so a client
+    /// that knows the wearer's wrist re-sends it before every start instead of trusting a stored value.
+    /// Reversible — send it again with the other wrist.
     public static let selectWristCmd: UInt8 = 123
 
     /// TOGGLE_LABRADOR_DATA_GENERATION (124 / 0x7C) — the client's `mainControlECGDataGeneration`.
@@ -272,16 +272,28 @@ public enum Whoop5Ecg {
     /// The `revision` byte every one of these commands leads with.
     public static let commandRevision: UInt8 = 0x01
 
-    /// Which wrist the strap is worn on.
+    /// Which wrist the strap is worn on: `01 01` right, `01 02` left (`docs/PROTOCOL_ECG.md`).
     ///
-    /// ⚠️ The raw values are INFERRED, not attested: `right` is listed first in the client's enum, so
-    /// right=0/left=1 is the natural reading. Since this command writes PERSISTENT strap state, a wrong
-    /// inference writes a wrong persistent value — so every surface that offers it says so.
+    /// Zero is not a wrist. The earlier right=0/left=1 reading, taken from a client enum's order, was
+    /// refused on a WHOOP MG (`WS50_r00`, fw `50.39.1.0`): the command answered `FAILURE(0)` and the
+    /// strap's own console logged `WSBLE_CMD_ECG_SELECT_WRIST invalied wrist value.` for `01 00`.
+    /// A valid argument can still fail when the ECG subsystem is not in the required state, so a
+    /// refusal of 1 or 2 is a state fact, not evidence that the mapping is wrong.
     public enum WristSelection: UInt8, Equatable, Sendable, CaseIterable {
-        case right = 0
-        case left = 1
+        case right = 1
+        case left = 2
 
         public var token: String { self == .right ? "right" : "left" }
+
+        /// The wrist a stored `token` names, or nil. A client that remembers the wearer's wrist stores the
+        /// token rather than the wire argument, so a remapped argument can never flip a remembered choice.
+        public init?(token: String) {
+            switch token {
+            case "right": self = .right
+            case "left": self = .left
+            default: return nil
+            }
+        }
     }
 
     /// The `mainControlECGDataGeneration` argument.
@@ -525,83 +537,10 @@ public enum Whoop5Ecg {
         return end <= payload.count && payload.count - end <= maxPadding
     }
 
-    // MARK: - The type-43 REALTIME_RAW_DATA record: the live ECG sample carrier (#891/#1100)
-    //
-    // OBSERVED on one WHOOP MG (WS50_r00, fw 50.39.1.0), not attested by any vendor document: once
-    // TOGGLE_LABRADOR_FILTERED(139)=1 has opened the master gate, the strap emits fixed-size 240-byte
-    // REALTIME_RAW_DATA (type 43) records whose body carries an i16-LE series.
-    //
-    // Twin of the Kotlin `Whoop5Ecg` helpers of the same names. Android grew the ECG app layer that consumes
-    // these first; the decode is a PROTOCOL fact, so it lands on both platforms together rather than living
-    // only where it happens to be called today. Nothing here decodes a status field, an HR, or a rhythm
-    // classification — only the sample series and a byte-fill count. Callers gate on the frame's CRC first.
-
-    /// Every REALTIME_RAW_DATA record OBSERVED on the MG was exactly this long.
-    public static let rawRecordLength = 240
-
-    /// Frame offset of the inner record's type byte on 5/MG (`[8]type [9]seq [10]cmd`).
-    public static let rawTypeOffset = 8
-
-    /// The inner record type byte for REALTIME_RAW_DATA.
-    public static let rawRecordType: UInt8 = 43
-
-    /// First body byte considered by `realtimeRawBodyNonZeroBytes` — excludes the constant sub-header.
-    public static let rawBodyStart = 24
-
-    /// First waveform byte. Bytes 24..33 are a constant 5x i16 sub-header that is NOT waveform.
-    public static let rawWaveformStart = 34
-
-    /// One past the last body byte; the remaining 4 bytes are the frame's CRC32 trailer.
-    public static let rawBodyEnd = 236
-
-    /// Samples one record carries: 101. Load-bearing beyond arithmetic — a fixed sample count per record is
-    /// exactly the shape that makes autocorrelation manufacture a peak at the record period, so anything
-    /// estimating a rate from these samples must exclude this lag. See the #194 withdrawal for what
-    /// happens when that is not done.
-    public static let samplesPerRawRecord = (rawBodyEnd - rawWaveformStart) / 2
-
-    /// Non-zero body bytes above which a record is treated as carrying a waveform rather than baseline.
-    public static let rawBodyActiveNonZeroBytes = 20
-
-    /// True for a frame shaped like a REALTIME_RAW_DATA record. Shape only — says nothing about CRC.
-    public static func isRealtimeRawRecord(_ frame: [UInt8]) -> Bool {
-        frame.count == rawRecordLength && frame[rawTypeOffset] == rawRecordType
-    }
-
-    /// The record's i16-LE sample series, or nil when `frame` is not a REALTIME_RAW_DATA record.
-    ///
-    /// Signed two's-complement, little-endian, exactly `samplesPerRawRecord` values. Zero samples are
-    /// returned as zeros and never trimmed: for a research artifact a trailing run of zeros is evidence
-    /// about the record, not padding to be tidied away.
-    public static func realtimeRawSamples(_ frame: [UInt8]) -> [Int]? {
-        guard isRealtimeRawRecord(frame) else { return nil }
-        var out = [Int]()
-        out.reserveCapacity(samplesPerRawRecord)
-        var i = rawWaveformStart
-        while i + 1 < rawBodyEnd {
-            let raw = Int(frame[i]) | (Int(frame[i + 1]) << 8)
-            out.append(raw >= 0x8000 ? raw - 0x10000 : raw)
-            i += 2
-        }
-        return out
-    }
-
-    /// Non-zero bytes in the body region, or nil when `frame` is not a REALTIME_RAW_DATA record.
-    public static func realtimeRawBodyNonZeroBytes(_ frame: [UInt8]) -> Int? {
-        guard isRealtimeRawRecord(frame) else { return nil }
-        var n = 0
-        for i in rawBodyStart..<rawBodyEnd where frame[i] != 0 { n += 1 }
-        return n
-    }
-
-    /// ONE definition of "this record carries a waveform", so every consumer agrees about the same record.
-    ///
-    /// What it cannot tell you: a flat record means the electrode circuit is open OR generation is off. It is
-    /// a byte-fill observation, never a statement about the wearer.
-    public static func realtimeRawSignalPresent(_ frame: [UInt8]) -> Bool? {
-        guard let n = realtimeRawBodyNonZeroBytes(frame) else { return nil }
-        return n > rawBodyActiveNonZeroBytes
-    }
+    // The type-43 live ECG record is decoded by `Whoop5EcgFilteredRecord` (R17, docs/PROTOCOL_ECG.md).
+    // An earlier 101-sample i16 reading of the same 240-byte frame lived here; it read the two alignment
+    // bytes at @234 as a sample and ignored the declared count, so it was removed rather than kept beside
+    // the documented decoder as a second answer for one frame.
 
     /// The frame-level form of `plausibleFilteredPayload`, CRC-gated. This is what the app layer runs
     /// over unclassified 5/MG frames while an ECG probe is armed.

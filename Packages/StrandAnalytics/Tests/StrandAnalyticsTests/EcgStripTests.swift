@@ -308,4 +308,23 @@ final class EcgStripTests: XCTestCase {
         let range = EcgStrip.verticalRange([])
         XCTAssertLessThan(range.min, range.max)
     }
+
+    func testBreakColumnsIsTheEnvelopeColumnHoldingTheGapSample() {
+        // Oracle: the column whose `envelope` bounds contain the sample, found by scanning those bounds.
+        for count in 1..<64 {
+            for requested in 1..<48 {
+                let n = min(requested, count)
+                for i in 0..<count {
+                    let holder = (0..<n).first { c in
+                        c * count / n <= i && i < max(c * count / n + 1, (c + 1) * count / n)
+                    }
+                    XCTAssertEqual(EcgStrip.breakColumns(gapAfter: [i], sampleCount: count, columns: requested),
+                                   [holder!], "count \(count) columns \(requested) sample \(i)")
+                }
+            }
+        }
+        // A case the scaled index gets wrong: sample 197 of 199 over 119 columns sits in column 118.
+        XCTAssertEqual(EcgStrip.breakColumns(gapAfter: [197], sampleCount: 199, columns: 119), [118])
+        XCTAssertEqual(EcgStrip.breakColumns(gapAfter: [-1, 5], sampleCount: 5, columns: 3), [])
+    }
 }

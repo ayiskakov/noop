@@ -396,8 +396,11 @@ final class Whoop5EcgTests: XCTestCase {
     }
 
     func testCommandPayloadIsRevisionThenArg() {
-        XCTAssertEqual(Whoop5Ecg.selectWristPayload(.right), [0x01, 0x00])
-        XCTAssertEqual(Whoop5Ecg.selectWristPayload(.left), [0x01, 0x01])
+        // LITERAL wire bytes (docs/PROTOCOL_ECG.md): right 01 01, left 01 02. Zero was refused on
+        // hardware as an invalid wrist, so neither case may ever encode it.
+        XCTAssertEqual(Whoop5Ecg.selectWristPayload(.right), [0x01, 0x01])
+        XCTAssertEqual(Whoop5Ecg.selectWristPayload(.left), [0x01, 0x02])
+        XCTAssertFalse(Whoop5Ecg.WristSelection.allCases.contains { $0.rawValue == 0 })
         XCTAssertEqual(Whoop5Ecg.togglePayload(on: true), [0x01, 0x01])
         XCTAssertEqual(Whoop5Ecg.togglePayload(on: false), [0x01, 0x00])
         XCTAssertEqual(Whoop5Ecg.controlPayload(.stop), [0x01, 0x01])
@@ -409,6 +412,8 @@ final class Whoop5EcgTests: XCTestCase {
         // must produce byte-identical output, so a test pins the wire form without a strap.
         let seq: UInt8 = 9
         XCTAssertEqual(Whoop5Ecg.selectWristFrame(.left, seq: seq),
+                       puffinCommandFrame(cmd: 0x7B, seq: seq, payload: [0x01, 0x02]))
+        XCTAssertEqual(Whoop5Ecg.selectWristFrame(.right, seq: seq),
                        puffinCommandFrame(cmd: 0x7B, seq: seq, payload: [0x01, 0x01]))
         XCTAssertEqual(Whoop5Ecg.toggleRealtimeFilteredEcgFrame(on: true, seq: seq),
                        puffinCommandFrame(cmd: 0x8B, seq: seq, payload: [0x01, 0x01]))
