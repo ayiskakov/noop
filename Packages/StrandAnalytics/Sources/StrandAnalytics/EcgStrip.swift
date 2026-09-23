@@ -273,6 +273,31 @@ public enum EcgStrip {
 
     // MARK: - Laying records onto a timeline
 
+    /// Where each beat falls along a strip built by `concatenate`, as a fraction of its width.
+    ///
+    /// Positions follow the SAMPLE axis the strip draws, not wall time, so a marker stays on its
+    /// complex even when a gap has closed the strip up. A beat at unix time `t` sits in the record
+    /// stamped `floor(t)`, at `(t - ts) * samplesPerSecond` samples in. Beats in records not on the
+    /// strip are dropped.
+    public static func markerFractions(beatTimes: [Double], records: [(ts: Int, sampleCount: Int)],
+                                       samplesPerSecond: Double) -> [Double] {
+        let ordered = records.sorted { $0.ts < $1.ts }
+        let total = ordered.reduce(0) { $0 + $1.sampleCount }
+        guard total > 0 else { return [] }
+        var offset: [Int: (start: Int, count: Int)] = [:]
+        var running = 0
+        for r in ordered {
+            offset[r.ts] = (running, r.sampleCount)
+            running += r.sampleCount
+        }
+        return beatTimes.compactMap { t in
+            let ts = Int((t + 1e-9).rounded(.down))
+            guard let o = offset[ts], o.count > 0 else { return nil }
+            let within = min(o.count - 1, max(0, Int(((t - Double(ts)) * samplesPerSecond).rounded())))
+            return (Double(o.start + within) + 0.5) / Double(total)
+        }
+    }
+
     /// Concatenate a recording's records into one series, inserting nothing for a missing second.
     ///
     /// Gaps are REPORTED, never filled. A recording is a run of consecutive record indices, so a missing
