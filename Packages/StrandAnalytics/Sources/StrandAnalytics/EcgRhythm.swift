@@ -31,7 +31,10 @@ public struct EcgRhythmFacts: Equatable, Sendable {
     /// Median rate over the recording.
     public let heartRate: Double
     /// 5th and 95th percentiles of the rolling rate: the range the rate moved through, without the
-    /// single-window extremes an artefact produces.
+    /// single-window extremes an artefact produces. Widened where needed to take in `heartRate`: over a
+    /// short or uneven series the median of every interval can fall outside the percentiles of its
+    /// five-interval windows ([889, 656, 805, 896, 905, 878, 746, 816] ms gives 70.8 bpm against
+    /// 67.5–68.3), and a rate shown outside its own range contradicts itself.
     public let rateLow: Double
     public let rateHigh: Double
     /// Share of rolling-rate windows above `highRate` / below `lowRate`, 0…1.
@@ -93,8 +96,8 @@ public struct EcgRhythmFacts: Equatable, Sendable {
         let completed = records.sorted { $0.ts < $1.ts }.first { $0.classifierState == 2 }
         return EcgRhythmFacts(
             heartRate: rate,
-            rateLow: EcgBeats.percentile(rolling, 0.05) ?? rate,
-            rateHigh: EcgBeats.percentile(rolling, 0.95) ?? rate,
+            rateLow: min(rate, EcgBeats.percentile(rolling, 0.05) ?? rate),
+            rateHigh: max(rate, EcgBeats.percentile(rolling, 0.95) ?? rate),
             fractionAboveHigh: Double(rolling.filter { $0 > highRate }.count) / Double(max(1, rolling.count)),
             fractionBelowLow: Double(rolling.filter { $0 < lowRate }.count) / Double(max(1, rolling.count)),
             variationPercent: mean > 0 ? sd / mean * 100 : 0,

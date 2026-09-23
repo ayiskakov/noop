@@ -79,6 +79,15 @@ final class EcgRhythmTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 40, accuracy: 1e-9)
     }
 
+    func testTheRangeTakesInTheRate() {
+        // Eight uneven intervals: the median of all of them (847 ms, 70.8 bpm) lies outside the 5th–95th
+        // percentiles of their four five-interval windows (67.5–68.3 bpm).
+        let f = facts([[889, 656, 805, 896, 905, 878, 746, 816]])
+        XCTAssertEqual(f.heartRate, 60_000 / 847, accuracy: 1e-9)
+        XCTAssertLessThanOrEqual(f.rateLow, f.heartRate)
+        XCTAssertEqual(f.rateHigh, f.heartRate, accuracy: 1e-9)
+    }
+
     func testTooFewIntervalsGiveNoFacts() {
         XCTAssertNil(EcgRhythmFacts.from(result([Array(repeating: 800, count: 5)]), records: []))
     }
