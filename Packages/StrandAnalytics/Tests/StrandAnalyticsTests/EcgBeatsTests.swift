@@ -115,6 +115,12 @@ final class EcgBeatsTests: XCTestCase {
         XCTAssertEqual(EcgBeats.analyse([partial]).analysedSeconds, 0)
     }
 
+    func testTinyInputsGiveNoBeatsRatherThanTrapping() {
+        XCTAssertEqual(EcgBeats.detect([], sampleRate: 0.5), [])
+        XCTAssertEqual(EcgBeats.detect([1], sampleRate: 1), [])
+        XCTAssertEqual(EcgBeats.detect([1, 9], sampleRate: 2), [])
+    }
+
     func testNoRateWithoutEnoughIntervals() {
         let result = EcgBeats.analyse(recording(bpm: 50, seconds: 8).records)
         XCTAssertLessThan(result.rrMs.count, EcgBeats.minIntervalsForRate)

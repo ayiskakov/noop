@@ -163,7 +163,7 @@ public enum EcgBeats {
     /// the trace's sign follows the wrist and lead orientation.
     public static func detect(_ samples: [Double], sampleRate fs: Double) -> [Int] {
         let n = samples.count
-        guard n >= Int(fs), fs > 0 else { return [] }
+        guard fs > 0, n >= max(3, Int(fs)) else { return [] }
         let band = bandPass(samples, sampleRate: fs)
 
         var energy = [Double](repeating: 0, count: n)
