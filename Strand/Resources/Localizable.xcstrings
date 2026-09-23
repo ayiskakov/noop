@@ -133263,70 +133263,6 @@
         }
       }
     },
-    "No live data yet. Check that the strap is connected and your finger is on the clasp.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch keine Live-Daten. Prüfe, ob das Band verbunden ist und dein Finger auf dem Verschluss liegt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No live data yet. Check that the strap is connected and your finger is on the clasp."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún no hay datos en vivo. Comprueba que la pulsera está conectada y que tu dedo está sobre el cierre."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pas encore de données en direct. Vérifie que le bracelet est connecté et que ton doigt est sur le fermoir."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora nessun dato in tempo reale. Controlla che il cinturino sia collegato e il dito sia sul fermaglio."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brak jeszcze danych na żywo. Sprawdź, czy opaska jest połączona, a palec leży na zapięciu."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ainda sem dados em tempo real. Verifica se a pulseira está ligada e o dedo está no fecho."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Данных в реальном времени пока нет. Проверьте, что браслет подключён, а палец лежит на застёжке."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无实时数据。请检查手环是否已连接，手指是否放在扣环上。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暫無即時資料。請檢查手環是否已連接，手指是否放在扣環上。"
-          }
-        }
-      }
-    },
     "No live heart rate or synced history yet this session.": {
       "localizations": {
         "de": {
@@ -161717,70 +161653,6 @@
         }
       }
     },
-    "Recording. Keep still and keep your finger on the clasp.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufzeichnung läuft. Halte still und lass den Finger auf dem Verschluss."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recording. Keep still and keep your finger on the clasp."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grabando. Quédate quieto y mantén el dedo en el cierre."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrement en cours. Reste immobile et garde le doigt sur le fermoir."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registrazione in corso. Resta fermo e tieni il dito sul fermaglio."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nagrywanie. Nie ruszaj się i trzymaj palec na zapięciu."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A gravar. Fica quieto e mantém o dedo no fecho."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Идёт запись. Не двигайтесь и держите палец на застёжке."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在记录。请保持不动，手指不要离开扣环。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在記錄。請保持不動，手指不要離開扣環。"
-          }
-        }
-      }
-    },
     "Recording. Your strap is connected and saving data.": {
       "localizations": {
         "de": {
@@ -190100,70 +189972,6 @@
         }
       }
     },
-    "Stopped at the time limit. The strap saved what it recorded.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Am Zeitlimit gestoppt. Das Band hat das Aufgezeichnete gespeichert."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stopped at the time limit. The strap saved what it recorded."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detenido al alcanzar el límite de tiempo. La pulsera guardó lo que registró."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrêté à la limite de temps. Le bracelet a enregistré ce qu'il a capté."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Interrotta al limite di tempo. Il cinturino ha salvato ciò che ha registrato."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zatrzymano po limicie czasu. Opaska zapisała to, co nagrała."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parado no limite de tempo. A pulseira guardou o que registou."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Остановлено по лимиту времени. Браслет сохранил записанное."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已达到时间上限而停止。手环已保存记录的内容。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已達到時間上限而停止。手環已儲存記錄的內容。"
-          }
-        }
-      }
-    },
     "Stops reading a cycle phase from your nightly temperature. You can turn it back on here any time.": {
       "localizations": {
         "de": {
@@ -200670,70 +200478,6 @@
         }
       }
     },
-    "The full-resolution waveform comes over with the next sync. Open Review ECG recordings in Test Centre to see it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Kurve in voller Auflösung kommt mit der nächsten Synchronisierung. Öffne „EKG-Aufzeichnungen ansehen“ im Testcenter, um sie zu sehen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The full-resolution waveform comes over with the next sync. Open Review ECG recordings in Test Centre to see it."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La forma de onda en resolución completa llega con la próxima sincronización. Abre «Revisar grabaciones de ECG» en el Centro de pruebas para verla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La courbe en pleine résolution arrive à la prochaine synchronisation. Ouvre « Consulter les enregistrements ECG » dans le Centre de test pour la voir."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La forma d'onda a piena risoluzione arriva con la prossima sincronizzazione. Apri «Esamina le registrazioni ECG» nel Centro test per vederla."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Przebieg w pełnej rozdzielczości pojawi się po następnej synchronizacji. Otwórz „Przejrzyj nagrania EKG” w Centrum testów, aby go zobaczyć."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A forma de onda em resolução total chega com a próxima sincronização. Abre «Rever gravações de ECG» no Centro de testes para a ver."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Кривая в полном разрешении придёт со следующей синхронизацией. Откройте «Просмотр записей ЭКГ» в Центре тестирования."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完整分辨率的波形会在下次同步时传来。在测试中心打开“查看心电图记录”即可查看。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完整解析度的波形會在下次同步時傳來。在測試中心開啟「查看心電圖記錄」即可查看。"
-          }
-        }
-      }
-    },
     "The history sync stopped before it finished. Keep the strap nearby and try Sync again.": {
       "localizations": {
         "de": {
@@ -201560,70 +201304,6 @@
         }
       }
     },
-    "The strap did not accept the wrist setting. The recording continues, but the trace may be upside down.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Band hat die Handgelenk-Einstellung nicht angenommen. Die Aufzeichnung läuft weiter, die Kurve kann aber auf dem Kopf stehen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The strap did not accept the wrist setting. The recording continues, but the trace may be upside down."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La pulsera no aceptó el ajuste de muñeca. La grabación continúa, pero la curva puede aparecer invertida."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le bracelet n'a pas accepté le réglage du poignet. L'enregistrement continue, mais la courbe peut être inversée."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il cinturino non ha accettato l'impostazione del polso. La registrazione continua, ma la traccia potrebbe essere capovolta."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opaska nie przyjęła ustawienia nadgarstka. Nagrywanie trwa, ale przebieg może być odwrócony."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A pulseira não aceitou a definição de pulso. A gravação continua, mas o traçado pode ficar invertido."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Браслет не принял настройку запястья. Запись продолжается, но кривая может быть перевёрнута."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手环未接受手腕设置。记录会继续，但波形可能上下颠倒。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手環未接受手腕設定。記錄會繼續，但波形可能上下顛倒。"
-          }
-        }
-      }
-    },
     "The strap keeps banking data on its own, so nothing is lost — NOOP just talks to it less often to help it last until you can charge it.": {
       "localizations": {
         "de": {
@@ -201788,70 +201468,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "手環記錄的是手腕與扣環上手指之間的心臟訊號，因此需要知道方向。"
-          }
-        }
-      }
-    },
-    "The strap saved the recording.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Band hat die Aufzeichnung gespeichert."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The strap saved the recording."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La pulsera guardó la grabación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le bracelet a enregistré l'enregistrement."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il cinturino ha salvato la registrazione."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opaska zapisała nagranie."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A pulseira guardou a gravação."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Браслет сохранил запись."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手环已保存本次记录。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手環已儲存本次記錄。"
           }
         }
       }
@@ -217433,70 +217049,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Czekam na tętno spoczynkowe. Najpierw rozpocznij czytanie na żywo lub wróć, gdy będziesz nieruchomy."
-          }
-        }
-      }
-    },
-    "Waiting for contact. Press your fingertip on the clasp.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warte auf Kontakt. Drücke deine Fingerkuppe auf den Verschluss."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for contact. Press your fingertip on the clasp."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esperando contacto. Presiona la yema del dedo sobre el cierre."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En attente de contact. Appuie le bout du doigt sur le fermoir."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In attesa di contatto. Premi il polpastrello sul fermaglio."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Oczekiwanie na kontakt. Przyciśnij opuszek palca do zapięcia."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À espera de contacto. Pressiona a ponta do dedo no fecho."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ожидание контакта. Прижмите кончик пальца к застёжке."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等待接触。请用指尖按住扣环。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等待接觸。請用指尖按住扣環。"
           }
         }
       }
@@ -256885,6 +256437,1606 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這是目前已記錄天數的平均值。身體年齡解鎖後，每項都會顯示它增加或減少的年數。"
+          }
+        }
+      }
+    },
+    "Setting the wrist…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handgelenk wird eingestellt …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting the wrist…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurando la muñeca…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglage du poignet…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impostazione del polso…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ustawianie nadgarstka…"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A definir o pulso…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Установка запястья…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在设置手腕…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在設定手腕…"
+          }
+        }
+      }
+    },
+    "No live data has arrived yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es sind noch keine Live-Daten angekommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No live data has arrived yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no han llegado datos en vivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune donnée en direct n'est encore arrivée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non sono ancora arrivati dati in tempo reale."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie dotarły jeszcze żadne dane na żywo."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não chegaram dados em tempo real."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные в реальном времени ещё не поступили."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未收到实时数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未收到即時資料。"
+          }
+        }
+      }
+    },
+    "No new data for %lld s.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seit %lld s keine neuen Daten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No new data for %lld s."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin datos nuevos desde hace %lld s."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune nouvelle donnée depuis %lld s."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun dato nuovo da %lld s."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak nowych danych od %lld s."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem dados novos há %lld s."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет новых данных уже %lld с."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有 %lld 秒没有新数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有 %lld 秒沒有新資料。"
+          }
+        }
+      }
+    },
+    "Receiving data. Keep still and keep your fingertip on the clasp.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daten kommen an. Halte still und lass die Fingerkuppe auf dem Verschluss."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receiving data. Keep still and keep your fingertip on the clasp."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recibiendo datos. Quédate quieto y mantén la yema del dedo en el cierre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réception des données. Reste immobile et garde le bout du doigt sur le fermoir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ricezione dei dati. Resta fermo e tieni il polpastrello sul fermaglio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odbieranie danych. Nie ruszaj się i trzymaj opuszek palca na zapięciu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A receber dados. Fica quieto e mantém a ponta do dedo no fecho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные поступают. Не двигайтесь и держите кончик пальца на застёжке."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在接收数据。请保持不动，指尖不要离开扣环。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在接收資料。請保持不動，指尖不要離開扣環。"
+          }
+        }
+      }
+    },
+    "Presence flag on · quality code %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsenz-Flag an · Qualitätscode %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presence flag on · quality code %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicador de presencia activado · código de calidad %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicateur de présence activé · code qualité %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicatore di presenza attivo · codice qualità %lld"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flaga obecności włączona · kod jakości %lld"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicador de presença ativo · código de qualidade %lld"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Флаг присутствия включён · код качества %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在标志：开 · 质量代码 %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在旗標：開 · 品質代碼 %lld"
+          }
+        }
+      }
+    },
+    "Presence flag off · quality code %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsenz-Flag aus · Qualitätscode %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presence flag off · quality code %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicador de presencia desactivado · código de calidad %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicateur de présence désactivé · code qualité %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicatore di presenza non attivo · codice qualità %lld"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flaga obecności wyłączona · kod jakości %lld"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicador de presença inativo · código de qualidade %lld"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Флаг присутствия выключен · код качества %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在标志：关 · 质量代码 %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在旗標：關 · 品質代碼 %lld"
+          }
+        }
+      }
+    },
+    "Waiting for the strap to confirm the stop…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warte, bis das Band den Stopp bestätigt …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the strap to confirm the stop…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando a que la pulsera confirme la detención…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En attente de la confirmation de l'arrêt par le bracelet…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In attesa che il cinturino confermi l'arresto…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Czekanie, aż opaska potwierdzi zatrzymanie…"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A aguardar que a pulseira confirme a paragem…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание подтверждения остановки от браслета…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待手环确认停止…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待手環確認停止…"
+          }
+        }
+      }
+    },
+    "An earlier ECG session may still be running on the strap. Stop it before recording again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Band läuft möglicherweise noch eine frühere EKG-Sitzung. Stoppe sie, bevor du erneut aufzeichnest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An earlier ECG session may still be running on the strap. Stop it before recording again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puede que una sesión de ECG anterior siga en curso en la pulsera. Detenla antes de volver a grabar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une session ECG précédente est peut-être encore en cours sur le bracelet. Arrête-la avant d'enregistrer à nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una sessione ECG precedente potrebbe essere ancora in corso sul cinturino. Interrompila prima di registrare di nuovo."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na opasce może nadal trwać wcześniejsza sesja EKG. Zatrzymaj ją przed ponownym nagrywaniem."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma sessão de ECG anterior pode ainda estar a decorrer na pulseira. Para-a antes de gravar novamente."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На браслете может всё ещё идти предыдущий сеанс ЭКГ. Остановите его перед новой записью."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环上可能仍在运行之前的心电图会话。请先停止它再重新记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環上可能仍在執行先前的心電圖工作階段。請先停止它再重新記錄。"
+          }
+        }
+      }
+    },
+    "Stop it": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stoppen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenerla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'arrêter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompila"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zatrzymaj"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановить"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
+          }
+        }
+      }
+    },
+    "Not started": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gestartet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not started"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No iniciado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non démarré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non avviato"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie rozpoczęto"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não iniciado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не запущено"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未开始"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未開始"
+          }
+        }
+      }
+    },
+    "The strap did not accept the wrist setting (%@). Nothing was recorded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat die Handgelenk-Einstellung nicht angenommen (%@). Es wurde nichts aufgezeichnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not accept the wrist setting (%@). Nothing was recorded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no aceptó la configuración de la muñeca (%@). No se grabó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas accepté le réglage du poignet (%@). Rien n'a été enregistré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha accettato l'impostazione del polso (%@). Non è stato registrato nulla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie przyjęła ustawienia nadgarstka (%@). Nic nie zostało nagrane."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não aceitou a definição do pulso (%@). Nada foi gravado."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет не принял настройку запястья (%@). Ничего не записано."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环未接受手腕设置（%@）。未记录任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環未接受手腕設定（%@）。未記錄任何內容。"
+          }
+        }
+      }
+    },
+    "The strap did not answer the wrist setting. Nothing was recorded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat auf die Handgelenk-Einstellung nicht geantwortet. Es wurde nichts aufgezeichnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not answer the wrist setting. Nothing was recorded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no respondió a la configuración de la muñeca. No se grabó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas répondu au réglage du poignet. Rien n'a été enregistré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha risposto all'impostazione del polso. Non è stato registrato nulla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie odpowiedziała na ustawienie nadgarstka. Nic nie zostało nagrane."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não respondeu à definição do pulso. Nada foi gravado."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет не ответил на настройку запястья. Ничего не записано."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环未回应手腕设置。未记录任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環未回應手腕設定。未記錄任何內容。"
+          }
+        }
+      }
+    },
+    "Finished before the strap answered the wrist setting. Nothing was recorded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beendet, bevor das Band auf die Handgelenk-Einstellung geantwortet hat. Es wurde nichts aufgezeichnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finished before the strap answered the wrist setting. Nothing was recorded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizado antes de que la pulsera respondiera a la configuración de la muñeca. No se grabó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminé avant que le bracelet réponde au réglage du poignet. Rien n'a été enregistré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminato prima che il cinturino rispondesse all'impostazione del polso. Non è stato registrato nulla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zakończono, zanim opaska odpowiedziała na ustawienie nadgarstka. Nic nie zostało nagrane."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminado antes de a pulseira responder à definição do pulso. Nada foi gravado."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Завершено до того, как браслет ответил на настройку запястья. Ничего не записано."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在手环回应手腕设置之前已结束。未记录任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在手環回應手腕設定之前已結束。未記錄任何內容。"
+          }
+        }
+      }
+    },
+    "The strap refused to start (%@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat den Start abgelehnt (%@)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap refused to start (%@)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera rechazó el inicio (%@)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet a refusé de démarrer (%@)."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino ha rifiutato l'avvio (%@)."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska odmówiła rozpoczęcia (%@)."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira recusou o início (%@)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет отказался запускать запись (%@)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环拒绝启动（%@）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環拒絕啟動（%@）。"
+          }
+        }
+      }
+    },
+    "The strap did not answer every start request, and no live data arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat nicht auf jede Startanfrage geantwortet, und es sind keine Live-Daten angekommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not answer every start request, and no live data arrived."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no respondió a todas las solicitudes de inicio y no llegaron datos en vivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas répondu à toutes les demandes de démarrage, et aucune donnée en direct n'est arrivée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha risposto a tutte le richieste di avvio e non sono arrivati dati in tempo reale."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie odpowiedziała na wszystkie żądania rozpoczęcia i nie dotarły żadne dane na żywo."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não respondeu a todos os pedidos de início e não chegaram dados em tempo real."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет ответил не на все запросы запуска, и данные в реальном времени не поступили."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环没有回应每个启动请求，也没有收到实时数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環沒有回應每個啟動請求，也沒有收到即時資料。"
+          }
+        }
+      }
+    },
+    "The strap accepted the start, but no live data arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat den Start angenommen, aber es sind keine Live-Daten angekommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap accepted the start, but no live data arrived."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera aceptó el inicio, pero no llegaron datos en vivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet a accepté le démarrage, mais aucune donnée en direct n'est arrivée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino ha accettato l'avvio, ma non sono arrivati dati in tempo reale."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska przyjęła rozpoczęcie, ale nie dotarły żadne dane na żywo."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira aceitou o início, mas não chegaram dados em tempo real."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет принял запуск, но данные в реальном времени не поступили."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环已接受启动，但没有收到实时数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環已接受啟動，但沒有收到即時資料。"
+          }
+        }
+      }
+    },
+    "Live records received: %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empfangene Live-Datensätze: %lld."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live records received: %lld."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registros en vivo recibidos: %lld."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrements en direct reçus : %lld."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record in tempo reale ricevuti: %lld."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odebrane rekordy na żywo: %lld."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registos em tempo real recebidos: %lld."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Получено записей в реальном времени: %lld."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收到的实时记录：%lld。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收到的即時記錄：%lld。"
+          }
+        }
+      }
+    },
+    "Stopped at the %lld-second limit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beim Limit von %lld Sekunden gestoppt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped at the %lld-second limit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido al alcanzar el límite de %lld segundos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté à la limite de %lld secondes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrotto al limite di %lld secondi."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zatrzymano po osiągnięciu limitu %lld s."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parado no limite de %lld segundos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено по достижении лимита в %lld с."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在 %lld 秒上限时停止。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在 %lld 秒上限時停止。"
+          }
+        }
+      }
+    },
+    "Stopped when the strap's progress reached 100.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestoppt, als der Fortschritt am Band 100 erreichte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped when the strap's progress reached 100."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido cuando el progreso de la pulsera llegó a 100."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté quand la progression du bracelet a atteint 100."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrotto quando l'avanzamento del cinturino ha raggiunto 100."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zatrzymano, gdy postęp opaski osiągnął 100."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parado quando o progresso da pulseira chegou a 100."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено, когда прогресс браслета достиг 100."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在手环进度达到 100 时停止。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在手環進度達到 100 時停止。"
+          }
+        }
+      }
+    },
+    "Stopped when you left this screen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestoppt, als du diesen Bildschirm verlassen hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped when you left this screen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido al salir de esta pantalla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté quand tu as quitté cet écran."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrotto quando hai lasciato questa schermata."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zatrzymano po opuszczeniu tego ekranu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parado quando saíste deste ecrã."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено, когда вы покинули этот экран."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你离开此屏幕时停止。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你離開此畫面時停止。"
+          }
+        }
+      }
+    },
+    "The strap accepted the request to save the full-resolution recording. It comes over with the next sync; open Review ECG recordings in Test Centre to see it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat die Anfrage angenommen, die Aufzeichnung in voller Auflösung zu speichern. Sie kommt mit der nächsten Synchronisierung; öffne „EKG-Aufzeichnungen ansehen“ im Testcenter, um sie zu sehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap accepted the request to save the full-resolution recording. It comes over with the next sync; open Review ECG recordings in Test Centre to see it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera aceptó la solicitud de guardar la grabación en resolución completa. Llega con la próxima sincronización; abre «Revisar grabaciones de ECG» en el Centro de pruebas para verla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet a accepté la demande d'enregistrer la courbe en pleine résolution. Elle arrive à la prochaine synchronisation ; ouvre « Consulter les enregistrements ECG » dans le Centre de test pour la voir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino ha accettato la richiesta di salvare la registrazione a piena risoluzione. Arriva con la prossima sincronizzazione; apri «Esamina le registrazioni ECG» nel Centro test per vederla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska przyjęła żądanie zapisania nagrania w pełnej rozdzielczości. Pojawi się po następnej synchronizacji; otwórz „Przejrzyj nagrania EKG” w Centrum testów, aby je zobaczyć."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira aceitou o pedido para guardar a gravação em resolução total. Chega com a próxima sincronização; abre «Rever gravações de ECG» no Centro de testes para a ver."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет принял запрос на сохранение записи в полном разрешении. Она придёт со следующей синхронизацией; откройте «Просмотр записей ЭКГ» в Центре тестирования."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环已接受保存完整分辨率记录的请求。它会在下次同步时传来；在测试中心打开“查看心电图记录”即可查看。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環已接受儲存完整解析度記錄的請求。它會在下次同步時傳來；在測試中心開啟「查看心電圖記錄」即可查看。"
+          }
+        }
+      }
+    },
+    "The strap did not confirm the request to save the full-resolution recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat die Anfrage, die Aufzeichnung in voller Auflösung zu speichern, nicht bestätigt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not confirm the request to save the full-resolution recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no confirmó la solicitud de guardar la grabación en resolución completa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas confirmé la demande d'enregistrer la courbe en pleine résolution."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha confermato la richiesta di salvare la registrazione a piena risoluzione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie potwierdziła żądania zapisania nagrania w pełnej rozdzielczości."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não confirmou o pedido para guardar a gravação em resolução total."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет не подтвердил запрос на сохранение записи в полном разрешении."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环未确认保存完整分辨率记录的请求。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環未確認儲存完整解析度記錄的請求。"
+          }
+        }
+      }
+    },
+    "The stop could not be sent, so the strap may still be recording. Reconnect, then use Stop ECG capture on the Devices screen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Stopp konnte nicht gesendet werden, daher zeichnet das Band möglicherweise noch auf. Verbinde es erneut und nutze dann „EKG-Aufzeichnung stoppen“ auf dem Geräte-Bildschirm."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The stop could not be sent, so the strap may still be recording. Reconnect, then use Stop ECG capture on the Devices screen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar la detención, así que puede que la pulsera siga grabando. Vuelve a conectarla y usa «Detener captura de ECG» en la pantalla Dispositivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'arrêt n'a pas pu être envoyé, le bracelet enregistre donc peut-être encore. Reconnecte-le, puis utilise « Arrêter la capture ECG » dans l'écran Appareils."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare l'arresto, quindi il cinturino potrebbe essere ancora in registrazione. Ricollegalo, poi usa «Interrompi acquisizione ECG» nella schermata Dispositivi."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się wysłać zatrzymania, więc opaska może nadal nagrywać. Połącz ją ponownie, a potem użyj „Zatrzymaj przechwytywanie ECG” na ekranie Urządzenia."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar a paragem, por isso a pulseira pode ainda estar a gravar. Volta a ligá-la e usa «Parar captura de ECG» no ecrã Dispositivos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось отправить остановку, поэтому браслет, возможно, всё ещё записывает. Переподключитесь и нажмите «Остановить запись ЭКГ» на экране «Устройства»."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法发送停止指令，手环可能仍在记录。请重新连接，然后在“设备”屏幕上使用“停止心电图采集”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法傳送停止指令，手環可能仍在記錄。請重新連接，然後在「裝置」畫面上使用「停止心電圖擷取」。"
+          }
+        }
+      }
+    },
+    "The strap refused to stop (%@). It may still be recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat den Stopp abgelehnt (%@). Es zeichnet möglicherweise noch auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap refused to stop (%@). It may still be recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera rechazó la detención (%@). Puede que siga grabando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet a refusé de s'arrêter (%@). Il enregistre peut-être encore."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino ha rifiutato l'arresto (%@). Potrebbe essere ancora in registrazione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska odmówiła zatrzymania (%@). Może nadal nagrywać."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira recusou a paragem (%@). Pode ainda estar a gravar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет отказался останавливать запись (%@). Возможно, он всё ещё записывает."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环拒绝停止（%@）。它可能仍在记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環拒絕停止（%@）。它可能仍在記錄。"
+          }
+        }
+      }
+    },
+    "The strap did not confirm every stop request. It may still be recording.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Band hat nicht jede Stoppanfrage bestätigt. Es zeichnet möglicherweise noch auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The strap did not confirm every stop request. It may still be recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pulsera no confirmó todas las solicitudes de detención. Puede que siga grabando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bracelet n'a pas confirmé toutes les demandes d'arrêt. Il enregistre peut-être encore."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il cinturino non ha confermato tutte le richieste di arresto. Potrebbe essere ancora in registrazione."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opaska nie potwierdziła wszystkich żądań zatrzymania. Może nadal nagrywać."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pulseira não confirmou todos os pedidos de paragem. Pode ainda estar a gravar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Браслет подтвердил не все запросы остановки. Возможно, он всё ещё записывает."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环未确认每个停止请求。它可能仍在记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環未確認每個停止請求。它可能仍在記錄。"
           }
         }
       }
