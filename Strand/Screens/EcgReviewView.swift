@@ -33,6 +33,8 @@ struct EcgReviewView: View {
     @State private var records: [EcgCandidateSample] = []
     /// Beats for the selected recording, nil while they are being found.
     @State private var beats: EcgBeats.Result?
+    /// Measured rhythm facts for the selected recording; nil while loading or with too few beats.
+    @State private var rhythm: EcgRhythmFacts?
     @State private var loading = true
     @State private var loadingWaveform = false
     /// Display-only baseline removal. ON by default because the captures need it — a ten-second window
@@ -73,6 +75,7 @@ struct EcgReviewView: View {
                     emptyCard
                 } else {
                     if let selected { stripCard(selected) }
+                    if let rhythm, let beats, !loadingWaveform { rhythmCard(rhythm, beats: beats) }
                     recordingListCard
                 }
             }
@@ -177,6 +180,62 @@ struct EcgReviewView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    // MARK: - Rhythm details
+
+    /// Measurements only. The section deliberately names no rhythm and no condition — see
+    /// `EcgRhythmFacts` for why a "not detected" line is the one this screen must never print.
+    private func rhythmCard(_ facts: EcgRhythmFacts, beats: EcgBeats.Result) -> some View {
+        StrandCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("Rhythm details (experimental)")
+                    .font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                factRow("Heart rate", value: Text("\(Int(facts.heartRate.rounded())) bpm"),
+                        detail: Text("range \(Int(facts.rateLow.rounded()))–\(Int(facts.rateHigh.rounded())) bpm"))
+                factRow("Above \(Int(EcgRhythmFacts.highRate)) bpm", value: share(facts.fractionAboveHigh))
+                factRow("Below \(Int(EcgRhythmFacts.lowRate)) bpm", value: share(facts.fractionBelowLow))
+                factRow("Beat-to-beat variation", value: facts.rmssdMs.map {
+                    Text("\(Int(facts.variationPercent.rounded()))% · RMSSD \(Int($0.rounded())) ms")
+                } ?? Text("\(Int(facts.variationPercent.rounded()))%"))
+                if facts.setAsideIntervals > 0 {
+                    Text("\(facts.setAsideIntervals) intervals set aside as likely missed or extra beats.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                }
+                VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                    Text("R-R intervals")
+                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                    RRDotChart(intervals: beats.intervals.map(\.ms))
+                        .frame(height: 120)
+                    Text("One dot per beat: the gap since the previous beat, in order.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                }
+                factRow("Strap's own result", value: facts.strapResultCode.map {
+                    Text("code \($0) (meaning not known)")
+                } ?? Text("Did not finish"))
+                Text("These are measurements, not a diagnosis. NOOP cannot detect or rule out AFib or any other heart condition. If you feel unwell or notice palpitations, see a doctor.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func factRow(_ label: LocalizedStringKey, value: Text, detail: Text? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+            Spacer()
+            VStack(alignment: .trailing, spacing: NoopMetrics.spaceHalf) {
+                value.font(StrandFont.bodyNumber).foregroundStyle(StrandPalette.textPrimary)
+                if let detail { detail.font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary) }
+            }
+        }
+    }
+
+    /// A share of the recording, worded so none of it reads as a verdict.
+    private func share(_ fraction: Double) -> Text {
+        if fraction <= 0 { return Text("No") }
+        if fraction >= 0.95 { return Text("Whole recording") }
+        return Text("\(max(1, Int((fraction * 100).rounded())))% of the recording")
     }
 
     @ViewBuilder private func scrubber(_ recording: EcgStrip.Recording) -> some View {
@@ -338,12 +397,17 @@ struct EcgReviewView: View {
         windowStart = 0
         loadingWaveform = true
         beats = nil
+        rhythm = nil
         let loaded = await model.repo.ecgRecords(for: recording)
         records = loaded
         // Off the main actor: a long recording is hundreds of thousands of samples.
-        let found = await Task.detached(priority: .userInitiated) { EcgBeats.analyse(loaded) }.value
+        let (found, facts) = await Task.detached(priority: .userInitiated) { () -> (EcgBeats.Result, EcgRhythmFacts?) in
+            let found = EcgBeats.analyse(loaded)
+            return (found, EcgRhythmFacts.from(found, records: loaded))
+        }.value
         guard selected?.id == recording.id else { return }
         beats = found
+        rhythm = facts
         loadingWaveform = false
     }
 
@@ -362,5 +426,44 @@ struct EcgReviewView: View {
         f.dateStyle = .none
         f.timeStyle = .medium
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts)))
+    }
+}
+
+/// R-R intervals as dots in beat order. A steady rhythm draws a flat band; the chart shows the spread
+/// and leaves what it means to the reader.
+private struct RRDotChart: View {
+    let intervals: [Double]
+
+    var body: some View {
+        Canvas { ctx, size in
+            guard intervals.count > 1, let lo = intervals.min(), let hi = intervals.max() else { return }
+            let pad = max(20, (hi - lo) * 0.15)
+            let bottom = lo - pad, span = hi - lo + 2 * pad
+            let step = size.width / Double(intervals.count - 1)
+            var grid = Path()
+            for fraction in [0.25, 0.5, 0.75] {
+                grid.move(to: CGPoint(x: 0, y: size.height * fraction))
+                grid.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+            }
+            ctx.stroke(grid, with: .color(StrandPalette.hairline), lineWidth: 0.5)
+            let r = NoopMetrics.space1 / 1.5
+            for (i, ms) in intervals.enumerated() {
+                let x = Double(i) * step
+                let y = size.height * (1 - (ms - bottom) / span)
+                ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
+                         with: .color(StrandPalette.accent))
+            }
+            ctx.draw(Text("\(Int(hi.rounded())) ms").font(StrandFont.caption)
+                        .foregroundColor(StrandPalette.textTertiary),
+                     at: CGPoint(x: 0, y: 0), anchor: .topLeading)
+            ctx.draw(Text("\(Int(lo.rounded())) ms").font(StrandFont.caption)
+                        .foregroundColor(StrandPalette.textTertiary),
+                     at: CGPoint(x: 0, y: size.height), anchor: .bottomLeading)
+        }
+        .background(StrandPalette.surfaceInset)
+        .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.space1, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("R-R intervals"))
+        .accessibilityValue(Text("\(intervals.count) intervals from \(Int((intervals.min() ?? 0).rounded())) to \(Int((intervals.max() ?? 0).rounded())) ms"))
     }
 }

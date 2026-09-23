@@ -10568,6 +10568,134 @@
         }
       }
     },
+    "%lld intervals from %lld to %lld ms": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Intervalle von %lld bis %lld ms"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervals from %lld to %lld ms"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalos de %lld a %lld ms"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalles de %lld à %lld ms"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalli da %lld a %lld ms"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld odstępów od %lld do %lld ms"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalos de %lld a %lld ms"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld интервалов от %lld до %lld мс"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个间期，%lld 至 %lld 毫秒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個間期，%lld 至 %lld 毫秒"
+          }
+        }
+      }
+    },
+    "%lld intervals set aside as likely missed or extra beats.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Intervalle als wahrscheinlich verpasste oder zusätzliche Schläge ausgeklammert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervals set aside as likely missed or extra beats."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalos apartados como probables latidos omitidos o de más."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalles mis de côté comme battements probablement manqués ou en trop."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalli esclusi come probabili battiti mancati o in più."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld odstępów pominięto jako prawdopodobnie pominięte lub dodatkowe uderzenia."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervalos postos de parte como prováveis batimentos falhados ou a mais."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld интервалов исключено как вероятно пропущенные или лишние удары."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已剔除 %lld 个疑似漏检或多检心跳的间期。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已剔除 %lld 個疑似漏檢或多檢心跳的間期。"
+          }
+        }
+      }
+    },
     "%lld logged caffeines are past your bedtime cutoff. They may still be on board and keep you up. Just a timing heads-up.": {
       "localizations": {
         "de": {
@@ -16064,6 +16192,70 @@
         }
       }
     },
+    "%lld%% of the recording": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% der Aufzeichnung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% of the recording"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% de la grabación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% de l'enregistrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% della registrazione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% nagrania"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% da gravação"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% записи"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录的 %lld%%"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄的 %lld%%"
+          }
+        }
+      }
+    },
     "%lld%% of today's goal": {
       "localizations": {
         "de": {
@@ -16118,6 +16310,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld%% dzisiejszego celu"
+          }
+        }
+      }
+    },
+    "%lld%% · RMSSD %lld ms": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% · RMSSD %lld ms"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD %lld ms"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% · RMSSD %lld ms"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% · RMSSD %lld ms"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD di %lld ms"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD: %lld ms"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD de %lld ms"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% · RMSSD %lld мс"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD %lld 毫秒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% · RMSSD %lld 毫秒"
           }
         }
       }
@@ -28878,6 +29134,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "O Twoim głównym śnie"
+          }
+        }
+      }
+    },
+    "Above %lld bpm": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über %lld bpm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Above %lld bpm"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por encima de %lld lpm"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au-dessus de %lld bpm"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sopra %lld bpm"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Powyżej %lld bpm"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acima de %lld bpm"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выше %lld уд/мин"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高于 %lld 次/分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高於 %lld 次/分"
           }
         }
       }
@@ -41696,6 +42016,70 @@
         }
       }
     },
+    "Beat-to-beat variation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwankung von Schlag zu Schlag"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beat-to-beat variation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variación entre latidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variation d'un battement à l'autre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variazione tra battiti"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zmienność między uderzeniami"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variação entre batimentos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вариабельность между ударами"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逐搏变化"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逐搏變化"
+          }
+        }
+      }
+    },
     "Beats": {
       "localizations": {
         "de": {
@@ -42354,6 +42738,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "鼓腹呼"
+          }
+        }
+      }
+    },
+    "Below %lld bpm": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unter %lld bpm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Below %lld bpm"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por debajo de %lld lpm"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En dessous de %lld bpm"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sotto %lld bpm"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poniżej %lld bpm"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abaixo de %lld bpm"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ниже %lld уд/мин"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于 %lld 次/分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低於 %lld 次/分"
           }
         }
       }
@@ -71690,6 +72138,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rozkurczowe ciśnienie krwi w mmHg"
+          }
+        }
+      }
+    },
+    "Did not finish": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht abgeschlossen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Did not finish"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No terminó"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non terminé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non completato"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie zakończono"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não terminou"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не завершено"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未完成"
           }
         }
       }
@@ -143165,6 +143677,70 @@
         }
       }
     },
+    "One dot per beat: the gap since the previous beat, in order.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Punkt pro Schlag: der Abstand zum vorherigen Schlag, in Reihenfolge."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One dot per beat: the gap since the previous beat, in order."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un punto por latido: el intervalo desde el latido anterior, en orden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un point par battement : l'écart depuis le battement précédent, dans l'ordre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un punto per battito: l'intervallo dal battito precedente, in ordine."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedna kropka na uderzenie: odstęp od poprzedniego uderzenia, po kolei."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um ponto por batimento: o intervalo desde o batimento anterior, por ordem."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Одна точка на удар: интервал от предыдущего удара, по порядку."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每次心跳一个点：与上一次心跳的间隔，按顺序排列。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每次心跳一個點：與上一次心跳的間隔，依序排列。"
+          }
+        }
+      }
+    },
     "One number for the whole session, so a leg day can be compared with a run.": {
       "localizations": {
         "de": {
@@ -169497,6 +170073,70 @@
         }
       }
     },
+    "Rhythm details (experimental)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rhythmusdetails (experimentell)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rhythm details (experimental)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles del ritmo (experimental)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détails du rythme (expérimental)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dettagli del ritmo (sperimentale)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczegóły rytmu (eksperymentalne)"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalhes do ritmo (experimental)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Детали ритма (экспериментально)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心律详情（实验性）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心律詳情（實驗性）"
+          }
+        }
+      }
+    },
     "Rhythm needs beat-to-beat timing measured one beat at a time. Your device stores its heartbeats in batches, so the exact spacing between them isn't recoverable. Nothing is wrong with your night.": {
       "localizations": {
         "de": {
@@ -192816,6 +193456,70 @@
         }
       }
     },
+    "Strap's own result": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigenes Ergebnis des Bands"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strap's own result"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultado propio de la pulsera"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résultat du bracelet"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risultato del cinturino"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Własny wynik opaski"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultado da própria pulseira"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Собственный результат браслета"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手环自身结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手環自身結果"
+          }
+        }
+      }
+    },
     "Streak": {
       "localizations": {
         "en": {
@@ -202735,6 +203439,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Są to niezależne szacunki obliczone na Twoim urządzeniu na podstawie danych Apple Health, a nie porada lekarska. Etykiety zaufania szczerze mówią, ile NOOP wie do tej pory."
+          }
+        }
+      }
+    },
+    "These are measurements, not a diagnosis. NOOP cannot detect or rule out AFib or any other heart condition. If you feel unwell or notice palpitations, see a doctor.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies sind Messwerte, keine Diagnose. NOOP kann Vorhofflimmern oder andere Herzerkrankungen weder erkennen noch ausschließen. Wenn du dich unwohl fühlst oder Herzstolpern bemerkst, geh zu einer Ärztin oder einem Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are measurements, not a diagnosis. NOOP cannot detect or rule out AFib or any other heart condition. If you feel unwell or notice palpitations, see a doctor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son mediciones, no un diagnóstico. NOOP no puede detectar ni descartar la fibrilación auricular ni ninguna otra afección cardiaca. Si te encuentras mal o notas palpitaciones, acude a un médico."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont des mesures, pas un diagnostic. NOOP ne peut ni détecter ni exclure une fibrillation auriculaire ou toute autre maladie cardiaque. Si tu ne te sens pas bien ou ressens des palpitations, consulte un médecin."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono misurazioni, non una diagnosi. NOOP non può rilevare né escludere la fibrillazione atriale o altre condizioni cardiache. Se non ti senti bene o avverti palpitazioni, consulta un medico."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To pomiary, a nie diagnoza. NOOP nie wykrywa ani nie wyklucza migotania przedsionków ani żadnej innej choroby serca. Jeśli źle się czujesz lub odczuwasz kołatanie serca, idź do lekarza."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São medições, não um diagnóstico. O NOOP não consegue detetar nem excluir fibrilhação auricular nem qualquer outra doença cardíaca. Se não te sentires bem ou notares palpitações, consulta um médico."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это измерения, а не диагноз. NOOP не может выявить или исключить фибрилляцию предсердий или другое заболевание сердца. Если вам плохо или вы замечаете сердцебиение, обратитесь к врачу."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些是测量结果，不是诊断。NOOP 无法检测或排除房颤或其他任何心脏疾病。如感到不适或出现心悸，请就医。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些是測量結果，不是診斷。NOOP 無法偵測或排除心房顫動或其他任何心臟疾病。如感到不適或出現心悸，請就醫。"
           }
         }
       }
@@ -223328,6 +224096,70 @@
         }
       }
     },
+    "Whole recording": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesamte Aufzeichnung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whole recording"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda la grabación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout l'enregistrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutta la registrazione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Całe nagranie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda a gravação"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вся запись"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整段记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整段記錄"
+          }
+        }
+      }
+    },
     "Whoop": {
       "localizations": {
         "de": {
@@ -234746,6 +235578,70 @@
         }
       }
     },
+    "code %lld (meaning not known)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code %lld (Bedeutung unbekannt)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "code %lld (meaning not known)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "código %lld (significado desconocido)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "code %lld (signification inconnue)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "codice %lld (significato sconosciuto)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kod %lld (znaczenie nieznane)"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "código %lld (significado desconhecido)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "код %lld (значение неизвестно)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代码 %lld（含义未知）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代碼 %lld（含義未知）"
+          }
+        }
+      }
+    },
     "cooler than baseline, limiting recovery": {
       "localizations": {
         "de": {
@@ -241601,6 +242497,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "opadanie (ostre: chroniczne %@) - miejsce do zbudowania"
+          }
+        }
+      }
+    },
+    "range %lld–%lld bpm": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich %lld–%lld bpm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "range %lld–%lld bpm"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rango %lld–%lld lpm"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "plage %lld–%lld bpm"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "intervallo %lld–%lld bpm"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zakres %lld–%lld bpm"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "intervalo %lld–%lld bpm"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "диапазон %lld–%lld уд/мин"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "范围 %lld–%lld 次/分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "範圍 %lld–%lld 次/分"
           }
         }
       }
