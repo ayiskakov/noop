@@ -153,6 +153,18 @@ public enum ResilienceEngine {
         /// Pairs of observed days behind each `acf` entry.
         public let acfPairs: [Int]
 
+        public init(tau: Double, tauLow: Double, tauHigh: Double, tauFit: Double, amplitude: Double,
+                    sigma: Double, acf: [Double?], acfPairs: [Int]) {
+            self.tau = tau
+            self.tauLow = tauLow
+            self.tauHigh = tauHigh
+            self.tauFit = tauFit
+            self.amplitude = amplitude
+            self.sigma = sigma
+            self.acf = acf
+            self.acfPairs = acfPairs
+        }
+
         /// False when the fitted amplitude is under `minAmplitude`: no measurable memory, so `tau` sits at
         /// the floor and says nothing about recovery.
         public var hasMemory: Bool { amplitude >= ResilienceEngine.minAmplitude }
@@ -173,6 +185,14 @@ public enum ResilienceEngine {
         public let daysUntilReady: Int
         /// Nil while the window is still collecting.
         public let estimate: Estimate?
+
+        public init(signal: Signal, endDay: Int, observedDays: Int, daysUntilReady: Int, estimate: Estimate?) {
+            self.signal = signal
+            self.endDay = endDay
+            self.observedDays = observedDays
+            self.daysUntilReady = daysUntilReady
+            self.estimate = estimate
+        }
     }
 
     public struct Knock: Equatable, Sendable {
