@@ -104,12 +104,7 @@ public enum EcgStrip {
     /// device's records at a time, since two straps' index spaces are unrelated.
     public static func group(deviceId: String, records: [RecordRef]) -> [Recording] {
         guard !records.isEmpty else { return [] }
-        let sorted = records.sorted { a, b in
-            switch (a.recordIndex, b.recordIndex) {
-            case let (x?, y?) where x != y: return x < y
-            default: return a.ts < b.ts
-            }
-        }
+        let sorted = records.sorted { recordOrder(($0.recordIndex, $0.ts), ($1.recordIndex, $1.ts)) }
         var out: [Recording] = []
         var run: [RecordRef] = [sorted[0]]
         for r in sorted.dropFirst() {
@@ -129,11 +124,26 @@ public enum EcgStrip {
     ///
     /// Exposed so the rule can be tested directly rather than only through a grouping result.
     public static func continuesRun(previous: RecordRef, next: RecordRef) -> Bool {
+        continuesRun(previous: (previous.recordIndex, previous.ts), next: (next.recordIndex, next.ts))
+    }
+
+    /// The same rule over bare keys, so every caller that splits records into runs (`EcgBeats` too)
+    /// agrees with the recordings this file groups.
+    static func continuesRun(previous: (recordIndex: Int?, ts: Int), next: (recordIndex: Int?, ts: Int))
+        -> Bool {
         if let a = previous.recordIndex, let b = next.recordIndex { return b == a + 1 }
         // No index on one side or the other: fall back to adjacent seconds. One second of slack, because
         // the records themselves are one per second and an exactly-equal ts would be a duplicate row the
         // primary key does not allow.
         return next.ts == previous.ts + 1
+    }
+
+    /// The order `group` walks records in: by record index where both carry one, else by timestamp.
+    static func recordOrder(_ a: (recordIndex: Int?, ts: Int), _ b: (recordIndex: Int?, ts: Int)) -> Bool {
+        switch (a.recordIndex, b.recordIndex) {
+        case let (x?, y?) where x != y: return x < y
+        default: return a.ts < b.ts
+        }
     }
 
     private static func summarise(deviceId: String, run: [RecordRef]) -> Recording {

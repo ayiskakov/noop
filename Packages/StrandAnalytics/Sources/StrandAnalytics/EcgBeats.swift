@@ -111,7 +111,8 @@ public enum EcgBeats {
 
     /// Detect beats across a recording's stored records, in any order.
     public static func analyse(_ records: [EcgCandidateSample]) -> Result {
-        let ordered = records.sorted { ($0.recordIndex ?? $0.ts, $0.ts) < ($1.recordIndex ?? $1.ts, $1.ts) }
+        // The order and continuity rule `EcgStrip.group` uses, so a stretch never spans two recordings.
+        let ordered = records.sorted { EcgStrip.recordOrder(($0.recordIndex, $0.ts), ($1.recordIndex, $1.ts)) }
         let perRecord = Int(sampleRate)
         var segments: [[EcgCandidateSample]] = []
         var current: [EcgCandidateSample] = []
@@ -123,7 +124,8 @@ public enum EcgBeats {
                 if !current.isEmpty { segments.append(current); current = [] }
                 continue
             }
-            if let last = current.last, !follows(last, record) {
+            if let last = current.last,
+               !EcgStrip.continuesRun(previous: (last.recordIndex, last.ts), next: (record.recordIndex, record.ts)) {
                 segments.append(current)
                 current = []
             }
@@ -146,13 +148,6 @@ public enum EcgBeats {
             }
         }
         return Result(beats: beats, intervals: intervals, analysedSeconds: segments.reduce(0) { $0 + $1.count })
-    }
-
-    /// True when `next` is the record directly after `previous`: the next record index when both carry
-    /// one, else the next second.
-    private static func follows(_ previous: EcgCandidateSample, _ next: EcgCandidateSample) -> Bool {
-        if let a = previous.recordIndex, let b = next.recordIndex { return b == a + 1 }
-        return next.ts == previous.ts + 1
     }
 
     // MARK: - Detection
