@@ -398,13 +398,15 @@ struct EcgReviewView: View {
         beats = nil
         rhythm = nil
         let loaded = await model.repo.ecgRecords(for: recording)
-        records = loaded
         // Off the main actor: a long recording is hundreds of thousands of samples.
         let (found, facts) = await Task.detached(priority: .userInitiated) { () -> (EcgBeats.Result, EcgRhythmFacts?) in
             let found = EcgBeats.analyse(loaded)
             return (found, EcgRhythmFacts.from(found, records: loaded))
         }.value
+        // Nothing lands until this load is known to still be the selected one: a superseded load that
+        // finishes late would otherwise put one recording's rows under another's figures.
         guard selected?.id == recording.id else { return }
+        records = loaded
         beats = found
         rhythm = facts
         loadingWaveform = false
