@@ -1178,15 +1178,7 @@ public enum SleepStager {
         let n = states.count
         // Epoch i spans [start + i·epochS, …); boundaries sit on 30 s edges, so expanding the segment tiling
         // to a per-epoch stage array and re-collapsing it is an exact round-trip (no-op when nothing changes).
-        func epochStart(_ i: Int) -> Int { start + Int(Double(i) * epochS) }
-        var labels = [String](repeating: "wake", count: n)
-        for i in 0..<n {
-            let t = epochStart(i)
-            if let seg = stages.first(where: { $0.start <= t && t < $0.end })
-                ?? stages.first(where: { $0.start <= t && t <= $0.end }) {
-                labels[i] = seg.stage
-            }
-        }
+        var labels = epochLabels(stages, start: start, epochs: n)
         // Interior = [firstSleep, lastSleep]; leading/trailing wake blocks are excluded from the veto.
         guard let onset = labels.firstIndex(where: { $0 != "wake" }),
               let finalWake = labels.lastIndex(where: { $0 != "wake" }), onset <= finalWake else {
@@ -1198,7 +1190,28 @@ public enum SleepStager {
             changed = true
         }
         if !changed { return stages }   // the band disputed nothing → byte-identical hypnogram
-        // Re-collapse consecutive same-stage epochs back into segments tiling [start, end].
+        return collapseEpochLabels(labels, start: start, end: end)
+    }
+
+    /// Expand a hypnogram tiling `[start, …)` onto `epochs` 30 s epochs (epoch i starts at
+    /// `start + i·epochS`). Boundaries sit on 30 s edges, so expanding and re-collapsing with
+    /// `collapseEpochLabels` is an exact round-trip. An epoch no segment covers reads "wake".
+    static func epochLabels(_ stages: [StageSegment], start: Int, epochs n: Int) -> [String] {
+        var labels = [String](repeating: "wake", count: n)
+        for i in 0..<n {
+            let t = start + Int(Double(i) * epochS)
+            if let seg = stages.first(where: { $0.start <= t && t < $0.end })
+                ?? stages.first(where: { $0.start <= t && t <= $0.end }) {
+                labels[i] = seg.stage
+            }
+        }
+        return labels
+    }
+
+    /// Re-collapse consecutive same-stage epochs back into segments tiling `[start, end]`.
+    static func collapseEpochLabels(_ labels: [String], start: Int, end: Int) -> [StageSegment] {
+        let n = labels.count
+        func epochStart(_ i: Int) -> Int { start + Int(Double(i) * epochS) }
         var out: [StageSegment] = []
         for i in 0..<n {
             let segStart = epochStart(i)
@@ -1211,6 +1224,75 @@ public enum SleepStager {
         }
         if !out.isEmpty { out[out.count - 1].end = end }
         return out
+    }
+
+    // MARK: - Band sleep_state latency trim (stop counting lying-still-awake as sleep)
+
+    // Session bounds come from gravity stillness alone, so the time a wearer lies still in bed BEFORE
+    // falling asleep (reading, phone, TV) and after waking is inside the session, and the stager labels
+    // much of it light/deep/REM: a still, calm-HR epoch looks like sleep to a cardiorespiratory stager.
+    // Measured on a 5/MG owner's five banked nights (2026-09-18..23), NOOP's session opened 21–133 min
+    // before the strap's own band first read "asleep" (one night at 20:51 against a 23:04 band onset, with
+    // the stretch in between scored partly "deep" while the band said WAKE and the pedometer counted
+    // steps), and total sleep ran 14–65 min above the band's own asleep span.
+    //
+    // This is the OPPOSITE direction to the dormant wake-veto above: it only ever turns sleep INTO wake,
+    // and only in the leading and trailing blocks outside the band's first and last persistent "asleep"
+    // run. It therefore moves wake% toward the PSG truth set (which says the shipped recipe UNDER-calls
+    // wake), rather than away from it, so it is default-on. The interior hypnogram is never touched.
+
+    /// Default-on gate for the band latency trim. An absent band stream (WHOOP 4.0) is a no-op regardless.
+    public static let bandStateLatencyTrimEnabled: Bool = true
+    /// Consecutive band-"asleep" epochs that mark a PERSISTENT onset / final-sleep run (10 × 30 s = 5 min),
+    /// so a brief band flicker to SLEEP while still awake in bed does not anchor the trim.
+    static let bandTrimPersistEpochs: Int = 10
+    /// Grace kept as sleep on each side of the band's persistent run (10 × 30 s = 5 min): the band's own
+    /// classifier needs a few minutes of stillness before it commits, so its onset lags true onset slightly.
+    static let bandTrimGraceEpochs: Int = 10
+    /// Minimum band samples per session second (the 5/MG banks 1 Hz). Below this the band is too sparse to
+    /// place an onset, and the hypnogram is left unchanged.
+    static let bandTrimMinCoverage: Double = 0.5
+
+    /// Band sleep_state latency trim. Relabels as wake every epoch of `stages` that lies more than
+    /// `bandTrimGraceEpochs` before the first, or after the last, PERSISTENT run (`bandTrimPersistEpochs`)
+    /// of the strap's own "asleep" band state. Returns `stages` unchanged (byte-identical) when the flag is
+    /// off, the band is absent or sparse, the band never holds a persistent "asleep" run, or nothing moves.
+    /// Pure + deterministic; applies to whichever stager (V1 or V2) produced `stages`.
+    static func applyBandStateLatencyTrim(_ stages: [StageSegment], start: Int, end: Int,
+                                          bandSleepState: [(ts: Int, state: Int)],
+                                          enabled: Bool = bandStateLatencyTrimEnabled) -> [StageSegment] {
+        guard enabled, !bandSleepState.isEmpty, !stages.isEmpty, end > start else { return stages }
+        let inWindow = bandSleepState.reduce(0) { $0 + ($1.ts >= start && $1.ts < end ? 1 : 0) }
+        guard Double(inWindow) >= bandTrimMinCoverage * Double(end - start) else { return stages }
+        let states = sessionEpochSleepState(start: start, end: end, sleepState: bandSleepState)
+        let n = states.count
+        guard n > 0, let onset = firstPersistentRun(states, from: 0, step: 1),
+              let final = firstPersistentRun(states, from: n - 1, step: -1), onset <= final else {
+            return stages
+        }
+        let keepFrom = max(0, onset - bandTrimGraceEpochs)
+        let keepThrough = min(n - 1, final + bandTrimGraceEpochs)
+        var labels = epochLabels(stages, start: start, epochs: n)
+        var changed = false
+        for i in 0..<n where (i < keepFrom || i > keepThrough) && !SleepStageVocabulary.isWake(labels[i]) {
+            labels[i] = "wake"
+            changed = true
+        }
+        return changed ? collapseEpochLabels(labels, start: start, end: end) : stages
+    }
+
+    /// Index of the epoch where the first run of `bandTrimPersistEpochs` consecutive "asleep" states begins,
+    /// scanning from `from` in direction `step` (+1 forward → the run's first epoch; −1 backward → the run's
+    /// last epoch). nil when no such run exists.
+    static func firstPersistentRun(_ states: [Int], from: Int, step: Int) -> Int? {
+        var run = 0
+        var i = from
+        while i >= 0 && i < states.count {
+            run = states[i] == bandStateAsleep ? run + 1 : 0
+            if run >= bandTrimPersistEpochs { return i - step * (bandTrimPersistEpochs - 1) }
+            i += step
+        }
+        return nil
     }
 
     /// Off-wrist HR-gap spans (#500). The contiguous HR-coverage gaps of at least `offWristHRGapMin`
@@ -1584,7 +1666,11 @@ public enum SleepStager {
             // (`bandSleepState`) scored "asleep". No-op when the band is absent (WHOOP 4.0) or the flag is
             // off; stager-agnostic (corrects whichever hypnogram V1/V2 produced). Efficiency below is then
             // computed on the corrected stages, so a night NOOP over-called wake on reports true efficiency.
-            let stages = applyBandStateWakeVeto(rawStages, start: p.start, end: p.end,
+            // Band latency trim: relabel as wake the lying-still-awake lead-in and tail outside the band's
+            // own persistent "asleep" span. No-op without a band stream (WHOOP 4.0).
+            let trimmedStages = applyBandStateLatencyTrim(rawStages, start: p.start, end: p.end,
+                                                          bandSleepState: bandSleepState)
+            let stages = applyBandStateWakeVeto(trimmedStages, start: p.start, end: p.end,
                                                 bandSleepState: bandSleepState)
             let eff = efficiency(start: p.start, end: p.end, stages: stages)
             let avgHrv = sessionAvgHRV(start: p.start, end: p.end, rr: rrS)
@@ -1602,7 +1688,7 @@ public enum SleepStager {
                 // `cutoffTs: 0` on purpose: the shadow measures the FULL veto potential across EVERY banded
                 // night (history included) to build the validation distribution, independent of whatever
                 // new-nights cutoff the eventual flip uses.
-                let shadowStages = applyBandStateWakeVeto(rawStages, start: p.start, end: p.end,
+                let shadowStages = applyBandStateWakeVeto(trimmedStages, start: p.start, end: p.end,
                                                           bandSleepState: bandSleepState,
                                                           enabled: true, cutoffTs: 0)
                 let shadowEff = efficiency(start: p.start, end: p.end, stages: shadowStages)
