@@ -204,3 +204,59 @@ final class RespRateRsaTests: XCTestCase {
         XCTAssertTrue(SleepStager.respRateFromRR([], start: start, end: start + 10).isNaN)
     }
 }
+
+/// The spectral RSA estimator must TRACK a varying breathing rate, and must refuse R-R that carries no
+/// breathing rhythm. The earlier peak-picker returned its own 60 / (k × 0.25 s) floor (13.33 / 14.12)
+/// whether or not the input held any breathing; these pin that neither regime survives.
+final class RespRateSpectralTests: XCTestCase {
+
+    /// ~20 min of beats at `hrBpm` with RSA at `breathsPerMin` plus deterministic beat-level jitter.
+    private func rsaNight(breathsPerMin: Double, hrBpm: Double = 58, ampMs: Double = 35,
+                          seconds: Double = 1200, seed: UInt64 = 7) -> [RRInterval] {
+        let start = 1_700_000_000
+        var rows: [RRInterval] = []
+        var t = 0.0
+        var s = seed
+        while t < seconds {
+            s = s &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            let jitter = Double(Int(truncatingIfNeeded: s >> 33) % 21) - 10.0
+            let rr = 60_000.0 / hrBpm + ampMs * sin(2.0 * Double.pi * breathsPerMin / 60.0 * t) + jitter
+            t += rr / 1000.0
+            rows.append(RRInterval(ts: start + Int(t), rrMs: Int(rr.rounded())))
+        }
+        return rows
+    }
+
+    func testRecoversSeveralInjectedRates() {
+        for rate in [10.5, 12.0, 14.0, 16.5, 20.0] {
+            let rows = rsaNight(breathsPerMin: rate)
+            let est = SleepStager.respRateFromRR(rows, start: rows[0].ts - 1, end: rows.last!.ts)
+            XCTAssertEqual(est, rate, accuracy: 0.6, "injected \(rate) bpm, estimated \(est)")
+        }
+    }
+
+    func testShuffledBeatsCarryNoBreathingAndReportNaN() {
+        let rows = rsaNight(breathsPerMin: 14.0)
+        // Deterministic Fisher–Yates over the VALUES only; the timestamps (and so every gate) are unchanged.
+        var values = rows.map(\.rrMs)
+        var s: UInt64 = 42
+        for i in stride(from: values.count - 1, to: 0, by: -1) {
+            s = s &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            values.swapAt(i, Int((s >> 33) % UInt64(i + 1)))
+        }
+        let shuffled = zip(rows, values).map { RRInterval(ts: $0.ts, rrMs: $1) }
+        XCTAssertTrue(SleepStager.respRateFromRR(shuffled, start: rows[0].ts - 1, end: rows.last!.ts).isNaN)
+    }
+
+    func testFlatJitterOnlyReportsNaN() {
+        let rows = rsaNight(breathsPerMin: 14.0, ampMs: 0)
+        XCTAssertTrue(SleepStager.respRateFromRR(rows, start: rows[0].ts - 1, end: rows.last!.ts).isNaN,
+                      "beat jitter without RSA must not produce a plausible-looking rate")
+    }
+
+    func testLowFrequencyOscillationIsNotReadAsASlowBreather() {
+        // 0.12 Hz (7.2/min) Mayer-like oscillation only: below the breathing band, never a rate.
+        let rows = rsaNight(breathsPerMin: 7.2, ampMs: 40)
+        XCTAssertTrue(SleepStager.respRateFromRR(rows, start: rows[0].ts - 1, end: rows.last!.ts).isNaN)
+    }
+}
