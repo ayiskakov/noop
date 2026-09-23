@@ -38,7 +38,8 @@ public enum EcgBeats {
 
     /// Samples per second assumed for a full R16 record.
     public static let sampleRate = 500.0
-    /// The strap quality code a record needs to be analysed.
+    /// The strap quality code a record needs to be analysed, exactly: the codes are states, not a scale
+    /// (`docs/PROTOCOL_ECG.md` has seen 0–3), so an unknown higher one is not read as better.
     public static let requiredQuality = 3
     /// Shortest contiguous gated stretch worth analysing.
     public static let minSegmentSeconds = 3
@@ -117,7 +118,7 @@ public enum EcgBeats {
         var segments: [[EcgCandidateSample]] = []
         var current: [EcgCandidateSample] = []
         for record in ordered {
-            let usable = record.quality >= requiredQuality
+            let usable = record.quality == requiredQuality
                 && record.samples.count == perRecord
                 && record.declaredCount == record.samples.count
             guard usable else {

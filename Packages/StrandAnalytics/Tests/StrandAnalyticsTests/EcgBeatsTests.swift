@@ -90,6 +90,8 @@ final class EcgBeatsTests: XCTestCase {
         XCTAssertEqual(result.analysedSeconds, 20)
         XCTAssertEqual(try XCTUnwrap(result.heartRate), injectedRate(peaks), accuracy: 0.5)
         XCTAssertTrue(result.beats.allSatisfy { $0.time < 1_790_000_020 })
+        // The codes are states, not a scale: an unknown higher one is not taken as better.
+        XCTAssertEqual(EcgBeats.analyse(recording(bpm: 90, seconds: 20, quality: 4).records).analysedSeconds, 0)
     }
 
     func testNoIntervalSpansAGapOrALowerQualityRecord() {
