@@ -520,6 +520,27 @@ final class IntelligenceEngine: ObservableObject {
         return fmt.string(from: sat)
     }
 
+    /// Scored nights (a resting HR) a week needs before a weekly Vitality / Body Age is written. Matches
+    /// Fitness Age's `FitnessAgeEngine.minCoverageDays`. `VitalityEngine.minFactors` counts FACTORS, and one
+    /// night alone supplies four of them (resting HR, sleep, regularity, HRV), so without a night count a
+    /// single partial first day became a whole week's Body Age.
+    nonisolated static let healthspanMinWeekNights = FitnessAgeEngine.minCoverageDays
+
+    /// Whether `days` (the week's rows) carry enough scored nights for a weekly Vitality / Body Age.
+    nonisolated static func healthspanWeekIsScorable<C: Collection>(_ days: C) -> Bool where C.Element == DailyMetric {
+        days.filter { $0.restingHr != nil }.count >= healthspanMinWeekNights
+    }
+
+    /// Days in the persisted window whose `sleep_performance` point was not produced by this pass, i.e.
+    /// the day no longer has a scored night. A point written by an earlier pass for a session that was
+    /// later dropped (a short evening block re-detected away) would otherwise outlive the sleep it
+    /// described. Rest is derived from the day's own row, so "not produced" means "no sleep", never "raw
+    /// streams aged out".
+    nonisolated static func staleRestPointDays(persisted: [DailyMetric], produced: [MetricPoint]) -> [String] {
+        let producedDays = Set(produced.filter { $0.key == "sleep_performance" }.map { $0.day })
+        return persisted.map { $0.day }.filter { !producedDays.contains($0) }.sorted()
+    }
+
     // MARK: - Healthspan (Body Age + Pace of Aging) inputs
     //
     // One resolver builds the Vitality inputs for EVERY window — this week's headline and each rolling
@@ -2608,6 +2629,10 @@ final class IntelligenceEngine: ObservableObject {
             for stale in existingWindow where !freshKeys.contains(stale.day) {
                 _ = try? await store.deleteDailyMetrics(deviceId: computedId, from: stale.day, to: stale.day)
             }
+            for day in Self.staleRestPointDays(persisted: persistedDailies, produced: restPoints) {
+                _ = try? await store.deleteMetricSeriesPoint(deviceId: computedId, day: day,
+                                                            key: "sleep_performance")
+            }
         }
         markPostLoopPhase("persist")
         // ── Fitness Age (Phase 2) , weekly, keyed to the week's Saturday ────────────────────────────
@@ -2657,7 +2682,7 @@ final class IntelligenceEngine: ObservableObject {
             days: Array(fa7), zone: vZone, strength: strengthMinutesByDay,
             age: Double(profile.age), sex: profile.sex,
             heightCm: profile.heightCm > 0 ? profile.heightCm : nil, leanMassKg: vLeanMass)
-        if let vRes = VitalityEngine.compute(vInputs) {
+        if Self.healthspanWeekIsScorable(fa7), let vRes = VitalityEngine.compute(vInputs) {
             let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
             _ = try? await store.upsertMetricSeries([
                 MetricPoint(day: satKey, key: "vitality", value: vRes.vitality),
