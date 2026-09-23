@@ -260,7 +260,12 @@ private struct ResilienceDetail: View {
                 #endif
             }
         }
-        .task { trend = await ResilienceLoader.trend(readout) }
+        // Keyed on the readout: a refresh while the sheet is open hands down a new one, and the trend
+        // must end at that readout's headline, not the one the sheet opened with.
+        .task(id: readout) {
+            trend = nil
+            trend = await ResilienceLoader.trend(readout)
+        }
         .sheet(isPresented: $showMethod) { ResilienceMethodSheet { showMethod = false } }
         #if os(macOS)
         .frame(minWidth: NoopMetrics.detailSheetMinWidth, minHeight: NoopMetrics.detailSheetMinHeight)

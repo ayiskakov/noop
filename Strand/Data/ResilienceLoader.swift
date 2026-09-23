@@ -19,7 +19,7 @@ enum ResiliencePrefs {
 }
 
 /// One signal's current readout.
-struct ResilienceReadout: Sendable {
+struct ResilienceReadout: Equatable, Sendable {
     let signal: ResilienceEngine.Signal
     /// The window's last day (a `PaceOfAgingEngine.dayIndex`).
     let endDay: Int
