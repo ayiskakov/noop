@@ -1866,6 +1866,7 @@ struct SettingsView: View {
     @ViewBuilder private var experimentalCard: some View {
         liquidTodayCard
         liveSessionsCard
+        resilienceCard
         // WHOOP 5/MG protocol research now lives in Test Centre. Everyday Settings no longer carries
         // a second copy; the persisted keys and reversible disable actions remain unchanged there.
         if showFiveMGControls { spo2CandidateCard }
@@ -1891,6 +1892,31 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(StrandPalette.accent)
                 Text("Replaces the Today tab with the prototype redesign. Turn it off any time to return to the classic dashboard. Reads the same live data from your strap.")
+                    .font(StrandFont.caption)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Resilience — the Pyrkov recovery time as an Experimental section of the Healthspan screen. Default
+    /// OFF: a research method applied to one person, shown only on request.
+    @AppStorage(ResiliencePrefs.enabledKey) private var resilienceEnabled = false
+    private var resilienceCard: some View {
+        SettingsSection(
+            icon: "arrow.uturn.backward",
+            title: "Experimental · Resilience",
+            blurb: "How quickly your body settles back after a knock, read from the day-to-day swings in your steps, resting heart rate and HRV."
+        ) {
+            VStack(alignment: .leading, spacing: NoopMetrics.rowSpacing) {
+                Toggle(isOn: $resilienceEnabled) {
+                    Text("Resilience (experimental)")
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textPrimary)
+                }
+                .toggleStyle(.switch)
+                .tint(StrandPalette.accent)
+                Text("Adds a Resilience section to the Healthspan screen. A research method applied to one person: always shown with its range, and it feeds no other score. Needs 90 days of data.")
                     .font(StrandFont.caption)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)

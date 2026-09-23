@@ -251674,6 +251674,3196 @@
           }
         }
       }
+    },
+    "Resilience": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resilienz"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resiliencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résilience"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resilienza"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odporność"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resiliência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устойчивость"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复力"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復力"
+          }
+        }
+      }
+    },
+    "Recovery time": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erholungszeit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo de recuperación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temps de récupération"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo di recupero"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Czas powrotu"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo de recuperação"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время восстановления"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复时间"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復時間"
+          }
+        }
+      }
+    },
+    "Reading your recovery time…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erholungszeit wird gelesen…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo tu tiempo de recuperación…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture de votre temps de récupération…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lettura del tuo tempo di recupero…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odczytywanie czasu powrotu…"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A ler o seu tempo de recuperação…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Считываем время восстановления…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取你的恢复时间…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在讀取你的恢復時間…"
+          }
+        }
+      }
+    },
+    "How recovery time is worked out": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So wird die Erholungszeit berechnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo se calcula el tiempo de recuperación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment le temps de récupération est calculé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come si calcola il tempo di recupero"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jak liczony jest czas powrotu"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como é calculado o tempo de recuperação"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как рассчитывается время восстановления"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复时间如何计算"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復時間如何計算"
+          }
+        }
+      }
+    },
+    "The ticks are population averages at ages 40 and 90, for context: not a score.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Markierungen sind Bevölkerungsdurchschnitte mit 40 und 90 Jahren, zur Einordnung – keine Bewertung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las marcas son promedios de población a los 40 y 90 años, como contexto: no es una puntuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les repères sont des moyennes de population à 40 et 90 ans, pour situer : pas une note."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I segni sono medie della popolazione a 40 e 90 anni, come contesto: non un punteggio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Znaczniki to średnie populacyjne dla wieku 40 i 90 lat, dla kontekstu – to nie jest ocena."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As marcas são médias da população aos 40 e aos 90 anos, para contexto: não é uma pontuação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметки — средние по населению в 40 и 90 лет, для ориентира, а не оценка."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刻度是 40 岁和 90 岁人群的平均值，仅供参考，不是评分。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刻度是 40 歲和 90 歲人群的平均值，僅供參考，不是評分。"
+          }
+        }
+      }
+    },
+    "No measurable carry-over": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein messbarer Nachhall"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin arrastre medible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune persistance mesurable"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun trascinamento misurabile"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak mierzalnego przenoszenia"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem arrastamento mensurável"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет измеримого последействия"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可测量的延续"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有可測量的延續"
+          }
+        }
+      }
+    },
+    "Your day-to-day swings here do not carry from one day to the next strongly enough to time a recovery. This can change as more days come in.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine täglichen Schwankungen wirken hier nicht stark genug von einem Tag in den nächsten nach, um eine Erholung zu timen. Das kann sich mit mehr Tagen ändern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus oscilaciones diarias aquí no se arrastran de un día a otro con fuerza suficiente para medir una recuperación. Esto puede cambiar con más días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos variations quotidiennes ne persistent pas assez d'un jour à l'autre pour chronométrer une récupération. Cela peut changer avec davantage de jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tue oscillazioni quotidiane qui non si trascinano da un giorno all'altro abbastanza da misurare un recupero. Può cambiare con più giorni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Twoje codzienne wahania nie przenoszą się tu z dnia na dzień na tyle, by zmierzyć powrót. To może się zmienić, gdy przybędzie dni."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As suas oscilações diárias aqui não passam de um dia para o outro com força suficiente para medir uma recuperação. Isto pode mudar com mais dias."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваши ежедневные колебания здесь недостаточно переходят с одного дня на следующий, чтобы измерить восстановление. С новыми днями это может измениться."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在这里的日常波动从一天延续到下一天的程度不足以测定恢复时间。随着天数增加，这可能会改变。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在這裡的日常波動從一天延續到下一天的程度不足以測定恢復時間。隨著天數增加，這可能會改變。"
+          }
+        }
+      }
+    },
+    "%lld of %lld days observed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Tagen erfasst"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld días observados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jours observés sur %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld di %lld giorni osservati"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld z %lld dni z odczytem"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld dias observados"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld из %lld дней с данными"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已观测 %lld / %lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已觀測 %lld / %lld 天"
+          }
+        }
+      }
+    },
+    "Recovery time needs 90 days with a reading in the last 180.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Erholungszeit braucht 90 Tage mit Messwert in den letzten 180."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tiempo de recuperación necesita 90 días con lectura en los últimos 180."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le temps de récupération nécessite 90 jours avec une mesure sur les 180 derniers."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tempo di recupero richiede 90 giorni con una lettura negli ultimi 180."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Czas powrotu wymaga 90 dni z odczytem w ostatnich 180."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O tempo de recuperação precisa de 90 dias com leitura nos últimos 180."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для времени восстановления нужно 90 дней с данными за последние 180."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复时间需要最近 180 天中有 90 天有读数。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復時間需要最近 180 天中有 90 天有讀數。"
+          }
+        }
+      }
+    },
+    "How your body settles": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie sich dein Körper einpendelt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo se estabiliza tu cuerpo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment votre corps se stabilise"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come si riassesta il tuo corpo"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jak twój organizm się uspokaja"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como o seu corpo estabiliza"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как ваше тело возвращается к норме"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身体如何回稳"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身體如何回穩"
+          }
+        }
+      }
+    },
+    "Evidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belege"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evidencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éléments"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evidenze"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dowody"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evidência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "依据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "依據"
+          }
+        }
+      }
+    },
+    "Days later": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tage später"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Días después"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jours plus tard"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giorni dopo"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dni później"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dias depois"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дней спустя"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天后"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天後"
+          }
+        }
+      }
+    },
+    "Each dot is how much of a day's deviation is still there that many days later. None of it carries over measurably yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Punkt zeigt, wie viel von der Abweichung eines Tages so viele Tage später noch da ist. Bisher wirkt nichts davon messbar nach."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada punto indica cuánto de la desviación de un día sigue presente esos días después. Por ahora nada se arrastra de forma medible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque point montre ce qui reste de l'écart d'un jour autant de jours plus tard. Rien ne persiste encore de façon mesurable."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni punto indica quanto della deviazione di un giorno è ancora presente quei giorni dopo. Per ora nulla si trascina in modo misurabile."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy punkt pokazuje, ile odchylenia z danego dnia zostaje po tylu dniach. Na razie nic nie przenosi się w mierzalny sposób."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ponto indica quanto do desvio de um dia ainda está presente esses dias depois. Por enquanto nada passa de forma mensurável."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая точка показывает, сколько отклонения дня остаётся через столько дней. Пока ничего измеримо не переносится."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点表示某一天的偏离在若干天后还剩多少。目前没有可测量的延续。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個點表示某一天的偏離在若干天後還剩多少。目前沒有可測量的延續。"
+          }
+        }
+      }
+    },
+    "Each dot is how much of a day's deviation is still there that many days later. The line is the best fit to these dots (%lld days); the headline corrects that fit for how short one person's history is.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Punkt zeigt, wie viel von der Abweichung eines Tages so viele Tage später noch da ist. Die Linie passt am besten zu diesen Punkten (%lld Tage); der Hauptwert korrigiert diese Anpassung dafür, wie kurz die Historie einer Person ist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada punto indica cuánto de la desviación de un día sigue presente esos días después. La línea es el mejor ajuste a estos puntos (%lld días); la cifra principal corrige ese ajuste por lo corto que es el historial de una persona."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque point montre ce qui reste de l'écart d'un jour autant de jours plus tard. La courbe est le meilleur ajustement de ces points (%lld jours) ; la valeur principale corrige cet ajustement pour la brièveté de l'historique d'une seule personne."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni punto indica quanto della deviazione di un giorno è ancora presente quei giorni dopo. La linea è l'adattamento migliore a questi punti (%lld giorni); il valore principale corregge l'adattamento per la brevità della storia di una sola persona."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy punkt pokazuje, ile odchylenia z danego dnia zostaje po tylu dniach. Linia to najlepsze dopasowanie do tych punktów (%lld dni); główny wynik koryguje je o to, jak krótka jest historia jednej osoby."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ponto indica quanto do desvio de um dia ainda está presente esses dias depois. A linha é o melhor ajuste a estes pontos (%lld dias); o valor principal corrige esse ajuste pela brevidade do histórico de uma só pessoa."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая точка показывает, сколько отклонения дня остаётся через столько дней. Линия — лучшая подгонка к этим точкам (%lld дн.); главное значение исправляет её с учётом того, насколько коротка история одного человека."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点表示某一天的偏离在若干天后还剩多少。线是对这些点的最佳拟合（%lld 天）；主数值会针对单人历史较短的问题对该拟合进行校正。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個點表示某一天的偏離在若干天後還剩多少。線是對這些點的最佳擬合（%lld 天）；主數值會針對單人歷史較短的問題對該擬合進行校正。"
+          }
+        }
+      }
+    },
+    "Your last knocks": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine letzten Ausschläge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus últimos golpes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos derniers chocs"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi ultimi scossoni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Twoje ostatnie wstrząsy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os seus últimos abalos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваши последние встряски"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近的冲击"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近的衝擊"
+          }
+        }
+      }
+    },
+    "No knocks in this window: nothing moved this signal more than 2 SD from its usual level for two days running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Ausschläge in diesem Zeitraum: Nichts hat dieses Signal zwei Tage in Folge um mehr als 2 SD von seinem üblichen Niveau entfernt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin golpes en este periodo: nada movió esta señal más de 2 DE de su nivel habitual durante dos días seguidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun choc sur cette période : rien n'a écarté ce signal de plus de 2 ET de son niveau habituel deux jours de suite."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno scossone in questo periodo: nulla ha spostato questo segnale di oltre 2 DS dal suo livello abituale per due giorni di fila."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak wstrząsów w tym okresie: nic nie odsunęło tego sygnału o ponad 2 SD od zwykłego poziomu przez dwa dni z rzędu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem abalos neste período: nada afastou este sinal mais de 2 DP do seu nível habitual durante dois dias seguidos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этом окне встрясок нет: ничто не отклоняло этот сигнал более чем на 2 SD от обычного уровня два дня подряд."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此窗口内没有冲击：没有任何事件让该信号连续两天偏离常态超过 2 个标准差。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此窗口內沒有衝擊：沒有任何事件讓該訊號連續兩天偏離常態超過 2 個標準差。"
+          }
+        }
+      }
+    },
+    "Days since the peak": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tage seit dem Höhepunkt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Días desde el pico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jours depuis le pic"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giorni dal picco"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dni od szczytu"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dias desde o pico"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дней после пика"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值后天数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值後天數"
+          }
+        }
+      }
+    },
+    "Recovery time in days, each point read from the 180 days before it. The band is its 90 % range.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erholungszeit in Tagen, jeder Punkt aus den 180 Tagen davor gelesen. Das Band ist sein 90-%-Bereich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo de recuperación en días; cada punto se lee de los 180 días anteriores. La banda es su rango del 90 %."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temps de récupération en jours, chaque point lu sur les 180 jours précédents. La bande est son intervalle à 90 %."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo di recupero in giorni, ogni punto letto dai 180 giorni precedenti. La fascia è il suo intervallo al 90 %."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Czas powrotu w dniach, każdy punkt odczytany z poprzedzających go 180 dni. Pasmo to jego 90-procentowy zakres."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo de recuperação em dias, cada ponto lido dos 180 dias anteriores. A faixa é o seu intervalo de 90 %."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время восстановления в днях; каждая точка рассчитана по 180 предшествующим дням. Полоса — её 90-процентный диапазон."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复时间（天），每个点取自之前的 180 天。色带是其 90% 区间。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復時間（天），每個點取自之前的 180 天。色帶是其 90% 區間。"
+          }
+        }
+      }
+    },
+    "Not enough history for a trend yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht genug Verlauf für einen Trend."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay suficiente historial para una tendencia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore assez d'historique pour une tendance."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non c'è ancora abbastanza storico per un andamento."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Za mało historii, by pokazać trend."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não há histórico suficiente para uma tendência."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока недостаточно истории для тренда."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史数据还不足以显示趋势。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歷史資料還不足以顯示趨勢。"
+          }
+        }
+      }
+    },
+    "Day-to-day swing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tägliche Schwankung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilación diaria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variation quotidienne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscillazione quotidiana"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wahania z dnia na dzień"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilação diária"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ежедневные колебания"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日常波动"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日常波動"
+          }
+        }
+      }
+    },
+    "12 months": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 Monate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 meses"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 mois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 mesi"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 miesięcy"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 meses"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 месяцев"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 个月"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 個月"
+          }
+        }
+      }
+    },
+    "How far a typical day strays from your usual level, once your weekly rhythm and any slow drift are removed. In large cohorts it grows with age alongside recovery time.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie weit ein typischer Tag von deinem üblichen Niveau abweicht, nachdem Wochenrhythmus und langsame Drift entfernt sind. In großen Kohorten wächst sie mit dem Alter, zusammen mit der Erholungszeit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuánto se aparta un día típico de tu nivel habitual, una vez eliminados tu ritmo semanal y cualquier deriva lenta. En grandes cohortes crece con la edad junto con el tiempo de recuperación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'écart d'une journée typique par rapport à votre niveau habituel, une fois retirés votre rythme hebdomadaire et toute dérive lente. Dans de grandes cohortes, il augmente avec l'âge, comme le temps de récupération."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quanto si discosta un giorno tipico dal tuo livello abituale, tolti il ritmo settimanale e ogni lenta deriva. In grandi coorti cresce con l'età insieme al tempo di recupero."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jak daleko typowy dzień odbiega od twojego zwykłego poziomu po usunięciu rytmu tygodniowego i powolnego dryfu. W dużych kohortach rośnie z wiekiem razem z czasem powrotu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quanto um dia típico se afasta do seu nível habitual, depois de retirados o ritmo semanal e qualquer deriva lenta. Em grandes coortes aumenta com a idade, a par do tempo de recuperação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Насколько обычный день отклоняется от вашего привычного уровня после удаления недельного ритма и медленного дрейфа. В больших когортах растёт с возрастом вместе со временем восстановления."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去除每周节律和缓慢漂移后，典型一天偏离你常态的程度。在大型人群中，它会随年龄与恢复时间一同增大。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去除每週節律和緩慢漂移後，典型一天偏離你常態的程度。在大型人群中，它會隨年齡與恢復時間一同增大。"
+          }
+        }
+      }
+    },
+    "%lld of %lld days observed for this signal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Tagen für dieses Signal erfasst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld días observados para esta señal."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jours observés sur %lld pour ce signal."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld di %lld giorni osservati per questo segnale."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld z %lld dni z odczytem dla tego sygnału."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld dias observados para este sinal."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld из %lld дней с данными для этого сигнала."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该信号已观测 %lld / %lld 天。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "該訊號已觀測 %lld / %lld 天。"
+          }
+        }
+      }
+    },
+    "Resilience asks how quickly your body settles back after something knocks it off its usual state: a hard week, a short night, travel or an illness.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resilienz fragt, wie schnell sich dein Körper wieder einpendelt, nachdem ihn etwas aus seinem üblichen Zustand gebracht hat: eine harte Woche, eine kurze Nacht, eine Reise oder eine Krankheit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La resiliencia mide lo rápido que tu cuerpo vuelve a su estado habitual después de que algo lo saque de él: una semana dura, una noche corta, un viaje o una enfermedad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La résilience mesure à quelle vitesse votre corps revient à son état habituel après en avoir été écarté : une semaine difficile, une nuit courte, un voyage ou une maladie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La resilienza misura quanto in fretta il tuo corpo torna al suo stato abituale dopo che qualcosa lo ha spostato: una settimana dura, una notte corta, un viaggio o una malattia."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odporność mierzy, jak szybko organizm wraca do zwykłego stanu, gdy coś go z niego wytrąci: ciężki tydzień, krótka noc, podróż lub choroba."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A resiliência mede a rapidez com que o seu corpo regressa ao estado habitual depois de algo o tirar dele: uma semana difícil, uma noite curta, uma viagem ou uma doença."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устойчивость показывает, как быстро тело возвращается в обычное состояние после того, как что-то выбило его: тяжёлая неделя, короткая ночь, поездка или болезнь."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复力衡量的是，当某件事让身体偏离常态后（辛苦的一周、睡眠不足的一晚、旅行或生病），它多快能回到常态。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復力衡量的是，當某件事讓身體偏離常態後（辛苦的一週、睡眠不足的一晚、旅行或生病），它多快能回到常態。"
+          }
+        }
+      }
+    },
+    "Each day is compared with your usual level after your weekly rhythm and any slow drift are removed. How long a deviation lingers is measured by correlating each day with the days after it, and fitted with an exponential decay. Its time constant is the recovery time.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Tag wird mit deinem üblichen Niveau verglichen, nachdem Wochenrhythmus und langsame Drift entfernt sind. Wie lange eine Abweichung anhält, wird gemessen, indem jeder Tag mit den folgenden Tagen korreliert und ein exponentieller Abfall angepasst wird. Dessen Zeitkonstante ist die Erholungszeit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada día se compara con tu nivel habitual tras eliminar tu ritmo semanal y cualquier deriva lenta. Cuánto dura una desviación se mide correlacionando cada día con los siguientes y ajustando un decaimiento exponencial. Su constante de tiempo es el tiempo de recuperación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque jour est comparé à votre niveau habituel une fois retirés votre rythme hebdomadaire et toute dérive lente. La durée d'un écart est mesurée en corrélant chaque jour avec les suivants, puis ajustée par une décroissance exponentielle. Sa constante de temps est le temps de récupération."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni giorno è confrontato con il tuo livello abituale dopo aver tolto il ritmo settimanale e ogni lenta deriva. Quanto dura una deviazione si misura correlando ogni giorno con i successivi e adattando un decadimento esponenziale. La sua costante di tempo è il tempo di recupero."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy dzień porównywany jest ze zwykłym poziomem po usunięciu rytmu tygodniowego i powolnego dryfu. To, jak długo utrzymuje się odchylenie, mierzy się, korelując każdy dzień z kolejnymi i dopasowując zanik wykładniczy. Jego stała czasowa to czas powrotu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada dia é comparado com o seu nível habitual depois de retirados o ritmo semanal e qualquer deriva lenta. A duração de um desvio mede-se correlacionando cada dia com os seguintes e ajustando um decaimento exponencial. A sua constante de tempo é o tempo de recuperação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждый день сравнивается с вашим обычным уровнем после удаления недельного ритма и медленного дрейфа. Длительность отклонения измеряется корреляцией каждого дня с последующими и подгонкой экспоненциального затухания. Его постоянная времени — это время восстановления."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去除每周节律和缓慢漂移后，将每一天与你的常态进行比较。通过将每一天与其后的日子做相关分析并拟合指数衰减，来衡量偏离持续多久。其时间常数就是恢复时间。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去除每週節律和緩慢漂移後，將每一天與你的常態進行比較。透過將每一天與其後的日子做相關分析並擬合指數衰減，來衡量偏離持續多久。其時間常數就是恢復時間。"
+          }
+        }
+      }
+    },
+    "The model is the one Pyrkov and colleagues used on blood counts and on daily step counts from wristband wearers. In large cohorts the recovery time lengthens with age, from about two weeks at 40 to more than eight weeks at 90.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell ist dasjenige, das Pyrkov und Kollegen auf Blutbilder und auf tägliche Schrittzahlen von Armbandträgern angewandt haben. In großen Kohorten wird die Erholungszeit mit dem Alter länger: von etwa zwei Wochen mit 40 auf mehr als acht Wochen mit 90."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El modelo es el que Pyrkov y sus colegas aplicaron a hemogramas y a los pasos diarios de usuarios de pulseras. En grandes cohortes, el tiempo de recuperación se alarga con la edad: de unas dos semanas a los 40 a más de ocho semanas a los 90."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le modèle est celui que Pyrkov et ses collègues ont appliqué aux numérations sanguines et aux pas quotidiens de porteurs de bracelets. Dans de grandes cohortes, le temps de récupération s'allonge avec l'âge : environ deux semaines à 40 ans, plus de huit semaines à 90 ans."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il modello è quello che Pyrkov e colleghi hanno usato su emocromi e sui passi giornalieri di chi indossa un braccialetto. In grandi coorti il tempo di recupero si allunga con l'età: da circa due settimane a 40 anni a oltre otto settimane a 90."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To model, którego Pyrkov i współpracownicy użyli dla morfologii krwi i dziennej liczby kroków z opasek. W dużych kohortach czas powrotu wydłuża się z wiekiem: od około dwóch tygodni w wieku 40 lat do ponad ośmiu tygodni w wieku 90 lat."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O modelo é o que Pyrkov e colegas aplicaram a hemogramas e aos passos diários de utilizadores de pulseiras. Em grandes coortes, o tempo de recuperação aumenta com a idade: de cerca de duas semanas aos 40 para mais de oito semanas aos 90."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это модель, которую Пырков и соавторы применили к анализам крови и к ежедневным шагам владельцев браслетов. В больших когортах время восстановления растёт с возрастом: от примерно двух недель в 40 лет до более восьми недель в 90."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该模型与 Pyrkov 等人用于血常规和手环佩戴者每日步数的模型相同。在大型人群中，恢复时间随年龄延长：40 岁时约两周，90 岁时超过八周。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "該模型與 Pyrkov 等人用於血液常規和手環配戴者每日步數的模型相同。在大型人群中，恢復時間隨年齡延長：40 歲時約兩週，90 歲時超過八週。"
+          }
+        }
+      }
+    },
+    "Those are population averages. A recovery time from one person's six months has not been validated and is noisy, so it is always shown with its 90 % range. It is not an age, and it feeds no other score.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind Bevölkerungsdurchschnitte. Eine Erholungszeit aus sechs Monaten einer einzelnen Person ist nicht validiert und verrauscht; deshalb wird sie immer mit ihrem 90-%-Bereich gezeigt. Sie ist kein Alter und fließt in keinen anderen Wert ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son promedios de población. Un tiempo de recuperación a partir de seis meses de una sola persona no está validado y es ruidoso, por eso siempre se muestra con su rango del 90 %. No es una edad y no alimenta ninguna otra puntuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont des moyennes de population. Un temps de récupération tiré de six mois d'une seule personne n'est pas validé et reste bruité ; il est donc toujours affiché avec son intervalle à 90 %. Ce n'est pas un âge, et il n'alimente aucun autre score."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono medie della popolazione. Un tempo di recupero ricavato da sei mesi di una sola persona non è validato ed è rumoroso, quindi è sempre mostrato con il suo intervallo al 90 %. Non è un'età e non alimenta nessun altro punteggio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To średnie populacyjne. Czas powrotu z sześciu miesięcy jednej osoby nie jest zwalidowany i jest zaszumiony, dlatego zawsze pokazujemy go z 90-procentowym zakresem. To nie jest wiek i nie wpływa na żaden inny wynik."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São médias da população. Um tempo de recuperação a partir de seis meses de uma só pessoa não está validado e tem ruído, por isso é sempre mostrado com o seu intervalo de 90 %. Não é uma idade e não alimenta nenhuma outra pontuação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это средние по населению. Время восстановления по шести месяцам одного человека не валидировано и зашумлено, поэтому всегда показывается с 90-процентным диапазоном. Это не возраст, и оно не влияет ни на какие другие оценки."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些是人群平均值。基于单人六个月数据得出的恢复时间未经验证且噪声较大，因此始终与其 90% 区间一起显示。它不是年龄，也不参与任何其他评分。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些是人群平均值。基於單人六個月資料得出的恢復時間未經驗證且雜訊較大，因此始終與其 90% 區間一起顯示。它不是年齡，也不參與任何其他評分。"
+          }
+        }
+      }
+    },
+    "A short history makes the raw fit read short. The headline corrects for that by simulating histories with known recovery times over your own days; the range holds every recovery time consistent with what was measured.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine kurze Historie lässt die rohe Anpassung zu kurz ausfallen. Der Hauptwert korrigiert das, indem er Verläufe mit bekannten Erholungszeiten über deine eigenen Tage simuliert; der Bereich enthält jede Erholungszeit, die mit der Messung vereinbar ist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un historial corto hace que el ajuste bruto salga corto. La cifra principal lo corrige simulando historiales con tiempos de recuperación conocidos sobre tus propios días; el rango incluye todo tiempo de recuperación compatible con lo medido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un historique court fait paraître l'ajustement brut trop court. La valeur principale le corrige en simulant des historiques aux temps de récupération connus sur vos propres jours ; l'intervalle contient tout temps de récupération compatible avec la mesure."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uno storico breve fa risultare corto l'adattamento grezzo. Il valore principale lo corregge simulando storici con tempi di recupero noti sui tuoi stessi giorni; l'intervallo contiene ogni tempo di recupero compatibile con quanto misurato."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krótka historia sprawia, że surowe dopasowanie wychodzi za krótkie. Główny wynik koryguje to, symulując historie o znanym czasie powrotu na twoich własnych dniach; zakres obejmuje każdy czas powrotu zgodny z pomiarem."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um histórico curto faz o ajuste bruto parecer curto. O valor principal corrige isso simulando históricos com tempos de recuperação conhecidos sobre os seus próprios dias; o intervalo contém todo o tempo de recuperação compatível com o que foi medido."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Короткая история делает сырую подгонку заниженной. Главное значение исправляет это, моделируя истории с известным временем восстановления на ваших собственных днях; диапазон включает любое время восстановления, совместимое с измерением."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史较短会让原始拟合偏短。主数值通过在你自己的日期上模拟已知恢复时间的历史来校正这一点；区间包含与测量结果相符的所有恢复时间。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歷史較短會讓原始擬合偏短。主數值透過在你自己的日期上模擬已知恢復時間的歷史來校正這一點；區間包含與測量結果相符的所有恢復時間。"
+          }
+        }
+      }
+    },
+    "Steps is the signal the study used. Resting heart rate and HRV apply the same method and are NOOP extensions.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritte sind das Signal, das die Studie verwendet hat. Ruhepuls und HRV wenden dieselbe Methode an und sind NOOP-Erweiterungen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los pasos son la señal que usó el estudio. La frecuencia cardíaca en reposo y la VFC aplican el mismo método y son extensiones de NOOP."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les pas sont le signal utilisé par l'étude. La fréquence cardiaque au repos et la VFC appliquent la même méthode et sont des extensions NOOP."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I passi sono il segnale usato dallo studio. Frequenza cardiaca a riposo e HRV applicano lo stesso metodo e sono estensioni di NOOP."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kroki to sygnał użyty w badaniu. Tętno spoczynkowe i HRV stosują tę samą metodę i są rozszerzeniami NOOP."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os passos são o sinal usado no estudo. A frequência cardíaca em repouso e a VFC aplicam o mesmo método e são extensões do NOOP."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шаги — сигнал, использованный в исследовании. Пульс покоя и ВСР используют тот же метод и являются расширениями NOOP."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "步数是该研究使用的信号。静息心率和 HRV 采用相同方法，属于 NOOP 的扩展。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "步數是該研究使用的訊號。靜息心率和 HRV 採用相同方法，屬於 NOOP 的擴充。"
+          }
+        }
+      }
+    },
+    "Published": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veröffentlicht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publié"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pubblicato"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opublikowany"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Опубликован"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发表"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已發表"
+          }
+        }
+      }
+    },
+    "Extension": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erweiterung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extensión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estensione"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rozszerzenie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extensão"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширение"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "擴充"
+          }
+        }
+      }
+    },
+    "≈ 1 day": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 Tag"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 giorno"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 dzień"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 dia"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 день"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ 1 天"
+          }
+        }
+      }
+    },
+    "≈ %lld days": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld Tage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld giorni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld dni"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld dias"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld 天"
+          }
+        }
+      }
+    },
+    "90 %% range: %lld days or longer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90-%%-Bereich: %lld Tage oder länger"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango del 90 %%: %lld días o más"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervalle à 90 %% : %lld jours ou plus"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervallo al 90 %%: %lld giorni o più"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zakres 90%%: %lld dni lub dłużej"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervalo de 90 %%: %lld dias ou mais"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Диапазон 90%%: %lld дн. или больше"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90%% 区间：%lld 天或更长"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90%% 區間：%lld 天或更長"
+          }
+        }
+      }
+    },
+    "90 %% range: %lld–%lld days": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90-%%-Bereich: %lld–%lld Tage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango del 90 %%: %lld–%lld días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervalle à 90 %% : %lld–%lld jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervallo al 90 %%: %lld–%lld giorni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zakres 90%%: %lld–%lld dni"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervalo de 90 %%: %lld–%lld dias"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Диапазон 90%%: %lld–%lld дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90%% 区间：%lld–%lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90%% 區間：%lld–%lld 天"
+          }
+        }
+      }
+    },
+    "%lld/%lld days": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld Tage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld giorni"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld dni"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld dias"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld 天"
+          }
+        }
+      }
+    },
+    "No carry-over": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Nachhall"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin arrastre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune persistance"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun trascinamento"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak przenoszenia"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem arrastamento"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет последействия"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无延续"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無延續"
+          }
+        }
+      }
+    },
+    "≈ %lld d (%lld–%lld)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld T (%lld–%lld)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld d (%lld–%lld)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld j (%lld–%lld)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld g (%lld–%lld)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld d (%lld–%lld)"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld d (%lld–%lld)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld дн. (%lld–%lld)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld 天（%lld–%lld）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≈ %lld 天（%lld–%lld）"
+          }
+        }
+      }
+    },
+    "Typical swing ± %@ bpm": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typische Schwankung ± %@ bpm"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilación típica ± %@ lpm"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variation typique ± %@ bpm"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscillazione tipica ± %@ bpm"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typowe wahanie ± %@ bpm"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilação típica ± %@ bpm"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Типичное колебание ± %@ уд/мин"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "典型波动 ± %@ bpm"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "典型波動 ± %@ bpm"
+          }
+        }
+      }
+    },
+    "Typical swing ± %lld %%": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typische Schwankung ± %lld %%"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilación típica ± %lld %%"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variation typique ± %lld %%"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscillazione tipica ± %lld %%"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typowe wahanie ± %lld%%"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilação típica ± %lld %%"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Типичное колебание ± %lld%%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "典型波动 ± %lld%%"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "典型波動 ± %lld%%"
+          }
+        }
+      }
+    },
+    "More active than usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiver als sonst"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más activo de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus actif que d'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più attivo del solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktywniej niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais ativo do que o habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активнее обычного"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比平时更活跃"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比平時更活躍"
+          }
+        }
+      }
+    },
+    "Less active than usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weniger aktiv als sonst"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menos activo de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moins actif que d'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meno attivo del solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mniej aktywnie niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menos ativo do que o habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Менее активно, чем обычно"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比平时更少活动"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "比平時更少活動"
+          }
+        }
+      }
+    },
+    "Resting HR above usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhepuls über dem Üblichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC en reposo por encima de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC au repos au-dessus de l'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC a riposo sopra il solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tętno spoczynkowe wyższe niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC em repouso acima do habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пульс покоя выше обычного"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静息心率高于平时"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "靜息心率高於平時"
+          }
+        }
+      }
+    },
+    "Resting HR below usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhepuls unter dem Üblichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC en reposo por debajo de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC au repos en dessous de l'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC a riposo sotto il solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tętno spoczynkowe niższe niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC em repouso abaixo do habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пульс покоя ниже обычного"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静息心率低于平时"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "靜息心率低於平時"
+          }
+        }
+      }
+    },
+    "HRV above usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV über dem Üblichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC por encima de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC au-dessus de l'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV sopra il solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV wyższe niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC acima do habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ВСР выше обычного"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV 高于平时"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV 高於平時"
+          }
+        }
+      }
+    },
+    "HRV below usual": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV unter dem Üblichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC por debajo de lo habitual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC en dessous de l'habitude"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV sotto il solito"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV niższe niż zwykle"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFC abaixo do habitual"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ВСР ниже обычного"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV 低于平时"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV 低於平時"
+          }
+        }
+      }
+    },
+    "Peaked at %@ SD. Not back in your usual range yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhepunkt bei %@ SD. Noch nicht zurück im üblichen Bereich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DE. Aún no ha vuelto a tu rango habitual."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pic à %@ ET. Pas encore revenu dans votre plage habituelle."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picco a %@ DS. Non ancora rientrato nel tuo intervallo abituale."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczyt: %@ SD. Jeszcze nie wrócił do zwykłego zakresu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DP. Ainda não voltou ao seu intervalo habitual."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пик — %@ SD. Пока не вернулся в обычный диапазон."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值为 %@ 个标准差，尚未回到常态范围。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值為 %@ 個標準差，尚未回到常態範圍。"
+          }
+        }
+      }
+    },
+    "Peaked at %@ SD, back in your usual range after 1 day.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhepunkt bei %@ SD, nach 1 Tag zurück im üblichen Bereich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DE; volvió a tu rango habitual tras 1 día."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pic à %@ ET, revenu dans votre plage habituelle après 1 jour."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picco a %@ DS, rientrato nel tuo intervallo abituale dopo 1 giorno."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczyt: %@ SD, powrót do zwykłego zakresu po 1 dniu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DP; voltou ao seu intervalo habitual após 1 dia."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пик — %@ SD, возврат в обычный диапазон через 1 день."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值为 %@ 个标准差，1 天后回到常态范围。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值為 %@ 個標準差，1 天後回到常態範圍。"
+          }
+        }
+      }
+    },
+    "Peaked at %@ SD, back in your usual range after %lld days.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhepunkt bei %@ SD, nach %lld Tagen zurück im üblichen Bereich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DE; volvió a tu rango habitual tras %lld días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pic à %@ ET, revenu dans votre plage habituelle après %lld jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picco a %@ DS, rientrato nel tuo intervallo abituale dopo %lld giorni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczyt: %@ SD, powrót do zwykłego zakresu po %lld dniach."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DP; voltou ao seu intervalo habitual após %lld dias."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пик — %@ SD, возврат в обычный диапазон через %lld дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值为 %@ 个标准差，%lld 天后回到常态范围。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值為 %@ 個標準差，%lld 天後回到常態範圍。"
+          }
+        }
+      }
+    },
+    "Peaked at %@ SD, back in your usual range after 1 day. Half-life ≈ %@ days.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhepunkt bei %@ SD, nach 1 Tag zurück im üblichen Bereich. Halbwertszeit ≈ %@ Tage."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DE; volvió a tu rango habitual tras 1 día. Vida media ≈ %@ días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pic à %@ ET, revenu dans votre plage habituelle après 1 jour. Demi-vie ≈ %@ jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picco a %@ DS, rientrato nel tuo intervallo abituale dopo 1 giorno. Emivita ≈ %@ giorni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczyt: %@ SD, powrót do zwykłego zakresu po 1 dniu. Okres połowicznego zaniku ≈ %@ dni."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %@ DP; voltou ao seu intervalo habitual após 1 dia. Meia-vida ≈ %@ dias."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пик — %@ SD, возврат в обычный диапазон через 1 день. Период полуспада ≈ %@ дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值为 %@ 个标准差，1 天后回到常态范围。半衰期 ≈ %@ 天。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值為 %@ 個標準差，1 天後回到常態範圍。半衰期 ≈ %@ 天。"
+          }
+        }
+      }
+    },
+    "Peaked at %@ SD, back in your usual range after %lld days. Half-life ≈ %@ days.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhepunkt bei %1$@ SD, nach %2$lld Tagen zurück im üblichen Bereich. Halbwertszeit ≈ %3$@ Tage."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %1$@ DE; volvió a tu rango habitual tras %2$lld días. Vida media ≈ %3$@ días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pic à %1$@ ET, revenu dans votre plage habituelle après %2$lld jours. Demi-vie ≈ %3$@ jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picco a %1$@ DS, rientrato nel tuo intervallo abituale dopo %2$lld giorni. Emivita ≈ %3$@ giorni."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szczyt: %1$@ SD, powrót do zwykłego zakresu po %2$lld dniach. Okres połowicznego zaniku ≈ %3$@ dni."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico de %1$@ DP; voltou ao seu intervalo habitual após %2$lld dias. Meia-vida ≈ %3$@ dias."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пик — %1$@ SD, возврат в обычный диапазон через %2$lld дн. Период полуспада ≈ %3$@ дн."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值为 %1$@ 个标准差，%2$lld 天后回到常态范围。半衰期 ≈ %3$@ 天。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值為 %1$@ 個標準差，%2$lld 天後回到常態範圍。半衰期 ≈ %3$@ 天。"
+          }
+        }
+      }
+    },
+    "Experimental · Resilience": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell · Resilienz"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental · Resiliencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental · Résilience"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale · Resilienza"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne · Odporność"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental · Resiliência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально · Устойчивость"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性 · 恢复力"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性 · 恢復力"
+          }
+        }
+      }
+    },
+    "How quickly your body settles back after a knock, read from the day-to-day swings in your steps, resting heart rate and HRV.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie schnell sich dein Körper nach einem Ausschlag wieder einpendelt, gelesen aus den täglichen Schwankungen von Schritten, Ruhepuls und HRV."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo rápido que tu cuerpo se recupera tras un golpe, a partir de las oscilaciones diarias de tus pasos, tu frecuencia cardíaca en reposo y tu VFC."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quelle vitesse votre corps se rétablit après un choc, d'après les variations quotidiennes de vos pas, de votre fréquence cardiaque au repos et de votre VFC."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quanto in fretta il tuo corpo si riassesta dopo uno scossone, letto dalle oscillazioni quotidiane di passi, frequenza cardiaca a riposo e HRV."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jak szybko organizm wraca do normy po wstrząsie, na podstawie codziennych wahań kroków, tętna spoczynkowego i HRV."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A rapidez com que o seu corpo recupera após um abalo, a partir das oscilações diárias dos seus passos, frequência cardíaca em repouso e VFC."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как быстро тело возвращается к норме после встряски — по ежедневным колебаниям шагов, пульса покоя и ВСР."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据步数、静息心率和 HRV 的日常波动，衡量身体在受到冲击后多快回稳。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根據步數、靜息心率和 HRV 的日常波動，衡量身體在受到衝擊後多快回穩。"
+          }
+        }
+      }
+    },
+    "Resilience (experimental)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resilienz (experimentell)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resiliencia (experimental)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résilience (expérimental)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resilienza (sperimentale)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odporność (eksperymentalne)"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resiliência (experimental)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устойчивость (экспериментально)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复力（实验性）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復力（實驗性）"
+          }
+        }
+      }
+    },
+    "Adds a Resilience section to the Healthspan screen. A research method applied to one person: always shown with its range, and it feeds no other score. Needs 90 days of data.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt dem Healthspan-Bildschirm einen Abschnitt „Resilienz“ hinzu. Eine Forschungsmethode, angewandt auf eine Person: immer mit ihrem Bereich angezeigt und ohne Einfluss auf andere Werte. Braucht 90 Tage Daten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade una sección de Resiliencia a la pantalla Healthspan. Un método de investigación aplicado a una persona: siempre se muestra con su rango y no alimenta ninguna otra puntuación. Necesita 90 días de datos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute une section Résilience à l'écran Healthspan. Une méthode de recherche appliquée à une seule personne : toujours affichée avec son intervalle, elle n'alimente aucun autre score. Nécessite 90 jours de données."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiunge una sezione Resilienza alla schermata Healthspan. Un metodo di ricerca applicato a una sola persona: sempre mostrato con il suo intervallo, non alimenta nessun altro punteggio. Servono 90 giorni di dati."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dodaje sekcję Odporność do ekranu Healthspan. Metoda badawcza zastosowana do jednej osoby: zawsze pokazywana z zakresem i nie wpływa na inne wyniki. Wymaga 90 dni danych."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adiciona uma secção Resiliência ao ecrã Healthspan. Um método de investigação aplicado a uma só pessoa: sempre mostrado com o seu intervalo e não alimenta nenhuma outra pontuação. Precisa de 90 dias de dados."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавляет раздел «Устойчивость» на экран Healthspan. Исследовательский метод, применённый к одному человеку: всегда показывается с диапазоном и не влияет на другие оценки. Нужно 90 дней данных."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Healthspan 页面中添加“恢复力”部分。这是应用于个人的研究方法：始终显示其区间，且不参与任何其他评分。需要 90 天数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Healthspan 頁面中新增「恢復力」部分。這是應用於個人的研究方法：始終顯示其區間，且不參與任何其他評分。需要 90 天資料。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
