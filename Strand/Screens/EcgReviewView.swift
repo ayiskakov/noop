@@ -205,9 +205,9 @@ struct EcgReviewView: View {
                 VStack(alignment: .leading, spacing: NoopMetrics.space1) {
                     Text("R-R intervals")
                         .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
-                    RRDotChart(intervals: beats.rrMs)
+                    RRDotChart(intervals: beats.intervals)
                         .frame(height: 120)
-                    Text("One dot per beat: the gap since the previous beat, in order.")
+                    Text("Each dot is the gap between two successive beats, in order. A blank is an interval out of range; a line is a break in the analysed signal.")
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                 }
                 factRow("Strap's own result", value: facts.strapResultCode.map {
@@ -432,32 +432,58 @@ struct EcgReviewView: View {
 
 /// R-R intervals as dots in beat order. A steady rhythm draws a flat band; the chart shows the spread
 /// and leaves what it means to the reader.
+///
+/// Takes every interval, rejected ones included, so each dot sits at its true place in the sequence: a
+/// rejected interval keeps its slot and draws nothing, and a stretch boundary gets a slot of its own
+/// with a line through it. Closing either up would set two intervals side by side that never were.
 private struct RRDotChart: View {
-    let intervals: [Double]
+    let intervals: [EcgBeats.Interval]
+
+    private var usable: [Double] { intervals.filter(\.isUsable).map(\.ms) }
 
     var body: some View {
         Canvas { ctx, size in
-            guard intervals.count > 1, let lo = intervals.min(), let hi = intervals.max() else { return }
+            let usable = self.usable
+            guard usable.count > 1, let lo = usable.min(), let hi = usable.max() else { return }
             let pad = max(20, (hi - lo) * 0.15)
-            let bottom = lo - pad, span = hi - lo + 2 * pad
-            let step = size.width / Double(intervals.count - 1)
+            let bottom = lo - pad, top = hi + pad
+            // Slots: one per interval, plus one at each change of stretch.
+            var slots: [Double?] = []
+            var breaks: [Int] = []
+            for (i, interval) in intervals.enumerated() {
+                if i > 0, interval.segment != intervals[i - 1].segment {
+                    breaks.append(slots.count)
+                    slots.append(nil)
+                }
+                slots.append(interval.isUsable ? interval.ms : nil)
+            }
+            let step = size.width / Double(max(1, slots.count - 1))
             var grid = Path()
             for fraction in [0.25, 0.5, 0.75] {
                 grid.move(to: CGPoint(x: 0, y: size.height * fraction))
                 grid.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
             }
             ctx.stroke(grid, with: .color(StrandPalette.hairline), lineWidth: 0.5)
+            var separators = Path()
+            for b in breaks {
+                separators.move(to: CGPoint(x: Double(b) * step, y: 0))
+                separators.addLine(to: CGPoint(x: Double(b) * step, y: size.height))
+            }
+            ctx.stroke(separators, with: .color(StrandPalette.textTertiary), lineWidth: 1)
             let r = NoopMetrics.space1 / 1.5
-            for (i, ms) in intervals.enumerated() {
+            for (i, slot) in slots.enumerated() {
+                guard let ms = slot else { continue }
                 let x = Double(i) * step
-                let y = size.height * (1 - (ms - bottom) / span)
+                let y = size.height * (1 - (ms - bottom) / (top - bottom))
                 ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
                          with: .color(StrandPalette.accent))
             }
-            ctx.draw(Text("\(Int(hi.rounded())) ms").font(StrandFont.caption)
+            // The edges are labelled with the values AT the edges, padding included, so the unlabelled
+            // grid lines between them read as the linear scale they are.
+            ctx.draw(Text("\(Int(top.rounded())) ms").font(StrandFont.caption)
                         .foregroundColor(StrandPalette.textTertiary),
                      at: CGPoint(x: 0, y: 0), anchor: .topLeading)
-            ctx.draw(Text("\(Int(lo.rounded())) ms").font(StrandFont.caption)
+            ctx.draw(Text("\(Int(bottom.rounded())) ms").font(StrandFont.caption)
                         .foregroundColor(StrandPalette.textTertiary),
                      at: CGPoint(x: 0, y: size.height), anchor: .bottomLeading)
         }
@@ -465,6 +491,6 @@ private struct RRDotChart: View {
         .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.space1, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("R-R intervals"))
-        .accessibilityValue(Text("\(intervals.count) intervals from \(Int((intervals.min() ?? 0).rounded())) to \(Int((intervals.max() ?? 0).rounded())) ms"))
+        .accessibilityValue(Text("\(usable.count) intervals from \(Int((usable.min() ?? 0).rounded())) to \(Int((usable.max() ?? 0).rounded())) ms"))
     }
 }

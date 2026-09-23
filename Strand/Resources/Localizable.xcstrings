@@ -76246,6 +76246,70 @@
         }
       }
     },
+    "Each dot is the gap between two successive beats, in order. A blank is an interval out of range; a line is a break in the analysed signal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Punkt ist der Abstand zwischen zwei aufeinanderfolgenden Schlägen, in Reihenfolge. Eine Lücke ist ein Intervall außerhalb des Bereichs; eine Linie ist eine Unterbrechung im ausgewerteten Signal."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each dot is the gap between two successive beats, in order. A blank is an interval out of range; a line is a break in the analysed signal."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada punto es el intervalo entre dos latidos consecutivos, en orden. Un hueco es un intervalo fuera de rango; una línea es una interrupción en la señal analizada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque point est l'écart entre deux battements successifs, dans l'ordre. Un vide est un intervalle hors plage ; une ligne est une coupure dans le signal analysé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni punto è l'intervallo tra due battiti successivi, in ordine. Uno spazio vuoto è un intervallo fuori dai limiti; una linea è un'interruzione nel segnale analizzato."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każda kropka to odstęp między dwoma kolejnymi uderzeniami, po kolei. Puste miejsce to odstęp poza zakresem; linia to przerwa w analizowanym sygnale."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ponto é o intervalo entre dois batimentos consecutivos, por ordem. Um espaço vazio é um intervalo fora dos limites; uma linha é uma interrupção no sinal analisado."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая точка — интервал между двумя соседними ударами, по порядку. Пропуск — интервал вне допустимого диапазона; линия — разрыв в анализируемом сигнале."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点是两次相邻心跳之间的间隔，按顺序排列。空缺表示超出范围的间隔；竖线表示分析信号中的中断。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個點是兩次相鄰心跳之間的間隔，依序排列。空缺表示超出範圍的間隔；豎線表示分析訊號中的中斷。"
+          }
+        }
+      }
+    },
     "Each dot pairs one heartbeat interval with the next. A tight line along the diagonal means a steady beat; a rounder, more spread-out cloud means the timing varied more.": {
       "localizations": {
         "de": {
@@ -143673,70 +143737,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "記錄一次訓練後，這裡會顯示本週每個肌群做了多少組，並與研究中和增長相關的數值對照。"
-          }
-        }
-      }
-    },
-    "One dot per beat: the gap since the previous beat, in order.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Punkt pro Schlag: der Abstand zum vorherigen Schlag, in Reihenfolge."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "One dot per beat: the gap since the previous beat, in order."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un punto por latido: el intervalo desde el latido anterior, en orden."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un point par battement : l'écart depuis le battement précédent, dans l'ordre."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un punto per battito: l'intervallo dal battito precedente, in ordine."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jedna kropka na uderzenie: odstęp od poprzedniego uderzenia, po kolei."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Um ponto por batimento: o intervalo desde o batimento anterior, por ordem."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Одна точка на удар: интервал от предыдущего удара, по порядку."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每次心跳一个点：与上一次心跳的间隔，按顺序排列。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每次心跳一個點：與上一次心跳的間隔，依序排列。"
           }
         }
       }
