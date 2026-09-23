@@ -225,14 +225,15 @@ final class IntelligenceEngine: ObservableObject {
         /// where `rr` is in scope and replayed through `diagnosticSink` in pass 2 (which is main-actor
         /// isolated). nil when the night has no in-sleep R-R.
         let hrvDiag: String?
-        /// #103/queue-11a: the nightly SpO₂ candidate mean for this day, computed off the main actor when
-        /// the SpO₂ candidate display toggle is ON. A WHOOP owner gets the `spo2_candidate_82` V18Aux
-        /// byte mean (unchanged); an Oura owner gets the ring's ceiling@100 `0x6F` mean
-        /// (`AnalyticsEngine.nightlySpo2CeilingMean`, queue 11a). nil when the toggle is OFF or the
-        /// night has no in-band reading for its owner's device. Written to metricSeries as
-        /// "spo2_candidate" under the "-noop" device ID in pass 2 — same key for both devices, since the
-        /// series is always read scoped to one device's own computed ID.
-        let spo2Candidate: Int?
+        /// #103/queue-11a: this night's whole SpO₂ candidate result — mean, range and below-threshold
+        /// dips — computed off the main actor when the SpO₂ candidate display toggle is ON from the
+        /// `spo2_candidate_82` V18Aux byte. nil when the toggle is OFF or the night has no in-band
+        /// reading. Written to metricSeries under the "-noop" device ID in pass 2.
+        ///
+        /// Carries the whole `Spo2CandidateNight` rather than the mean it used to: the dips are shown
+        /// beside that mean now, and re-resolving them in pass 2 would mean two loops over one night's
+        /// readings that can disagree. One resolver, one result, carried.
+        let spo2Candidate: Spo2CandidateNight?
         /// Healthspan: whole-day minutes in each of the five display HR zones, binned from the SAME
         /// `dayHr` calendar-day stream the day's steps and calories come from. Whole-day rather than
         /// workout-only, because the moderate/vigorous dose the mortality cohorts measured is all of a
@@ -1753,20 +1754,25 @@ final class IntelligenceEngine: ObservableObject {
                                                             respRateBpm: res.daily.respRateBpm,
                                                             beatAccurate: respGateAcc,
                                                             rrIntegrity: respGateIntegrity)
-                // #103/queue-11a: SpO₂ candidate nightly mean. Only computed when the display toggle is
-                // ON: the in-band (70–100) `spo2_candidate_82` V18Aux byte, averaged over the night. nil
-                // when there is no v18 aux stream or no candidate decode, or when the toggle is OFF.
-                // The mean is written to metricSeries as "spo2_candidate" in pass 2, never to `spo2Pct` —
-                // the guard test `testHistoricalV18OpticalFieldsAreNotNamedPhysiologically` enforces that
-                // boundary for the WHOOP path.
-                var spo2CandidateMean: Int? = nil
+                // #103/queue-11a: the night's SpO₂ candidate result — the in-band (70–100)
+                // `spo2_candidate_82` V18Aux readings resolved into a mean, a range and the night's
+                // below-threshold runs. Only computed when the display toggle is ON; nil when there is no
+                // v18 aux stream, no in-band reading, or the toggle is OFF.
+                //
+                // Resolved ONCE, here, for everything pass 2 writes: the mean, the minimum, the dip count,
+                // the dip span and the reading count are all read off this single value rather than
+                // recomputed per key, so no two of them can describe a different set of readings.
+                //
+                // Persisted to metricSeries in pass 2 under the `Spo2CandidateSeries` keys, never to
+                // `spo2Pct` — the guard test `testHistoricalV18OpticalFieldsAreNotNamedPhysiologically`
+                // enforces that boundary for the WHOOP path.
+                var spo2CandidateNight: Spo2CandidateNight? = nil
                 if spo2CandidateDisplayOn {
                     let auxSamples = (try? await store.v18AuxSamples(
                         deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
                     if !auxSamples.isEmpty {
-                        if let cand = AnalyticsEngine.nightlySpo2CandidateMean(res.sleepSessions, aux: auxSamples) {
-                            spo2CandidateMean = cand.mean
-                        }
+                        spo2CandidateNight = AnalyticsEngine.nightlySpo2CandidateNight(
+                            res.sleepSessions, aux: auxSamples)
                     }
                 }
                 // #1169 SHADOW METRIC (instrumentation only): the primary-session MEAN resting HR, recorded
@@ -1786,7 +1792,7 @@ final class IntelligenceEngine: ObservableObject {
                                    readOwner: owner, hrRows: hr.count,
                                    sleepTrace: sleepTrace, stepsTrace: stepsTrace, hrvTrace: hrvTrace,
                                    hrvDiag: Self.mergedDayDiag(hrvDiag, strainDiagLines),
-                                   spo2Candidate: spo2CandidateMean,
+                                   spo2Candidate: spo2CandidateNight,
                                    zoneMinutes: zoneMinutes,
                                    hrvOverCounted: hrvOverCounted,
                                    primarySessionRHR: primarySessionRHR,
@@ -1873,8 +1879,9 @@ final class IntelligenceEngine: ObservableObject {
         // visible in every export.
         var readOwnerByDay: [String: (owner: String, hrRows: Int)] = [:]
         var resolvedScoreOwnerByDay: [String: String] = [:]
-        // #103: SpO₂ candidate @82 nightly mean per day, carried from pass 1 for metricSeries persistence.
-        var spo2CandidateByDay: [String: Int] = [:]
+        // #103: the SpO₂ candidate @82 night result per day, carried from pass 1 for metricSeries
+        // persistence (mean, minimum and dips all come off this one value).
+        var spo2CandidateByDay: [String: Spo2CandidateNight] = [:]
         // #1118: per-day HRV over-count flag, carried from pass 1 for metricSeries persistence. nil (absent)
         // for a night with no in-sleep R-R; otherwise true/false, so a re-score always overwrites the row.
         var hrvOverCountByDay: [String: Bool] = [:]
@@ -2296,12 +2303,46 @@ final class IntelligenceEngine: ObservableObject {
                                               key: DayCycleIntelligenceIntegration.onsetKey,
                                               value: Double(onset)))
             }
-            // #103: persist the SpO₂ candidate @82 nightly mean to metricSeries as "spo2_candidate" so the
-            // Blood Oxygen tile can surface it as a "strap estimate (unverified)" fallback when the toggle
-            // is ON. Written under the "-noop" computed device ID, never to `spo2Pct` — the candidate has
-            // split cross-device evidence and stays behind the experimental display toggle.
+            // #103: persist the SpO₂ candidate @82 night to metricSeries so the Blood Oxygen tile can
+            // surface it as a "strap estimate (unverified)" fallback when the toggle is ON. Written under
+            // the "-noop" computed device ID, never to `spo2Pct` — the candidate has split cross-device
+            // evidence and stays behind the experimental display toggle.
+            //
+            // `spo2_candidate` is now the UNROUNDED mean. It was rounded to an Int on the way in, which
+            // cost the whole signal inside a percent: four nights that climbed 95.36 → 95.66 → 96.00 →
+            // 96.61 were stored as 95/96/96/97, so a real monotone rise read as one flat night, one step,
+            // one flat night. Every reader already takes a Double and rounds at the display edge
+            // (`intText`, `MetricDescriptor.format` with `decimals: 0`), so the number ON SCREEN is
+            // unchanged — only the stored precision improves, and a re-score refills prior nights.
+            //
+            // The four keys beside it are FACTS THE MEAN CANNOT CARRY, not restatements of it: a night
+            // averaging 96 % with a run down to 77 % and a night flat at 96 % are the same mean and
+            // different nights. They are separate keys rather than fields on `dailyMetric` because
+            // metricSeries takes any key with no migration, and because none of them may ever look like a
+            // calibrated column. All four come off the ONE `Spo2CandidateNight` resolved in pass 1, so
+            // they cannot disagree with the mean they sit next to.
+            //
+            // `spo2_candidate_dip_seconds` is time measured BETWEEN readings, never `samples × 1 s` — see
+            // `Spo2DesatEvent.spanSeconds`. It is therefore legitimately 0 on a night whose only dips were
+            // single readings, which is why the dip COUNT is stored separately instead of being inferred
+            // from a duration.
+            //
+            // Every key comes from `Spo2CandidateSeries`, never a literal spelled here — the reader looks
+            // these up optionally, so a key spelled twice could drift on one side and bank nothing for a
+            // field nobody notices is missing (the `V18AuxSlot.decoderKey` lesson, one layer up).
             if let cand = spo2CandidateByDay[daily.day] {
-                restPoints.append(MetricPoint(day: daily.day, key: "spo2_candidate", value: Double(cand)))
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.meanKey,
+                                              value: cand.mean))
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.minimumKey,
+                                              value: Double(cand.minimum)))
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.samplesKey,
+                                              value: Double(cand.samples)))
+                // 0 written, not omitted, for both dip keys: a night that dipped and then re-scores clean
+                // must CLEAR its prior figure rather than keep showing a stale one.
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.dipsKey,
+                                              value: Double(cand.events.count)))
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.dipSecondsKey,
+                                              value: Double(cand.secondsBelowThreshold)))
             }
             // #1118: persist the HRV over-count flag (1/0) so the HRV card can mark an over-counted 4.0
             // night's reading "unverified" until the two-channel de-dup lands. 0 written on a clean night

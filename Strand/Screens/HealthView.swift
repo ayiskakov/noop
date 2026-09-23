@@ -1333,6 +1333,14 @@ private struct VitalsSection: View {
     // the experimental toggle is ON. Empty when the toggle is OFF or no candidate data exists.
     @State private var spo2CandidateByDay: [String: Double] = [:]
     @State private var hrvOverCountByDay: [String: Double] = [:]   // #1118
+    // #103: the figures the candidate MEAN cannot carry — the night's low, its dips, the dip duration and
+    // the reading count behind all of it. Four separate metricSeries rows, loaded beside the mean above
+    // and resolved into ONE night by `Spo2CandidateSeries.latest` so the card cannot show last night's
+    // mean beside an older night's low. Empty whenever the mean is.
+    @State private var spo2CandidateMinByDay: [String: Double] = [:]
+    @State private var spo2CandidateDipsByDay: [String: Double] = [:]
+    @State private var spo2CandidateDipSecondsByDay: [String: Double] = [:]
+    @State private var spo2CandidateSamplesByDay: [String: Double] = [:]
 
     var body: some View {
         let readings = BodyVitalSigns.readings(
@@ -1363,6 +1371,14 @@ private struct VitalsSection: View {
                 .font(StrandFont.footnote)
                 .foregroundStyle(StrandPalette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            // #103: the strap-estimate detail, below the vitals grid rather than inside it — these are
+            // four figures about ONE night, not four more headline vitals, and a tile in that grid would
+            // sit beside calibrated readings as if it were one. The card renders nothing when the
+            // experimental toggle is OFF or no night has been scored, so this costs an opted-out install
+            // an empty `if`.
+            Spo2EstimateCard(night: spo2CandidateNight,
+                             meanTrend: spo2CandidateMeanTrend,
+                             dipThreshold: AnalyticsEngine.spo2CandidateDipThreshold)
         }
         .task(id: PuffinExperiment.spo2CandidateDisplayEnabled) {
             // #1118: load the per-night HRV over-count flags (always — no toggle) so the HRV tile can
@@ -1381,9 +1397,41 @@ private struct VitalsSection: View {
                 spo2CandidateByDay = [:]
                 return
             }
-            let pts = await repo.exploreSeries(key: "spo2_candidate", source: "my-whoop", days: 14)
+            let pts = await repo.exploreSeries(key: Spo2CandidateSeries.meanKey, source: "my-whoop", days: 14)
             spo2CandidateByDay = Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+            // #103: the four companion series behind the strap-estimate card. Read with the SAME window
+            // and source as the mean above so they describe the same span, and keyed off
+            // `Spo2CandidateSeries` rather than literals — the writer spells them from that same enum,
+            // which is the only thing stopping a rename from silently banking rows nothing reads.
+            spo2CandidateMinByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.minimumKey)
+            spo2CandidateDipsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.dipsKey)
+            spo2CandidateDipSecondsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.dipSecondsKey)
+            spo2CandidateSamplesByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.samplesKey)
         }
+    }
+
+    /// One candidate companion series as day → value. Same window and source as the mean, so the card's
+    /// figures cannot come from a different span than its headline.
+    private static func loadCandidateSeries(_ repo: Repository, _ key: String) async -> [String: Double] {
+        let pts = await repo.exploreSeries(key: key, source: "my-whoop", days: 14)
+        return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// The night the strap-estimate card describes, resolved through the ONE funnel (pure + CI-tested in
+    /// `StrandAnalytics`). nil when the toggle is OFF or nothing has been scored — the card then renders
+    /// nothing rather than an empty frame that would read as "the strap sent nothing".
+    private var spo2CandidateNight: Spo2CandidateSeries.Night? {
+        Spo2CandidateSeries.latest(mean: spo2CandidateByDay,
+                                   minimum: spo2CandidateMinByDay,
+                                   dips: spo2CandidateDipsByDay,
+                                   dipSeconds: spo2CandidateDipSecondsByDay,
+                                   samples: spo2CandidateSamplesByDay)
+    }
+
+    /// The nightly means oldest → newest for the card's sparkline. Sorted by day KEY (`YYYY-MM-DD` sorts
+    /// lexicographically), not by insertion, so the trail reads left-to-right in time.
+    private var spo2CandidateMeanTrend: [Double] {
+        spo2CandidateByDay.sorted { $0.key < $1.key }.map(\.value)
     }
 }
 

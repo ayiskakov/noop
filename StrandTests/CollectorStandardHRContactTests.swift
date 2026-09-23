@@ -13,7 +13,7 @@ final class CollectorStandardHRContactTests: XCTestCase {
 
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
-                spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
             if failNextInsert {
                 failNextInsert = false
                 throw Failure.requested
@@ -21,7 +21,7 @@ final class CollectorStandardHRContactTests: XCTestCase {
             inserted.append(streams)
             return (streams.hr.count, streams.rr.count, streams.events.count,
                     streams.battery.count, streams.spo2.count, streams.skinTemp.count,
-                    streams.resp.count, streams.gravity.count)
+                    streams.resp.count, streams.gravity.count, streams.v18Aux.count)
         }
 
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}

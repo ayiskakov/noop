@@ -759,6 +759,10 @@ public final class BLEManager: NSObject, ObservableObject {
     private var offloadResp = 0
     private var offloadSkinTemp = 0
     private var offloadSpo2 = 0
+    /// #103: v18 aux rows ACCEPTED from this link's offload — the per-second 5/MG slot stream that carries
+    /// the `@82` SpO2 candidate. Tallied per link like every counter above, so the census can report the
+    /// channel a 5/MG actually fills instead of only the 4.0 tables it never can.
+    private var offloadV18Aux = 0
     /// Chunks the offload actually persisted on this link — separates "never ran" from "nothing new".
     private var offloadChunks = 0
 
@@ -1456,6 +1460,7 @@ public final class BLEManager: NSObject, ObservableObject {
                                     self.offloadHr += c.hr; self.offloadRr += c.rr
                                     self.offloadGravity += c.gravity; self.offloadResp += c.resp
                                     self.offloadSkinTemp += c.skinTemp; self.offloadSpo2 += c.spo2
+                                    self.offloadV18Aux += c.v18Aux
                                 },
                                 enableRawCapture: enableRawCapture,
                                 log: { [weak self] s in self?.log(s) },
@@ -5505,6 +5510,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // open holding the previous link's rows — reporting them as banked on a link that never saw them.
         liveHr = 0; liveRr = 0; offloadHr = 0; offloadRr = 0
         offloadGravity = 0; offloadResp = 0; offloadSkinTemp = 0; offloadSpo2 = 0; offloadChunks = 0
+        offloadV18Aux = 0
         linkUpSince = DispatchTime.now()
         standingConnectAt = nil     // #1413: a live link means no standing connect is outstanding
         restoredPeripheral = nil
@@ -5707,12 +5713,24 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             // #1635: LIVE streams only — the offload persists through `Backfiller` and has its own
             // accounting, so folding it in would make a healthy bonded sync read as "nothing banked live
             // for: gravity". Inside the same `linkUpSince` guard for the same reason the epitaph is.
+            // #103: the four family-conditional channels. `resp` and `spo2` are 4.0-only tables — the v18
+            // layout emits no `resp_rate_raw` and no red/IR ADC pair at all — so on a 5/MG they are not
+            // measurable rather than empty, and passing 0 made every 5/MG link report them as missing
+            // while the offload banked hundreds of thousands of v18 aux rows. `v18aux` is the mirror: a
+            // 4.0 cannot produce it, so it is omitted there.
+            //
+            // Keyed off the DeviceFamily of the selected model through the one canonical resolver, like
+            // the reboot branch above — never a model-string compare, which the wizard's "5.0" and the
+            // BLE path's "WHOOP 5.0" spellings would each half-miss.
+            let isWhoop5 = selectedModel.deviceFamily == .whoop5
             log(ConnectionReadout.linkBankedSummary(
                 liveHr: liveHr, liveRr: liveRr, offloadChunks: offloadChunks,
                 offloadHr: offloadHr, offloadRr: offloadRr, offloadGravity: offloadGravity,
-                offloadResp: offloadResp, offloadSkinTemp: offloadSkinTemp, offloadSpo2: offloadSpo2,
+                offloadResp: isWhoop5 ? nil : offloadResp, offloadSkinTemp: offloadSkinTemp,
+                offloadSpo2: isWhoop5 ? nil : offloadSpo2,
                 // nil, not 0: this store does not return a step count, and a zero would read as a fault.
-                offloadSteps: nil))
+                offloadSteps: nil,
+                offloadV18Aux: isWhoop5 ? offloadV18Aux : nil))
             // Frames this link REJECTED, per reason. A per-connection readout, so it sits behind the
             // Test Centre's Connection domain (D3) — a resync after a lost notification rejects frames
             // routinely and always did, and that number is explicitly NOT the signal to act on. The one
@@ -5726,6 +5744,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         inboundFrames = 0; inboundBytes = 0; cmdChannelFrames = 0
         liveHr = 0; liveRr = 0; offloadHr = 0; offloadRr = 0
         offloadGravity = 0; offloadResp = 0; offloadSkinTemp = 0; offloadSpo2 = 0; offloadChunks = 0
+        offloadV18Aux = 0
         linkUpSince = nil
         // #2332: scoped to the link, so it dies with it. Leaving it set would hand the NEXT link's epitaph
         // a reading taken on this one. The THROTTLE is cleared with them: it measures "how long since we

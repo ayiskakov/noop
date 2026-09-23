@@ -132,9 +132,28 @@ struct FullDayChartView: View {
 
     // MARK: Controls
 
+    /// #103: the SpO₂-estimate track is offered only while the experimental candidate toggle is ON — the
+    /// same gate every other candidate surface checks. Without it a 4.0 owner (and a 5/MG owner who never
+    /// opted in) would be handed a pill for a signal they have not asked to see, whose only honest state
+    /// is empty.
+    ///
+    /// Filtered here rather than inside `TimelineMetric` so the enum stays a plain description of what the
+    /// timeline CAN plot and the preference decides what is shown; `allCases` is still the source of
+    /// order, so the new pill cannot drift to a different position between builds.
+    ///
+    /// No stranded-selection guard is needed because `metric` is `@State`, so it returns to `.hr` every
+    /// time this screen appears — and the toggle lives in Settings, which means leaving the screen. If
+    /// `metric` ever becomes `@AppStorage`, a selection of `.spo2Candidate` could outlive the preference
+    /// that offers it and WOULD need one.
+    private var availableMetrics: [Repository.TimelineMetric] {
+        Repository.TimelineMetric.allCases.filter {
+            $0 != .spo2Candidate || PuffinExperiment.spo2CandidateDisplayEnabled
+        }
+    }
+
     private var metricPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            SegmentedPillControl(Repository.TimelineMetric.allCases, selection: $metric) { $0.title }
+            SegmentedPillControl(availableMetrics, selection: $metric) { $0.title }
                 .padding(.vertical, NoopMetrics.space1 / 2)
         }
     }
@@ -313,8 +332,23 @@ struct FullDayChartView: View {
     /// the Health screen where the R-R/RSA estimate surfaces. Strap view only (ownedOnly). Twin of Android
     /// FullDayChartScreen.EmptyTimelineState.
     private var emptyReason: String {
+        // #103: on a 5/MG this said "this strap doesn't send SpO₂ over Bluetooth", which is false — the
+        // strap sends a percentage-shaped candidate byte (`@82`) every second it scores a night, and the
+        // app banks every one of them. What is true is that it sends no CALIBRATED SpO₂ and nothing on
+        // the 4.0 red/IR channels this track plots. Saying the broader thing is what convinced a 5/MG
+        // owner their readings were not being collected at all. So: name what is missing (a calibrated
+        // reading), and point at the track that does have their data.
         if ownedOnly, metricUnsupported, metric == .spo2 {
-            return String(localized: "This strap doesn’t send SpO₂ over Bluetooth. Import a WHOOP export or Health Connect to see it.")
+            return PuffinExperiment.spo2CandidateDisplayEnabled
+                ? String(localized: "This strap sends no calibrated SpO₂ over Bluetooth. Its own unverified estimate is on the “SpO₂ estimate” track; a WHOOP export or Health Connect import adds calibrated values.")
+                : String(localized: "This strap sends no calibrated SpO₂ over Bluetooth. Import a WHOOP export or Health Connect to see it, or turn on the strap’s own unverified estimate in Settings → Experimental · Blood Oxygen.")
+        }
+        // The candidate track's own empty state. `@82` reads zero all day and goes in-band only while the
+        // band is scoring a night, so "nothing for this window" is the ORDINARY daytime answer here and
+        // must not read as a fault. Never routed through `metricUnsupported`: that flag is resolved from
+        // the 4.0 SpO₂/respiration tables, which say nothing about this stream.
+        if ownedOnly, metric == .spo2Candidate {
+            return String(localized: "No SpO₂ estimate in this window. The strap reports it only while it is scoring a night, so it is normally empty outside sleep.")
         }
         if ownedOnly, metricUnsupported, metric == .respiration {
             return String(localized: "This strap sends no raw respiration stream. Your estimated respiratory rate appears on the Health screen.")
@@ -446,6 +480,10 @@ struct FullDayChartView: View {
         case .motion: return " g"
         // Seconds of movement per ~30 s window (the ring's OWN 0x47 activity), so tag it "s".
         case .spo2, .bandSleepState: return ""
+        // #103: the candidate byte IS percentage-shaped (70-100), unlike the `.spo2` ratio proxy above,
+        // so it carries the "%" its own numbers imply. The "unverified" caveat lives in the pill title
+        // and the empty/footer copy, not in the unit — a unit is not the place to argue about provenance.
+        case .spo2Candidate: return "%"
         }
     }
 
@@ -456,6 +494,9 @@ struct FullDayChartView: View {
         // skin temp to °F upfront so the chart's own axis (plotted from the same points) agrees. (#101)
         case .skinTemp: return String(format: "%.1f", v)
         case .spo2, .motion: return String(format: "%.2f", v)
+        // Whole percent. The wire value is an integer byte; at day scale a bucket average is fractional,
+        // and printing "96.43 %" off a mean of integers would imply a precision the byte does not have.
+        case .spo2Candidate: return String(Int(v.rounded()))
         // #175: name the band's own state at the nearest code so the readout reads "asleep", not "2.0".
         case .bandSleepState: return Self.bandStateLabel(v)
         }
@@ -493,6 +534,10 @@ struct FullDayChartView: View {
             return Gradient(colors: [StrandPalette.strain033.opacity(0.55), StrandPalette.strain033])
         case .hrv, .spo2:
             return Gradient(colors: [StrandPalette.sleepLight.opacity(0.55), StrandPalette.sleepLight])
+        // Cyan, matching the Blood Oxygen tile this track drills into (`StrandPalette.metricCyan`), so
+        // the two surfaces for one signal look like one signal.
+        case .spo2Candidate:
+            return Gradient(colors: [StrandPalette.metricCyan.opacity(0.55), StrandPalette.metricCyan])
         case .respiration, .motion:
             return Gradient(colors: [StrandPalette.textSecondary.opacity(0.5), StrandPalette.textSecondary])
         // #175: the band-state track uses the deep-sleep hue so it reads as a distinct sleep track.

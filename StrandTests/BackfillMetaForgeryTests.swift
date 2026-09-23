@@ -22,9 +22,10 @@ final class BackfillMetaForgeryTests: XCTestCase {
         @discardableResult
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
-                spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
             (streams.hr.count, streams.rr.count, 0, 0,
-             streams.spo2.count, streams.skinTemp.count, streams.resp.count, streams.gravity.count)
+             streams.spo2.count, streams.skinTemp.count, streams.resp.count, streams.gravity.count,
+             streams.v18Aux.count)
         }
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}
         func setCursor(_ name: String, _ value: Int) async throws {}

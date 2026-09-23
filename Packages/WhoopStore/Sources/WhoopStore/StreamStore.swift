@@ -307,13 +307,21 @@ extension WhoopStore {
     /// Idempotent upsert of decoded streams by natural key. Returns the number of rows
     /// ACTUALLY inserted per stream (0 for rows that already existed).
     ///
+    /// `v18Aux` joined the tuple for #103. It was deliberately left out as "persist-only" alongside
+    /// steps/sleepState/ppgHr/ppgWaveform, which was right while nothing needed the number — but the link
+    /// census reports the offload's banked channels, and on a 5/MG every channel IN the tuple is a
+    /// 4.0-only table. So the census could only ever print zeros for that family while this stream banked
+    /// hundreds of thousands of rows, and a 5/MG owner read the result as "my SpO2 is not being
+    /// collected". It is in the tuple so that line can count the rows it is actually talking about, on the
+    /// same ACCEPTED-rows basis as every other entry — not a decoded count wearing the same label.
+    ///
     /// NOTE: the `synced` column (added by migration v5 for a since-removed server-upload feature)
     /// is intentionally NOT written here, it is unused and defaults to 0. The column is left in the
     /// schema to avoid a DROP COLUMN migration over existing data; nothing reads it.
     @discardableResult
     public func insert(_ streams: Streams, deviceId: String) async throws
         -> (hr: Int, rr: Int, events: Int, battery: Int,
-            spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+            spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
         try await insert(streams, deviceId: deviceId,
                          v18AuxRetentionRows: WhoopStore.v18AuxRetentionRows,
                          v18AuxPruneEveryRows: WhoopStore.v18AuxPruneEveryRows,
@@ -339,7 +347,7 @@ extension WhoopStore {
                 ecgCandidateRetentionRows: Int = WhoopStore.ecgCandidateRetentionRows,
                 ecgCandidatePruneEveryRows: Int = WhoopStore.ecgCandidatePruneEveryRows) async throws
         -> (hr: Int, rr: Int, events: Int, battery: Int,
-            spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+            spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
         // Banked rows, accumulated across batches so the sweep does not run on every one.
         var v18Written = 0
         var ppgWaveformWritten = 0
@@ -655,7 +663,11 @@ extension WhoopStore {
                 ecgCandidateRowsSincePrune[deviceId] = 0
             }
         }
-        return result
+        // `v18Written` is accumulated by the write closure above and counted OUTSIDE it (the retention
+        // sweep runs in its own transaction), so it is appended here rather than returned from `syncWrite`.
+        // Rows ACCEPTED, exactly like the eight that precede it: a reconnect re-offloading records already
+        // on disk adds nothing here, which is the property the census depends on.
+        return (result.0, result.1, result.2, result.3, result.4, result.5, result.6, result.7, v18Written)
     }
 
     // MARK: - Raw sensor CSV export (diagnostic)

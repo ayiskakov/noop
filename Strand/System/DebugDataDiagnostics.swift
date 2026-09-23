@@ -343,8 +343,24 @@ enum DebugDataDiagnostics {
         if auxRead == nil {
             lines.append("SpO₂ candidate @82: could not read the aux stream for this night — "
                          + "a read failure, NOT an absence of readings.")
-        } else if let cand = AnalyticsEngine.nightlySpo2CandidateMean([det], aux: auxRead ?? []) {
-            lines.append("SpO₂ candidate @82 (5/MG): mean \(cand.mean) over \(cand.samples) in-band readings "
+        } else if let cand = AnalyticsEngine.nightlySpo2CandidateNight([det], aux: auxRead ?? []) {
+            // The MEAN alone sent a reader the wrong way: a night averaging 96 % with a run down to 77 %
+            // and a night flat at 96 % printed the same line. The range and the dips are what separate
+            // them, and they cost nothing here — the readings are already in hand. One decimal on the
+            // mean because the stored series keeps the unrounded value now, and the rounded figure a
+            // screen shows is derived from it; printing only the rounded one would make this line
+            // unable to explain a screen that disagreed with it.
+            //
+            // Dip SECONDS are measured between readings, never samples × 1 s, so they are legitimately 0
+            // when every dip was a single reading — the count is therefore printed beside them rather
+            // than inferred from them (see `Spo2DesatEvent.spanSeconds`).
+            let dips = cand.events.isEmpty
+                ? "no dips below \(cand.threshold)%"
+                : "\(cand.events.count) dip(s) below \(cand.threshold)% "
+                    + "(lowest \(cand.nadir.map(String.init) ?? "?")%, \(cand.secondsBelowThreshold)s measured)"
+            lines.append("SpO₂ candidate @82 (5/MG): mean \(String(format: "%.1f", cand.mean))% "
+                         + "(shown as \(cand.meanRounded)%), range \(cand.minimum)-\(cand.maximum)%, "
+                         + "\(dips), over \(cand.samples) in-band readings "
                          + "— UNVERIFIED, compare against the WHOOP app's figure for this night (#103).")
         } else {
             lines.append("SpO₂ candidate @82 (5/MG): no in-band readings inside this night's span.")

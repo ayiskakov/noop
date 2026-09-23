@@ -12,11 +12,11 @@ final class StandardHRLifecyclePersistenceTests: XCTestCase {
 
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
-                spo2: Int, skinTemp: Int, resp: Int, gravity: Int) {
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
             offeredHRRows = streams.hr.count
             offeredRRRows = streams.rr.count
             // Deliberately differ from the offered counts: this is the store's conflict/dedup result.
-            return (0, 1, 0, 0, 0, 0, 0, 0)
+            return (0, 1, 0, 0, 0, 0, 0, 0, 0)
         }
 
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}
