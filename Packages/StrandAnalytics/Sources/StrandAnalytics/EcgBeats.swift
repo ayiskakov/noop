@@ -86,11 +86,16 @@ public enum EcgBeats {
         public let intervals: [Interval]
         /// Seconds of signal that passed the quality gate and were analysed.
         public let analysedSeconds: Int
+        /// Seconds the strap rated `requiredQuality`: one per record at that code, analysed or not. More
+        /// than `analysedSeconds` where some came as partial records or in runs under
+        /// `minSegmentSeconds`.
+        public let ratedSeconds: Int
 
-        public init(beats: [Beat], intervals: [Interval], analysedSeconds: Int) {
+        public init(beats: [Beat], intervals: [Interval], analysedSeconds: Int, ratedSeconds: Int? = nil) {
             self.beats = beats
             self.intervals = intervals
             self.analysedSeconds = analysedSeconds
+            self.ratedSeconds = ratedSeconds ?? analysedSeconds
         }
 
         /// Successive intervals that fell outside `rrRangeMs`.
@@ -148,7 +153,8 @@ public enum EcgBeats {
                 intervals.append(Interval(ms: Double(b - a) / sampleRate * 1_000, segment: s))
             }
         }
-        return Result(beats: beats, intervals: intervals, analysedSeconds: segments.reduce(0) { $0 + $1.count })
+        return Result(beats: beats, intervals: intervals, analysedSeconds: segments.reduce(0) { $0 + $1.count },
+                      ratedSeconds: records.filter { $0.quality == requiredQuality }.count)
     }
 
     // MARK: - Detection

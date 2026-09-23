@@ -109,6 +109,8 @@ final class EcgBeatsTests: XCTestCase {
     func testShortStretchesAndPartialRecordsAreSkipped() {
         let short = recording(bpm: 80, seconds: EcgBeats.minSegmentSeconds - 1).records
         XCTAssertEqual(EcgBeats.analyse(short).analysedSeconds, 0)
+        // The strap still rated them: the screen says how much, so an empty result is not read as none.
+        XCTAssertEqual(EcgBeats.analyse(short).ratedSeconds, EcgBeats.minSegmentSeconds - 1)
         // Inside a long stretch, where only the record checks can drop them: one record that stored and
         // declared 245 samples, and one that stored 500 but declared 600.
         var records = recording(bpm: 80, seconds: 20).records
@@ -118,6 +120,7 @@ final class EcgBeatsTests: XCTestCase {
         records[13] = EcgCandidateSample(ts: b.ts, samples: b.samples, recordIndex: b.recordIndex,
                                          declaredCount: 600, quality: 3)
         XCTAssertEqual(EcgBeats.analyse(records).analysedSeconds, 18)
+        XCTAssertEqual(EcgBeats.analyse(records).ratedSeconds, 20)
     }
 
     func testTinyInputsGiveNoBeatsRatherThanTrapping() {

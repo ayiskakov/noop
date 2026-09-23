@@ -171,7 +171,7 @@ struct EcgReviewView: View {
                     Text("R-R median \(Int(rr.rounded())) ms · \(beats.beats.count) beats in \(beats.analysedSeconds) s of clean signal")
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                 } else {
-                    Text("Not enough clean signal for a heart rate. The strap marked \(beats.analysedSeconds) s of this recording as clean.")
+                    Text("Not enough clean signal for a heart rate. The strap marked \(beats.ratedSeconds) s of this recording as clean; \(beats.analysedSeconds) s of it came in runs long enough to analyse.")
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

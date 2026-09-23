@@ -138195,66 +138195,66 @@
         }
       }
     },
-    "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean.": {
+    "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean; %lld s of it came in runs long enough to analyse.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zu wenig sauberes Signal für eine Herzfrequenz. Das Band hat %lld s dieser Aufzeichnung als sauber markiert."
+            "value": "Zu wenig sauberes Signal für eine Herzfrequenz. Das Band hat %lld s dieser Aufzeichnung als sauber markiert; davon kamen %lld s in Abschnitten, die lang genug für die Analyse waren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean."
+            "value": "Not enough clean signal for a heart rate. The strap marked %lld s of this recording as clean; %lld s of it came in runs long enough to analyse."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No hay suficiente señal limpia para una frecuencia cardiaca. La pulsera marcó %lld s de esta grabación como limpios."
+            "value": "No hay suficiente señal limpia para una frecuencia cardiaca. La pulsera marcó %lld s de esta grabación como limpios; %lld s llegaron en tramos lo bastante largos para analizarlos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pas assez de signal propre pour une fréquence cardiaque. Le bracelet a jugé %lld s de cet enregistrement propres."
+            "value": "Pas assez de signal propre pour une fréquence cardiaque. Le bracelet a jugé %lld s de cet enregistrement propres ; %lld s sont arrivées en séquences assez longues pour être analysées."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Segnale pulito insufficiente per una frequenza cardiaca. Il cinturino ha segnato come pulito %lld s di questa registrazione."
+            "value": "Segnale pulito insufficiente per una frequenza cardiaca. Il cinturino ha segnato come pulito %lld s di questa registrazione; %lld s sono arrivati in tratti abbastanza lunghi da analizzare."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Za mało czystego sygnału, by podać tętno. Opaska oznaczyła %lld s tego nagrania jako czyste."
+            "value": "Za mało czystego sygnału, by podać tętno. Opaska oznaczyła %lld s tego nagrania jako czyste; %lld s z tego przypadło na odcinki wystarczająco długie do analizy."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sinal limpo insuficiente para uma frequência cardíaca. A pulseira marcou %lld s desta gravação como limpos."
+            "value": "Sinal limpo insuficiente para uma frequência cardíaca. A pulseira marcou %lld s desta gravação como limpos; %lld s vieram em troços suficientemente longos para análise."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Недостаточно чистого сигнала для расчёта пульса. Браслет отметил как чистые %lld с этой записи."
+            "value": "Недостаточно чистого сигнала для расчёта пульса. Браслет отметил как чистые %lld с этой записи; из них %lld с пришлись на отрезки, достаточно длинные для анализа."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "清晰信号不足，无法计算心率。手环将本次记录中的 %lld 秒标记为清晰。"
+            "value": "清晰信号不足，无法计算心率。手环将本次记录中的 %lld 秒标记为清晰；其中 %lld 秒处于足够长、可供分析的连续片段中。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "清晰訊號不足，無法計算心率。手環將本次記錄中的 %lld 秒標記為清晰。"
+            "value": "清晰訊號不足，無法計算心率。手環將本次記錄中的 %lld 秒標記為清晰；其中 %lld 秒位於足夠長、可供分析的連續片段中。"
           }
         }
       }
