@@ -16,7 +16,11 @@ import WhoopProtocol
 /// absolute difference 4.0 bpm, ECG reading 2.0 bpm higher on average (the optical figure is smoothed
 /// over tens of seconds). An independent Python analysis of the same records agreed with it per session
 /// to within 0.5 bpm. That is a varying input tracked rather than one matched night; the synthetic tests
-/// recover several injected rates for the same reason.
+/// recover several injected rates for the same reason. The adaptive thresholds in `classify` and the
+/// neighbour check came after that comparison. Re-run over five recordings from the same strap (354 s
+/// at quality 3), they find the same beats the fixed threshold did, at the same samples, bar four it
+/// took that were not complexes, and give the same rate at every moment an optical reading fell in a
+/// quality-3 stretch.
 ///
 /// ## What is gated, and why
 ///
@@ -156,10 +160,11 @@ public enum EcgBeats {
     /// R-peak sample indices in one contiguous stretch, ascending.
     ///
     /// A reduced Pan–Tompkins: zero-phase 5–20 Hz band-pass (which also takes 50/60 Hz mains down by
-    /// more than 60 dB), squared slope, 150 ms moving integration, a threshold at 30 % of the stretch's
-    /// 98th percentile, a 250 ms refractory period, and each peak placed on the band-passed signal's
-    /// extreme in the stretch's dominant polarity. Polarity is chosen per stretch because the trace's
-    /// sign follows the wrist and lead orientation.
+    /// more than 60 dB), squared slope, 150 ms moving integration, Pan–Tompkins' running signal and
+    /// noise thresholds with search-back (`classify`), a 250 ms refractory period, each peak placed on
+    /// the band-passed signal's extreme in the stretch's dominant polarity, and a check of that extreme
+    /// against the neighbouring beats' (`inLineWithNeighbours`). Polarity is chosen per stretch because
+    /// the trace's sign follows the wrist and lead orientation.
     public static func detect(_ samples: [Double], sampleRate fs: Double) -> [Int] {
         let n = samples.count
         guard n >= Int(fs), fs > 0 else { return [] }
@@ -180,14 +185,13 @@ public enum EcgBeats {
         }
 
         guard let high = percentile(integrated, 0.98), high > 0 else { return [] }
-        let threshold = 0.3 * high
-        var candidates: [Int] = []
-        for i in 1..<(n - 1) where integrated[i] >= threshold
-            && integrated[i] > integrated[i - 1] && integrated[i] >= integrated[i + 1] {
-            candidates.append(i)
-        }
         let refractory = Int(0.250 * fs)
-        let kept = strongestFirst(candidates, height: integrated, spacing: refractory)
+        var maxima: [Int] = []
+        for i in 1..<(n - 1) where integrated[i] > integrated[i - 1] && integrated[i] >= integrated[i + 1] {
+            maxima.append(i)
+        }
+        let kept = classify(strongestFirst(maxima, height: integrated, spacing: refractory),
+                            height: integrated, sampleRate: fs)
 
         // The integrator lags the complex by up to its window; search back over it, and a little ahead.
         let back = Int(0.200 * fs), ahead = Int(0.050 * fs)
@@ -205,7 +209,102 @@ public enum EcgBeats {
         let down = spans.reduce(0.0) { $0 - band[$1.lo] }
         let peaks = spans.map { up >= down ? $0.hi : $0.lo }
         let refined = Array(Set(peaks)).sorted()
-        return strongestFirst(refined, height: band.map { up >= down ? $0 : -$0 }, spacing: refractory)
+        let height = band.map { up >= down ? $0 : -$0 }
+        return inLineWithNeighbours(strongestFirst(refined, height: height, spacing: refractory), height: height)
+    }
+
+    /// Peaks whose band-passed height, in the stretch's polarity, is in line with the beats around them:
+    /// of the two medians, over the four beats before and the four after, at least half the smaller and
+    /// at most four times the larger.
+    ///
+    /// The running threshold judges energy, which a spike of the wrong polarity has plenty of; this
+    /// judges the deflection the beat is placed on. Half the amplitude is the quarter energy the
+    /// threshold works at. Each side is taken separately so a step in amplitude, where the beats on one
+    /// side are all smaller, does not read as an outlier, and at a stretch end the one side there is
+    /// decides. Over one MG's captures (five recordings, 354 s of quality 3) the running threshold
+    /// alone took two opposite-polarity spikes for beats; this check removes them, and three detections
+    /// the fixed threshold had also made (a dip at each end of one stretch and the onset of a large
+    /// step), and nothing that was a complex.
+    static func inLineWithNeighbours(_ peaks: [Int], height: [Double]) -> [Int] {
+        guard peaks.count >= 3 else { return peaks }
+        return peaks.indices.filter { i in
+            let before = median(peaks[max(0, i - 4)..<i].map { height[$0] })
+            let after = median(peaks[(i + 1)..<min(peaks.count, i + 5)].map { height[$0] })
+            let sides = [before, after].compactMap { $0 }.filter { $0 > 0 }
+            guard let low = sides.min(), let high = sides.max() else { return true }
+            return height[peaks[i]] >= 0.5 * low && height[peaks[i]] <= 4 * high
+        }.map { peaks[$0] }
+    }
+
+    /// Pan–Tompkins' adaptive thresholds over candidate peaks of the integrated signal (ascending, at
+    /// most one per refractory period): the QRS subset.
+    ///
+    /// One threshold per stretch loses every beat wherever the complexes shrink, as they do when the
+    /// finger's pressure on the clasp eases: a swing between 0.4 and 1.0 of full amplitude lost 22 of 72
+    /// beats to a fixed 30 % of the stretch's 98th percentile, silently, since the median rate holds. Here
+    /// the threshold sits a quarter of the way from a running noise level to a running signal level,
+    /// each updated by the candidates as they are classified (weight 1/8), so it follows the amplitude.
+    /// When no beat has been found for 1.66 times the mean of the last eight R-R intervals, the gap is
+    /// searched again at half the threshold and its strongest candidate taken, which is how a lone
+    /// small complex after a large one is recovered.
+    ///
+    /// One change from the original: a candidate's height enters the signal level capped at twice the
+    /// level. Uncapped, one second of motion artefact classified as three or four beats lifts the level
+    /// so far that no later complex clears even the search-back threshold, and nothing ever brings it
+    /// down, so the rest of the stretch goes silent. Capped, the level rises at most an eighth per beat:
+    /// a burst moves it little, and a genuine rise in amplitude is followed over a few more beats.
+    ///
+    /// The levels are learned from the start of the stretch, as in the original, but robustly: the
+    /// signal level is the median of the highest point in each of the first three two-second blocks (at
+    /// 30 bpm every block still holds a beat, and one block of artefact does not move a median of
+    /// three), and the noise level is the stretch's median, which lies between complexes. Learned from
+    /// the whole stretch instead, a recording whose complexes grow threefold partway starts above every
+    /// complex before the growth.
+    ///
+    /// What it cannot follow is an abrupt fall to under about a third of the amplitude: those complexes
+    /// sit below even the search-back threshold, and go unmarked on the strip.
+    static func classify(_ candidates: [Int], height h: [Double], sampleRate fs: Double) -> [Int] {
+        guard !candidates.isEmpty else { return [] }
+        let block = max(1, Int(2 * fs))
+        let blockPeaks = stride(from: 0, to: min(h.count, 3 * block), by: block)
+            .map { h[$0..<min(h.count, $0 + block)].max() ?? 0 }
+        var signal = median(blockPeaks) ?? 0
+        var noise = median(h) ?? 0
+        var threshold: Double { noise + 0.25 * (signal - noise) }
+
+        var beats: [Int] = []
+        var rr: [Int] = []
+        // Candidates classified as noise since the last beat: where a search-back looks.
+        var passed: [Int] = []
+
+        func searchBack(before end: Int) {
+            while let last = beats.last, !rr.isEmpty {
+                let recent = rr.suffix(8)
+                let mean = Double(recent.reduce(0, +)) / Double(recent.count)
+                guard Double(end - last) > 1.66 * mean,
+                      let found = passed.filter({ h[$0] >= 0.5 * threshold }).max(by: { h[$0] < h[$1] })
+                else { return }
+                signal = 0.25 * min(h[found], 2 * signal) + 0.75 * signal
+                rr.append(found - last)
+                beats.append(found)
+                passed.removeAll { $0 <= found }
+            }
+        }
+
+        for c in candidates {
+            searchBack(before: c)
+            if h[c] >= threshold {
+                signal = 0.125 * min(h[c], 2 * signal) + 0.875 * signal
+                if let last = beats.last { rr.append(c - last) }
+                beats.append(c)
+                passed.removeAll()
+            } else {
+                noise = 0.125 * h[c] + 0.875 * noise
+                passed.append(c)
+            }
+        }
+        searchBack(before: h.count)
+        return beats
     }
 
     /// Keep the highest candidates first, dropping any within `spacing` of one already kept.

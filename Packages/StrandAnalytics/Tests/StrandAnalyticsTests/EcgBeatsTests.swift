@@ -19,10 +19,12 @@ final class EcgBeatsTests: XCTestCase {
     /// `seconds` full records of a synthetic ECG at `bpm`, with ±3 % alternating R-R jitter. Returns the
     /// records and the injected R-peak times (seconds from the start).
     ///
+    /// `amplitude` scales each complex by its peak time, for recordings whose complexes grow and shrink;
     /// `clockJump` moves every record from `at` onwards by `seconds` of wall clock, leaving the record
     /// index running on, as a clock correction partway through a session does.
     private func recording(bpm: Double, seconds: Int, polarity: Double = -1, hum: Double = 0.5,
                            quality: Int = 3, startIndex: Int = 1_000, ts0: Int = 1_790_000_000,
+                           amplitude: (Double) -> Double = { _ in 1 },
                            clockJump: (at: Int, seconds: Int)? = nil)
         -> (records: [EcgCandidateSample], rPeaks: [Double]) {
         let fs = EcgBeats.sampleRate
@@ -35,17 +37,18 @@ final class EcgBeatsTests: XCTestCase {
             k += 1
         }
         var noise = Lcg(state: UInt64(bpm * 1_000))
-        let amplitude = 8_000.0
+        let full = 8_000.0
         var x = [Double](repeating: 0, count: n)
         for i in 0..<n {
             let ti = Double(i) / fs
             var v = 40_000 + 15_000 * sin(2 * .pi * 0.3 * ti)          // offset and drift
-            v += hum * amplitude * sin(2 * .pi * 50 * ti)               // mains
-            v += 0.05 * amplitude * noise.next()
+            v += hum * full * sin(2 * .pi * 50 * ti)                   // mains
+            v += 0.05 * full * noise.next()
             for p in peaks where abs(ti - p) < 0.6 {
                 let q = (ti - p) / 0.010, tw = (ti - p - 0.25) / 0.060
-                v += polarity * amplitude * exp(-0.5 * q * q)           // QRS
-                v += polarity * 0.3 * amplitude * exp(-0.5 * tw * tw)   // T wave
+                let a = full * amplitude(p)
+                v += polarity * a * exp(-0.5 * q * q)                  // QRS
+                v += polarity * 0.3 * a * exp(-0.5 * tw * tw)          // T wave
             }
             x[i] = v
         }
@@ -155,6 +158,83 @@ final class EcgBeatsTests: XCTestCase {
         XCTAssertEqual(marks.count, peaks.count)
         for (mark, peak) in zip(marks, peaks) {
             XCTAssertEqual(mark * 10_000, peak * 500, accuracy: 5)
+        }
+    }
+
+    /// Complexes that shrink and grow, as they do when the finger's pressure on the clasp changes, are
+    /// all found. One threshold for the whole stretch lost every complex below about half the largest,
+    /// and the median rate did not move to show it.
+    func testEveryBeatIsFoundAsTheAmplitudeSwings() {
+        for low in [0.4, 0.6] {
+            let (records, peaks) = recording(bpm: 72, seconds: 60,
+                                             amplitude: { low + (1 - low) * (0.5 + 0.5 * cos(2 * .pi * $0 / 20)) })
+            let result = EcgBeats.analyse(records)
+            XCTAssertEqual(result.beats.count, peaks.count, "swing down to \(low)")
+            for (beat, peak) in zip(result.beats, peaks) {
+                XCTAssertEqual(beat.time - Double(records[0].ts), peak, accuracy: 0.010)
+            }
+        }
+    }
+
+    func testAStepDownInAmplitudeIsFollowed() {
+        let (records, peaks) = recording(bpm: 75, seconds: 30, amplitude: { $0 < 15 ? 1 : 0.4 })
+        let result = EcgBeats.analyse(records)
+        XCTAssertEqual(result.beats.count, peaks.count)
+        for (beat, peak) in zip(result.beats, peaks) {
+            XCTAssertEqual(beat.time - Double(records[0].ts), peak, accuracy: 0.010)
+        }
+    }
+
+    /// Where the complexes fade into the noise they cannot be found, and none may be invented there.
+    func testAFadingSignalLosesBeatsButNeverInventsThem() {
+        let amplitude: (Double) -> Double = { 0.5 + 0.5 * cos(2 * .pi * $0 / 20) }
+        let (records, peaks) = recording(bpm: 72, seconds: 60, amplitude: amplitude)
+        let result = EcgBeats.analyse(records)
+        let t0 = Double(records[0].ts)
+        for beat in result.beats {
+            XCTAssertTrue(peaks.contains { abs($0 - (beat.time - t0)) < 0.010 }, "beat at \(beat.time - t0) s")
+        }
+        for peak in peaks where amplitude(peak) >= 0.25 {
+            XCTAssertTrue(result.beats.contains { abs($0.time - t0 - peak) < 0.010 }, "complex at \(peak) s")
+        }
+    }
+
+    /// A spike of the opposite polarity to the complexes and as large as they are, midway between two
+    /// beats. The running threshold judges energy, which such a spike has plenty of, and takes it for a
+    /// beat; judged against the neighbouring complexes' deflection it is not one.
+    func testAnOppositePolaritySpikeBetweenBeatsIsNotABeat() {
+        var (records, peaks) = recording(bpm: 75, seconds: 30)
+        let spikes = [7, 15, 23].map { (peaks[$0] + peaks[$0 + 1]) / 2 }
+        records = records.enumerated().map { s, r in
+            EcgCandidateSample(ts: r.ts, samples: r.samples.enumerated().map { i, v in
+                let t = Double(s) + Double(i) / 500
+                return v + Int(spikes.reduce(0.0) { $0 + 8_000 * exp(-0.5 * pow((t - $1) / 0.008, 2)) }.rounded())
+            }, recordIndex: r.recordIndex, quality: 3)
+        }
+        let result = EcgBeats.analyse(records)
+        XCTAssertEqual(result.beats.count, peaks.count)
+        for (beat, peak) in zip(result.beats, peaks) {
+            XCTAssertEqual(beat.time - Double(records[0].ts), peak, accuracy: 0.010)
+        }
+    }
+
+    /// A second of artefact raises the threshold for a moment, not for the stretch. At over 3 % of a
+    /// 30-second stretch it put a threshold taken from the stretch's 98th percentile above every
+    /// real complex.
+    func testABriefArtefactDoesNotSilenceTheRestOfTheStretch() {
+        var (records, peaks) = recording(bpm: 75, seconds: 30)
+        var noise = Lcg(state: 7)
+        let r = records[15]
+        records[15] = EcgCandidateSample(ts: r.ts, samples: r.samples.map { $0 + Int(80_000 * noise.next()) },
+                                         recordIndex: r.recordIndex, quality: 3)
+        let result = EcgBeats.analyse(records)
+        let t0 = Double(records[0].ts)
+        let clear: (Double) -> Bool = { abs($0 - 15.5) > 1.5 }
+        for peak in peaks where clear(peak) {
+            XCTAssertTrue(result.beats.contains { abs($0.time - t0 - peak) < 0.010 }, "complex at \(peak) s")
+        }
+        for beat in result.beats where clear(beat.time - t0) {
+            XCTAssertTrue(peaks.contains { abs($0 - (beat.time - t0)) < 0.010 }, "beat at \(beat.time - t0) s")
         }
     }
 }
