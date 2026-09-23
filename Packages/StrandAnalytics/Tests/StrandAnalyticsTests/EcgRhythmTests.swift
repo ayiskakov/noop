@@ -59,6 +59,8 @@ final class EcgRhythmTests: XCTestCase {
         // Each stretch is perfectly steady; only a cross-stretch pair would differ.
         let f = facts([Array(repeating: 800, count: 10), Array(repeating: 600, count: 10)])
         XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 0, accuracy: 1e-9)
+        // Nor is the difference in rate between them counted as variation (pooled over both it is 14.6 %).
+        XCTAssertEqual(f.variationPercent, 0, accuracy: 1e-9)
     }
 
     func testNoDifferenceIsTakenAcrossARejectedInterval() {
@@ -67,6 +69,14 @@ final class EcgRhythmTests: XCTestCase {
         let f = facts([Array(repeating: 1_180, count: 6) + [2_200] + Array(repeating: 1_000, count: 6)])
         XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 0, accuracy: 1e-9)
         XCTAssertEqual(f.setAsideIntervals, 0)
+    }
+
+    func testVariationIsPooledWithinStretches() {
+        // Two stretches alternating by 40 ms around different rates. Each has sample SD 20 · √(20/19), so
+        // the pooled SD is the same; the mean of all forty intervals is 720.
+        let f = facts([(0..<20).map { $0 % 2 == 0 ? 800 : 840 }, (0..<20).map { $0 % 2 == 0 ? 600 : 640 }])
+        XCTAssertEqual(f.variationPercent, 20 * (20.0 / 19).squareRoot() / 720 * 100, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(f.rmssdMs), 40, accuracy: 1e-9)
     }
 
     func testTooFewIntervalsGiveNoFacts() {

@@ -37,7 +37,9 @@ public struct EcgRhythmFacts: Equatable, Sendable {
     /// Share of rolling-rate windows above `highRate` / below `lowRate`, 0…1.
     public let fractionAboveHigh: Double
     public let fractionBelowLow: Double
-    /// Coefficient of variation of the kept intervals, in percent.
+    /// Coefficient of variation of the kept intervals, in percent: the standard deviation within each
+    /// stretch, pooled, over the mean. Pooled rather than taken over every interval at once, so a rate
+    /// that differs between two stretches is not counted as variation.
     public let variationPercent: Double
     /// Root mean square of successive differences between kept intervals, in milliseconds. Only pairs
     /// of adjacent intervals in one stretch count: none across a stretch boundary, a rejected interval
@@ -60,6 +62,7 @@ public struct EcgRhythmFacts: Equatable, Sendable {
         var rolling: [Double] = []
         var nn: [Double] = []
         var contiguous: [Bool] = []
+        var pooledSquares = 0.0, pooledDegrees = 0
         var setAside = 0
         for raw in bySegment {
             let ms = raw.filter(EcgBeats.rrRangeMs.contains)
@@ -77,10 +80,14 @@ public struct EcgRhythmFacts: Equatable, Sendable {
             // across a stretch boundary when the stretches are appended.
             nn += clean.nn
             contiguous += clean.contiguous
+            if let sd = HRVAnalyzer.sdnnRaw(clean.nn) {
+                pooledSquares += sd * sd * Double(clean.nn.count - 1)
+                pooledDegrees += clean.nn.count - 1
+            }
         }
 
         let mean = nn.isEmpty ? 0 : nn.reduce(0, +) / Double(nn.count)
-        let sd = HRVAnalyzer.sdnnRaw(nn) ?? 0
+        let sd = pooledDegrees > 0 ? (pooledSquares / Double(pooledDegrees)).squareRoot() : 0
         let rmssd = HRVAnalyzer.rmssdGapAware(nn, contiguous)
 
         let completed = records.sorted { $0.ts < $1.ts }.first { $0.classifierState == 2 }
