@@ -9,7 +9,8 @@ MG ECG uses the ECG channel of the optical front end; see the
 [hardware overview](PROTOCOL_WHOOP5.md#whoop5-max86176).
 A shared firmware version does not guarantee ECG hardware, successful
 initialization, or availability on every strap. The complete workflow and physical
-waveform calibration have not been validated on hardware for this version.
+waveform calibration have not been validated on hardware for this version;
+[Hardware observations](#hardware-observations) records what one strap has shown.
 
 All offsets below refer to the **complete reassembled format-1 frame**, starting
 at its framing byte. Check framing, declared length and both checksums before
@@ -27,6 +28,7 @@ reading a record. Multi-byte fields are little-endian unless explicitly stated.
 - [Startup, settling and interpretation](#startup-settling-and-interpretation)
 - [Front-end application and calibration boundary](#front-end-application-and-calibration-boundary)
 - [Decoder and session requirements](#decoder-and-session-requirements)
+- [Hardware observations](#hardware-observations)
 - [Constructed parser checks](#constructed-parser-checks)
 
 ## Commands and independent output gates
@@ -336,6 +338,40 @@ Still unresolved are physical voltage scale, raw/filtered rates, an unconditiona
 valid runtime filtered-count bound, complete hardware prerequisites, contact acceptance,
 classifier-code semantics and clinical validity. Neither 500 raw slots nor 100
 filtered slots establishes a rate, and no fixed session duration is established.
+
+## Hardware observations
+
+The sections above specify the wire contract. This section records what has been
+observed on hardware and how, so each claim can be traced to the capture behind it.
+One strap is one data point: nothing here extends to another hardware revision,
+firmware or configuration, and nothing here relaxes a requirement above.
+
+Strap: WHOOP MG, hardware revision `WS50_r00`, firmware `50.39.1.0`, observed
+2026-09-21 to 2026-09-23 with live filtered output, raw saving and generation
+requested (`8B 01 01`, `7D 01 01`, `7C 01 02`).
+
+| Observation | How it was observed |
+|---|---|
+| Wrist argument zero fails | `7B 01 00` answered result 0, and the strap's console logged an invalid wrist value. Arguments `01` and `02` have not yet been observed on this strap. |
+| Start is acknowledged and generation runs | All three requests answered result 1, the console logged the ECG active timer, and R16 historical records arrived with the next offload. |
+| Live type-43 frames arrive while generation runs | Seen throughout the 2026-09-23 captures. Their layout byte was not recorded, so whether they carry R16 or R17 is unconfirmed. |
+| Runs open with short records | Two runs began with a record declaring 0 samples and then one declaring 245 before full 500-sample records. |
+| **R16 throughput is 500 samples per second** | Three continuous runs (62, 62 and 78 full records, no gaps in the record sequence) each delivered exactly 500.00 declared samples per second of the timestamp field at byte 15. On this strap that field advanced by one per record and matched the phone's clock to within about 2 s. |
+
+Two checks corroborate the rate without relying on the strap clock:
+
+- A capture with open electrodes was dominated by mains interference. Its spectral
+  peak places the rate at 500.06 samples per second if the grid runs at 50.00 Hz.
+- Beat intervals computed at 500 samples per second agreed with the strap's optical
+  heart rate in six windows reporting quality code 3, differing by 0.2 to 8.5 bpm in
+  both directions. A 10 % rate error would shift every window by about 9 bpm in the
+  same direction.
+
+For that configuration this establishes the R16 raw rate, so an R16 display there
+may use a time axis; amplitude stays uncalibrated. It does not establish the R17
+filtered rate (100 per second would follow from the one-in-five ratio but has not
+been measured), a voltage scale, contact acceptance, classifier semantics or
+clinical validity.
 
 ## Constructed parser checks
 

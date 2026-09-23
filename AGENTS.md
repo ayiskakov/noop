@@ -215,6 +215,23 @@ Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `
   injected values, not one). Until it does, land it as **instrumentation** (decode + store + log the
   estimate beside the incumbent) or behind a **default-off Experimental toggle** — never make it the
   default or feed it a downstream gate (recovery, illness) on thin evidence.
+- **WHOOP MG ECG (#891) — what is established, and the limits that stay.** Read
+  [`docs/PROTOCOL_ECG.md`](docs/PROTOCOL_ECG.md) before deriving anything from ECG bytes: an R16 layout
+  re-derived from scratch looked self-consistent, passed its tests, and discarded 42.8 % of every
+  record while the correct layout sat in that doc. Its §Hardware observations records what one strap
+  (`WS50_r00`, fw `50.39.1.0`) has shown: the command family starts generation, R16 banks to flash at
+  500 samples per second, and wrist argument zero is refused. The ECG commands have therefore met the
+  BLE bar above and are an ordinary reversible command family, not a probe. They are still never sent
+  automatically, never re-sent on reconnect, run one session at a time, and acknowledge the wrist
+  before start. Three limits do **not** move with decoding progress. (1) No rhythm result, arrhythmia
+  wording, or strap classifier code presented as a finding: that is the not-a-medical-device
+  constraint ([`DISCLAIMER.md`](DISCLAIMER.md) §5, [`docs/SCOPE.md`](docs/SCOPE.md), #752), not an
+  evidence gate. (2) No ECG-derived number (BPM, HRV) shown as a result or fed to a gate until it passes
+  the rule above across subjects; logging it beside the incumbent is already allowed. (3) Capture stays
+  behind the default-off Experimental ECG opt-in until a second strap or firmware reproduces it
+  (`50.40.1.0` is reported to refuse). Presence (byte 22 bit 3) is not finger contact, quality codes are
+  not a grade, and a seconds axis needs the rate for that layout established in the observations
+  section — R16 has it, R17 does not yet.
 
 ## iOS specifics worth knowing
 
