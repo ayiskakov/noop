@@ -384,9 +384,7 @@ public enum EcgBeats {
     // MARK: - Statistics
 
     static func median(_ values: [Double]) -> Double? {
-        guard !values.isEmpty else { return nil }
-        let s = values.sorted(), m = s.count / 2
-        return s.count % 2 == 1 ? s[m] : (s[m - 1] + s[m]) / 2
+        values.isEmpty ? nil : HRVAnalyzer.median(values)
     }
 
     static func percentile(_ values: [Double], _ p: Double) -> Double? {
