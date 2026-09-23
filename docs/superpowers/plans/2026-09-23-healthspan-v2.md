@@ -17,7 +17,7 @@ observational, and nothing here is validated against a mortality outcome (WHOOP'
 
 - [x] **PR 1 — Engine** (`Packages/StrandAnalytics`: `VitalityEngine` + `PaceOfAgingEngine`, `swift test`)
 - [x] **PR 2 — Pipeline** (`Strand/Data/IntelligenceEngine.swift`: windows, inputs, persisted breakdown)
-- [ ] **PR 3 — Healthspan tab** (`Strand/Screens/HealthspanView.swift`, macOS + iOS)
+- [x] **PR 3 — Healthspan tab** (`Strand/Screens/HealthspanView.swift`, macOS + iOS)
 
 ## What is wrong with the current feature (found 2026-09-23)
 
@@ -107,7 +107,7 @@ Changes inside `VitalityEngine` / `PaceOfAgingEngine`. Each curve carries its ci
 5. **Trend:** Body Age and pace over 6 months (StrandDesign chart).
 6. **Context (not scored):** HRV.
 7. **Method sheet:** the referent choice, the limits, the references.
-8. The **Resilience** section (sibling plan) mounts below, behind its Experimental toggle.
+8. The **Resilience** section (sibling plan) mounts below, behind its Experimental toggle. *(Not in this PR: it ships with the Resilience plan.)*
 
 The same rule applies to every readout: hero, dial, chips and chart all read one stored point per day.
 Design tokens only. New copy must go into `Strand/Resources/Localizable.xcstrings` with de / es / fr /

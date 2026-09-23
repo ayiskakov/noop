@@ -1211,7 +1211,7 @@ private struct VitalitySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            SectionHeader("Vitality", overline: "Weekly",
+            SectionHeader("Vitality", overline: "6 months",
                           trailing: bodyAge != nil ? String(localized: "Body Age \(Int((bodyAge ?? 0).rounded()))") : nil)
             if let v = vitality, let ba = bodyAge {
                 hero(vitality: v, bodyAge: ba)
