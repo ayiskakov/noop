@@ -264,8 +264,17 @@ public enum EcgBeats {
     /// of the stretch 60 times; capped, never, and no beat was added. The cap leaves the growth case
     /// alone, where the start is the smaller of the two.
     ///
-    /// What it cannot follow is an abrupt fall to under about a third of the amplitude: those complexes
-    /// sit below even the search-back threshold, and go unmarked on the strip.
+    /// What it cannot follow:
+    /// - an abrupt fall below about 0.4 of the amplitude (0.4 itself is followed to 150 bpm, 0.35 is
+    ///   not from 75 bpm, and at 170 bpm and above 0.4 already loses some): those complexes sit below
+    ///   even the search-back threshold;
+    /// - complexes alternating beat by beat between full and about half amplitude or less. Every smaller
+    ///   one sits under the threshold, and the search-back takes the doubled interval for the rhythm, so
+    ///   none is recovered and the rate reads half. Down to 0.55, every beat is found at 60 to 150 bpm
+    ///   (at 170, down to 0.65); the most eight successive beats alternated over one MG's captures was
+    ///   to 0.65.
+    ///
+    /// Either way, the missing complexes go unmarked on the strip.
     static func classify(_ candidates: [Int], height h: [Double], sampleRate fs: Double) -> [Int] {
         guard !candidates.isEmpty else { return [] }
         let block = max(1, Int(2 * fs))
