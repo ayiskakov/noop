@@ -51,14 +51,38 @@ public enum EcgBeats {
         public let segment: Int
     }
 
+    /// The gap between two successive beats of one stretch.
+    public struct Interval: Equatable, Sendable {
+        /// Unix seconds of the beat that ends the interval.
+        public let endTime: Double
+        public let ms: Double
+        public let segment: Int
+
+        public init(endTime: Double, ms: Double, segment: Int) {
+            self.endTime = endTime
+            self.ms = ms
+            self.segment = segment
+        }
+    }
+
     public struct Result: Equatable, Sendable {
         public let beats: [Beat]
-        /// Successive intervals within one stretch that fell inside `rrRangeMs`, in milliseconds.
-        public let rrMs: [Double]
+        /// Successive intervals within one stretch that fell inside `rrRangeMs`, in beat order.
+        public let intervals: [Interval]
         /// Successive intervals within one stretch that fell outside it.
         public let rejectedIntervals: Int
         /// Seconds of signal that passed the quality gate and were analysed.
         public let analysedSeconds: Int
+
+        public init(beats: [Beat], intervals: [Interval], rejectedIntervals: Int, analysedSeconds: Int) {
+            self.beats = beats
+            self.intervals = intervals
+            self.rejectedIntervals = rejectedIntervals
+            self.analysedSeconds = analysedSeconds
+        }
+
+        /// The in-range intervals, in milliseconds.
+        public var rrMs: [Double] { intervals.map(\.ms) }
 
         /// Median-based rate, or nil with fewer than `minIntervalsForRate` usable intervals. The median
         /// keeps one missed or doubled beat from moving the figure.
@@ -94,7 +118,7 @@ public enum EcgBeats {
         segments.removeAll { $0.count < minSegmentSeconds }
 
         var beats: [Beat] = []
-        var rr: [Double] = []
+        var intervals: [Interval] = []
         var rejected = 0
         for (s, segment) in segments.enumerated() {
             let samples = segment.flatMap { $0.samples.map(Double.init) }
@@ -104,10 +128,14 @@ public enum EcgBeats {
             beats += times.map { Beat(time: $0, segment: s) }
             for i in times.indices.dropFirst() {
                 let ms = (times[i] - times[i - 1]) * 1_000
-                if rrRangeMs.contains(ms) { rr.append(ms) } else { rejected += 1 }
+                if rrRangeMs.contains(ms) {
+                    intervals.append(Interval(endTime: times[i], ms: ms, segment: s))
+                } else {
+                    rejected += 1
+                }
             }
         }
-        return Result(beats: beats, rrMs: rr, rejectedIntervals: rejected,
+        return Result(beats: beats, intervals: intervals, rejectedIntervals: rejected,
                       analysedSeconds: segments.reduce(0) { $0 + $1.count })
     }
 
