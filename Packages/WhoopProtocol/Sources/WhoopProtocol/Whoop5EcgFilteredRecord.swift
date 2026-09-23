@@ -51,6 +51,13 @@ public enum Whoop5EcgFilteredRecord {
             && frame[9] == layout
     }
 
+    /// True for a frame shaped like a LIVE R17 record (type 43). A historical R17 (type 47) belongs to a
+    /// session that already ran, so a live trace must never take one: its samples would be spliced into
+    /// the current capture and its status would stand in for the live one.
+    public static func isLiveRecord(_ frame: [UInt8]) -> Bool {
+        isFilteredRecord(frame) && frame[8] == livePacketType
+    }
+
     /// A bound this record violated. Reported rather than repaired.
     public enum Anomaly: Equatable, Sendable {
         /// The declared count exceeds the 100-slot capacity. The doc requires such a count be

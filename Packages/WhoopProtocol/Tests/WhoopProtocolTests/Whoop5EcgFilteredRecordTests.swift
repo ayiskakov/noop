@@ -39,6 +39,13 @@ final class Whoop5EcgFilteredRecordTests: XCTestCase {
         XCTAssertNil(Whoop5EcgFilteredRecord.decode(frame(samples: [], layout: 16)))
     }
 
+    func testOnlyTypeFortyThreeIsALiveRecord() {
+        // A historical R17 is a finished session's record: a live trace must never take it.
+        XCTAssertTrue(Whoop5EcgFilteredRecord.isLiveRecord(frame(samples: [])))
+        XCTAssertFalse(Whoop5EcgFilteredRecord.isLiveRecord(frame(samples: [], type: 47)))
+        XCTAssertFalse(Whoop5EcgFilteredRecord.isLiveRecord(frame(samples: [], layout: 16)))
+    }
+
     func testSamplesAreSignedLittleEndianAndExactlyTheDeclaredCount() {
         let d = Whoop5EcgFilteredRecord.decode(frame(samples: [0, 1, -1, 32767, -32768, -9798]))!
         XCTAssertEqual(d.samples, [0, 1, -1, 32767, -32768, -9798])
