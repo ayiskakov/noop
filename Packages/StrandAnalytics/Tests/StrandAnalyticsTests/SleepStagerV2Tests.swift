@@ -322,13 +322,16 @@ final class SleepStagerV2Tests: XCTestCase {
         XCTAssertEqual(v2.start, v1.start)
         XCTAssertEqual(v2.end, v1.end)
         // The hypnogram is V2's: it matches a direct V2 stageSession over the accepted span, and (proof
-        // the flag actually flipped the engine) it expresses both deep and REM.
+        // the flag actually flipped the engine) it differs from V1's and expresses REM. It no longer has to
+        // express deep: this fixture's HR is flat all night, and its deep used to come only from the
+        // symmetric respiration-regularity boost, which is now one-sided and REM-only.
         let v2Direct = SleepStagerV2.stageSession(start: v2.start, end: v2.end,
                                                   grav: grav, hr: hr, rr: rr, resp: [])
         XCTAssertEqual(v2.stages.map { $0.stage }, v2Direct.map { $0.stage },
                        "flag ON must produce the V2 hypnogram")
         let v2Stages = Set(v2.stages.map { $0.stage })
-        XCTAssertTrue(v2Stages.contains("deep"), "V2 night should express deep")
+        XCTAssertNotEqual(v2.stages.map { $0.stage }, v1.stages.map { $0.stage },
+                          "flag ON must not reproduce the V1 hypnogram")
         XCTAssertTrue(v2Stages.contains("rem"), "V2 night should express REM")
     }
 
@@ -374,7 +377,7 @@ final class SleepStagerV2Tests: XCTestCase {
         let segs = SleepStagerV2.stageSession(start: start, end: start + dur, grav: grav, hr: hr, rr: rr, resp: [])
         let golden: [(Int, Int, String)] = [
             (0, 5070, "deep"), (5070, 5310, "light"), (5310, 5550, "rem"),
-            (5550, 10740, "light"), (10740, 16290, "rem"), (16290, 21600, "wake")]
+            (5550, 10800, "light"), (10800, 16200, "rem"), (16200, 21600, "wake")]
         XCTAssertEqual(segs.count, golden.count, "segment count")
         for k in 0..<min(segs.count, golden.count) {
             XCTAssertEqual(segs[k].start, start + golden[k].0, "seg \(k) start")

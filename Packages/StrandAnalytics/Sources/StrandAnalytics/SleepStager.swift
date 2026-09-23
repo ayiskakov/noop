@@ -1178,15 +1178,7 @@ public enum SleepStager {
         let n = states.count
         // Epoch i spans [start + i·epochS, …); boundaries sit on 30 s edges, so expanding the segment tiling
         // to a per-epoch stage array and re-collapsing it is an exact round-trip (no-op when nothing changes).
-        func epochStart(_ i: Int) -> Int { start + Int(Double(i) * epochS) }
-        var labels = [String](repeating: "wake", count: n)
-        for i in 0..<n {
-            let t = epochStart(i)
-            if let seg = stages.first(where: { $0.start <= t && t < $0.end })
-                ?? stages.first(where: { $0.start <= t && t <= $0.end }) {
-                labels[i] = seg.stage
-            }
-        }
+        var labels = epochLabels(stages, start: start, epochs: n)
         // Interior = [firstSleep, lastSleep]; leading/trailing wake blocks are excluded from the veto.
         guard let onset = labels.firstIndex(where: { $0 != "wake" }),
               let finalWake = labels.lastIndex(where: { $0 != "wake" }), onset <= finalWake else {
@@ -1198,7 +1190,28 @@ public enum SleepStager {
             changed = true
         }
         if !changed { return stages }   // the band disputed nothing → byte-identical hypnogram
-        // Re-collapse consecutive same-stage epochs back into segments tiling [start, end].
+        return collapseEpochLabels(labels, start: start, end: end)
+    }
+
+    /// Expand a hypnogram tiling `[start, …)` onto `epochs` 30 s epochs (epoch i starts at
+    /// `start + i·epochS`). Boundaries sit on 30 s edges, so expanding and re-collapsing with
+    /// `collapseEpochLabels` is an exact round-trip. An epoch no segment covers reads "wake".
+    static func epochLabels(_ stages: [StageSegment], start: Int, epochs n: Int) -> [String] {
+        var labels = [String](repeating: "wake", count: n)
+        for i in 0..<n {
+            let t = start + Int(Double(i) * epochS)
+            if let seg = stages.first(where: { $0.start <= t && t < $0.end })
+                ?? stages.first(where: { $0.start <= t && t <= $0.end }) {
+                labels[i] = seg.stage
+            }
+        }
+        return labels
+    }
+
+    /// Re-collapse consecutive same-stage epochs back into segments tiling `[start, end]`.
+    static func collapseEpochLabels(_ labels: [String], start: Int, end: Int) -> [StageSegment] {
+        let n = labels.count
+        func epochStart(_ i: Int) -> Int { start + Int(Double(i) * epochS) }
         var out: [StageSegment] = []
         for i in 0..<n {
             let segStart = epochStart(i)
@@ -1211,6 +1224,75 @@ public enum SleepStager {
         }
         if !out.isEmpty { out[out.count - 1].end = end }
         return out
+    }
+
+    // MARK: - Band sleep_state latency trim (stop counting lying-still-awake as sleep)
+
+    // Session bounds come from gravity stillness alone, so the time a wearer lies still in bed BEFORE
+    // falling asleep (reading, phone, TV) and after waking is inside the session, and the stager labels
+    // much of it light/deep/REM: a still, calm-HR epoch looks like sleep to a cardiorespiratory stager.
+    // Measured on a 5/MG owner's five banked nights (2026-09-18..23), NOOP's session opened 21–133 min
+    // before the strap's own band first read "asleep" (one night at 20:51 against a 23:04 band onset, with
+    // the stretch in between scored partly "deep" while the band said WAKE and the pedometer counted
+    // steps), and total sleep ran 14–65 min above the band's own asleep span.
+    //
+    // This is the OPPOSITE direction to the dormant wake-veto above: it only ever turns sleep INTO wake,
+    // and only in the leading and trailing blocks outside the band's first and last persistent "asleep"
+    // run. It therefore moves wake% toward the PSG truth set (which says the shipped recipe UNDER-calls
+    // wake), rather than away from it, so it is default-on. The interior hypnogram is never touched.
+
+    /// Default-on gate for the band latency trim. An absent band stream (WHOOP 4.0) is a no-op regardless.
+    public static let bandStateLatencyTrimEnabled: Bool = true
+    /// Consecutive band-"asleep" epochs that mark a PERSISTENT onset / final-sleep run (10 × 30 s = 5 min),
+    /// so a brief band flicker to SLEEP while still awake in bed does not anchor the trim.
+    static let bandTrimPersistEpochs: Int = 10
+    /// Grace kept as sleep on each side of the band's persistent run (10 × 30 s = 5 min): the band's own
+    /// classifier needs a few minutes of stillness before it commits, so its onset lags true onset slightly.
+    static let bandTrimGraceEpochs: Int = 10
+    /// Minimum band samples per session second (the 5/MG banks 1 Hz). Below this the band is too sparse to
+    /// place an onset, and the hypnogram is left unchanged.
+    static let bandTrimMinCoverage: Double = 0.5
+
+    /// Band sleep_state latency trim. Relabels as wake every epoch of `stages` that lies more than
+    /// `bandTrimGraceEpochs` before the first, or after the last, PERSISTENT run (`bandTrimPersistEpochs`)
+    /// of the strap's own "asleep" band state. Returns `stages` unchanged (byte-identical) when the flag is
+    /// off, the band is absent or sparse, the band never holds a persistent "asleep" run, or nothing moves.
+    /// Pure + deterministic; applies to whichever stager (V1 or V2) produced `stages`.
+    static func applyBandStateLatencyTrim(_ stages: [StageSegment], start: Int, end: Int,
+                                          bandSleepState: [(ts: Int, state: Int)],
+                                          enabled: Bool = bandStateLatencyTrimEnabled) -> [StageSegment] {
+        guard enabled, !bandSleepState.isEmpty, !stages.isEmpty, end > start else { return stages }
+        let inWindow = bandSleepState.reduce(0) { $0 + ($1.ts >= start && $1.ts < end ? 1 : 0) }
+        guard Double(inWindow) >= bandTrimMinCoverage * Double(end - start) else { return stages }
+        let states = sessionEpochSleepState(start: start, end: end, sleepState: bandSleepState)
+        let n = states.count
+        guard n > 0, let onset = firstPersistentRun(states, from: 0, step: 1),
+              let final = firstPersistentRun(states, from: n - 1, step: -1), onset <= final else {
+            return stages
+        }
+        let keepFrom = max(0, onset - bandTrimGraceEpochs)
+        let keepThrough = min(n - 1, final + bandTrimGraceEpochs)
+        var labels = epochLabels(stages, start: start, epochs: n)
+        var changed = false
+        for i in 0..<n where (i < keepFrom || i > keepThrough) && !SleepStageVocabulary.isWake(labels[i]) {
+            labels[i] = "wake"
+            changed = true
+        }
+        return changed ? collapseEpochLabels(labels, start: start, end: end) : stages
+    }
+
+    /// Index of the epoch where the first run of `bandTrimPersistEpochs` consecutive "asleep" states begins,
+    /// scanning from `from` in direction `step` (+1 forward → the run's first epoch; −1 backward → the run's
+    /// last epoch). nil when no such run exists.
+    static func firstPersistentRun(_ states: [Int], from: Int, step: Int) -> Int? {
+        var run = 0
+        var i = from
+        while i >= 0 && i < states.count {
+            run = states[i] == bandStateAsleep ? run + 1 : 0
+            if run >= bandTrimPersistEpochs { return i - step * (bandTrimPersistEpochs - 1) }
+            i += step
+        }
+        return nil
     }
 
     /// Off-wrist HR-gap spans (#500). The contiguous HR-coverage gaps of at least `offWristHRGapMin`
@@ -1584,7 +1666,11 @@ public enum SleepStager {
             // (`bandSleepState`) scored "asleep". No-op when the band is absent (WHOOP 4.0) or the flag is
             // off; stager-agnostic (corrects whichever hypnogram V1/V2 produced). Efficiency below is then
             // computed on the corrected stages, so a night NOOP over-called wake on reports true efficiency.
-            let stages = applyBandStateWakeVeto(rawStages, start: p.start, end: p.end,
+            // Band latency trim: relabel as wake the lying-still-awake lead-in and tail outside the band's
+            // own persistent "asleep" span. No-op without a band stream (WHOOP 4.0).
+            let trimmedStages = applyBandStateLatencyTrim(rawStages, start: p.start, end: p.end,
+                                                          bandSleepState: bandSleepState)
+            let stages = applyBandStateWakeVeto(trimmedStages, start: p.start, end: p.end,
                                                 bandSleepState: bandSleepState)
             let eff = efficiency(start: p.start, end: p.end, stages: stages)
             let avgHrv = sessionAvgHRV(start: p.start, end: p.end, rr: rrS)
@@ -1602,7 +1688,7 @@ public enum SleepStager {
                 // `cutoffTs: 0` on purpose: the shadow measures the FULL veto potential across EVERY banded
                 // night (history included) to build the validation distribution, independent of whatever
                 // new-nights cutoff the eventual flip uses.
-                let shadowStages = applyBandStateWakeVeto(rawStages, start: p.start, end: p.end,
+                let shadowStages = applyBandStateWakeVeto(trimmedStages, start: p.start, end: p.end,
                                                           bandSleepState: bandSleepState,
                                                           enabled: true, cutoffTs: 0)
                 let shadowEff = efficiency(start: p.start, end: p.end, stages: shadowStages)
@@ -2036,11 +2122,28 @@ public enum SleepStager {
     /// Moving-mean detrend window for the RSA tachogram (seconds).
     static let rsaDetrendWindowS = 8.0
 
-    /// Minimum spacing between breath peaks on the tachogram (seconds) → ≤24 bpm.
-    static let rsaMinPeakDistanceS = 2.5
-
     /// Per-window length for the per-window rate estimate (seconds).
     static let rsaWindowS = 300.0
+
+    /// Welch segment length inside a window (seconds): 64 s at 4 Hz = 256 samples, a 1/64 Hz
+    /// (~0.94 breaths/min) bin, refined below the bin by parabolic interpolation of the log peak.
+    static let rsaSpectralSegmentS = 64.0
+    /// Welch hop (seconds): 75% overlap between Hann-windowed segments.
+    static let rsaSpectralHopS = 16.0
+    /// Breathing band searched for the RSA peak (Hz): 0.16–0.42 Hz = 9.6–25.2 breaths/min. The peak must
+    /// be a strict local maximum INSIDE the band, so low-frequency (Mayer-wave) power leaking up to the
+    /// lower edge is never read as a slow breather. With the edge at 0.14 Hz, five banked 5/MG nights
+    /// split into a 13–15 bpm cluster and an 8.4–9.9 bpm cluster sitting on the bottom bins, which flipped
+    /// two nights' medians to ~9–10; at 0.16 Hz all five read 14.2–14.7.
+    static let rsaBandLowHz = 0.16
+    static let rsaBandHighHz = 0.42
+    /// Share of in-band power the peak bin and its two neighbours must hold for a window to count as
+    /// carrying a breathing rhythm. Calibrated on five banked 5/MG nights: 43–54% of real R-R windows
+    /// qualify, against 2–6% once the same beats are SHUFFLED (window medians 0.38–0.48 vs 0.26–0.29).
+    static let rsaMinPeakConcentration = 0.45
+    /// Share of measured windows that must qualify before a night reports a rate. Below it the night is
+    /// dominated by windows with no breathing rhythm and the honest answer is NaN.
+    static let rsaMinQualifiedWindowFrac = 0.2
 
     /// #977: wall-clock seconds a beat-to-beat step may exceed its own RR before the series is treated
     /// as SPLICED there. `ts` is whole seconds, so a 1 s discrepancy is quantisation, not a gap; the
@@ -2048,12 +2151,7 @@ public enum SleepStager {
     /// enough that only an unambiguous dropout trips it, and deliberately not tuned to a corpus.
     static let rsaGapToleranceS = 3.0
 
-    /// Physiologic breath-interval band (seconds): 0.1–0.4 Hz = 6–24 breaths/min.
-    static let rsaMinBreathIntervalS = 2.5   // 24 bpm
-    static let rsaMaxBreathIntervalS = 10.0  // 6 bpm
-
-    /// THE canonical plausible sleeping-respiratory-rate band (bpm). The RSA peak-pick below can
-    /// yield 6–8 bpm at its noise floor, but every consumer (illness/readiness gates) only acts on
+    /// THE canonical plausible sleeping-respiratory-rate band (bpm). Every consumer (illness/readiness gates) only acts on
     /// 8–25 — so respRateFromRR clamps its output to this band (NaN outside it) and the stored
     /// value can never disagree with what's acted on. Mirrors Android SleepStager.
     public static let respPlausibleRangeBpm: ClosedRange<Double> = 8.0...25.0
@@ -2075,10 +2173,18 @@ public enum SleepStager {
     ///      represent a dropout, so those points are splices, not elapsed time.
     ///   3. Resample the tachogram onto a uniform ~4 Hz grid by linear interpolation.
     ///   4. Detrend: subtract a centered moving mean (rsaDetrendWindowS).
-    ///   5. Per ~5-min window, SKIPPING any window containing a splice: findPeaks
-    ///      (min distance rsaMinPeakDistanceS) on the detrended grid, keep peak-to-peak
-    ///      intervals in the 6–24 bpm band, rate = 60 / median(intervals). Take the
-    ///      median across windows.
+    ///   5. Per ~5-min window, SKIPPING any window containing a splice: a Welch power
+    ///      spectrum (64 s Hann segments, 75% overlap); the window's rate is the strict
+    ///      in-band (9.6–25.2 bpm) spectral peak, and the window QUALIFIES only when that
+    ///      peak holds at least `rsaMinPeakConcentration` of the in-band power. The night is
+    ///      the median over qualifying windows, and NaN unless at least
+    ///      `rsaMinQualifiedWindowFrac` of the measured windows qualified.
+    ///
+    /// Why spectral, not peak-picking (2026-09-23): the earlier per-window peak-picker returned
+    /// 60 / (k × 0.25 s), and on five banked 5/MG nights it read 13.333 on four and 14.118 on one — the
+    /// SAME values it returns when the night's R-R values are shuffled or replaced by white noise, i.e.
+    /// its own floor, not breathing. The same nights DO carry RSA: their spectra hold a concentrated peak
+    /// at ~14.0–14.7 bpm that shuffling destroys. The concentration gate is what refuses noise.
     ///
     /// Known bound on the splice skip (#977): step 4's centered mean spans ±rsaDetrendWindowS/2, so a
     /// splice just inside one window's edge leaves ~4 s of contaminated samples at the neighbouring
@@ -2197,44 +2303,88 @@ public enum SleepStager {
         }
         if standardDeviation(detrended) <= 1e-9 { return nan }  // flat → no RSA
 
-        // 5. Per ~5-min window peak-pick → 60/median(breath interval); median across.
+        // 5. Per ~5-min window: Welch spectrum → strict in-band peak; a window qualifies only when that
+        // peak holds `rsaMinPeakConcentration` of the in-band power. Median across qualifying windows.
         let spliceGrid = spliceAtS.map { Int($0 / dt) }
-        let minDistSamples = max(2, Int((rsaMinPeakDistanceS * rsaResampleHz).rounded()))
-        let windowSamples = max(minDistSamples * 3, Int((rsaWindowS * rsaResampleHz).rounded()))
+        let windowSamples = Int((rsaWindowS * rsaResampleHz).rounded())
+        let segmentSamples = Int((rsaSpectralSegmentS * rsaResampleHz).rounded())
         var perWindowRates: [Double] = []
+        var measuredWindows = 0
         var w = 0
         while w < nGrid {
             let wEnd = min(nGrid, w + windowSamples)
             // #977: a window straddling a splice is measuring a discontinuity, not a breath. Dropping it
-            // costs one window; keeping it puts a fabricated interval into the median. All windows spliced
+            // costs one window; keeping it puts a fabricated rhythm into the median. All windows spliced
             // leaves perWindowRates empty and the function returns NaN, which is the honest answer.
             let spliced = spliceGrid.contains { $0 >= w && $0 < wEnd }
-            if !spliced && wEnd - w >= minDistSamples * 3 {
-                let winSeg = Array(detrended[w..<wEnd])
-                // findPeaks with height = 0.0 selects the positive RSA peaks (one per
-                // breath) on the zero-mean detrended tachogram.
-                let peaks = findPeaks(winSeg, distance: minDistSamples, height: 0.0)
-                if peaks.count >= 3 {
-                    var intervals: [Double] = []
-                    for i in 1..<peaks.count {
-                        let ivS = Double(peaks[i] - peaks[i - 1]) * dt
-                        if ivS >= rsaMinBreathIntervalS && ivS <= rsaMaxBreathIntervalS {
-                            intervals.append(ivS)
-                        }
-                    }
-                    if intervals.count >= 2 {
-                        let med = HRVAnalyzer.median(intervals)
-                        if med > 0.0 { perWindowRates.append(60.0 / med) }
-                    }
+            if !spliced && wEnd - w >= 2 * segmentSamples {
+                measuredWindows += 1
+                if let peak = rsaSpectralPeak(Array(detrended[w..<wEnd])),
+                   peak.concentration >= rsaMinPeakConcentration {
+                    perWindowRates.append(peak.bpm)
                 }
             }
             w += windowSamples
         }
-        if perWindowRates.isEmpty { return nan }
+        // A night where most windows carry no breathing rhythm reports nothing rather than the median of
+        // the few that happened to clear the gate.
+        if perWindowRates.isEmpty
+            || Double(perWindowRates.count) < rsaMinQualifiedWindowFrac * Double(measuredWindows) {
+            return nan
+        }
         // Reject estimates outside the canonical consumer band (NaN = "no usable estimate") so the
         // persisted value never silently disagrees with the illness/readiness plausibility gate.
         let median = HRVAnalyzer.median(perWindowRates)
         return respPlausibleRangeBpm.contains(median) ? median : nan
+    }
+
+    /// Welch power spectrum of one detrended 4 Hz tachogram window, searched for the breathing peak.
+    /// Returns the peak rate (breaths/min, parabolically interpolated on log power) and the share of
+    /// in-band power held by the peak bin and its two neighbours. nil when the window is shorter than one
+    /// segment, carries no power, or the in-band maximum sits on a band edge (not a resolved peak).
+    /// Pure Swift (no Accelerate) so the package keeps building on Linux; a direct DFT over the ~20
+    /// in-band bins is cheap at 256 samples per segment.
+    static func rsaSpectralPeak(_ x: [Double]) -> (bpm: Double, concentration: Double)? {
+        let fs = rsaResampleHz
+        let seg = Int((rsaSpectralSegmentS * fs).rounded())
+        let hop = max(1, Int((rsaSpectralHopS * fs).rounded()))
+        guard seg >= 8, x.count >= seg else { return nil }
+        let binHz = fs / Double(seg)
+        // One guard bin either side of the band so the edge bins can be tested as strict local maxima.
+        let kLo = max(1, Int((rsaBandLowHz / binHz).rounded(.up)) - 1)
+        let kHi = min(seg / 2 - 1, Int((rsaBandHighHz / binHz).rounded(.down)) + 1)
+        guard kHi - kLo >= 4 else { return nil }
+        let hann = (0..<seg).map { 0.5 - 0.5 * cos(2.0 * Double.pi * Double($0) / Double(seg)) }
+        var power = [Double](repeating: 0, count: kHi - kLo + 1)
+        var segments = 0
+        var s0 = 0
+        while s0 + seg <= x.count {
+            let slice = Array(x[s0..<(s0 + seg)])
+            let mean = slice.reduce(0, +) / Double(seg)
+            let y = (0..<seg).map { (slice[$0] - mean) * hann[$0] }
+            for (bi, k) in (kLo...kHi).enumerated() {
+                let omega = 2.0 * Double.pi * Double(k) / Double(seg)
+                var re = 0.0, im = 0.0
+                for n in 0..<seg {
+                    re += y[n] * cos(omega * Double(n))
+                    im -= y[n] * sin(omega * Double(n))
+                }
+                power[bi] += re * re + im * im
+            }
+            segments += 1
+            s0 += hop
+        }
+        guard segments > 0 else { return nil }
+        let inBand = Array(1..<(power.count - 1))
+        let total = inBand.reduce(0.0) { $0 + power[$1] }
+        guard total > 1e-12, let pk = inBand.max(by: { power[$0] < power[$1] }) else { return nil }
+        guard power[pk] > power[pk - 1] && power[pk] > power[pk + 1] else { return nil }
+        let a = log(max(power[pk - 1], 1e-300)), b = log(power[pk]), c = log(max(power[pk + 1], 1e-300))
+        let denom = a - 2.0 * b + c
+        let offset = denom != 0 ? max(-0.5, min(0.5, 0.5 * (a - c) / denom)) : 0
+        let hz = (Double(kLo + pk) + offset) * binHz
+        let concentration = (power[pk - 1] + power[pk] + power[pk + 1]) / total
+        return (bpm: 60.0 * hz, concentration: concentration)
     }
 
     // MARK: - Per-epoch features

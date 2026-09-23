@@ -388,8 +388,8 @@ struct CoupledView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Active calories for the day from the stored whole-day estimate. Never fabricated, a day with no
-    /// estimate reads a dash.
+    /// Calories for the day from the stored whole-day estimate: TOTAL expenditure (resting + active),
+    /// despite the `activeKcalEst` column name. Never fabricated, a day with no estimate reads a dash.
     private var caloriesText: String {
         guard let k = day?.activeKcalEst else { return "—" }
         return "\(Int(k.rounded())) kcal"

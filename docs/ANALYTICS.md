@@ -348,6 +348,22 @@ The rule: **elevated HR alone is insufficient to call wake.** An epoch or run at
 - **`adaptiveOvernightHRBaseline`.** A personalised sleep band derived from recent overnight medians (self-calibrating across a supplement/fitness era), with a floor. Threaded through `detectSleep` as an optional argument that defaults to `nil` (byte-identical when unset); live cross-night wiring in `IntelligenceEngine` is a follow-up.
 
 Source: `SleepStager.swift` (`confirmSleepWithHR`, `adaptiveOvernightHRBaseline`) and `SleepStagerV2.swift` (motion-quiescent clamp), both in `Packages/StrandAnalytics`. Filed upstream as [ryanbr/noop#462](https://github.com/ryanbr/noop/issues/462).
+### Band latency trim — lying still awake in bed is not sleep (default ON, WHOOP 5/MG)
+
+Session bounds come from gravity stillness alone, so the time a wearer lies still before falling asleep (reading, phone, TV) and after waking sits inside the session, and a cardiorespiratory stager scores much of it light/deep/REM. On a 5/MG owner's five banked nights the session opened 21–133 min before the strap's own band state (v18 @81, `(b >> 4) & 3`) first read **SLEEP**, and total sleep ran 14–65 min above the band's own asleep span.
+
+`SleepStager.applyBandStateLatencyTrim` relabels as **wake** every epoch more than 5 min before the band's first, or after its last, *persistent* (≥ 5 min) SLEEP run. It never touches the interior hypnogram and only ever turns sleep into wake, so it moves wake% toward the PSG truth set (which says the shipped recipe under-calls wake) — the opposite direction to the dormant wake-veto. It is a no-op without a band stream (WHOOP 4.0), with a sparse band (< 0.5 samples/s), or when the band never holds a persistent SLEEP run. Session start/end (in-bed) are unchanged; the trimmed minutes show up as onset latency / final wake, and efficiency drops accordingly.
+
+### V2 respiration-regularity term — one-sided, REM-only
+
+`SleepStagerV2` reads breathing regularity (RSA spectral peakedness from R-R) per epoch. The term used to be symmetric: `deep += 0.6·z`, `rem −= 0.6·z` over a within-night z-score, which hands the irregular half of every night a REM boost against light. The WHOOP 5/MG is the strap that feeds it every epoch, and on five banked 5/MG nights it staged REM at 35–49 % of sleep and light at 22–39 %. It is now `rem −= 0.6·max(0, z)`. Regular breathing counts against REM. Irregular breathing is not evidence for REM, because motion, arousals and dropped beats produce it too. Deep keeps its own separator, the HR-flatness gate. The same nights now stage light 44–56 %, deep 22–28 % and REM 20–27 %. The PSG harness cannot score this term either way, because sleep-accel has no R-R (`Tools/SleepPSG`'s port mirrors the change).
+
+### Respiratory rate from R-R (WHOOP 5/MG) — spectral, and NaN on no rhythm
+
+The 5/MG has no respiration channel, so the nightly `respRateBpm` is estimated from respiratory sinus arrhythmia in the R-R stream (`SleepStager.respRateFromRR`). Each ~5-min window gets a Welch spectrum (64 s Hann segments, 75% overlap); its rate is the strict in-band peak between 0.16 and 0.42 Hz (9.6–25.2 breaths/min), and the window counts only when that peak holds ≥ 45% of the in-band power. The night is the median of qualifying windows, and NaN unless ≥ 20% of measured windows qualified.
+
+It replaced a per-window peak-picker whose output was `60 / (k × 0.25 s)`: on five banked 5/MG nights it returned 13.333 four times and 14.118 once, and it returned the same values for the nights' R-R shuffled or replaced by white noise. The spectral estimator reads 14.2–14.7 on those nights and NaN on the shuffled beats; synthetic tests pin that it tracks injected rates of 10.5–20 bpm. A NaN drops the respiration term from Charge (its weight renormalises) and from the illness signal.
+
 ### Displayed sleep onset — the headline "Asleep at" spans the whole bridged night
 
 The Sleep screen headline ("Asleep at …") reports the onset of the **whole bridged night**, not the main session's start. A night stored as a short first-sleep fragment + a brief walk + the main session bridges into one group when the gap is under `gapBridgeMaxMin` (60 min). The display onset walk (`SleepView.nightOnsetTs` → `isPreOnsetAwakeStub`) previously mis-classified such a fragment as a spurious pre-onset lead through two stacked defects: (1) the #259 relative "minor lead" test compared the fragment's asleep minutes against 15% of the main block, so on a long main sleep a genuine short first sleep was skipped and the headline jumped forward to the main session's start; (2) the stub test read asleep minutes via the dict-only `decodeStages`, which returns nil for the segment-array `stagesJSON` an on-device **computed** night stores — so every fragment counted as 0 asleep minutes and tripped the "essentially sleepless stub" branch, bypassing defect (1)'s floor entirely.
@@ -367,7 +383,8 @@ Source: assembled in `AnalyticsEngine` from the `SleepStager` outputs above. Res
 | Restorative share (deep + REM) / asleep | 0.20 | how much of the night was restorative |
 | Consistency (sleep/wake regularity) | 0.10 | how consistent your sleep and wake timing is |
 
-- **Personal sleep need:** 8 h default, refined by your recent average; the hours-vs-need term clamps at 100.
+- **Personal sleep need:** the upper quartile of your nightly hours, floored at the age-appropriate population target (8 h adults, 9 h under 18) and capped at 9.5 h; the population target until 7 nights exist. The hours-vs-need term clamps at 100. The consistency term is 1 − CV of the last 28 nights (neutral 0.5 until 3 nights exist).
+- **One Rest number:** the persisted `sleep_performance` point and Charge's Rest-quality term both use that personal need and consistency. The `Repository.dailyColumn` fallback for a just-synced day, before the series point exists, uses the population defaults until the pass projects the point.
 - Rest consumes whatever stages each device provides (v25 motion on 4.0; PPG/IMU on 5/MG as it unlocks) — the sleep-staging algorithm itself is unchanged.
 - The `sleep_performance` key now stores this 0–100 composite. The **Charge** "Rest quality" driver reads it (÷100) instead of raw efficiency.
 
@@ -393,6 +410,8 @@ let clamped = max(lo, min(hi, value))                       // ±3·spread
 let newBaseline = lb * clamped + (1 - lb) * state.baseline
 let newSpread   = max(cfg.floorSpread, ls * abs(value - newBaseline) + (1 - ls) * state.spread)
 ```
+
+**Charge is scored against the nights before it.** The stored Charge (pass 2 in `IntelligenceEngine`) takes each day's HRV / resting-HR / resp / skin-temp baseline from `Baselines.priorFold(...).state(before: day)`: the same fold, epochs and gates, cut off at the scored day. It used to be one fold over the whole history, which contains the scored night and every later night. On a short history the first nights were scored mostly against their own future, and had a Charge before they had the 4 prior nights the cold-start gate promises.
 
 ### 2. Trailing-window mean/SD (`rollingMeanSD`)
 

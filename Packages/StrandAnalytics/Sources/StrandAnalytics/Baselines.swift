@@ -525,6 +525,49 @@ public enum Baselines {
                              nightsSinceUpdate: 0, status: .calibrating)
     }
 
+    /// Every intermediate state of a chronological fold, so a caller can score each day against the
+    /// baseline of the nights BEFORE it rather than against the whole history (which contains that day
+    /// and every later night). `state(before:)` is exactly `foldHistory(values, dayKeys:, cfg:,
+    /// baselineEpoch:)` restricted to the keys that sort strictly before the given day, including the
+    /// same recalibration-epoch drop and the same calibrating seed when nothing precedes it.
+    public struct PriorFold: Sendable {
+        /// Chronological keys of the folded nights (after the epoch drop).
+        let keys: [String]
+        /// `states[i]` = the fold of `keys[0..<i]`; `states.count == keys.count + 1`.
+        let states: [BaselineState]
+
+        /// The baseline built from every folded night dated strictly before `day` ("yyyy-MM-dd").
+        public func state(before day: String) -> BaselineState {
+            var lo = 0, hi = keys.count
+            while lo < hi { let mid = (lo + hi) / 2; if keys[mid] < day { lo = mid + 1 } else { hi = mid } }
+            return states[lo]
+        }
+    }
+
+    /// Build a `PriorFold` over `values` (oldest first) keyed by `dayKeys` ("yyyy-MM-dd", sorted).
+    /// Nights dated before `baselineEpoch` (seconds; 0 = none) are dropped exactly as `foldHistory` does.
+    public static func priorFold(_ values: [Double?], dayKeys: [String], cfg: MetricCfg,
+                                 baselineEpoch: Double) -> PriorFold {
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        fmt.dateFormat = "yyyy-MM-dd"
+        let seed = BaselineState(baseline: (cfg.minVal + cfg.maxVal) / 2.0, spread: cfg.floorSpread,
+                                 nValid: 0, nightsSinceUpdate: 0, status: .calibrating)
+        var keys: [String] = []
+        var states: [BaselineState] = [seed]
+        var state: BaselineState? = nil
+        for (i, v) in values.enumerated() where i < dayKeys.count {
+            if baselineEpoch > 0, let d = fmt.date(from: dayKeys[i]), d.timeIntervalSince1970 < baselineEpoch {
+                continue
+            }
+            state = update(state, value: v, cfg: cfg)
+            keys.append(dayKeys[i])
+            states.append(state!)
+        }
+        return PriorFold(keys: keys, states: states)
+    }
+
     // MARK: - Device-era boundary (#459)
 
     /// The recalibration epoch (seconds, UTC start-of-day) at the LATEST device-era boundary in a

@@ -2528,8 +2528,9 @@ final class Repository: ObservableObject {
     /// resolver returned no Rest for that day and Today borrowed the latest historical value (#614). Derive
     /// it on the fly from the same banked totals via the single source of truth
     /// `AnalyticsEngine.Rest.composite(daily:)` , the SAME composite the series carries (what
-    /// IntelligenceEngine projects) , so the day resolves to its own Rest. Consistency is left to the
-    /// scorer's neutral default here (the daily row carries no regularity term). Mirrors Android
+    /// IntelligenceEngine projects) , so the day resolves to its own Rest. Need and consistency are left
+    /// to the population defaults here (the daily row carries neither); the persisted series point, which
+    /// uses the personal need + consistency, replaces this placeholder once the pass projects it. Mirrors Android
     /// WhoopRepository.dailyColumn / RestScorer.restFromDaily.
     ///
     /// Internal + nonisolated (not private) so the pure `EditMergePrecedenceTests` can exercise the #614
