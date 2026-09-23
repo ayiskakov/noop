@@ -102,15 +102,45 @@ final class HealthspanInputsTests: XCTestCase {
 
     /// Locked below 21 scored days in the last 31; unlocked at 21.
     func testUnlockGate() {
-        XCTAssertTrue(IntelligenceEngine.healthspanPoints(
-            history: history(days: 20), endDay: today, dayKey: "2026-09-23",
-            age: 40, sex: "male", profileWeightKg: 80).isEmpty)
-        XCTAssertFalse(IntelligenceEngine.healthspanPoints(
-            history: history(days: 21), endDay: today, dayKey: "2026-09-23",
-            age: 40, sex: "male", profileWeightKg: 80).isEmpty)
+        func keys(_ days: Int) -> Set<String> {
+            Set(IntelligenceEngine.healthspanPoints(
+                history: history(days: days), endDay: today, dayKey: "2026-09-23",
+                age: 40, sex: "male", profileWeightKg: 80).map(\.key))
+        }
+        XCTAssertFalse(keys(20).contains(HealthspanSeries.bodyAge))
+        XCTAssertTrue(keys(21).contains(HealthspanSeries.bodyAge))
         XCTAssertTrue(IntelligenceEngine.healthspanPoints(
             history: history(days: 60), endDay: today, dayKey: "2026-09-23",
             age: 17, sex: "male", profileWeightKg: 80).isEmpty, "adults only")
+    }
+
+    /// A locked day still carries each driver's value, target and 30-day value, so the screen can list the
+    /// targets and the averages so far, but no years, Body Age or pace: those wait for the unlock.
+    func testALockedDayWritesTheTargetsOnly() {
+        let points = IntelligenceEngine.healthspanPoints(history: history(days: 5), endDay: today,
+                                                         dayKey: "2026-09-23", age: 40, sex: "male",
+                                                         profileWeightKg: 80)
+        let byKey = Dictionary(uniqueKeysWithValues: points.map { ($0.key, $0.value) })
+        XCTAssertEqual(byKey[HealthspanSeries.value("steps")], 8000)
+        XCTAssertEqual(byKey[HealthspanSeries.target("steps")], VitalityEngine.stepsTarget(age: 40))
+        XCTAssertEqual(byKey[HealthspanSeries.recent("steps")], 8000)
+        XCTAssertEqual(byKey[HealthspanSeries.value("rhr")], 60)
+        XCTAssertTrue(HealthspanSeries.drivers.allSatisfy { byKey[HealthspanSeries.years($0)] == nil })
+        for key in [HealthspanSeries.bodyAge, HealthspanSeries.vitality, HealthspanSeries.pace] {
+            XCTAssertNil(byKey[key], key)
+        }
+        XCTAssertTrue(points.allSatisfy { HealthspanSeries.allKeys.contains($0.key) },
+                      "every written key is one a recomputation clears")
+    }
+
+    /// Whether an average so far meets its target follows each driver's direction.
+    func testTargetSoFarMetFollowsTheDriversDirection() {
+        XCTAssertTrue(HealthspanTargetSoFar(key: "rhr", value: 58, target: 60, recent: nil).met)
+        XCTAssertFalse(HealthspanTargetSoFar(key: "rhr", value: 62, target: 60, recent: nil).met)
+        XCTAssertTrue(HealthspanTargetSoFar(key: "sleep", value: 7.5, target: 7, recent: nil).met)
+        XCTAssertFalse(HealthspanTargetSoFar(key: "sleep", value: 9.5, target: 7, recent: nil).met)
+        XCTAssertFalse(HealthspanTargetSoFar(key: "steps", value: 4200, target: 8000, recent: nil).met)
+        XCTAssertTrue(HealthspanTargetSoFar(key: "vigorous", value: 30, target: 10, recent: nil).met)
     }
 
     /// The persisted per-driver years sum to the persisted Body Age offset — the property that lets a

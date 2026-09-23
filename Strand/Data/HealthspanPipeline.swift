@@ -160,20 +160,31 @@ extension IntelligenceEngine {
             weightKg: lean == nil ? nil : weight)
     }
 
-    /// The day's Healthspan points, or empty while Healthspan is locked (fewer than 21 scored days in the
-    /// last 31, or under 18) or the six-month window cannot be scored.
+    /// The day's Healthspan points. Empty under 18. While Healthspan is locked (fewer than 21 scored days
+    /// in the last 31), only each driver's value, target and 30-day value are written, so the screen can
+    /// list the targets and the averages so far; the years, the Body Age and the pace wait for the unlock.
+    /// A locked day is told apart by the absence of its `years` rows.
     nonisolated static func healthspanPoints(history: HealthspanHistory, endDay: Int, dayKey: String,
                                              age: Double, sex: String,
                                              profileWeightKg: Double?) -> [MetricPoint] {
-        let scored = healthspanScoredDays(history, endDay: endDay)
-        guard VitalityEngine.unlockStatus(scoredDaysInWindow: scored, age: age).unlocked else { return [] }
+        guard age >= VitalityEngine.minAge else { return [] }
         func inputs(_ end: Int, _ window: Int) -> VitalityEngine.Inputs {
             healthspanInputs(history: history, endDay: end, windowDays: window, age: age, sex: sex,
                              profileWeightKg: profileWeightKg)
         }
         let baseline = inputs(endDay, PaceOfAgingEngine.baselineWindowDays)
-        guard let body = VitalityEngine.compute(baseline) else { return [] }
         let recent = inputs(endDay, PaceOfAgingEngine.projectionRecentDays)
+        let recentPoints = VitalityEngine.contributions(recent).map {
+            MetricPoint(day: dayKey, key: HealthspanSeries.recent($0.key), value: $0.value)
+        }
+        let scored = healthspanScoredDays(history, endDay: endDay)
+        guard VitalityEngine.unlockStatus(scoredDaysInWindow: scored, age: age).unlocked,
+              let body = VitalityEngine.compute(baseline) else {
+            return VitalityEngine.contributions(baseline).flatMap { c in
+                [MetricPoint(day: dayKey, key: HealthspanSeries.value(c.key), value: c.value),
+                 MetricPoint(day: dayKey, key: HealthspanSeries.target(c.key), value: c.target)]
+            } + recentPoints
+        }
         // The six non-overlapping monthly windows of the half-year, each only when it holds enough scored
         // days to be a habit rather than a handful of nights.
         let monthly = (0..<6).compactMap { k -> VitalityEngine.Inputs? in
@@ -191,9 +202,7 @@ extension IntelligenceEngine {
             out.append(MetricPoint(day: dayKey, key: HealthspanSeries.value(c.key), value: c.value))
             out.append(MetricPoint(day: dayKey, key: HealthspanSeries.target(c.key), value: c.target))
         }
-        for c in VitalityEngine.contributions(recent) {
-            out.append(MetricPoint(day: dayKey, key: HealthspanSeries.recent(c.key), value: c.value))
-        }
+        out += recentPoints
         if let p = PaceOfAgingEngine.project(baseline: baseline, recent: recent, monthlyWindows: monthly) {
             out.append(MetricPoint(day: dayKey, key: HealthspanSeries.pace, value: p.pace))
             // The margin travels WITH the pace, keyed to the same day. A pace read back without it cannot
