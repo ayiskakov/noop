@@ -1,0 +1,17 @@
+# Upstream commits reviewed and deliberately not taken. Tools/upstream-candidates.py hides them
+# (--all lists them with the reason). One per line:
+#
+#   <sha> <reason>        one commit; the SHA may be abbreviated to 7 or more hex digits
+#   /<regex>/ <reason>    every commit whose subject the regex matches
+#
+# Picks are not recorded here: `git cherry-pick -x` writes the trailer the tool reads.
+
+/^build: testing build/ upstream's testing build numbers; this fork numbers its own releases
+
+# 2026-09-24 review of upstream a56840bb..141cbd93
+4b0cc6bb WHOOP 4.0 direct HR broadcast (#2400); 4.0 support was removed here
+720187a1 no change for a strap, whose sleep rows live only under the computed id; fixes the Oura device-hypnogram heal (#2372)
+b7369029 superseded by this fork's REM funnel line (3a64c313), which names the staging setting; upstream's reads PuffinExperiment.experimentalSleepV2Enabled, gone here (#2366)
+8637ce26 the Apple half only moves the HR notify line into a helper; the fix is Android's (#2392)
+141cbd93 only StandardHRSource (chest straps) and FTMSSource (gym machines); the WHOOP path already retrieves after poweredOn since #2272 (#2436)
+f3872779 re-pins an assertion on the Android hero label (06083a0b), which this fork removed
