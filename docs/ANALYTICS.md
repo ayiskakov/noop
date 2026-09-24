@@ -378,6 +378,8 @@ The Sleep screen headline ("Asleep at …") reports the onset of the **whole bri
 
 Fix: an **absolute floor** `preOnsetStubMinorAsleepFloorMin = 20` (min) under the #259 relative test — a leading fragment carrying **≥ 20 asleep minutes** is never treated as a spurious lead, whatever the main block's size — plus a format-agnostic `decodedAsleepMinutes` (dict-of-minutes decode with a segment-array fallback) used at both onset call sites, so the floor's input is populated on computed nights too. The relaxation is strict (it can only un-skip a real first sleep, never newly skip one), so the displayed onset now equals the bridged night's first sleep and agrees with the Apple Health write-back span (bridged night groups, #294/#364). The #736 sleepless-stub skip and the #259 tiny-stray-lead (≤ 10 min) behavior are unchanged. The constant and decode seam live in `Strand/Screens/SleepView.swift`.
 
+The Asleep / Woke row then reads the night's timeline, not its bounds: **Asleep** is the start of the first non-wake interval and **Woke** the end of the last one (`Night.sleepOnsetTs` / `finalWakeTs`). The bounds are time in bed. On a banked 5/MG night the band latency trim scores the lying-awake lead-in and tail as wake inside them, so the row could print an in-bed start as "Asleep" above a hypnogram that stayed awake for two more hours. The edit sheet the row opens still edits the in-bed bounds, so its fields are labelled **Bedtime** and **Got up**. A night with no real timeline (imported totals) keeps its bounds.
+
 ---
 
 ## The **Rest** score composite — *"how restorative was your sleep?"*
