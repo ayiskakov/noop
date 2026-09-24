@@ -157,11 +157,10 @@ struct SettingsView: View {
     // iPhone (between Test Centre and Settings) and its own sidebar item on macOS. Its `@AppStorage`
     // keys live there now; nothing here reads them.
 
-    /// "Experimental sleep staging (V2)" (ON by default, promoted after the 44-subject cross-subject
-    /// benchmark). When on, detected nights are re-staged with `SleepStagerV2` (the transparent
-    /// cardiorespiratory recipe) instead of the older V1 stager. Read at the staging call site in
-    /// `Repository`. See [PuffinExperiment.experimentalSleepV2Key].
-    @AppStorage(PuffinExperiment.experimentalSleepV2Key) private var experimentalSleepV2Enabled = true
+    /// The stored sleep-staging choice. Observed here only so the picker redraws when it changes; the
+    /// picker READS through `PuffinExperiment.sleepStager` (see `sleepStagerChoice`), the resolver the
+    /// staging engine uses, so an upgraded user whose old V2 switch was off sees V1 here, as staged.
+    @AppStorage(PuffinExperiment.sleepStagerKey) private var sleepStagerRaw = ""
 
     /// "Motion-aware wake refinement" (#364 follow-up, OFF by default). A post-pass over the already-staged
     /// hypnogram: reclassifies a scored WAKE segment to `light` when its per-minute step-tick cadence shows
@@ -1950,25 +1949,29 @@ struct SettingsView: View {
         }
     }
 
-    /// Sleep staging engine. V2 (the transparent cardiorespiratory recipe) is the DEFAULT after a 44-subject
-    /// cross-subject benchmark; model-agnostic — it works on WHOOP 4 and 5 — so it renders on every strap.
-    /// Turning the toggle OFF falls back to the older V1 percentile-band stager; either way only future
-    /// (and re-derived) nights are affected.
+    /// Which recipe stages detected nights: V3 (fitted to polysomnography) by default, with V2 and V1 kept
+    /// to switch back to. Model-agnostic, so it renders on every strap; only future (and re-derived) nights
+    /// are affected.
     private var sleepStagingCard: some View {
         SettingsSection(
             icon: "bed.double.fill",
             title: "Sleep staging",
-            blurb: "How NOOP splits a night into light / deep / REM. The V2 recipe is the default; turn it off to fall back to the older V1 staging."
+            blurb: "How NOOP splits a night into light / deep / REM. V3 is the default; V2 and V1 stay available if you want to switch back."
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.rowSpacing) {
-                Toggle(isOn: $experimentalSleepV2Enabled) {
-                    Text("Sleep staging (V2)")
-                        .font(StrandFont.subhead)
-                        .foregroundStyle(StrandPalette.textPrimary)
+                Picker("Sleep staging", selection: sleepStagerChoice) {
+                    ForEach([SleepStagerVersion.v3, .v2, .v1], id: \.self) { version in
+                        Text(verbatim: version.label).tag(version)
+                    }
                 }
-                .toggleStyle(.switch)
+                .pickerStyle(.segmented)
+                .labelsHidden()
                 .tint(StrandPalette.accent)
-                Text("A transparent cardiorespiratory recipe that recovers deep and REM better than the older V1 staging, and is now the default. It only changes how already-detected nights are split into stages (detection and scores are unchanged); turn it off to fall back to V1. Takes effect on the next nights staged.")
+                Text(sleepStagerCaption(sleepStagerChoice.wrappedValue))
+                    .font(StrandFont.caption)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("It only changes how detected nights are split into stages, and what is worked out from those stages; which nights are detected stays the same. Takes effect on the next nights staged.")
                     .font(StrandFont.caption)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1988,6 +1991,24 @@ struct SettingsView: View {
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// The picker's selection, read through the engine's own resolver and written to the new key.
+    private var sleepStagerChoice: Binding<SleepStagerVersion> {
+        Binding(
+            get: { _ = sleepStagerRaw; return PuffinExperiment.sleepStager },
+            set: { sleepStagerRaw = $0.rawValue })
+    }
+
+    private func sleepStagerCaption(_ version: SleepStagerVersion) -> String {
+        switch version {
+        case .v3:
+            return String(localized: "Learned from lab sleep studies: motion, heart rate and beat-to-beat heart-rate variability, fitted to the stages sleep technicians scored. It agreed with the lab better than V2 on every test set so far, but no lab study has used a WHOOP strap, so treat the stages as estimates.")
+        case .v2:
+            return String(localized: "The earlier hand-tuned heart-rate and motion recipe, the default before V3.")
+        case .v1:
+            return String(localized: "The original percentile-band staging.")
         }
     }
 

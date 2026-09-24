@@ -56,12 +56,16 @@ final class RestSubScoreTraceTests: XCTestCase {
     func testSleepMotionLine() {
         XCTAssertEqual(
             AnalyticsEngine.sleepMotionLine(day: "2026-07-12", grav: 118, hr: 590, sparse: true,
-                                            useSleepStagerV2: false, family: .whoop5),
+                                            stager: .v1, family: .whoop5),
             "sleep-motion day=2026-07-12 grav=118 hr=590 sparse=true stager=V1 family=whoop5")
         XCTAssertEqual(
             AnalyticsEngine.sleepMotionLine(day: "2026-07-12", grav: 800, hr: 590, sparse: false,
-                                            useSleepStagerV2: true, family: .whoop5),
+                                            stager: .v2, family: .whoop5),
             "sleep-motion day=2026-07-12 grav=800 hr=590 sparse=false stager=V2 family=whoop5")
+        XCTAssertEqual(
+            AnalyticsEngine.sleepMotionLine(day: "2026-07-12", grav: 800, hr: 590, sparse: false,
+                                            stager: .v3, family: .whoop5),
+            "sleep-motion day=2026-07-12 grav=800 hr=590 sparse=false stager=V3 family=whoop5")
     }
 
     // MARK: - #271 onset trace (over-early WHOOP 4.0 bedtime)

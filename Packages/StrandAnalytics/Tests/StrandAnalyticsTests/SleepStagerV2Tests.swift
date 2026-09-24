@@ -3,8 +3,8 @@ import XCTest
 import WhoopProtocol
 
 /// Basic coverage for `SleepStagerV2` (V7 Pillar 3b, reimplemented from @sunny-noop's recipe) — the recipe
-/// that stages a normal user's nights, since `PuffinExperiment.experimentalSleepV2Enabled` is default ON
-/// (#277 promoted it over V1; #351 extended it to every strap family). These assert the drop-in CONTRACT —
+/// that staged a normal user's nights from #277 (#351 extended it to every strap family) until V3 became the
+/// default, and that stays selectable in Settings. These assert the drop-in CONTRACT —
 /// same `stageSession` signature + return shape as V1, segments that tile `[start, end]` with canonical
 /// stage labels — and a couple of recipe invariants.
 /// They are NOT a fidelity claim against any reference: the cross-subject evidence behind the promotion is
@@ -315,7 +315,7 @@ final class SleepStagerV2Tests: XCTestCase {
                        "flag OFF must reproduce the exact V1 hypnogram labels")
 
         // Flag ON — the SAME detected window must now be staged by V2.
-        let v2Sessions = SleepStager.detectSleep(hr: hr, rr: rr, gravity: grav, useSleepStagerV2: true)
+        let v2Sessions = SleepStager.detectSleep(hr: hr, rr: rr, gravity: grav, stager: .v2)
         XCTAssertEqual(v2Sessions.count, 1, "detection is unchanged by the staging flag")
         let v2 = v2Sessions[0]
         // Same accepted window (detection is identical — only staging differs).
@@ -333,6 +333,19 @@ final class SleepStagerV2Tests: XCTestCase {
         XCTAssertNotEqual(v2.stages.map { $0.stage }, v1.stages.map { $0.stage },
                           "flag ON must not reproduce the V1 hypnogram")
         XCTAssertTrue(v2Stages.contains("rem"), "V2 night should express REM")
+
+        // V3 — the same detected window again, now staged by the PSG-fitted recipe.
+        let v3Sessions = SleepStager.detectSleep(hr: hr, rr: rr, gravity: grav, stager: .v3)
+        XCTAssertEqual(v3Sessions.map { [$0.start, $0.end] }, [[v1.start, v1.end]],
+                       "detection is unchanged by the staging choice")
+        let v3Direct = SleepStagerV3.stageSession(start: v1.start, end: v1.end,
+                                                  grav: grav, hr: hr, rr: rr, resp: [])
+        XCTAssertEqual(v3Sessions[0].stages, v3Direct, "stager .v3 must produce the V3 hypnogram")
+        for version in SleepStagerVersion.allCases {
+            XCTAssertEqual(version.stageSession(start: v1.start, end: v1.end, grav: grav, hr: hr, rr: rr, resp: []),
+                           [SleepStagerVersion.v1: v1Direct, .v2: v2Direct, .v3: v3Direct][version],
+                           "\(version.label) dispatches to its own recipe")
+        }
     }
 
     // MARK: - #277: lock the V2 recipe shape + parity (golden) and the tuned deep-boundary values (directly)
@@ -375,8 +388,9 @@ final class SleepStagerV2Tests: XCTestCase {
             rr.append(RRInterval(ts: ts, rrMs: (60_000 / bpm) + rsaWave(ph, i)))
         }
         let segs = SleepStagerV2.stageSession(start: start, end: start + dur, grav: grav, hr: hr, rr: rr, resp: [])
+        // The deep-latency guard holds the first 8 min to light; every later boundary is unchanged.
         let golden: [(Int, Int, String)] = [
-            (0, 5070, "deep"), (5070, 5310, "light"), (5310, 5550, "rem"),
+            (0, 480, "light"), (480, 5070, "deep"), (5070, 5310, "light"), (5310, 5550, "rem"),
             (5550, 10800, "light"), (10800, 16200, "rem"), (16200, 21600, "wake")]
         XCTAssertEqual(segs.count, golden.count, "segment count")
         for k in 0..<min(segs.count, golden.count) {

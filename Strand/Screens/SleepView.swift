@@ -234,6 +234,9 @@ struct SleepView: View {
                 // a phantom night.
                 let coverageLo = min(edit.detectedStartTs, edit.bedTs)
                 SleepTimeEditor(bedTs: edit.bedTs, wakeTs: edit.wakeTs,
+                                title: edit.isNap ? "Edit nap times" : "Edit sleep times",
+                                bedLabel: edit.isNap ? "Nap started" : "Bedtime",
+                                wakeLabel: edit.isNap ? "Nap ended" : "Got up",
                                 coverage: coverageLo...max(edit.wakeTs, coverageLo + 1),
                                 suppressesReDetection: !edit.userEdited,
                                 onSave: { newBedTs, newWakeTs in
@@ -744,7 +747,8 @@ struct SleepView: View {
                                     bedTs: nap.effectiveStartTs,
                                     wakeTs: nap.endTs,
                                     stagesJSON: nap.stagesJSON,
-                                    userEdited: true)   // a nap row is always manually added → no tombstone on delete
+                                    userEdited: true,   // a nap row is always manually added → no tombstone on delete
+                                    isNap: true)
             } label: {
                 Image(systemName: isEdited ? "pencil.circle.fill" : "pencil.circle")
                     .font(StrandFont.headline)
@@ -2690,6 +2694,9 @@ private struct WakeEdit: Identifiable {
     /// never re-detected), so the editor's delete-confirm copy must NOT promise re-detection suppression
     /// for it. Mirrors the undo-banner branch (#65 banner/confirm honesty).
     let userEdited: Bool
+    /// True when a nap row opened the editor. Its fields then name the nap's start and end, as the Add-a-nap
+    /// sheet does; a night's are Bedtime and Got up, which read wrongly on a 14:00 nap.
+    var isNap = false
     var id: Int { detectedStartTs }
 }
 
@@ -2744,6 +2751,10 @@ private struct SleepTimeEditor: View {
     /// True while the #940 "no recorded data there" confirm is up; Save proceeds only on consent.
     @State private var confirmingDisjoint = false
 
+    /// The two fields edit the session's in-bed bounds, which the Asleep/Woke row no longer shows (it reads
+    /// the hypnogram's first and last sleep), so they are labelled Bedtime and Got up: the row and the sheet
+    /// it opens must not show two different times under one name.
+    ///
     /// `title`/`blurb`/`bedLabel`/`wakeLabel` default to the edit-an-existing-night wording; the
     /// "Add a nap" caller (#508) overrides them. The save logic is identical either way — adding a nap
     /// is just an edit whose "existing" window is a seed. `onDelete` (#68) is the optional destructive
@@ -2751,8 +2762,8 @@ private struct SleepTimeEditor: View {
     init(bedTs: Int, wakeTs: Int,
          title: LocalizedStringKey = "Edit sleep times",
          blurb: LocalizedStringKey = "Correct when you went to bed and woke. Stages are re-derived from your data; the edit is kept through the next strap sync.",
-         bedLabel: LocalizedStringKey = "Asleep",
-         wakeLabel: LocalizedStringKey = "Woke",
+         bedLabel: LocalizedStringKey = "Bedtime",
+         wakeLabel: LocalizedStringKey = "Got up",
          deleteLabel: LocalizedStringKey = "Delete this sleep",
          coverage: ClosedRange<Int>? = nil,
          suppressesReDetection: Bool = true,

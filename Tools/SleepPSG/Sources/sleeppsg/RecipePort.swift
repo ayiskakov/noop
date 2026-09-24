@@ -85,6 +85,11 @@ struct RecipeConfig: Equatable {
     /// see `Variants.preNine30Guard`. It is a diagnostic, not a candidate.
     var remLatencyMode: RemLatencyMode = .gradedFromOnset
 
+    /// The deep-latency guard: the twin of the REM guard, measured from the same onset and applied in the
+    /// same second pass. Only `.gradedFromOnset` has a pass 2, so the pre-#930 diagnostic never runs it.
+    var deepLatencyPenalty: Double = 3.0
+    var deepLatencyMinutes: Double = 20.0
+
     /// The shipped recipe, as of `Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift`.
     static let shipped = RecipeConfig(
         priorLight: log(0.50), priorDeep: log(0.18), priorRem: log(0.22), priorAwake: log(0.10),
@@ -108,7 +113,8 @@ struct RecipeConfig: Equatable {
             "awake": ["deep": 0.0, "rem": 0.0, "light": 0.10, "awake": 0.90],
         ],
         remLatencyPenalty: 3.0, remLatencyMinutes: 60.0, onsetSustainedEpochs: 10,
-        remLatencyMode: .gradedFromOnset)
+        remLatencyMode: .gradedFromOnset,
+        deepLatencyPenalty: 3.0, deepLatencyMinutes: 20.0)
 
     var baseLogPrior: [String: Double] {
         ["light": priorLight, "deep": priorDeep, "rem": priorRem, "awake": priorAwake]
@@ -371,6 +377,10 @@ enum V2Recipe {
         cfg.remLatencyPenalty * min(1.0, max(0.0, 1.0 - minutesSinceOnset / cfg.remLatencyMinutes))
     }
 
+    static func deepLatencyGuard(_ minutesSinceOnset: Double, _ cfg: RecipeConfig) -> Double {
+        cfg.deepLatencyPenalty * min(1.0, max(0.0, 1.0 - minutesSinceOnset / cfg.deepLatencyMinutes))
+    }
+
     static func cyclePrior(_ c: Double, _ minutesSinceOnset: Double, _ cfg: RecipeConfig) -> [String: Double] {
         ["deep": 1.2 * max(0.0, 1.0 - c / 0.55),
          "rem": 1.0 * c - remLatencyGuard(minutesSinceOnset, cfg),
@@ -476,6 +486,7 @@ enum V2Recipe {
         let originMin = sustainedSleepOnset(provisional, cfg).map { feats[$0].minutesSinceOnset } ?? 0.0
         for i in feats.indices {
             seq[i]["rem"]! -= remLatencyGuard(feats[i].minutesSinceOnset - originMin, cfg)
+            seq[i]["deep"]! -= deepLatencyGuard(feats[i].minutesSinceOnset - originMin, cfg)
         }
         return viterbi(seq, cfg)
     }

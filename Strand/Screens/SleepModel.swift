@@ -94,8 +94,25 @@ struct Night {
         return out
     }
 
-    var onsetText: String { Night.timeFmt.string(from: Date(timeIntervalSince1970: TimeInterval(session.effectiveStartTs))) }
-    var wakeText: String { Night.timeFmt.string(from: Date(timeIntervalSince1970: TimeInterval(session.endTs))) }
+    /// When the hypnogram first shows sleep. The session's own bounds are time in bed. On a banked 5/MG
+    /// night the band latency trim scores the lying-awake lead-in as wake inside them, and the in-bed start
+    /// can sit more than two hours before the first sleep epoch. The Asleep row reads this
+    /// so it states what the hypnogram under it draws. A night with no real timeline (imported totals)
+    /// keeps its in-bed start.
+    var sleepOnsetTs: Int {
+        guard let first = realSegments?.first(where: { $0.stage != .awake }) else { return session.effectiveStartTs }
+        return session.effectiveStartTs + Int(first.start)
+    }
+
+    /// When the hypnogram last shows sleep: the end of its final non-wake interval, before any trailing wake
+    /// the trim scored while the wearer was still in bed. A night with no real timeline keeps its end.
+    var finalWakeTs: Int {
+        guard let last = realSegments?.last(where: { $0.stage != .awake }) else { return session.endTs }
+        return session.effectiveStartTs + Int(last.end)
+    }
+
+    var onsetText: String { Night.timeFmt.string(from: Date(timeIntervalSince1970: TimeInterval(sleepOnsetTs))) }
+    var wakeText: String { Night.timeFmt.string(from: Date(timeIntervalSince1970: TimeInterval(finalWakeTs))) }
     var dateLabel: String { Night.dateFmt.string(from: Date(timeIntervalSince1970: TimeInterval(session.effectiveStartTs))) }
 
     /// Date label that becomes a span when the night crosses midnight (onset on a different

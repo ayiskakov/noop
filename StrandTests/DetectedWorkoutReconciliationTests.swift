@@ -22,7 +22,8 @@ final class DetectedWorkoutReconciliationTests: XCTestCase {
             "noop.hrvBaselineEpoch", "noop.recoveryBaselineEpoch", UnitPrefs.hrvWindowKey,
             RescoreBackgroundScheduler.owedKey, RescoreBackgroundScheduler.owedTokenKey,
             RescoreBackgroundScheduler.lastPassSecondsKey, DayCycleMode.storageKey,
-            PuffinExperiment.experimentalSleepV2Key, PuffinExperiment.motionAwareWakeKey,
+            PuffinExperiment.experimentalSleepV2Key, PuffinExperiment.sleepStagerKey,
+            PuffinExperiment.motionAwareWakeKey,
             PuffinExperiment.autoDetectWorkoutsKey,
             WorkoutSource.dismissedDefaultsKey,
             "testcentre.active.workouts", "testcentre.active.master",
@@ -36,7 +37,7 @@ final class DetectedWorkoutReconciliationTests: XCTestCase {
         }
         for key in keys { defaults.removeObject(forKey: key) }
         defaults.set(DayCycleMode.midnight.rawValue, forKey: DayCycleMode.storageKey)
-        defaults.set(true, forKey: PuffinExperiment.experimentalSleepV2Key)
+        defaults.set(SleepStagerVersion.v2.rawValue, forKey: PuffinExperiment.sleepStagerKey)
         defaults.set(false, forKey: PuffinExperiment.motionAwareWakeKey)
         defaults.set(false, forKey: PuffinExperiment.autoDetectWorkoutsKey)
         TestCentre.activate(.workouts)
