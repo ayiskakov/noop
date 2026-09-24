@@ -517,6 +517,13 @@ public enum SleepStagerV2 {
     /// it MORE variable, not less (CV 0.617 as a fraction vs 0.537 in minutes). The `c < 0.12` step this
     /// replaced therefore scaled a fixed physiological interval by session length: across one WHOOP 5 user's
     /// own recorded nights it ranged 7.4–84.5 min, an 11× spread, for the same wearer and the same physiology.
+    ///
+    /// `c` STAYS A FRACTION OF THE SESSION when a band sleep window is given, although the onset guards move
+    /// to the window. With a long lying-awake lead-in, part of the early deep prior is spent before sleep
+    /// begins: on the owner's six banked 5/MG nights `c` at the band's onset was 0.03–0.19, a deep prior of
+    /// 0.79–1.13 instead of 1.20. Measuring `c` over the window instead was tried and scored no better
+    /// against PSG in the window: four-class kappa 0.363 → 0.360 on Wearanize+, 0.434 → 0.427 on
+    /// sleep-accel and 0.259 → 0.261 on DREAMT, with first REM later on all three (+5, +2 and +23 min).
     static func cyclePrior(_ c: Double, _ minutesSinceOnset: Double) -> [String: Double] {
         ["deep": 1.2 * max(0.0, 1.0 - c / 0.55),
          "rem": 1.0 * c - remLatencyGuard(minutesSinceOnset),

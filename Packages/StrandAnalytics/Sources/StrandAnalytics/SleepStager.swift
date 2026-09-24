@@ -1717,13 +1717,14 @@ public enum SleepStager {
                     detail: "daytime=true restingHR=\(resting ?? -1) baseline=\(baseline.map { Int($0) } ?? -1) nightTail=false"))
                 continue
             }
-            // `stageWindow`, the one staging funnel the app's re-stage shares: V2 and V3 stage inside the
-            // band's sleep window, so the recipe starts from the band's onset. Band latency trim: relabel as
-            // wake the lying-still-awake lead-in and tail outside the band's own persistent "asleep" span.
-            // Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN band scored
-            // "asleep". Both are no-ops without a band stream (WHOOP 4.0) and stager-agnostic. Efficiency
-            // below is computed on the final stages, so a night NOOP over-called wake on reports true
-            // efficiency.
+            // `stageWindow`, the one staging funnel the app's re-stage shares. V2 and V3 stage inside the
+            // band's sleep window, so V2's onset guards and V3's elapsed time start at the band's onset (V2's
+            // cycle-prior clock still spans the session; see `SleepStagerV2.cyclePrior`). Band latency trim:
+            // relabel as wake the lying-still-awake lead-in and tail outside the band's own persistent
+            // "asleep" span. Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN
+            // band scored "asleep". Both are no-ops without a band stream (WHOOP 4.0) and stager-agnostic.
+            // Efficiency below is computed on the final stages, so a night NOOP over-called wake on reports
+            // true efficiency.
             let staged = stageWindow(start: p.start, end: p.end, grav: grav, hr: hrS, rr: rrS, resp: respS,
                                      bandSleepState: bandSleepState, stager: stager)
             let trimmedStages = staged.trimmed
