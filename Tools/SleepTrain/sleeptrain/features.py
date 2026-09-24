@@ -374,13 +374,15 @@ def features(grav, hr, rr, span_start, n):
     return F
 
 
-def impute(F, names):
-    """Model input matrix: each feature's missing values take that night's median of the feature (0 when the
-    feature is missing all night), so an absent channel reads as typical for the night, not as extreme."""
+def impute(F, names, absent=None):
+    """Model input matrix: each feature's missing values take that night's median of the feature, so a gap
+    reads as typical for the night, not as extreme. A feature missing all night takes `absent[j]`, the head's
+    training mean, so it standardises to 0 (`Head.posteriors` passes it). Fitting passes none and would fill 0,
+    but no training night has a whole-night gap in a column its head reads."""
     X = np.empty((F[names[0]].size, len(names)))
     for j, name in enumerate(names):
         x = F[name].astype(float).copy()
         m = median(x)
-        x[np.isnan(x)] = 0.0 if np.isnan(m) else m
+        x[np.isnan(x)] = (0.0 if absent is None else absent[j]) if np.isnan(m) else m
         X[:, j] = x
     return X

@@ -149,6 +149,21 @@ final class SleepStagerV3OracleTests: XCTestCase {
         }
     }
 
+    /// A column missing for the whole night takes the head's training mean, so it standardises to 0 and moves
+    /// no logit; a partly missing column takes the night's median. A whole-night gap used to take 0, which for
+    /// a percentile rank reads as the night's extreme: no heart rate at all read as the lowest, flattest heart
+    /// rate of the night.
+    func testAColumnMissingAllNightMovesNoLogit() {
+        XCTAssertEqual(SleepStagerV3.imputed([.nan, .nan], absent: 0.5), [0.5, 0.5])
+        XCTAssertEqual(SleepStagerV3.imputed([.nan, 1, 3, 2], absent: 0.5), [2, 1, 3, 2])
+        let head = SleepStagerV3.baseHead, n = 3
+        var columns: [String: [Double]] = [:]
+        for (j, name) in head.features.enumerated() { columns[name] = [Double](repeating: head.mean[j], count: n) }
+        let atMean = head.posteriors(SleepStagerV3.Features(n: n, columns: columns, beats: [0, 0, 0]))
+        for name in ["hr_pct", "hrsd5_pct", "hr_over_low"] { columns[name] = [.nan, .nan, .nan] }
+        XCTAssertEqual(head.posteriors(SleepStagerV3.Features(n: n, columns: columns, beats: [0, 0, 0])), atMean)
+    }
+
     /// The Welch band powers equal a direct evaluation of the density on a signal with known content: a pure
     /// 0.25 Hz tone puts the HF peak on that bin, and its LF power is negligible next to HF.
     func testSpectralPeakTracksAToneAndMovesWithIt() {

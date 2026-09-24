@@ -128,7 +128,9 @@ public enum SleepStagerV3 {
         /// Per-epoch stage posteriors (softmax of the standardised features' logits).
         func posteriors(_ f: Features) -> [[Double]] {
             let n = f.n
-            let cols = features.map { imputed(f.columns[$0] ?? [Double](repeating: .nan, count: n)) }
+            let cols = features.indices.map { j in
+                imputed(f.columns[features[j]] ?? [Double](repeating: .nan, count: n), absent: mean[j])
+            }
             var out: [[Double]] = []
             out.reserveCapacity(n)
             for i in 0..<n {
@@ -210,11 +212,19 @@ public enum SleepStagerV3 {
         return path
     }
 
-    /// Missing values take the column's median over the night (0 when the whole column is missing), so an
-    /// absent channel reads as typical for the night rather than as an extreme.
-    static func imputed(_ x: [Double]) -> [Double] {
+    /// Missing values take the column's median over the night, so a gap reads as typical for the night rather
+    /// than as an extreme. A column missing for the whole night takes `absent`, the head's training mean for
+    /// it, so it standardises to 0 and moves no logit.
+    ///
+    /// A whole-night gap used to take 0, which is neutral only for the z-scored columns. For a percentile
+    /// rank (typical value 0.5) or a ratio it is an extreme. A span with gravity but no heart rate yet read as
+    /// the lowest, flattest heart rate of the night: hr_pct and the three hrsd ranks at z = -1.74, hr_over_low
+    /// at -1.03. On the owner's six banked 5/MG nights with the heart rate removed that staged 32-48 % deep,
+    /// against 8-18 % with it present. No training night holds a whole-night gap in a column its head reads,
+    /// so the fitted model is unchanged, and so are the PSG figures.
+    static func imputed(_ x: [Double], absent: Double) -> [Double] {
         let m = median(x)
-        let fill = m.isNaN ? 0 : m
+        let fill = m.isNaN ? absent : m
         return x.map { $0.isNaN ? fill : $0 }
     }
 

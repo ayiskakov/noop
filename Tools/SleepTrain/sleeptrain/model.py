@@ -29,7 +29,7 @@ class Head:
         self.prior, self.transition = np.asarray(prior), np.asarray(transition)
 
     def posteriors(self, F):
-        z = (impute(F, self.names) - self.mean) / self.scale
+        z = (impute(F, self.names, self.mean) - self.mean) / self.scale
         logits = np.tile(self.intercept, (z.shape[0], 1))
         for j in range(z.shape[1]):             # feature by feature, the order the Swift port accumulates in
             logits += self.coef[:, j] * z[:, j:j + 1]
