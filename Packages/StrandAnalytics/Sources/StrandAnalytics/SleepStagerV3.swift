@@ -48,41 +48,18 @@ public enum SleepStagerV3 {
         // Only [first epoch, last epoch + 30) is ever read, so slice every stream to it before keying the
         // memo: the callers pass multi-day streams to every per-night call.
         let lo = first, hi = last + epochS
-        let gravW = clip(sortedByTs(grav, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
-        let hrW = clip(sortedByTs(hr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
-        let rrW = clip(sortedByTs(rr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
-        let key = V3Key(
-            start: start, end: end,
-            grav: StreamFingerprint.of(gravW, ts: { $0.ts }, quant: {
-                StreamFingerprint.gravityQuant(x: $0.x, y: $0.y, z: $0.z)
-            }),
-            hr: StreamFingerprint.of(hrW, ts: { $0.ts }, quant: { Int($0.bpm) }),
-            rr: StreamFingerprint.of(rrW, ts: { $0.ts }, quant: { Int($0.rrMs) }),
-            windowFrom: sleepWindow?.from, windowTo: sleepWindow?.to)
+        let gravW = StagerInput.clip(StagerInput.sortedByTs(grav, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let hrW = StagerInput.clip(StagerInput.sortedByTs(hr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let rrW = StagerInput.clip(StagerInput.sortedByTs(rr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let key = StagerInput.Key(start: start, end: end, grav: gravW, hr: hrW, rr: rrW, sleepWindow: sleepWindow)
         return stageCache.value(key) {
             let labels = stageEpochs(epochs: epochs, grav: gravW, hr: hrW, rr: rrW, sleepWindow: sleepWindow,
                                      end: end)
-            var segments: [StageSegment] = []
-            for (i, e) in epochs.enumerated() {
-                let segStart = i == 0 ? start : e
-                let segEnd = i == epochs.count - 1 ? end : epochs[i + 1]
-                if let lastSeg = segments.last, lastSeg.stage == labels[i] {
-                    segments[segments.count - 1].end = segEnd
-                } else {
-                    segments.append(StageSegment(start: segStart, end: segEnd, stage: labels[i]))
-                }
-            }
-            return segments
+            return StagerInput.tile(epochStarts: epochs, labels: labels, start: start, end: end)
         }
     }
 
-    private struct V3Key: Hashable {
-        let start: Int; let end: Int
-        let grav: StreamFingerprint; let hr: StreamFingerprint; let rr: StreamFingerprint
-        let windowFrom: Int?; let windowTo: Int?
-    }
-
-    private static let stageCache = AnalyticsMemoCache<V3Key, [StageSegment]>(capacity: 24)
+    private static let stageCache = AnalyticsMemoCache<StagerInput.Key, [StageSegment]>(capacity: 24)
 
     /// Stage names in model order.
     static let stages = ["wake", "light", "deep", "rem"]
@@ -398,7 +375,7 @@ public enum SleepStagerV3 {
     /// ts + j / c in their stored order.
     static func beatTimes(_ rr: [RRInterval], spanStart: Int, n: Int) -> ([Double], [Double]) {
         let hi = spanStart + epochS * n
-        let kept = sortedByTs(rr, { $0.ts }).filter { $0.ts >= spanStart && $0.ts < hi }
+        let kept = StagerInput.sortedByTs(rr, { $0.ts }).filter { $0.ts >= spanStart && $0.ts < hi }
         var t = [Double](), v = [Double]()
         t.reserveCapacity(kept.count); v.reserveCapacity(kept.count)
         var i = 0
@@ -650,30 +627,5 @@ public enum SleepStagerV3 {
         var lo = 0, hi = s.count
         while lo < hi { let m = (lo + hi) / 2; if s[m] <= v { lo = m + 1 } else { hi = m } }
         return lo
-    }
-
-    // MARK: - Stream plumbing
-
-    /// Stable timestamp order (same-second rows keep their input order).
-    static func sortedByTs<T>(_ xs: [T], _ ts: (T) -> Int) -> [T] {
-        var sorted = true
-        for i in xs.indices.dropFirst() where ts(xs[i - 1]) > ts(xs[i]) { sorted = false; break }
-        if sorted { return xs }
-        return xs.enumerated().sorted { a, b in
-            let ta = ts(a.element), tb = ts(b.element)
-            return ta == tb ? a.offset < b.offset : ta < tb
-        }.map { $0.element }
-    }
-
-    /// The rows of a ts-sorted stream inside `[lo, hi)`.
-    static func clip<T>(_ xs: [T], lo: Int, hi: Int, ts: (T) -> Int) -> [T] {
-        if xs.isEmpty { return xs }
-        if ts(xs[0]) >= lo && ts(xs[xs.count - 1]) < hi { return xs }
-        var a = 0, b = xs.count
-        while a < b { let m = (a + b) / 2; if ts(xs[m]) < lo { a = m + 1 } else { b = m } }
-        let start = a
-        b = xs.count
-        while a < b { let m = (a + b) / 2; if ts(xs[m]) < hi { a = m + 1 } else { b = m } }
-        return Array(xs[start..<a])
     }
 }
