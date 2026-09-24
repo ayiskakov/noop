@@ -1010,9 +1010,8 @@ final class IntelligenceEngine: ObservableObject {
         // the day loop below, which is the scoring half of the owner probes. See `StoreProbeTally`.
         _ = StoreProbeRecorder.take()
         // ── #1005 BATTERY: per-day reuse cache setup (see `dayScanCache`) ────────────────────────────
-        // The stager toggles are read per-day inside the loop below, but they are global (same value every
-        // day); read them ONCE here too so the config signature can fold them without reaching into the
-        // detached loop.
+        // The stager toggles are global (same value every day): read them ONCE for the whole pass, so the
+        // config signature folds exactly the values the day loop below stages with.
         let sleepStagerGlobal = PuffinExperiment.sleepStager
         let useMotionAwareWakeGlobal = PuffinExperiment.motionAwareWakeEnabled
         // Cache eligibility for the whole pass: never reuse while a Test-Centre trace is active (a cached
@@ -1326,16 +1325,17 @@ final class IntelligenceEngine: ObservableObject {
                                                                      from: from, to: to, store: store)
                 }
 
-                // #690: read the staging choice ONCE here (off the detached executor, matching the Repository
-                // self-heal call site) and capture it, so the Settings picker drives the NORMAL detected-night
-                // staging path, not only the userEdited self-heal restage. V3 is the default for every strap;
-                // V2 and V1 stay selectable. The self-heal restage below reads the same resolver.
-                let sleepStager = PuffinExperiment.sleepStager
-                // #364 follow-up: read the motion-aware wake refinement toggle the same way (once, off the
-                // detached executor). Default OFF — see `PuffinExperiment.motionAwareWakeEnabled`. It only
-                // ever runs AFTER whichever stager above just ran, and self-gates on the night's observed
-                // gravity + step density, so flipping it on is a no-op for any night too sparse to trust.
-                let useMotionAwareWake = PuffinExperiment.motionAwareWakeEnabled
+                // #690: the staging choice drives the NORMAL detected-night staging path, not only the
+                // userEdited self-heal restage. V3 is the default for every strap; V2 and V1 stay selectable.
+                // It is the value read ONCE for the pass above, the one `dayCacheConfigSig` records: a second
+                // read here could see a picker change made mid-pass and cache later days staged by a recipe
+                // the signature does not name.
+                let sleepStager = sleepStagerGlobal
+                // #364 follow-up: the motion-aware wake refinement toggle, from the same single read. Default
+                // OFF — see `PuffinExperiment.motionAwareWakeEnabled`. It only ever runs AFTER whichever stager
+                // above just ran, and self-gates on the night's observed gravity + step density, so flipping it
+                // on is a no-op for any night too sparse to trust.
+                let useMotionAwareWake = useMotionAwareWakeGlobal
 
                 // Already OFF the main actor , score directly (the prior nested `Task.detached` here only
                 // existed to hop off the main actor; the whole loop now runs off it, so the score is computed
