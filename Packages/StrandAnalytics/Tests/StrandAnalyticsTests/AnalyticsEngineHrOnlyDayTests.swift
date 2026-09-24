@@ -67,4 +67,19 @@ final class AnalyticsEngineHrOnlyDayTests: XCTestCase {
         // that remains TRUE of this day — the change made the vitals available, not the staging better.
         XCTAssertEqual(res.daily.sleepHrOnly, true, "the day must still be marked HR-only")
     }
+
+    /// The Rest trace's `stager=` names the recipe that staged the scored night. For an HR-only night that is
+    /// `hrOnlyRecipe`: the choice itself, except V1, which cannot stage without motion and hands it to V2.
+    func testTheTraceNamesTheRecipeThatStagedAnHrOnlyNight() {
+        let (hr, rr) = streams()
+        for (stager, named) in [(SleepStagerVersion.v3, "V3"), (.v2, "V2"), (.v1, "V2")] {
+            let provided = SleepStager.hrOnlySessions(hr: hr, rr: rr, resp: [], stager: stager)
+            var trace: [String] = []
+            _ = AnalyticsEngine.analyzeDay(day: day, hr: hr, rr: rr, profile: profile, stager: stager,
+                                           providedSleep: provided, traceSink: { trace.append($0) })
+            let line = trace.first { $0.hasPrefix("sleep-motion") }
+            XCTAssertNotNil(line, stager.label)
+            XCTAssertTrue(line?.contains(" stager=\(named) ") ?? false, "\(stager.label): \(line ?? "no line")")
+        }
+    }
 }

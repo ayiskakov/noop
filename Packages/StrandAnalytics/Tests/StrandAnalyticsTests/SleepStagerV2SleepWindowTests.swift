@@ -59,11 +59,38 @@ final class SleepStagerV2SleepWindowTests: XCTestCase {
 
     func testEachEpochIsJudgedByTheSessionGridInstantItContains() {
         // Session grid starts at 1000 (10 s past a wall-clock boundary); window = grid epochs 5 ..< 20.
-        let w = (from: 1_150, to: 1_600)
-        XCTAssertFalse(SleepStagerV2.epochInSleepWindow(1_110, w), "[1110, 1140) holds 1120, before the window")
-        XCTAssertTrue(SleepStagerV2.epochInSleepWindow(1_140, w), "[1140, 1170) holds 1150, the window's first")
-        XCTAssertTrue(SleepStagerV2.epochInSleepWindow(1_560, w), "[1560, 1590) holds 1570, the window's last")
-        XCTAssertFalse(SleepStagerV2.epochInSleepWindow(1_590, w), "[1590, 1620) holds 1600, past the end")
+        let w = (from: 1_150, to: 1_600), end = 2_200
+        XCTAssertFalse(SleepStagerV2.epochInSleepWindow(1_110, w, end: end), "[1110, 1140) holds 1120, before the window")
+        XCTAssertTrue(SleepStagerV2.epochInSleepWindow(1_140, w, end: end), "[1140, 1170) holds 1150, the window's first")
+        XCTAssertTrue(SleepStagerV2.epochInSleepWindow(1_560, w, end: end), "[1560, 1590) holds 1570, the window's last")
+        XCTAssertFalse(SleepStagerV2.epochInSleepWindow(1_590, w, end: end), "[1590, 1620) holds 1600, past the end")
+    }
+
+    /// A session that starts off the wall-clock grid ends on a recipe epoch cut short at `end`. When that
+    /// epoch holds no session-grid instant before `end`, it lies inside the session's last grid epoch and is
+    /// judged by it. Judged by the instant past `end`, a band that slept through the end still closed the
+    /// night on a few seconds of wake.
+    func testThePartialLastEpochIsJudgedByTheSessionsLastGridEpoch() {
+        // Session grid 15 s past the wall clock; 120 grid epochs, the last one [end - 20, end).
+        let start = 1_699_999_995, end = start + 3_590
+        let lastRecipeEpoch = end - 5   // [end - 5, end): the next grid instant is end + 10
+        let band = (0..<(end - start)).map { (ts: start + $0, state: 2) }
+        guard let w = SleepStager.bandSleepWindow(start: start, end: end, bandSleepState: band, enabled: true) else {
+            return XCTFail("the band sleeps throughout")
+        }
+        XCTAssertEqual(w.to, end)
+        XCTAssertTrue(SleepStagerV2.epochInSleepWindow(lastRecipeEpoch, w, end: end))
+        XCTAssertFalse(SleepStagerV2.epochInSleepWindow(lastRecipeEpoch, (from: start, to: end - 20), end: end),
+                       "a window that closes before the last grid epoch still excludes it")
+
+        let grav = (start..<end).map { GravitySample(ts: $0, x: 0, y: 0, z: 1.0) }
+        let hr = (start..<end).map { HRSample(ts: $0, bpm: 52 + (($0 - start) / 60) % 3) }
+        for stager in [SleepStagerVersion.v2, .v3] {
+            let stages = SleepStager.stageWindow(start: start, end: end, grav: grav, hr: hr, rr: [], resp: [],
+                                                 bandSleepState: band, stager: stager).stages
+            XCTAssertEqual(stages.last?.end, end)
+            XCTAssertNotEqual(stages.last?.stage, "wake", "\(stager.label): the band slept through the end")
+        }
     }
 
     // MARK: - staging inside the window

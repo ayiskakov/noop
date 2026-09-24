@@ -1,0 +1,7 @@
+numpy>=2.0
+scikit-learn>=1.5
+# prepare_wearanize.py
+pyarrow>=15
+neurokit2>=0.2.10
+# prepare_dreamt.py
+pandas>=2.2

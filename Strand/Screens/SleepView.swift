@@ -234,6 +234,9 @@ struct SleepView: View {
                 // a phantom night.
                 let coverageLo = min(edit.detectedStartTs, edit.bedTs)
                 SleepTimeEditor(bedTs: edit.bedTs, wakeTs: edit.wakeTs,
+                                title: edit.isNap ? "Edit nap times" : "Edit sleep times",
+                                bedLabel: edit.isNap ? "Nap started" : "Bedtime",
+                                wakeLabel: edit.isNap ? "Nap ended" : "Got up",
                                 coverage: coverageLo...max(edit.wakeTs, coverageLo + 1),
                                 suppressesReDetection: !edit.userEdited,
                                 onSave: { newBedTs, newWakeTs in
@@ -744,7 +747,8 @@ struct SleepView: View {
                                     bedTs: nap.effectiveStartTs,
                                     wakeTs: nap.endTs,
                                     stagesJSON: nap.stagesJSON,
-                                    userEdited: true)   // a nap row is always manually added → no tombstone on delete
+                                    userEdited: true,   // a nap row is always manually added → no tombstone on delete
+                                    isNap: true)
             } label: {
                 Image(systemName: isEdited ? "pencil.circle.fill" : "pencil.circle")
                     .font(StrandFont.headline)
@@ -2690,6 +2694,9 @@ private struct WakeEdit: Identifiable {
     /// never re-detected), so the editor's delete-confirm copy must NOT promise re-detection suppression
     /// for it. Mirrors the undo-banner branch (#65 banner/confirm honesty).
     let userEdited: Bool
+    /// True when a nap row opened the editor. Its fields then name the nap's start and end, as the Add-a-nap
+    /// sheet does; a night's are Bedtime and Got up, which read wrongly on a 14:00 nap.
+    var isNap = false
     var id: Int { detectedStartTs }
 }
 

@@ -22,7 +22,8 @@ final class IntelligenceRRSourceTests: XCTestCase {
             "noop.hrvBaselineEpoch", "noop.recoveryBaselineEpoch", UnitPrefs.hrvWindowKey,
             RescoreBackgroundScheduler.owedKey, RescoreBackgroundScheduler.owedTokenKey,
             RescoreBackgroundScheduler.lastPassSecondsKey, DayCycleMode.storageKey,
-            PuffinExperiment.experimentalSleepV2Key, PuffinExperiment.motionAwareWakeKey,
+            PuffinExperiment.experimentalSleepV2Key, PuffinExperiment.sleepStagerKey,
+            PuffinExperiment.motionAwareWakeKey,
         ]
         let saved = keys.map { ($0, defaults.object(forKey: $0)) }
         defer {
@@ -33,7 +34,7 @@ final class IntelligenceRRSourceTests: XCTestCase {
         }
         for key in keys { defaults.removeObject(forKey: key) }
         defaults.set(DayCycleMode.midnight.rawValue, forKey: DayCycleMode.storageKey)
-        defaults.set(true, forKey: PuffinExperiment.experimentalSleepV2Key)
+        defaults.set(SleepStagerVersion.v2.rawValue, forKey: PuffinExperiment.sleepStagerKey)
         defaults.set(false, forKey: PuffinExperiment.motionAwareWakeKey)
         try await body()
     }

@@ -6,6 +6,7 @@ import WhoopProtocol
 //
 // USAGE:  sleeppsg --dataset /path/to/sleep-accel-1.0.0 [--section all] [--csv out.csv] [--subjects N]
 //         sleeppsg --section port                        (no dataset needed — the port check alone)
+//         sleeppsg --section v3 --nights DIR [--nights DIR ...] [--dump out.csv]
 //
 // The dataset lives outside this repository and is always an argument. Nothing is written to it.
 
@@ -15,6 +16,8 @@ struct Args {
     var csv: String?
     var subjects: Int?
     var seed: UInt64 = PortValidation.defaultSeed
+    var nights: [String] = []
+    var dump: String?
 }
 var a = Args()
 var it = CommandLine.arguments.dropFirst().makeIterator()
@@ -25,15 +28,20 @@ while let k = it.next() {
     case "--csv": a.csv = it.next()
     case "--subjects": a.subjects = Int(it.next() ?? "")
     case "--seed": a.seed = UInt64(it.next() ?? "") ?? a.seed
+    case "--nights": if let d = it.next() { a.nights.append(d) }
+    case "--dump": a.dump = it.next()
     case "-h", "--help":
         print("""
         usage: sleeppsg --dataset <sleep-accel root> [--section all|port|baseline|strata|rem|variants]
                         [--subjects N] [--csv <path>] [--seed <n>]
+               sleeppsg --section v3 --nights <dir> [--nights <dir> ...] [--dump <path>]
 
           --dataset   PhysioNet sleep-accel v1.0.0, extracted. See README.md for the download step and the
                       attribution its licence requires. Never committed; read-only here.
           --section   which report to print. `port` needs no dataset.
           --subjects  score only the first N subject ids (a fast smoke run; full cohort is the default).
+          --nights    a cohort prepared by Tools/SleepTrain (night format). `v3` scores V2 and V3 over it.
+          --dump      with `v3`: write every scored epoch's truth and label per report row as CSV.
         """)
         exit(0)
     default: FileHandle.standardError.write(Data("unknown argument \(k)\n".utf8)); exit(2)
@@ -75,6 +83,14 @@ if want("port") {
 }
 
 if a.section == "port" { exit(0) }
+
+if a.section == "v3" {
+    guard !a.nights.isEmpty else {
+        FileHandle.standardError.write(Data("--section v3 needs at least one --nights <dir>\n".utf8)); exit(2)
+    }
+    Nights.run(dirs: a.nights, dump: a.dump)
+    exit(0)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
 // Dataset

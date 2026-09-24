@@ -63,37 +63,12 @@ public enum SleepStagerV2 {
         // slice each stream to the read window BEFORE fingerprinting and BEFORE the uncached recipe. This is
         // output-identical for sorted callers (and stable for same-second rows), drops only rows `features()`
         // could never touch, and tightens the fingerprint to the rows that matter. PAD_LO/PAD_HI are the SAME
-        // values the Android twin (R1) clips with.
-        let stableOrder: (Int, (Int) -> Int) -> [Int]? = { count, tsAt in
-            if count < 2 { return nil }
-            var hasInversion = false
-            for i in 1..<count where tsAt(i - 1) > tsAt(i) {
-                hasInversion = true
-                break
-            }
-            if !hasInversion { return nil }
-            return (0..<count).sorted { lhs, rhs in
-                let lts = tsAt(lhs), rts = tsAt(rhs)
-                return lts == rts ? lhs < rhs : lts < rts
-            }
-        }
-        let gravO = stableOrder(grav.count, { grav[$0].ts }).map { $0.map { grav[$0] } } ?? grav
-        let hrO = stableOrder(hr.count, { hr[$0].ts }).map { $0.map { hr[$0] } } ?? hr
-        let rrO = stableOrder(rr.count, { rr[$0].ts }).map { $0.map { rr[$0] } } ?? rr
-        let gravW = clipToWindow(gravO,
-                                 lo: start - Self.padLo, hi: end + Self.padHi, ts: { $0.ts })
-        let hrW = clipToWindow(hrO,
-                               lo: start - Self.padLo, hi: end + Self.padHi, ts: { $0.ts })
-        let rrW = clipToWindow(rrO,
-                               lo: start - Self.padLo, hi: end + Self.padHi, ts: { $0.ts })
-        let key = V2Key(
-            start: start, end: end,
-            grav: StreamFingerprint.of(gravW, ts: { $0.ts }, quant: {
-                StreamFingerprint.gravityQuant(x: $0.x, y: $0.y, z: $0.z)
-            }),
-            hr: StreamFingerprint.of(hrW, ts: { $0.ts }, quant: { Int($0.bpm) }),
-            rr: StreamFingerprint.of(rrW, ts: { $0.ts }, quant: { Int($0.rrMs) }),
-            windowFrom: sleepWindow?.from, windowTo: sleepWindow?.to)
+        // values the Android twin (R1) clips with. The sort, clip and key are `StagerInput`'s, shared with V3.
+        let lo = start - Self.padLo, hi = end + Self.padHi
+        let gravW = StagerInput.clip(StagerInput.sortedByTs(grav, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let hrW = StagerInput.clip(StagerInput.sortedByTs(hr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let rrW = StagerInput.clip(StagerInput.sortedByTs(rr, { $0.ts }), lo: lo, hi: hi, ts: { $0.ts })
+        let key = StagerInput.Key(start: start, end: end, grav: gravW, hr: hrW, rr: rrW, sleepWindow: sleepWindow)
         return stageCache.value(key) {
             stageSessionUncached(start: start, end: end, grav: gravW, hr: hrW, rr: rrW, resp: resp,
                                  sleepWindow: sleepWindow)
@@ -108,34 +83,9 @@ public enum SleepStagerV2 {
     static let padLo = 330   // backward reach: 11-min window's `e - 330`
     static let padHi = 390   // forward reach: 11-min window's `e + 30 + 360`
 
-    /// Slice a ts-sorted stream to `[lo, hi)` with a lower/upper-bound pair (O(log n) bounds + one copy of the
-    /// kept rows). Returns a contiguous sub-slice as an `Array`. Loss-free for the recipe: every row outside
-    /// the window is one `features()` provably never touches.
-    private static func clipToWindow<T>(_ samples: [T], lo: Int, hi: Int, ts: (T) -> Int) -> [T] {
-        if samples.isEmpty { return samples }
-        // Already inside the window in full → avoid the copy (the common single-night case).
-        if ts(samples[0]) >= lo && ts(samples[samples.count - 1]) < hi { return samples }
-        // lowerBound: first index with ts >= lo.
-        var l = 0, h = samples.count
-        while l < h { let m = (l + h) / 2; if ts(samples[m]) < lo { l = m + 1 } else { h = m } }
-        let start = l
-        // upperBound: first index with ts >= hi (exclusive upper, matching the half-open read windows).
-        l = start; h = samples.count
-        while l < h { let m = (l + h) / 2; if ts(samples[m]) < hi { l = m + 1 } else { h = m } }
-        if start == 0 && l == samples.count { return samples }
-        return Array(samples[start..<l])
-    }
-
-    /// Cache key = locked window + per-stream fingerprints of the inputs the recipe actually reads + the
-    /// sleep-window constraint, which changes the labels without changing any stream.
-    private struct V2Key: Hashable {
-        let start: Int; let end: Int
-        let grav: StreamFingerprint; let hr: StreamFingerprint; let rr: StreamFingerprint
-        let windowFrom: Int?; let windowTo: Int?
-    }
-
-    /// ≈ a couple of weeks of distinct nights (incl. re-staged edits); FIFO-evicted, result-only.
-    private static let stageCache = AnalyticsMemoCache<V2Key, [StageSegment]>(capacity: 24)
+    /// ≈ a couple of weeks of distinct nights (incl. re-staged edits); FIFO-evicted, result-only. Keyed by
+    /// the locked window, the fingerprints of the clipped streams the recipe reads and the sleep window.
+    private static let stageCache = AnalyticsMemoCache<StagerInput.Key, [StageSegment]>(capacity: 24)
 
     /// The unchanged staging recipe. Split out verbatim from `stageSession` so the public entry can memoize
     /// in front of it; behaviour is byte-identical (a cache miss runs exactly this).
@@ -145,23 +95,13 @@ public enum SleepStagerV2 {
         // The public veneer has already established stable timestamp order before clipping.
         let feats = features(start: start, end: end, grav: grav, hr: hr, rr: rr)
         if feats.isEmpty { return [StageSegment(start: start, end: end, stage: "light")] }
-        let labels = stageEpochs(feats, sleepWindow: sleepWindow)
+        let labels = stageEpochs(feats, sleepWindow: sleepWindow, end: end)
 
-        // Tile [start, end] with one segment per staged epoch. The first segment back-fills [start, firstEpoch)
-        // and the last extends to `end`; an interior coverage gap is carried by the preceding label. "awake"
-        // is renamed to the canonical "wake" used by V1 / StageSegment.
-        var segments: [StageSegment] = []
-        for (i, f) in feats.enumerated() {
-            let stage = labels[i] == "awake" ? "wake" : labels[i]
-            let segStart = i == 0 ? start : f.start
-            let segEnd = i == feats.count - 1 ? end : feats[i + 1].start
-            if let last = segments.last, last.stage == stage {
-                segments[segments.count - 1].end = segEnd
-            } else {
-                segments.append(StageSegment(start: segStart, end: segEnd, stage: stage))
-            }
-        }
-        return segments
+        // Tile [start, end] with one segment per staged epoch (`StagerInput.tile`: the first segment back-fills
+        // [start, firstEpoch), the last extends to `end`, an interior coverage gap is carried by the preceding
+        // label). "awake" is renamed to the canonical "wake" used by V1 / StageSegment.
+        return StagerInput.tile(epochStarts: feats.map { $0.start },
+                                labels: labels.map { $0 == "awake" ? "wake" : $0 }, start: start, end: end)
     }
 
     // MARK: - Recipe constants (all fixed a-priori — NOT fit to labels)
@@ -517,6 +457,13 @@ public enum SleepStagerV2 {
     /// it MORE variable, not less (CV 0.617 as a fraction vs 0.537 in minutes). The `c < 0.12` step this
     /// replaced therefore scaled a fixed physiological interval by session length: across one WHOOP 5 user's
     /// own recorded nights it ranged 7.4–84.5 min, an 11× spread, for the same wearer and the same physiology.
+    ///
+    /// `c` STAYS A FRACTION OF THE SESSION when a band sleep window is given, although the onset guards move
+    /// to the window. With a long lying-awake lead-in, part of the early deep prior is spent before sleep
+    /// begins: on the owner's six banked 5/MG nights `c` at the band's onset was 0.03–0.19, a deep prior of
+    /// 0.79–1.13 instead of 1.20. Measuring `c` over the window instead was tried and scored no better
+    /// against PSG in the window: four-class kappa 0.363 → 0.360 on Wearanize+, 0.434 → 0.427 on
+    /// sleep-accel and 0.259 → 0.261 on DREAMT, with first REM later on all three (+5, +2 and +23 min).
     static func cyclePrior(_ c: Double, _ minutesSinceOnset: Double) -> [String: Double] {
         ["deep": 1.2 * max(0.0, 1.0 - c / 0.55),
          "rem": 1.0 * c - remLatencyGuard(minutesSinceOnset),
@@ -545,12 +492,18 @@ public enum SleepStagerV2 {
     /// enough that no emission or transition can outweigh it, and finite so the lattice never sums infinities.
     static let forcedWakePenalty = 1.0e6
 
-    /// Whether the 30 s epoch starting at `epochStart` lies inside `window`. The window sits on the session's
-    /// own grid (`SleepStager.bandSleepWindow`) and recipe epochs sit on the wall-clock grid, so each epoch is
-    /// judged by the one session-grid instant it contains. That is the instant the latency trim reads the
-    /// epoch's label at, so the trim finds nothing left to relabel.
-    static func epochInSleepWindow(_ epochStart: Int, _ window: (from: Int, to: Int)) -> Bool {
-        let t = epochStart + ((window.from - epochStart) % 30 + 30) % 30
+    /// Whether the 30 s epoch starting at `epochStart` lies inside `window`, for a session ending at `end`. The
+    /// window sits on the session's own grid (`SleepStager.bandSleepWindow`) and recipe epochs sit on the
+    /// wall-clock grid, so each epoch is judged by the one session-grid instant it contains. That is the
+    /// instant the latency trim reads the epoch's label at, so the trim finds nothing left to relabel.
+    ///
+    /// The session's last recipe epoch is cut short at `end` and can hold no session-grid instant before it.
+    /// It then lies inside the session's last grid epoch and is judged by that epoch's instant. Judged by the
+    /// instant past `end`, it fell outside a window that runs to the end, so a night the band slept through
+    /// closed on a sliver of wake (up to 29 s) that no trim removed.
+    static func epochInSleepWindow(_ epochStart: Int, _ window: (from: Int, to: Int), end: Int) -> Bool {
+        var t = epochStart + ((window.from - epochStart) % 30 + 30) % 30
+        if t >= end { t -= 30 }
         return t >= window.from && t < window.to
     }
 
@@ -608,7 +561,7 @@ public enum SleepStagerV2 {
     /// staged there, often deep, which is the transition the awake row forbids. Only the labels are
     /// constrained: every emission, z-score and percentile is computed exactly as before, over the whole
     /// session.
-    static func stageEpochs(_ feats: [Epoch], sleepWindow: (from: Int, to: Int)? = nil) -> [String] {
+    static func stageEpochs(_ feats: [Epoch], sleepWindow: (from: Int, to: Int)? = nil, end: Int = .max) -> [String] {
         if feats.isEmpty { return [] }
 
         // Per-night z-score over the present values (population std; 0 std → 1 so a flat channel is neutral).
@@ -657,7 +610,7 @@ public enum SleepStagerV2 {
             for s in stageNames { em[s]! += pr[s]! }
             if f.jerkMax > f.jerkScale * jerkFloorGateMult { em["awake"]! += motionGateBoost }
             if let rg = f.respReg { em["rem"]! -= respWeight * max(0.0, zrg(rg)) }
-            if let w = sleepWindow, !epochInSleepWindow(f.start, w) {
+            if let w = sleepWindow, !epochInSleepWindow(f.start, w, end: end) {
                 for s in stageNames where s != "awake" { em[s]! -= forcedWakePenalty }
             }
             seq.append(em)

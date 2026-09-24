@@ -206,22 +206,24 @@ enum PuffinExperiment {
     static let pauseHrvDisabledKey = "noopPowerSavingPauseHrvDisabled"
     static var pauseHrvOnPowerSaveEnabled: Bool { !UserDefaults.standard.bool(forKey: pauseHrvDisabledKey) }
 
-    /// "Experimental sleep staging (V2)": re-stage each detected night with `SleepStagerV2` — a transparent
-    /// cardiorespiratory recipe (reimplemented from contributor PR #600) — instead of the older V1 stager.
-    /// Pure analysis switch: it changes ONLY which staging engine runs over an already-detected sleep window;
-    /// sleep DETECTION, scoring and the V1 path are all untouched. Model-agnostic (WHOOP 4 and 5). **Default
-    /// ON**: V2 was promoted to the default staging engine after a 44-subject cross-subject benchmark (AAUWSS
-    /// + Walch sleep-accel, leave-one-subject-out) showed V2 strictly dominates V1 (kappa 0.35 vs 0.03, deep
-    /// recall 55 % vs 1 %) — the multi-subject validation this recipe originally lacked. V1 remains available.
-    /// Read at the staging call site (Repository). Mirrors the Android `PuffinExperiment.KEY_EXPERIMENTAL_SLEEP_V2`.
+    /// Which recipe stages each detected night (Settings → Experimental → Sleep staging): `SleepStagerV3`,
+    /// fitted to polysomnography, by default; the hand-set `SleepStagerV2` and the original V1 stay
+    /// selectable. Pure analysis switch: it changes ONLY which staging engine runs over an already-detected
+    /// sleep window; sleep DETECTION is untouched. Stored as the `SleepStagerVersion` raw value.
+    static let sleepStagerKey = "noopSleepStager"
+
+    /// The pre-V3 switch, `true` = V2 and `false` = V1. Never written any more; read only so a user who had
+    /// turned V2 OFF keeps V1 after the upgrade instead of being moved to V3 unasked.
     static let experimentalSleepV2Key = "noopExperimentalSleepV2"
 
-    /// Default ON when the key is unset (mirrors the Android `getBoolean(KEY, true)`): a `bool(forKey:)` alone
-    /// reads a missing key as false, so an absent preference must resolve to the promoted V2 default explicitly.
-    static var experimentalSleepV2Enabled: Bool {
-        UserDefaults.standard.object(forKey: experimentalSleepV2Key) == nil
-            ? true
-            : UserDefaults.standard.bool(forKey: experimentalSleepV2Key)
+    /// The ONE resolver for the staging choice: the engine, the self-heal restage, the diagnostics line and
+    /// the Settings picker all read it, so no two of them can disagree. An explicit choice wins; otherwise a
+    /// legacy explicit V2-OFF means V1; otherwise V3.
+    static var sleepStager: SleepStagerVersion {
+        let d = UserDefaults.standard
+        if let raw = d.string(forKey: sleepStagerKey), let v = SleepStagerVersion(rawValue: raw) { return v }
+        if d.object(forKey: experimentalSleepV2Key) != nil, !d.bool(forKey: experimentalSleepV2Key) { return .v1 }
+        return .v3
     }
 
     /// Opt-in "HR-from-PPG sub-lag interpolation" (default off): the v26 optical-PPG gap-fill HR estimator
