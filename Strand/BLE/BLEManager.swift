@@ -7034,6 +7034,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 // Byte runs dropped below the family minimum still reach the reject tally.
                 let completedFrames = reassembler.feed(bytes)
                 router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
+                router.noteReassemblerHeaderDrops(reassembler.headerChecksumDrops)
                 for frame in completedFrames {
                     let isOffload = backfilling && BLEManager.isOffloadFrame(frame, family: .whoop5)
                     noteWhoop5R22Telemetry(frame, duringOffload: isOffload)   // #174 deep-data telemetry
