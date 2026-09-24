@@ -309,18 +309,16 @@ enum DebugDataDiagnostics {
             return lines
         }
         if let rem = SleepStager.remFunnelDiagnostic(start: cs.startTs, end: cs.endTs, grav: grav, hr: hr, rr: rr, resp: resp) {
-            // The funnel replays the V1 classifier, but the shipped hypnogram is staged by whichever recipe
-            // the user's choice resolves to (V3 by default) — name both, or the two totals read as one fact
-            // disagreeing.
+            // The funnel replays the V1 classifier, while the screen shows the stored hypnogram. Name both, or
+            // the two totals read as one fact disagreeing. A stored night keeps no record of the recipe that
+            // staged it: the picker may have moved since it was staged, and a night the merge takes from an
+            // import was never staged here. So the line names the current setting, not the night's recipe,
+            // and says the totals can differ whatever that setting is.
             // On a 5/MG the gap is maximal: V1's primary REM gate needs the raw resp channel that
             // hardware never emits, while V2 and V3 read the R-R stream instead, so the funnel can report
             // ~46min REM against a 231min screen for the same night.
-            let screenStager = PuffinExperiment.sleepStager.label
-            var summary = rem.summary + " · funnel replays V1; screen staged by \(screenStager)"
-            if screenStager != "V1" {
-                summary += " — totals can differ"
-            }
-            lines.append(summary)
+            lines.append(rem.summary + " · funnel replays V1; the screen shows the stored hypnogram "
+                         + "(staging setting now \(PuffinExperiment.sleepStager.label)) — totals can differ")
         } else {
             lines.append("REM funnel: insufficient motion data (<2 gravity samples)")
         }
