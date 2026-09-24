@@ -36,9 +36,15 @@ public enum SleepStagerV2 {
     /// span. DROP-IN: same signature + return type as `SleepStager.stageSession`, so a caller can switch
     /// V1↔V2 on a flag with no other change. `resp` (raw resp ADC) is accepted for signature-parity but not
     /// consumed — respiration regularity is recovered from the R-R stream (RSA), the path available on both
-    /// WHOOP 4 and 5. The recipe stages "wake" naturally (no separate pre-onset / post-wake forcing).
+    /// WHOOP 4 and 5. The recipe stages "wake" naturally (no separate pre-onset / post-wake forcing) unless
+    /// `sleepWindow` is given.
+    ///
+    /// `sleepWindow` is the `[from, to)` span (unix seconds) that an independent reference allows to be sleep:
+    /// the strap's own band state, via `SleepStager.bandSleepWindow`. Epochs outside it are forced to wake
+    /// inside the Viterbi lattice (see `stageEpochs`). nil (the default) stages exactly as before.
     public static func stageSession(start: Int, end: Int, grav: [GravitySample],
-                                    hr: [HRSample], rr: [RRInterval], resp: [RespSample]) -> [StageSegment] {
+                                    hr: [HRSample], rr: [RRInterval], resp: [RespSample],
+                                    sleepWindow: (from: Int, to: Int)? = nil) -> [StageSegment] {
         // v7.0.2 perf (#707): stage each night AT MOST ONCE per (window, input-fingerprint). The post-sync
         // scoring loop and the self-heal restage call this with byte-identical streams across passes; without
         // the cache each call re-allocates the large per-second HR/gravity dictionaries below before
@@ -86,9 +92,11 @@ public enum SleepStagerV2 {
                 StreamFingerprint.gravityQuant(x: $0.x, y: $0.y, z: $0.z)
             }),
             hr: StreamFingerprint.of(hrW, ts: { $0.ts }, quant: { Int($0.bpm) }),
-            rr: StreamFingerprint.of(rrW, ts: { $0.ts }, quant: { Int($0.rrMs) }))
+            rr: StreamFingerprint.of(rrW, ts: { $0.ts }, quant: { Int($0.rrMs) }),
+            windowFrom: sleepWindow?.from, windowTo: sleepWindow?.to)
         return stageCache.value(key) {
-            stageSessionUncached(start: start, end: end, grav: gravW, hr: hrW, rr: rrW, resp: resp)
+            stageSessionUncached(start: start, end: end, grav: gravW, hr: hrW, rr: rrW, resp: resp,
+                                 sleepWindow: sleepWindow)
         }
     }
 
@@ -118,10 +126,12 @@ public enum SleepStagerV2 {
         return Array(samples[start..<l])
     }
 
-    /// Cache key = locked window + per-stream fingerprints of the inputs the recipe actually reads.
+    /// Cache key = locked window + per-stream fingerprints of the inputs the recipe actually reads + the
+    /// sleep-window constraint, which changes the labels without changing any stream.
     private struct V2Key: Hashable {
         let start: Int; let end: Int
         let grav: StreamFingerprint; let hr: StreamFingerprint; let rr: StreamFingerprint
+        let windowFrom: Int?; let windowTo: Int?
     }
 
     /// ≈ a couple of weeks of distinct nights (incl. re-staged edits); FIFO-evicted, result-only.
@@ -130,11 +140,12 @@ public enum SleepStagerV2 {
     /// The unchanged staging recipe. Split out verbatim from `stageSession` so the public entry can memoize
     /// in front of it; behaviour is byte-identical (a cache miss runs exactly this).
     private static func stageSessionUncached(start: Int, end: Int, grav: [GravitySample],
-                                             hr: [HRSample], rr: [RRInterval], resp: [RespSample]) -> [StageSegment] {
+                                             hr: [HRSample], rr: [RRInterval], resp: [RespSample],
+                                             sleepWindow: (from: Int, to: Int)?) -> [StageSegment] {
         // The public veneer has already established stable timestamp order before clipping.
         let feats = features(start: start, end: end, grav: grav, hr: hr, rr: rr)
         if feats.isEmpty { return [StageSegment(start: start, end: end, stage: "light")] }
-        let labels = stageEpochs(feats)
+        let labels = stageEpochs(feats, sleepWindow: sleepWindow)
 
         // Tile [start, end] with one segment per staged epoch. The first segment back-fills [start, firstEpoch)
         // and the last extends to `end`; an interior coverage gap is carried by the preceding label. "awake"
@@ -505,6 +516,19 @@ public enum SleepStagerV2 {
         return nil
     }
 
+    /// Log-odds subtracted from every sleep stage's emission on an epoch outside the sleep window. Large
+    /// enough that no emission or transition can outweigh it, and finite so the lattice never sums infinities.
+    static let forcedWakePenalty = 1.0e6
+
+    /// Whether the 30 s epoch starting at `epochStart` lies inside `window`. The window sits on the session's
+    /// own grid (`SleepStager.bandSleepWindow`) and recipe epochs sit on the wall-clock grid, so each epoch is
+    /// judged by the one session-grid instant it contains. That is the instant the latency trim reads the
+    /// epoch's label at, so the trim finds nothing left to relabel.
+    static func epochInSleepWindow(_ epochStart: Int, _ window: (from: Int, to: Int)) -> Bool {
+        let t = epochStart + ((window.from - epochStart) % 30 + 30) % 30
+        return t >= window.from && t < window.to
+    }
+
     /// Viterbi most-likely path over the per-epoch log-emissions with the sticky transition matrix and a
     /// uniform start. Ties resolve to the earlier stage in `stageNames`.
     static func viterbi(_ emSeq: [[String: Double]]) -> [String] {
@@ -549,7 +573,17 @@ public enum SleepStagerV2 {
     /// one Viterbi over an already-built lattice, not a second featurisation, and `stageSession` memoizes the
     /// whole thing anyway. When no sustained run exists the origin falls back to the window start, which is
     /// exactly the origin the shipped `c`-based guard used.
-    static func stageEpochs(_ feats: [Epoch]) -> [String] {
+    ///
+    /// SLEEP WINDOW. With `sleepWindow`, every epoch outside it has its sleep emissions pushed down by
+    /// `forcedWakePenalty`, so both passes can only label it awake. The strap's band state used to be applied
+    /// only after staging, by relabelling the lead-in and tail as wake. Pass 1 therefore read sleep onset from
+    /// a hypnogram that still slept through the lead-in, up to two hours before the band's onset on a banked
+    /// 5/MG night (2 h 13 min before it). The REM-latency guard was spent before sleep began, and REM appeared
+    /// 31 min after the real onset. The relabelling also cut straight from wake into whatever the recipe had
+    /// staged there, often deep, which is the transition the awake row forbids. Only the labels are
+    /// constrained: every emission, z-score and percentile is computed exactly as before, over the whole
+    /// session.
+    static func stageEpochs(_ feats: [Epoch], sleepWindow: (from: Int, to: Int)? = nil) -> [String] {
         if feats.isEmpty { return [] }
 
         // Per-night z-score over the present values (population std; 0 std → 1 so a flat channel is neutral).
@@ -598,6 +632,9 @@ public enum SleepStagerV2 {
             for s in stageNames { em[s]! += pr[s]! }
             if f.jerkMax > f.jerkScale * jerkFloorGateMult { em["awake"]! += motionGateBoost }
             if let rg = f.respReg { em["rem"]! -= respWeight * max(0.0, zrg(rg)) }
+            if let w = sleepWindow, !epochInSleepWindow(f.start, w) {
+                for s in stageNames where s != "awake" { em[s]! -= forcedWakePenalty }
+            }
             seq.append(em)
         }
 

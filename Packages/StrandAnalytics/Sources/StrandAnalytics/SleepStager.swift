@@ -1261,24 +1261,44 @@ public enum SleepStager {
     static func applyBandStateLatencyTrim(_ stages: [StageSegment], start: Int, end: Int,
                                           bandSleepState: [(ts: Int, state: Int)],
                                           enabled: Bool = bandStateLatencyTrimEnabled) -> [StageSegment] {
-        guard enabled, !bandSleepState.isEmpty, !stages.isEmpty, end > start else { return stages }
+        guard !stages.isEmpty,
+              let window = bandSleepWindow(start: start, end: end, bandSleepState: bandSleepState,
+                                           enabled: enabled) else { return stages }
+        let n = Int(ceil(Double(end - start) / epochS))
+        var labels = epochLabels(stages, start: start, epochs: n)
+        var changed = false
+        for i in 0..<n where !SleepStageVocabulary.isWake(labels[i]) {
+            let t = start + Int(Double(i) * epochS)
+            if t < window.from || t >= window.to {
+                labels[i] = "wake"
+                changed = true
+            }
+        }
+        return changed ? collapseEpochLabels(labels, start: start, end: end) : stages
+    }
+
+    /// The part of `[start, end]` the strap's band allows to be sleep: from `bandTrimGraceEpochs` before the
+    /// first PERSISTENT "asleep" run through the same grace after the last one, as `[from, to)` in unix
+    /// seconds on the session's own 30 s grid (`start + i·epochS`). nil when the flag is off, the band is
+    /// absent or sparse, or it never holds a persistent "asleep" run — every case where the trim is a no-op.
+    ///
+    /// The latency trim relabels everything outside this window as wake. `SleepStagerV2` also takes it as a
+    /// constraint, so its lattice meets the real sleep onset instead of one the trim later cuts away.
+    static func bandSleepWindow(start: Int, end: Int, bandSleepState: [(ts: Int, state: Int)],
+                                enabled: Bool = bandStateLatencyTrimEnabled) -> (from: Int, to: Int)? {
+        guard enabled, !bandSleepState.isEmpty, end > start else { return nil }
         let inWindow = bandSleepState.reduce(0) { $0 + ($1.ts >= start && $1.ts < end ? 1 : 0) }
-        guard Double(inWindow) >= bandTrimMinCoverage * Double(end - start) else { return stages }
+        guard Double(inWindow) >= bandTrimMinCoverage * Double(end - start) else { return nil }
         let states = sessionEpochSleepState(start: start, end: end, sleepState: bandSleepState)
         let n = states.count
         guard n > 0, let onset = firstPersistentRun(states, from: 0, step: 1),
               let final = firstPersistentRun(states, from: n - 1, step: -1), onset <= final else {
-            return stages
+            return nil
         }
         let keepFrom = max(0, onset - bandTrimGraceEpochs)
         let keepThrough = min(n - 1, final + bandTrimGraceEpochs)
-        var labels = epochLabels(stages, start: start, epochs: n)
-        var changed = false
-        for i in 0..<n where (i < keepFrom || i > keepThrough) && !SleepStageVocabulary.isWake(labels[i]) {
-            labels[i] = "wake"
-            changed = true
-        }
-        return changed ? collapseEpochLabels(labels, start: start, end: end) : stages
+        return (from: start + Int(Double(keepFrom) * epochS),
+                to: min(end, start + Int(Double(keepThrough + 1) * epochS)))
     }
 
     /// Index of the epoch where the first run of `bandTrimPersistEpochs` consecutive "asleep" states begins,
@@ -1657,9 +1677,14 @@ public enum SleepStager {
                     detail: "daytime=true restingHR=\(resting ?? -1) baseline=\(baseline.map { Int($0) } ?? -1) nightTail=false"))
                 continue
             }
+            // V2 stages with the band's sleep window as a constraint, so the latency trim below finds wake
+            // already in place and the recipe's onset-relative terms start from the band's onset. V1 has no
+            // such input and relies on the trim alone.
             let rawStages = useSleepStagerV2
                 ? SleepStagerV2.stageSession(start: p.start, end: p.end, grav: grav,
-                                             hr: hrS, rr: rrS, resp: respS)
+                                             hr: hrS, rr: rrS, resp: respS,
+                                             sleepWindow: bandSleepWindow(start: p.start, end: p.end,
+                                                                          bandSleepState: bandSleepState))
                 : stageSession(start: p.start, end: p.end, grav: grav,
                                hr: hrS, rr: rrS, resp: respS)
             // Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN band
