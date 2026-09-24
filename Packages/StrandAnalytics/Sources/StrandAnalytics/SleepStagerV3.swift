@@ -60,7 +60,8 @@ public enum SleepStagerV3 {
             rr: StreamFingerprint.of(rrW, ts: { $0.ts }, quant: { Int($0.rrMs) }),
             windowFrom: sleepWindow?.from, windowTo: sleepWindow?.to)
         return stageCache.value(key) {
-            let labels = stageEpochs(epochs: epochs, grav: gravW, hr: hrW, rr: rrW, sleepWindow: sleepWindow)
+            let labels = stageEpochs(epochs: epochs, grav: gravW, hr: hrW, rr: rrW, sleepWindow: sleepWindow,
+                                     end: end)
             var segments: [StageSegment] = []
             for (i, e) in epochs.enumerated() {
                 let segStart = i == 0 ? start : e
@@ -95,13 +96,13 @@ public enum SleepStagerV3 {
         return out
     }
 
-    /// One label per epoch of the grid: the staged span decoded, everything else wake.
+    /// One label per epoch of the grid: the staged span decoded, everything else wake. `end` is the session's.
     static func stageEpochs(epochs: [Int], grav: [GravitySample], hr: [HRSample], rr: [RRInterval],
-                            sleepWindow: (from: Int, to: Int)?) -> [String] {
+                            sleepWindow: (from: Int, to: Int)?, end: Int) -> [String] {
         var labels = [String](repeating: "wake", count: epochs.count)
         let inSpan: [Int]
         if let w = sleepWindow {
-            inSpan = epochs.indices.filter { SleepStagerV2.epochInSleepWindow(epochs[$0], w) }
+            inSpan = epochs.indices.filter { SleepStagerV2.epochInSleepWindow(epochs[$0], w, end: end) }
         } else {
             inSpan = Array(epochs.indices)
         }

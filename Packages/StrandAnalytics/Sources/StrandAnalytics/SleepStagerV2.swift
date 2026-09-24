@@ -145,7 +145,7 @@ public enum SleepStagerV2 {
         // The public veneer has already established stable timestamp order before clipping.
         let feats = features(start: start, end: end, grav: grav, hr: hr, rr: rr)
         if feats.isEmpty { return [StageSegment(start: start, end: end, stage: "light")] }
-        let labels = stageEpochs(feats, sleepWindow: sleepWindow)
+        let labels = stageEpochs(feats, sleepWindow: sleepWindow, end: end)
 
         // Tile [start, end] with one segment per staged epoch. The first segment back-fills [start, firstEpoch)
         // and the last extends to `end`; an interior coverage gap is carried by the preceding label. "awake"
@@ -545,12 +545,18 @@ public enum SleepStagerV2 {
     /// enough that no emission or transition can outweigh it, and finite so the lattice never sums infinities.
     static let forcedWakePenalty = 1.0e6
 
-    /// Whether the 30 s epoch starting at `epochStart` lies inside `window`. The window sits on the session's
-    /// own grid (`SleepStager.bandSleepWindow`) and recipe epochs sit on the wall-clock grid, so each epoch is
-    /// judged by the one session-grid instant it contains. That is the instant the latency trim reads the
-    /// epoch's label at, so the trim finds nothing left to relabel.
-    static func epochInSleepWindow(_ epochStart: Int, _ window: (from: Int, to: Int)) -> Bool {
-        let t = epochStart + ((window.from - epochStart) % 30 + 30) % 30
+    /// Whether the 30 s epoch starting at `epochStart` lies inside `window`, for a session ending at `end`. The
+    /// window sits on the session's own grid (`SleepStager.bandSleepWindow`) and recipe epochs sit on the
+    /// wall-clock grid, so each epoch is judged by the one session-grid instant it contains. That is the
+    /// instant the latency trim reads the epoch's label at, so the trim finds nothing left to relabel.
+    ///
+    /// The session's last recipe epoch is cut short at `end` and can hold no session-grid instant before it.
+    /// It then lies inside the session's last grid epoch and is judged by that epoch's instant. Judged by the
+    /// instant past `end`, it fell outside a window that runs to the end, so a night the band slept through
+    /// closed on a sliver of wake (up to 29 s) that no trim removed.
+    static func epochInSleepWindow(_ epochStart: Int, _ window: (from: Int, to: Int), end: Int) -> Bool {
+        var t = epochStart + ((window.from - epochStart) % 30 + 30) % 30
+        if t >= end { t -= 30 }
         return t >= window.from && t < window.to
     }
 
@@ -608,7 +614,7 @@ public enum SleepStagerV2 {
     /// staged there, often deep, which is the transition the awake row forbids. Only the labels are
     /// constrained: every emission, z-score and percentile is computed exactly as before, over the whole
     /// session.
-    static func stageEpochs(_ feats: [Epoch], sleepWindow: (from: Int, to: Int)? = nil) -> [String] {
+    static func stageEpochs(_ feats: [Epoch], sleepWindow: (from: Int, to: Int)? = nil, end: Int = .max) -> [String] {
         if feats.isEmpty { return [] }
 
         // Per-night z-score over the present values (population std; 0 std → 1 so a flat channel is neutral).
@@ -657,7 +663,7 @@ public enum SleepStagerV2 {
             for s in stageNames { em[s]! += pr[s]! }
             if f.jerkMax > f.jerkScale * jerkFloorGateMult { em["awake"]! += motionGateBoost }
             if let rg = f.respReg { em["rem"]! -= respWeight * max(0.0, zrg(rg)) }
-            if let w = sleepWindow, !epochInSleepWindow(f.start, w) {
+            if let w = sleepWindow, !epochInSleepWindow(f.start, w, end: end) {
                 for s in stageNames where s != "awake" { em[s]! -= forcedWakePenalty }
             }
             seq.append(em)

@@ -175,11 +175,13 @@ final class SleepStagerV3OracleTests: XCTestCase {
         let hr = (0..<(end - start)).map { HRSample(ts: start + $0, bpm: 58 + $0 % 5) }
         let w = (from: start + 3600, to: start + 7200)
         let epochs = SleepStagerV3.epochStarts(start: start, end: end)
-        let labels = SleepStagerV3.stageEpochs(epochs: epochs, grav: grav, hr: hr, rr: [], sleepWindow: w)
-        for (e, l) in zip(epochs, labels) where !SleepStagerV2.epochInSleepWindow(e, w) { XCTAssertEqual(l, "wake") }
+        let labels = SleepStagerV3.stageEpochs(epochs: epochs, grav: grav, hr: hr, rr: [], sleepWindow: w, end: end)
+        for (e, l) in zip(epochs, labels) where !SleepStagerV2.epochInSleepWindow(e, w, end: end) {
+            XCTAssertEqual(l, "wake")
+        }
         XCTAssertTrue(labels.contains { $0 != "wake" })
         let empty = SleepStagerV3.stageEpochs(epochs: epochs, grav: grav, hr: hr, rr: [],
-                                              sleepWindow: (from: end + 60, to: end + 600))
+                                              sleepWindow: (from: end + 60, to: end + 600), end: end)
         XCTAssertEqual(Set(empty), ["wake"])
     }
 }

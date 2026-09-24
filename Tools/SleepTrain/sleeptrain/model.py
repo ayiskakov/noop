@@ -121,9 +121,12 @@ def epoch_starts(start, end):
     return out
 
 
-def in_window(e, window):
-    """SleepStagerV2.epochInSleepWindow."""
+def in_window(e, window, end):
+    """SleepStagerV2.epochInSleepWindow: the session-grid instant the epoch holds, or the one before `end` for
+    the session's cut-short last epoch."""
     t = e + ((window[0] - e) % 30 + 30) % 30
+    if t >= end:
+        t -= 30
     return window[0] <= t < window[1]
 
 
@@ -132,7 +135,7 @@ def stage_session(start, end, grav, hr, rr, window, hrv_head, base_head):
     epochs = epoch_starts(start, end)
     if not epochs:
         return [], [(start, end, "light")], None
-    idx = [i for i, e in enumerate(epochs) if window is None or in_window(e, window)]
+    idx = [i for i, e in enumerate(epochs) if window is None or in_window(e, window, end)]
     labels = ["wake"] * len(epochs)
     detail = None
     if idx:
