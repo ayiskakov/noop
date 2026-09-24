@@ -27200,58 +27200,6 @@
         }
       }
     },
-    "A transparent cardiorespiratory recipe that recovers deep and REM better than the older V1 staging, and is now the default. It only changes how already-detected nights are split into stages (detection and scores are unchanged); turn it off to fall back to V1. Takes effect on the next nights staged.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein transparentes kardiorespiratorisches Rezept, das sich tief und REM besser erholt als das ältere V1-Staging und jetzt standardmäßig ist. Es ändert sich nur, wie bereits erkannte Nächte in Etappen unterteilt sind (Erkennung und Ergebnisse sind unverändert); Schalte es aus, um auf V1 zurückzugreifen. Tritt in den nächsten Nächten inszeniert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una receta cardiorrespiratoria transparente que recupera profundo y REM mejor que el estadificación V1 más antiguo, y ahora es el predeterminado. Sólo cambia cómo las noches ya detectadas se dividen en etapas (la detección y las puntuaciones no cambian); apágalo para caer a V1. Efectúa las noches siguientes."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une recette cardiorespiratoire transparente qui récupère profonde et REM mieux que l'ancienne mise en scène V1, et est maintenant la par défaut. Cela ne fait que changer la façon dont les nuits déjà détectées sont divisées en étapes (la détection et les scores sont inchangés); éteindre pour revenir en V1. Ça prend effet les nuits suivantes."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uma receita cardiorrespiratória transparente que recupera melhor o REM profundo e o REM do que o antigo estadiamento V1 e é agora o padrão. Isto apenas altera a forma como as noites já detetadas são divididas em fases (a deteção e as pontuações permanecem inalteradas); desligue-o para voltar a V1. Entra em vigor nas próximas noites encenadas."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Przejrzysta receptura krążeniowo-oddechowa, która regeneruje głębiej i w fazie REM lepiej niż starsza wersja V1 i jest teraz domyślna. Zmienia się jedynie sposób podziału już wykrytych nocy na etapy (wykrywanie i wyniki pozostają niezmienione); wyłącz go, aby powrócić do wersji V1. Obowiązuje od kolejnych nocy scenicznych."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Прозрачная кардиореспираторная методика, которая восстанавливает глубокий сон и REM лучше прежней разметки V1 и теперь используется по умолчанию. Она меняет только то, как уже определённые ночи делятся на стадии (определение и оценки не меняются); выключите, чтобы вернуться к V1. Вступает в силу для следующих размеченных ночей."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一套透明的心肺分期方法，比旧的 V1 分期能更好地还原深睡和 REM，现已成为默认。它只改变已检测到的夜间如何划分睡眠阶段（检测与评分不变）；关闭它即可回到 V1。对之后分期的夜晚生效。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一套透明的心肺分期方法，比舊的 V1 分期能更好地還原深睡和 REM，現已成為預設。它只改變已偵測到的夜間如何劃分睡眠階段（偵測與評分不變）；關閉它即可回到 V1。對之後分期的夜晚生效。"
-          }
-        }
-      }
-    },
     "A typical recent day": {
       "localizations": {
         "de": {
@@ -100024,6 +99972,64 @@
         }
       }
     },
+    "How NOOP splits a night into light / deep / REM. V3 is the default; V2 and V1 stay available if you want to switch back.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie NOOP eine Nacht in Leicht- / Tief- / REM-Schlaf aufteilt. V3 ist der Standard; V2 und V1 bleiben verfügbar, falls du zurückwechseln möchtest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo divide NOOP una noche en sueño ligero / profundo / REM. V3 es el predeterminado; V2 y V1 siguen disponibles si quieres volver a ellos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment NOOP répartit une nuit en sommeil léger / profond / paradoxal. V3 est la méthode par défaut ; V2 et V1 restent disponibles si vous voulez y revenir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come NOOP divide una notte in sonno leggero / profondo / REM. V3 è il predefinito; V2 e V1 restano disponibili se vuoi tornare indietro."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jak NOOP dzieli noc na sen lekki / głęboki / REM. Domyślnie używana jest wersja V3; V2 i V1 pozostają dostępne, jeśli chcesz do nich wrócić."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como o NOOP divide uma noite em sono leve / profundo / REM. O V3 é o predefinido; o V2 e o V1 continuam disponíveis se quiser voltar atrás."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как NOOP делит ночь на лёгкий / глубокий / быстрый сон (REM). По умолчанию используется V3; V2 и V1 остаются доступны, если захотите вернуться."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 如何把一夜划分为浅睡 / 深睡 / REM。默认使用 V3；如需切换回去，V2 和 V1 仍可选用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 如何把一夜劃分為淺睡 / 深睡 / REM。預設使用 V3；如需切換回去，V2 和 V1 仍可選用。"
+          }
+        }
+      }
+    },
     "How NOOP works": {
       "localizations": {
         "de": {
@@ -107348,6 +107354,64 @@
         }
       }
     },
+    "It only changes how detected nights are split into stages, and what is worked out from those stages; which nights are detected stays the same. Takes effect on the next nights staged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ändert nur, wie erkannte Nächte in Phasen aufgeteilt werden, und was daraus berechnet wird; welche Nächte erkannt werden, bleibt gleich. Wirkt ab den nächsten eingeteilten Nächten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo cambia cómo se dividen en fases las noches detectadas y lo que se calcula a partir de esas fases; qué noches se detectan no cambia. Se aplica a las próximas noches clasificadas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cela ne change que la façon dont les nuits détectées sont réparties en stades, et ce qui en est calculé ; les nuits détectées restent les mêmes. Prend effet sur les prochaines nuits réparties."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia solo come le notti rilevate vengono divise in fasi e ciò che viene calcolato da quelle fasi; quali notti vengono rilevate resta invariato. Ha effetto sulle prossime notti elaborate."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zmienia tylko sposób podziału wykrytych nocy na fazy oraz to, co jest z tych faz wyliczane; to, które noce są wykrywane, pozostaje bez zmian. Obowiązuje od kolejnych przetworzonych nocy."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altera apenas a forma como as noites detetadas são divididas em fases e o que é calculado a partir dessas fases; as noites detetadas continuam as mesmas. Aplica-se às próximas noites processadas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Меняет только то, как обнаруженные ночи делятся на стадии, и то, что рассчитывается из этих стадий; какие ночи обнаруживаются, не меняется. Вступает в силу для следующих обработанных ночей."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它只改变已检测到的夜晚如何划分阶段，以及由这些阶段计算出的结果；哪些夜晚被检测到保持不变。将在下次分期的夜晚生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它只改變已偵測到的夜晚如何劃分階段，以及由這些階段計算出的結果；哪些夜晚被偵測到保持不變。將在下次分期的夜晚生效。"
+          }
+        }
+      }
+    },
     "It shows the shape of your heartbeat timing and a plain-language description of how steady it looked. It does not tell you whether anything is right or wrong.": {
       "localizations": {
         "de": {
@@ -112938,6 +113002,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beztłuszczowa masa ciała"
+          }
+        }
+      }
+    },
+    "Learned from lab sleep studies: motion, heart rate and beat-to-beat heart-rate variability, fitted to the stages sleep technicians scored. It agreed with the lab better than V2 on every test set so far, but no lab study has used a WHOOP strap, so treat the stages as estimates.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Schlaflaborstudien gelernt: Bewegung, Herzfrequenz und Schlag-zu-Schlag-Herzfrequenzvariabilität, angepasst an die Phasen, die Schlaftechniker bewertet haben. In allen bisherigen Testdatensätzen stimmte es besser mit dem Labor überein als V2, aber keine Laborstudie hat ein WHOOP-Armband verwendet – betrachte die Phasen daher als Schätzungen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprendido de estudios de sueño en laboratorio: movimiento, frecuencia cardíaca y variabilidad de la frecuencia cardíaca latido a latido, ajustados a las fases que puntuaron técnicos del sueño. Hasta ahora ha coincidido con el laboratorio mejor que V2 en todos los conjuntos de prueba, pero ningún estudio de laboratorio ha usado una banda WHOOP, así que toma las fases como estimaciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appris à partir d'études du sommeil en laboratoire : mouvement, fréquence cardiaque et variabilité de la fréquence cardiaque battement par battement, ajustés aux stades notés par des techniciens du sommeil. Il a mieux concordé avec le laboratoire que V2 sur tous les jeux de test jusqu'ici, mais aucune étude en laboratoire n'a utilisé de bracelet WHOOP : considérez donc les stades comme des estimations."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appreso da studi del sonno in laboratorio: movimento, frequenza cardiaca e variabilità della frequenza cardiaca battito per battito, adattati alle fasi valutate dai tecnici del sonno. Finora ha concordato con il laboratorio meglio di V2 in ogni set di test, ma nessuno studio di laboratorio ha usato un bracciale WHOOP, quindi considera le fasi come stime."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wyuczony na laboratoryjnych badaniach snu: ruch, tętno i zmienność rytmu serca uderzenie po uderzeniu, dopasowane do faz ocenionych przez techników snu. Jak dotąd na każdym zbiorze testowym zgadzał się z laboratorium lepiej niż V2, ale żadne badanie laboratoryjne nie użyło opaski WHOOP, więc traktuj fazy jako szacunki."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprendido a partir de estudos do sono em laboratório: movimento, frequência cardíaca e variabilidade da frequência cardíaca batimento a batimento, ajustados às fases classificadas por técnicos do sono. Até agora concordou com o laboratório melhor do que o V2 em todos os conjuntos de teste, mas nenhum estudo em laboratório usou uma pulseira WHOOP, por isso considere as fases como estimativas."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обучен на лабораторных исследованиях сна: движение, пульс и вариабельность сердечного ритма от удара к удару, сопоставленные со стадиями, которые разметили специалисты по сну. На всех тестовых наборах до сих пор совпадал с лабораторией лучше, чем V2, но ни одно лабораторное исследование не проводилось с браслетом WHOOP, поэтому считайте стадии оценкой."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从睡眠实验室研究中学习：将体动、心率和逐搏心率变异性拟合到睡眠技师评分的阶段。在迄今所有测试集上，它与实验室的一致性都优于 V2，但尚无实验室研究使用 WHOOP 手环，因此请把各阶段视为估计值。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從睡眠實驗室研究中學習：將體動、心率和逐搏心率變異性擬合到睡眠技師評分的階段。在迄今所有測試集上，它與實驗室的一致性都優於 V2，但尚無實驗室研究使用 WHOOP 手環，因此請把各階段視為估計值。"
           }
         }
       }
@@ -184825,52 +184947,6 @@
         }
       }
     },
-    "Sleep staging (V2)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schlafstadien (V2)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estadificación de sueño (V2)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stade de sommeil (V2)"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Определение стадий сна (V2)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "睡眠分期 (V2 算法)"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estadiamento do sono (V2)"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ocena snu (V2)"
-          }
-        }
-      }
-    },
     "Sleep steadiness: Rest varied ±%@ pts night to night.": {
       "localizations": {
         "de": {
@@ -201379,6 +201455,64 @@
         }
       }
     },
+    "The earlier hand-tuned heart-rate and motion recipe, the default before V3.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das frühere, von Hand abgestimmte Rezept aus Herzfrequenz und Bewegung, der Standard vor V3."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La receta anterior de frecuencia cardíaca y movimiento ajustada a mano, la predeterminada antes de V3."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'ancienne recette de fréquence cardiaque et de mouvement réglée à la main, la méthode par défaut avant V3."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La precedente ricetta di frequenza cardiaca e movimento regolata a mano, quella predefinita prima di V3."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wcześniejsza, ręcznie dostrojona receptura oparta na tętnie i ruchu, domyślna przed V3."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A receita anterior de frequência cardíaca e movimento afinada à mão, a predefinida antes do V3."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прежний настроенный вручную метод по пульсу и движению, использовавшийся по умолчанию до V3."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "早先手动调校的心率与体动算法，V3 之前的默认选项。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "早先手動調校的心率與體動演算法，V3 之前的預設選項。"
+          }
+        }
+      }
+    },
     "The export file could not be created or shared.": {
       "shouldTranslate": false,
       "localizations": {
@@ -202026,6 +202160,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "Księga Liczb"
+          }
+        }
+      }
+    },
+    "The original percentile-band staging.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ursprüngliche Phaseneinteilung nach Perzentilbändern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clasificación original por bandas de percentiles."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La répartition d'origine par bandes de percentiles."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo staging originale a bande di percentili."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pierwotny podział na fazy według przedziałów percentylowych."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O estadiamento original por bandas de percentis."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исходное разбиение на стадии по процентильным диапазонам."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初的百分位区间分期方法。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初的百分位區間分期方法。"
           }
         }
       }

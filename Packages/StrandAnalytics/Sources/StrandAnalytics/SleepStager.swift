@@ -1402,16 +1402,15 @@ public enum SleepStager {
     /// re-onset (#531): a daytime block the strap itself scored predominantly "asleep" is KEPT even on a
     /// borderline HR dip. Default empty keeps pure-function callers/tests free of it; IntelligenceEngine
     /// passes the night window's persisted band state. It can only RESCUE a real-sleep block, never fabricate.
-    /// `useSleepStagerV2` (7.0.0; default ON since #277/#351): which recipe stages an accepted night — the cardiorespiratory
-    /// `SleepStagerV2.stageSession` when true, V1's `stageSession` when false. DETECTION is unchanged
-    /// (same accepted windows); only the per-epoch hypnogram differs.
+    /// `stager`: which recipe stages an accepted night (`SleepStagerVersion`). DETECTION is unchanged (same
+    /// accepted windows); only the per-epoch hypnogram differs.
     ///
     /// THE TWO DEFAULTS ARE NOT THE SAME, and reading only the signature gets this backwards. This
-    /// PARAMETER defaults false so pure-function callers and the frozen-golden tests stay byte-identical.
-    /// The SHIPPED app never takes that default: the live call site threads
-    /// `PuffinExperiment.experimentalSleepV2Enabled`, which is **default ON** (V2 was promoted over V1 in
-    /// #277 and extended to every strap family in #351), so a normal user's nights are staged by **V2**.
-    /// `= false` here describes the library's contract with its callers, not the product's behaviour.
+    /// PARAMETER defaults to `.v1` so pure-function callers and the frozen-golden tests stay byte-identical.
+    /// The SHIPPED app never takes that default: the live call site threads `PuffinExperiment.sleepStager`,
+    /// which is **`.v3`** unless the user picked another recipe in Settings, so a normal user's nights are
+    /// staged by **V3**. `.v1` here describes the library's contract with its callers, not the product's
+    /// behaviour.
     /// `sleepHRBaseline` (motion-corroborated wake, directive b): the wearer's PERSONALISED overnight HR band
     /// (`adaptiveOvernightHRBaseline`), used by `confirmSleepWithHR` in place of the day-median so a supplement /
     /// fitness era self-calibrates the sleep band. Default nil keeps the day-median (byte-identical to before);
@@ -1423,7 +1422,7 @@ public enum SleepStager {
                                    tzOffsetSeconds: Int = 0,
                                    wristOff: [(start: Int, end: Int)] = [],
                                    bandSleepState: [(ts: Int, state: Int)] = [],
-                                   useSleepStagerV2: Bool = false,
+                                   stager: SleepStagerVersion = .v1,
                                    sleepHRBaseline: Double? = nil,
                                    traceSink: ((String) -> Void)? = nil) -> [SleepSession] {
         // Sleep & Rest test mode only: when a trace is requested we MUST run the live ladder, not a
@@ -1434,7 +1433,7 @@ public enum SleepStager {
         if let traceSink {
             return detectSleepUncached(hr: hr, rr: rr, resp: resp, gravity: gravity,
                                        tzOffsetSeconds: tzOffsetSeconds, wristOff: wristOff,
-                                       bandSleepState: bandSleepState, useSleepStagerV2: useSleepStagerV2,
+                                       bandSleepState: bandSleepState, stager: stager,
                                        sleepHRBaseline: sleepHRBaseline, traceSink: traceSink)
         }
         // v7.0.2 perf (#707): the single heaviest analytics call — it sorts the dense full-day gravity
@@ -1443,8 +1442,8 @@ public enum SleepStager {
         // a re-run with the SAME raw (an idempotent re-pass, or a later sync that didn't touch this day's
         // streams) re-does all of it for an identical `[SleepSession]`. Memoize on a FULL key: every input
         // that steers detection or staging — the four streams, the tz offset (daytime-guard + onset band),
-        // the off-wrist intervals (#500 backstop), the persisted band state (#531 H8), and the V2 toggle (an
-        // edit to any re-keys to a fresh compute). Result-only + bounded; the raw arrays are never retained.
+        // the off-wrist intervals (#500 backstop), the persisted band state (#531 H8), and the stager choice
+        // (an edit to any re-keys to a fresh compute). Result-only + bounded; the raw arrays are never retained.
         // Match Android's raw-axis semantics: mix x/y/z IEEE-754 bits in order, never their lossy sum.
         let key = DetectKey(
             grav: StreamFingerprint.of(gravity, ts: { $0.ts }, quant: {
@@ -1456,12 +1455,12 @@ public enum SleepStager {
             tz: tzOffsetSeconds,
             wristOff: StreamFingerprint.of(wristOff, ts: { $0.start }, quant: { $0.end }),
             band: StreamFingerprint.of(bandSleepState, ts: { $0.ts }, quant: { $0.state }),
-            v2: useSleepStagerV2,
+            stager: stager,
             sleepHRBaseline: sleepHRBaseline)
         return detectSleepCache.value(key) {
             detectSleepUncached(hr: hr, rr: rr, resp: resp, gravity: gravity,
                                 tzOffsetSeconds: tzOffsetSeconds, wristOff: wristOff,
-                                bandSleepState: bandSleepState, useSleepStagerV2: useSleepStagerV2,
+                                bandSleepState: bandSleepState, stager: stager,
                                 sleepHRBaseline: sleepHRBaseline, traceSink: nil)
         }
     }
@@ -1471,7 +1470,7 @@ public enum SleepStager {
         let rr: StreamFingerprint; let resp: StreamFingerprint
         let tz: Int
         let wristOff: StreamFingerprint; let band: StreamFingerprint
-        let v2: Bool
+        let stager: SleepStagerVersion
         let sleepHRBaseline: Double?
     }
     /// ≈ the number of distinct days in a scoring window; FIFO-evicted, holds only small session arrays.
@@ -1485,7 +1484,7 @@ public enum SleepStager {
                                             tzOffsetSeconds: Int,
                                             wristOff: [(start: Int, end: Int)],
                                             bandSleepState: [(ts: Int, state: Int)],
-                                            useSleepStagerV2: Bool,
+                                            stager: SleepStagerVersion,
                                             sleepHRBaseline: Double? = nil,
                                             traceSink: ((String) -> Void)? = nil) -> [SleepSession] {
         let grav = gravity.sorted { $0.ts < $1.ts }
@@ -1677,19 +1676,17 @@ public enum SleepStager {
                     detail: "daytime=true restingHR=\(resting ?? -1) baseline=\(baseline.map { Int($0) } ?? -1) nightTail=false"))
                 continue
             }
-            // V2 stages with the band's sleep window as a constraint, so the latency trim below finds wake
-            // already in place and the recipe's onset-relative terms start from the band's onset. V1 has no
-            // such input and relies on the trim alone.
-            let rawStages = useSleepStagerV2
-                ? SleepStagerV2.stageSession(start: p.start, end: p.end, grav: grav,
-                                             hr: hrS, rr: rrS, resp: respS,
-                                             sleepWindow: bandSleepWindow(start: p.start, end: p.end,
-                                                                          bandSleepState: bandSleepState))
-                : stageSession(start: p.start, end: p.end, grav: grav,
-                               hr: hrS, rr: rrS, resp: respS)
+            // V2 and V3 stage with the band's sleep window as a constraint, so the latency trim below finds
+            // wake already in place and the recipe starts from the band's onset. V1 has no such input and
+            // relies on the trim alone.
+            let rawStages = stager.stageSession(start: p.start, end: p.end, grav: grav,
+                                                hr: hrS, rr: rrS, resp: respS,
+                                                sleepWindow: stager == .v1 ? nil
+                                                    : bandSleepWindow(start: p.start, end: p.end,
+                                                                      bandSleepState: bandSleepState))
             // Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN band
             // (`bandSleepState`) scored "asleep". No-op when the band is absent (WHOOP 4.0) or the flag is
-            // off; stager-agnostic (corrects whichever hypnogram V1/V2 produced). Efficiency below is then
+            // off; stager-agnostic (corrects whichever hypnogram the chosen recipe produced). Efficiency below is then
             // computed on the corrected stages, so a night NOOP over-called wake on reports true efficiency.
             // Band latency trim: relabel as wake the lying-still-awake lead-in and tail outside the band's
             // own persistent "asleep" span. No-op without a band stream (WHOOP 4.0).

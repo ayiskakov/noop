@@ -114,7 +114,7 @@ final class AnalyticsEngineProvidedSleepTests: XCTestCase {
             sleepConsistency: nil,
             habitualMidsleepSec: nil,
             bandSleepState: [],
-            useSleepStagerV2: false,
+            stager: .v1,
             useMotionAwareWake: false,
             providedSleep: provided,
             sleepProvenance: .measured,

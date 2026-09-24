@@ -102,7 +102,7 @@ final class IntelligenceEngine: ObservableObject {
     nonisolated static let dayCacheConfigFields: [String] = [
         "hrvBaseline", "rhrBaseline", "age", "sex", "stepTicksPerStep", "maxHROverride",
         "tzOffset", "sleepNeedHours", "sleepConsistency", "habitualMidsleep",
-        "experimentalSleepV2", "motionAwareWake", "deepHrvWindow", "spo2CandidateDisplay",
+        "sleepStager", "motionAwareWake", "deepHrvWindow", "spo2CandidateDisplay",
         "effortMethod", "dayCycleMode",
     ]
 
@@ -1013,7 +1013,7 @@ final class IntelligenceEngine: ObservableObject {
         // The stager toggles are read per-day inside the loop below, but they are global (same value every
         // day); read them ONCE here too so the config signature can fold them without reaching into the
         // detached loop.
-        let useSleepStagerV2Global = PuffinExperiment.experimentalSleepV2Enabled
+        let sleepStagerGlobal = PuffinExperiment.sleepStager
         let useMotionAwareWakeGlobal = PuffinExperiment.motionAwareWakeEnabled
         // Cache eligibility for the whole pass: never reuse while a Test-Centre trace is active (a cached
         // scan carries no fresh gate trace). Owner-level eligibility (registered WHOOP) is checked per day.
@@ -1060,7 +1060,7 @@ final class IntelligenceEngine: ObservableObject {
             String(sleepNeedHours.bitPattern),
             sleepConsistency.map { String($0.bitPattern) } ?? "nil",
             habitualMidsleepSec.map { "\($0)" } ?? "nil",
-            "\(useSleepStagerV2Global)", "\(useMotionAwareWakeGlobal)", "\(deepHrvWindow)",
+            sleepStagerGlobal.rawValue, "\(useMotionAwareWakeGlobal)", "\(deepHrvWindow)",
             "\(spo2CandidateDisplayOn)",
             // #1545: MUST be here. The Effort recipe changes every day's strain, so a cached scan
             // produced under one method is stale the moment the user switches — serving it would show a
@@ -1326,15 +1326,11 @@ final class IntelligenceEngine: ObservableObject {
                                                                      from: from, to: to, store: store)
                 }
 
-                // #690: read the experimental-V2 toggle ONCE here (off the detached executor, matching the
-                // Repository self-heal call site) and capture the Bool, so the Settings toggle now drives the
-                // NORMAL detected-night staging path , not only the userEdited self-heal restage.
-                // V2 is the default staging engine for EVERY strap (the toggle defaults on); turn it off to
-                // fall back to V1. WHOOP 4.0 is unvalidated either way — V2 can over-stage on sparse motion
-                // (#319) and V1 can badly UNDER-stage deep/REM (kavemang, #347), so neither is proven; the
-                // toggle is the honest escape until real 4.0 ground truth settles it (#271/#319). Matches the
-                // self-heal restage below, which reads the same toggle.
-                let useSleepStagerV2 = PuffinExperiment.experimentalSleepV2Enabled
+                // #690: read the staging choice ONCE here (off the detached executor, matching the Repository
+                // self-heal call site) and capture it, so the Settings picker drives the NORMAL detected-night
+                // staging path, not only the userEdited self-heal restage. V3 is the default for every strap;
+                // V2 and V1 stay selectable. The self-heal restage below reads the same resolver.
+                let sleepStager = PuffinExperiment.sleepStager
                 // #364 follow-up: read the motion-aware wake refinement toggle the same way (once, off the
                 // detached executor). Default OFF — see `PuffinExperiment.motionAwareWakeEnabled`. It only
                 // ever runs AFTER whichever stager above just ran, and self-gates on the night's observed
@@ -1424,9 +1420,9 @@ final class IntelligenceEngine: ObservableObject {
                                                      sleepConsistency: sleepConsistency,
                                                      habitualMidsleepSec: habitualMidsleepSec,
                                                      bandSleepState: bandSleepState,
-                                                     // #690: thread the V2 toggle into the NORMAL staging path so
-                                                     // it affects detected nights, not just the self-heal restage.
-                                                     useSleepStagerV2: useSleepStagerV2,
+                                                     // #690: thread the staging choice into the NORMAL staging
+                                                     // path so it affects detected nights, not just the restage.
+                                                     stager: sleepStager,
                                                      // #364 follow-up: same threading for the motion-aware wake
                                                      // refinement post-pass.
                                                      useMotionAwareWake: useMotionAwareWake,

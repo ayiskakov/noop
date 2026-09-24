@@ -309,12 +309,13 @@ enum DebugDataDiagnostics {
             return lines
         }
         if let rem = SleepStager.remFunnelDiagnostic(start: cs.startTs, end: cs.endTs, grav: grav, hr: hr, rr: rr, resp: resp) {
-            // The funnel replays the V1 classifier, but the shipped hypnogram is staged by V2 whenever
-            // the default-on flag says so — name both, or the two totals read as one fact disagreeing.
+            // The funnel replays the V1 classifier, but the shipped hypnogram is staged by whichever recipe
+            // the user's choice resolves to (V3 by default) — name both, or the two totals read as one fact
+            // disagreeing.
             // On a 5/MG the gap is maximal: V1's primary REM gate needs the raw resp channel that
-            // hardware never emits, while V2 recovers respiration from R-R, so the funnel can report
+            // hardware never emits, while V2 and V3 read the R-R stream instead, so the funnel can report
             // ~46min REM against a 231min screen for the same night.
-            let screenStager = PuffinExperiment.experimentalSleepV2Enabled ? "V2" : "V1"
+            let screenStager = PuffinExperiment.sleepStager.label
             var summary = rem.summary + " · funnel replays V1; screen staged by \(screenStager)"
             if screenStager != "V1" {
                 summary += " — totals can differ"

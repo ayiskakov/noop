@@ -1770,17 +1770,13 @@ final class Repository: ObservableObject {
         let steps = useMotionAwareWake
             ? ((try? await store.stepSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? [])
             : []
-        // Which staging engine re-stages this window (Settings → Experimental · Sleep staging). The flag is
-        // **default ON** (#277 promoted V2 over V1; #351 extended it to every strap family), so unless the
-        // user has explicitly turned it OFF this re-stages with the cardiorespiratory recipe `SleepStagerV2`;
-        // turning it off falls back to V1 `SleepStager`. Read once here off the actor; the switch is purely
-        // which engine runs over the already-detected window — detection is identical either way.
-        // (V7 Pillar 3b)
-        let useV2 = PuffinExperiment.experimentalSleepV2Enabled
+        // Which staging engine re-stages this window (Settings → Experimental · Sleep staging): V3 unless
+        // the user picked V2 or V1. Read once here off the actor, through the same resolver the normal
+        // staging path uses; the choice is purely which engine runs over the already-detected window —
+        // detection is identical either way. (V7 Pillar 3b)
+        let stager = PuffinExperiment.sleepStager
         let segs = await Task.detached(priority: .utility) {
-            let staged = useV2
-                ? SleepStagerV2.stageSession(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp)
-                : SleepStager.stageSession(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp)
+            let staged = stager.stageSession(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp)
             // #364 follow-up: motion-aware wake refinement post-pass, same toggle-shaped no-op when off
             // as every other Experimental switch here.
             return WakeMotionRefinement.apply(staged, grav: grav, steps: steps, enabled: useMotionAwareWake)

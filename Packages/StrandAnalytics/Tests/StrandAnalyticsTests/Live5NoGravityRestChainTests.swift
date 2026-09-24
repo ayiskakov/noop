@@ -62,13 +62,13 @@ final class Live5NoGravityRestChainTests: XCTestCase {
     /// default stager. The pair here is not that assertion again: it is the statement that the answer is
     /// the SAME on both stagers, which is the fact the chain turns on and the one whose absence let this
     /// file spend two years implying V2 might rescue the night. The original spelling relied on
-    /// `useSleepStagerV2`'s default, so it silently stopped describing shipped behaviour when that
+    /// the stager parameter's default, so it silently stopped describing shipped behaviour when that
     /// default moved — which is how the implication survived.
     func testV1WithNoGravityDetectsNoSleep() {
         let start = nightStart()
         let dur = 8 * 60 * 60
         let hr = hrStream(start: start, durationS: dur, bpm: 50)
-        let sessions = SleepStager.detectSleep(hr: hr, gravity: [], useSleepStagerV2: false)
+        let sessions = SleepStager.detectSleep(hr: hr, gravity: [], stager: .v1)
         XCTAssertTrue(sessions.isEmpty,
                       "V1's spine is motion stillness: no gravity, no session")
     }
@@ -90,9 +90,11 @@ final class Live5NoGravityRestChainTests: XCTestCase {
     func testV2WithNoGravityAlsoDetectsNoSleep() {
         let start = nightStart()
         let hr = hrStream(start: start, durationS: 8 * 60 * 60, bpm: 50)
-        let sessions = SleepStager.detectSleep(hr: hr, gravity: [], useSleepStagerV2: true)
-        XCTAssertTrue(sessions.isEmpty,
-                      "detectSleep needs motion on either stager; the HR-only rescue is the engine's fallback")
+        for stager in [SleepStagerVersion.v2, .v3] {
+            let sessions = SleepStager.detectSleep(hr: hr, gravity: [], stager: stager)
+            XCTAssertTrue(sessions.isEmpty,
+                          "detectSleep needs motion on every stager; the HR-only rescue is the engine's fallback")
+        }
     }
 
     // MARK: - Stage 2: no sleep ⇒ no Rest composite ⇒ no sleep_performance point

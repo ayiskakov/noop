@@ -74,7 +74,7 @@ final class DayCacheConfigFieldTests: XCTestCase {
         XCTAssertEqual(IntelligenceEngine.dayCacheConfigFields, [
             "hrvBaseline", "rhrBaseline", "age", "sex", "stepTicksPerStep", "maxHROverride",
             "tzOffset", "sleepNeedHours", "sleepConsistency", "habitualMidsleep",
-            "experimentalSleepV2", "motionAwareWake", "deepHrvWindow", "spo2CandidateDisplay",
+            "sleepStager", "motionAwareWake", "deepHrvWindow", "spo2CandidateDisplay",
             "effortMethod", "dayCycleMode",
         ])
     }

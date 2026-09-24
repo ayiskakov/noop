@@ -364,18 +364,17 @@ public enum AnalyticsEngine {
                                   // pure-function callers/tests free of it; IntelligenceEngine threads the
                                   // night window's persisted band state. (#531 / H8 consume)
                                   bandSleepState: [(ts: Int, state: Int)] = [],
-                                  // Which sleep-staging recipe runs (V2 vs V1). When true, detected nights
-                                  // are staged by `SleepStagerV2` instead of V1. This PARAMETER defaults
-                                  // false to keep pure-function callers/tests byte-identical — it is NOT
-                                  // the product default. IntelligenceEngine threads
-                                  // `PuffinExperiment.experimentalSleepV2Enabled`, which is default ON
-                                  // (#277/#351), so the shipped app stages with V2. (7.0.0)
-                                  useSleepStagerV2: Bool = false,
+                                  // Which sleep-staging recipe stages detected nights. This PARAMETER
+                                  // defaults to `.v1` to keep pure-function callers/tests byte-identical —
+                                  // it is NOT the product default. IntelligenceEngine threads
+                                  // `PuffinExperiment.sleepStager`, which is `.v3` unless the user picked
+                                  // another recipe, so the shipped app stages with V3.
+                                  stager: SleepStagerVersion = .v1,
                                   // Opt-in motion-aware wake refinement (#364 "Proposal 2" follow-up; density
                                   // gate precedent #345). When true, `WakeMotionRefinement` re-derives each
                                   // detected session's stages, reclassifying a hot-but-still WAKE segment to
                                   // `light` when it shows no locomotion and a stable posture outside isolated
-                                  // burst minutes; it only ever runs AFTER V1/V2 staging and self-gates on the
+                                  // burst minutes; it only ever runs AFTER staging and self-gates on the
                                   // observed gravity + step density, so it is a no-op on a sparse (e.g. WHOOP
                                   // 4.0) night regardless of this flag. Default false keeps every pure-function
                                   // caller/test byte-identical; IntelligenceEngine threads
@@ -445,9 +444,9 @@ public enum AnalyticsEngine {
         let detectedSessions = SleepStager.detectSleep(hr: hr, rr: rr, resp: resp, gravity: gravity,
                                                   tzOffsetSeconds: tzOffsetSeconds, wristOff: wristOff,
                                                   bandSleepState: bandSleepState,
-                                                  useSleepStagerV2: useSleepStagerV2,
+                                                  stager: stager,
                                                   traceSink: traceSink)
-        // Motion-aware wake refinement (#364 follow-up) runs AFTER V1/V2 staging, over every detected
+        // Motion-aware wake refinement (#364 follow-up) runs AFTER staging, over every detected
         // session (naps included — the same eligibility gates apply). `steps` is the SAME calendar-day/
         // night-window stream the caller passed for the rest of this analysis; the pass self-gates on its
         // observed density, so an empty/sparse `steps` (e.g. a WHOOP 4.0, which never emits StepSample at
@@ -594,11 +593,11 @@ public enum AnalyticsEngine {
             }
             // #319: the motion-coverage + staging context behind the Rest number, so a high score on a poor
             // night can be explained from an export (WHOOP 4.0 banks motion coarsely → sparse=true → most
-            // epochs default to sleep → over-counted duration → high Rest). `stager` says whether V1/V2 ran.
+            // epochs default to sleep → over-counted duration → high Rest). `stager` says which recipe ran.
             traceSink(AnalyticsEngine.sleepMotionLine(
                 day: day, grav: gravity.count, hr: hr.count,
                 sparse: gravitySparse,
-                useSleepStagerV2: useSleepStagerV2, family: skinTempFamily))
+                stager: stager, family: skinTempFamily))
             // CAPTURE-C (#799): append the sleep PROVENANCE so an imported row winning the merge is visible
             // (not silently swapped for the measured night). hoursAsleep = the scored night's tst in minutes;
             // sourceRowId = the main-night's start ts for the measured path (stable per night), else the
