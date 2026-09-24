@@ -90,22 +90,6 @@ final class IntelligenceEngine: ObservableObject {
     /// potentially stale and the whole cache is dropped. Empty until the first pass.
     private var dayScanCacheConfigSig = ""
 
-    /// Names of the config-signature fields, in the exact order `dayCacheConfigSig` builds them.
-    ///
-    /// Kept beside the reader rather than at the construction site so that site stays a plain value list.
-    /// The cost is that the two must stay in step, which `changedConfigField` refuses to guess about when
-    /// they are not. Kotlin twin: `IntelligenceEngine.DAY_CACHE_CONFIG_FIELDS`.
-    ///
-    /// `nonisolated` for the same reason the reader below is: the engine is @MainActor, so a plain
-    /// `static let` inherits that isolation, and neither a nonisolated function nor a synchronous test
-    /// could then touch it. `[String]` is Sendable, so sharing it is safe.
-    nonisolated static let dayCacheConfigFields: [String] = [
-        "hrvBaseline", "rhrBaseline", "age", "sex", "stepTicksPerStep", "maxHROverride",
-        "tzOffset", "sleepNeedHours", "sleepConsistency", "habitualMidsleep",
-        "sleepStager", "motionAwareWake", "deepHrvWindow", "spo2CandidateDisplay",
-        "effortMethod", "dayCycleMode",
-    ]
-
     /// Which config field(s) moved between two signatures, for the `configDropped` tally.
     ///
     /// `configDropped` said a 21-day re-score happened because the pass-global config changed, and stopped
@@ -114,18 +98,21 @@ final class IntelligenceEngine: ObservableObject {
     ///
     /// Never guesses: "first" on the first drop of a process, because the signature starts EMPTY rather
     /// than nil and there is nothing to diff against, and "unknown" when the two signatures do not have
-    /// the field count this list describes, because a mislabelled field sends a reader somewhere the data
-    /// never pointed.
+    /// one value per name in `fields`, because a mislabelled field sends a reader somewhere the data never
+    /// pointed.
+    ///
+    /// `fields` are the names `analyzeRecent` builds the signature with, value beside name. They used to
+    /// live in a separate list that fell a name behind the values when the Healthspan zone set joined the
+    /// signature, and from then on every drop read "unknown".
     ///
     /// `nonisolated` because it is a pure function of its arguments: the engine is @MainActor, and without
     /// this the rule would inherit that isolation and could not be driven from a synchronous test.
-    /// Kotlin twin: `IntelligenceEngine.changedConfigField`.
-    nonisolated static func changedConfigField(previous: String, current: String) -> String {
+    nonisolated static func changedConfigField(previous: String, current: String, fields: [String]) -> String {
         if previous.isEmpty { return "first" }
         let a = previous.split(separator: "|", omittingEmptySubsequences: false)
         let b = current.split(separator: "|", omittingEmptySubsequences: false)
-        guard a.count == b.count, b.count == dayCacheConfigFields.count else { return "unknown" }
-        let moved = b.indices.filter { a[$0] != b[$0] }.map { dayCacheConfigFields[$0] }
+        guard a.count == b.count, b.count == fields.count else { return "unknown" }
+        let moved = b.indices.filter { a[$0] != b[$0] }.map { fields[$0] }
         return moved.isEmpty ? "none" : moved.joined(separator: "+")
     }
 
@@ -1044,34 +1031,37 @@ final class IntelligenceEngine: ObservableObject {
         // trailing delay. So this fires once per completed backfill, not once per chunk. That coalescing is
         // load-bearing for the cache — removing it would reintroduce the #1402 storm in a form no signature
         // change can fix.
-        // Field names live in `dayCacheConfigFields`, in this exact order. Kept there rather than here so
-        // the construction stays a plain value list. Add or reorder here and add or reorder there:
-        // `changedConfigField` refuses to name anything when the counts disagree, but it cannot see a
-        // REORDER, which would quietly label the wrong field.
+        // Each value sits beside the name `changedConfigField` reports it under, so the two cannot fall out
+        // of step: add a field here and it is named, reorder and the names move with the values.
         let healthspanZoneSignature: String =
             healthspanZoneSet.zones.map { "\($0.lower)-\($0.upper)" }.joined(separator: ",")
-        let dayCacheConfigSig = [
-            String(describing: baselines1.hrv),
-            String(describing: baselines1.restingHR),
-            String(up.age.bitPattern), up.sex, String(up.stepTicksPerStep.bitPattern),
-            maxHR.map { String($0.bitPattern) } ?? "nil",
-            "\(tzOffset)",
-            String(sleepNeedHours.bitPattern),
-            sleepConsistency.map { String($0.bitPattern) } ?? "nil",
-            habitualMidsleepSec.map { "\($0)" } ?? "nil",
-            sleepStagerGlobal.rawValue, "\(useMotionAwareWakeGlobal)", "\(deepHrvWindow)",
-            "\(spo2CandidateDisplayOn)",
+        let dayCacheConfig: [(field: String, value: String)] = [
+            ("hrvBaseline", String(describing: baselines1.hrv)),
+            ("rhrBaseline", String(describing: baselines1.restingHR)),
+            ("age", String(up.age.bitPattern)),
+            ("sex", up.sex),
+            ("stepTicksPerStep", String(up.stepTicksPerStep.bitPattern)),
+            ("maxHROverride", maxHR.map { String($0.bitPattern) } ?? "nil"),
+            ("tzOffset", "\(tzOffset)"),
+            ("sleepNeedHours", String(sleepNeedHours.bitPattern)),
+            ("sleepConsistency", sleepConsistency.map { String($0.bitPattern) } ?? "nil"),
+            ("habitualMidsleep", habitualMidsleepSec.map { "\($0)" } ?? "nil"),
+            ("sleepStager", sleepStagerGlobal.rawValue),
+            ("motionAwareWake", "\(useMotionAwareWakeGlobal)"),
+            ("deepHrvWindow", "\(deepHrvWindow)"),
+            ("spo2CandidateDisplay", "\(spo2CandidateDisplayOn)"),
             // #1545: MUST be here. The Effort recipe changes every day's strain, so a cached scan
             // produced under one method is stale the moment the user switches — serving it would show a
             // window of days scored by a recipe the user just turned off, with nothing to explain it.
-            "\(effortMethodGlobal)",
-            dayCycleMode.rawValue,
+            ("effortMethod", "\(effortMethodGlobal)"),
+            ("dayCycleMode", dayCycleMode.rawValue),
             // MUST be here, for the same reason the Effort recipe is: a cached scan carries the day's
             // moderate/vigorous zone minutes, and those are binned against THIS zone set. Move an HR-max
             // override or a custom threshold and every cached day's minutes are stale — served silently,
             // with nothing on screen to explain why the Healthspan drivers didn't move.
-            healthspanZoneSignature,
-        ].joined(separator: "|")
+            ("healthspanZones", healthspanZoneSignature),
+        ]
+        let dayCacheConfigSig = dayCacheConfig.map(\.value).joined(separator: "|")
         // Drop the whole cache on a config change, then snapshot it into a Sendable `let` for the detached
         // loop (the engine is @MainActor; the loop can't touch `self`). The loop returns the updated cache
         // and we write it back after `.value`.
@@ -1081,7 +1071,8 @@ final class IntelligenceEngine: ObservableObject {
         var dayCacheConfigMoved = ""
         if dayCacheConfigSig != dayScanCacheConfigSig {
             dayCacheConfigMoved = Self.changedConfigField(previous: dayScanCacheConfigSig,
-                                                          current: dayCacheConfigSig)
+                                                          current: dayCacheConfigSig,
+                                                          fields: dayCacheConfig.map(\.field))
             dayScanCache.removeAll()
             dayScanCacheConfigSig = dayCacheConfigSig
             dayCacheConfigDropped = true
