@@ -633,12 +633,20 @@ public enum SleepStager {
 
     /// Whole sleep SESSIONS from heart rate alone, for a strap that banks no motion (#1801).
     ///
-    /// `hrOnlySleepRuns` supplies the spine this normally gets from gravity stillness; `SleepStagerV2`
+    /// `hrOnlySleepRuns` supplies the spine this normally gets from gravity stillness; `stager.hrOnlyRecipe`
     /// then stages each surviving run from HR and R-R with an EMPTY gravity array. That is not a
-    /// degenerate call: V2's epoch features read HR and R-R directly and only its motion-quiescence terms
-    /// go quiet, so it returns a real hypnogram rather than one flat stage. A stageless session would be
+    /// degenerate call for V2 or V3. V2's epoch features read HR and R-R directly and only its
+    /// motion-quiescence terms go quiet. V3 reads the absent motion channel as missing, so it moves no logit.
+    /// Either returns a real hypnogram rather than one flat stage. A stageless session would be
     /// dropped by `sleepSessionFromProvided` anyway, so a night that fails to stage is correctly omitted
     /// here rather than passed on hollow.
+    ///
+    /// `stager` is the user's choice, as for every other night. With motion stripped from PSG nights, V3
+    /// scored four-class kappa 0.477 / 0.446 / 0.275 on Wearanize+ / sleep-accel / DREAMT inside the band
+    /// window, against V2's 0.303 / 0.363 / 0.224. Only DREAMT is out of V3's sample, and its first REM
+    /// lands 40-74 min late there against V2's -28 to +19. The choice used to be ignored here: these nights
+    /// were always V2, under a trace that named the chosen recipe. V1 stages no night without motion, so it
+    /// maps to V2 (`hrOnlyRecipe`). The default keeps pure-function callers on V2.
     ///
     /// The anchor is `hrOnlyBaseline` — the `hrOnlyAnchorPercentile` of the window — and NOT the
     /// `hrBaseline` median the motion path derives. Reusing that median looked like parity and was a bug:
@@ -657,6 +665,7 @@ public enum SleepStager {
     /// and it lives outside this package. The spine and the anchor below it stay `internal` — the tests
     /// reach them with `@testable`, and nothing outside should be building its own spine.
     public static func hrOnlySessions(hr: [HRSample], rr: [RRInterval], resp: [RespSample],
+                                      stager: SleepStagerVersion = .v2,
                                       minMinutes: Int = minSleepMin,
                                       traceSink: ((String) -> Void)? = nil) -> [SleepSession] {
         let hrS = hr.sorted { $0.ts < $1.ts }
@@ -684,8 +693,8 @@ public enum SleepStager {
             if p.stage != "sleep" { continue }
             longestSleepS = max(longestSleepS, p.end - p.start)
             if (p.end - p.start) < minMinutes * 60 { continue }
-            let stages = SleepStagerV2.stageSession(start: p.start, end: p.end, grav: [],
-                                                    hr: hrS, rr: rrS, resp: resp)
+            let stages = stager.hrOnlyRecipe.stageSession(start: p.start, end: p.end, grav: [],
+                                                          hr: hrS, rr: rrS, resp: resp)
             staged += 1
             if stages.isEmpty { continue }
             // #1884: MEASURED, not nilled. The bounds here are inferred from heart rate, which is why

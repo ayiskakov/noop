@@ -78,4 +78,34 @@ final class SleepStagerHrOnlySessionsTests: XCTestCase {
         XCTAssertNotNil(s.restingHR, "restingHR needs only HR")
         XCTAssertNil(s.avgHRV, "no R-R means no RMSSD to report")
     }
+
+    /// The staging choice reaches a night with no motion, as it reaches every other night. V2 and V3 stage it
+    /// themselves; V1 cannot stage without gravity (one flat "light" block), so it maps to V2. The spine,
+    /// and so the bounds, are the same whichever recipe stages them.
+    func testTheStagingChoiceStagesTheNight() throws {
+        let (hr, rr) = window()
+        let bounds = SleepStager.hrOnlySessions(hr: hr, rr: rr, resp: [], stager: .v2).map { [$0.start, $0.end] }
+        for (stager, recipe) in [(SleepStagerVersion.v1, SleepStagerVersion.v2), (.v2, .v2), (.v3, .v3)] {
+            let sessions = SleepStager.hrOnlySessions(hr: hr, rr: rr, resp: [], stager: stager)
+            XCTAssertEqual(sessions.map { [$0.start, $0.end] }, bounds, stager.label)
+            let s = try XCTUnwrap(sessions.first)
+            XCTAssertEqual(s.stages, recipe.stageSession(start: s.start, end: s.end, grav: [], hr: hr, rr: rr, resp: []),
+                           "\(stager.label) stages with \(recipe.label)")
+        }
+        XCTAssertEqual(SleepStagerVersion.v1.hrOnlyRecipe, .v2)
+        XCTAssertEqual(SleepStagerVersion.v3.hrOnlyRecipe, .v3)
+    }
+
+    /// V3 reads a night with no gravity as missing motion, not as the stillest night it ever saw. Read as
+    /// still, every epoch's activity is 0 and the time since movement sits at its cap, which on PSG nights
+    /// stripped of motion over-called deep by 19-30 percentage points.
+    func testV3ReadsNoGravityAsMissingMotion() {
+        let (hr, rr) = window(aH: 0, nH: 2)
+        let f = SleepStagerV3.features(grav: [], hr: hr, rr: rr, spanStart: 1_788_300_000, n: 240)
+        for name in ["act_mean", "act_max", "move_frac", "since_move", "until_move", "act_ctx2", "act_ctx20",
+                     "dangn", "dangn_ctx5"] {
+            XCTAssertTrue(f.columns[name]?.allSatisfy { $0.isNaN } ?? false, "\(name) must be missing")
+        }
+        XCTAssertFalse(f.columns["hr_z"]?.allSatisfy { $0.isNaN } ?? true, "heart rate is still measured")
+    }
 }

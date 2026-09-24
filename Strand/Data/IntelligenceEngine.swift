@@ -1383,6 +1383,7 @@ final class IntelligenceEngine: ObservableObject {
                             attempted: true, reason: "no-motion-no-hypnogram",
                             gravRows: grav.count, storedNights: 0))
                         providedSleep = SleepStager.hrOnlySessions(hr: hr, rr: rr, resp: resp,
+                                                                   stager: sleepStager,
                                                                    traceSink: traceSink)
                     }
                 } else {

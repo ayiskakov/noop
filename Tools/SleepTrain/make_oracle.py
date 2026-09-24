@@ -29,11 +29,12 @@ OUT = os.path.join(REPO, "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/or
 MASK = (1 << 64) - 1
 
 # name, seed, start, epochs, rr mode, HR gap [from, to) in seconds from start or None,
-# sleep window as seconds from start or None, stride
+# sleep window as seconds from start or None, stride, gravity kept (False = an HR-only night)
 CASES = [
-    ("band night with beats", 1, 1_700_000_017, 600, "full", None, (1207, 600 * 30 - 900), 20),
-    ("whole session, no beats, HR gap", 2, 1_700_100_000, 360, "none", (3600, 5400), None, 15),
-    ("short nap, sparse beats", 3, 1_700_200_010, 50, "sparse", None, None, 2),
+    ("band night with beats", 1, 1_700_000_017, 600, "full", None, (1207, 600 * 30 - 900), 20, True),
+    ("whole session, no beats, HR gap", 2, 1_700_100_000, 360, "none", (3600, 5400), None, 15, True),
+    ("short nap, sparse beats", 3, 1_700_200_010, 50, "sparse", None, None, 2, True),
+    ("no gravity, beats", 4, 1_700_300_020, 240, "full", None, None, 10, False),
 ]
 
 
@@ -129,15 +130,17 @@ def main():
     a = ap.parse_args()
     hrv, base = load_heads(a.model)
     cases = []
-    for name, seed, start, n_epochs, rr_mode, hr_gap, window, stride in CASES:
+    for name, seed, start, n_epochs, rr_mode, hr_gap, window, stride, gravity in CASES:
         grav, hr, rr = synth(seed, start, n_epochs, rr_mode, hr_gap)
+        if not gravity:
+            grav = []
         end = start + 30 * n_epochs
         w = (start + window[0], start + window[1]) if window else None
         labels, segments, d = stage_session(start, end, grav, hr, rr, w, hrv, base)
         picks = list(range(0, d["n"], stride))
         cases.append(dict(
             name=name, seed=seed, start=start, epochs=n_epochs, rr=rr_mode,
-            hrGap=list(hr_gap) if hr_gap else None, window=list(w) if w else None,
+            hrGap=list(hr_gap) if hr_gap else None, window=list(w) if w else None, gravity=gravity,
             samples=dict(grav=len(grav), hr=len(hr), rr=len(rr)),
             spanStart=d["span_start"], n=d["n"], head=d["head"], stride=stride,
             features={k: [num(d["F"][k][i]) for i in picks] for k in BASE + HRV},

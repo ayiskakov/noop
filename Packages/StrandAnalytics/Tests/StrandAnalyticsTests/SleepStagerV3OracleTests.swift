@@ -99,12 +99,14 @@ final class SleepStagerV3OracleTests: XCTestCase {
 
     func testPortMatchesTheReference() throws {
         let cases = try XCTUnwrap(try loadOracle()["cases"] as? [[String: Any]])
-        XCTAssertEqual(cases.count, 3)
+        XCTAssertEqual(cases.count, 4)
         for c in cases {
             let name = try XCTUnwrap(c["name"] as? String)
             let start = try XCTUnwrap(c["start"] as? Int), epochs = try XCTUnwrap(c["epochs"] as? Int)
-            let (grav, hr, rr) = synth(seed: try XCTUnwrap(c["seed"] as? Int), start: start, epochs: epochs,
-                                       rr: try XCTUnwrap(c["rr"] as? String), hrGap: c["hrGap"] as? [Int])
+            let (synthGrav, hr, rr) = synth(seed: try XCTUnwrap(c["seed"] as? Int), start: start, epochs: epochs,
+                                            rr: try XCTUnwrap(c["rr"] as? String), hrGap: c["hrGap"] as? [Int])
+            // An HR-only night: the generator draws its gravity (so every later draw matches) and drops it.
+            let grav = try XCTUnwrap(c["gravity"] as? Bool) ? synthGrav : []
             let samples = try XCTUnwrap(c["samples"] as? [String: Int])
             XCTAssertEqual([grav.count, hr.count, rr.count], [samples["grav"], samples["hr"], samples["rr"]],
                            "\(name): synthetic inputs differ from the generator's")

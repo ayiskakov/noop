@@ -36,8 +36,9 @@ NPERSEG = 256
 LF = (0.04, 0.15)
 HF = (0.15, 0.40)
 
-BASE = (["act_mean", "act_max", "move_frac", "since_move", "until_move"] + [f"act_ctx{w}" for w in CTX] +
-        ["dangn"] + [f"dangn_ctx{w}" for w in CTX] + ["hr_z", "hr_pct"] +
+MOTION = ["act_mean", "act_max", "move_frac", "since_move", "until_move"] + [f"act_ctx{w}" for w in CTX]
+POSTURE = ["dangn"] + [f"dangn_ctx{w}" for w in CTX]
+BASE = (MOTION + POSTURE + ["hr_z", "hr_pct"] +
         [f"hrsd{name}_{k}" for _, name in HRSD for k in ("pct", "z")] + [f"hr_ctx{w}_z" for w in HR_CTX] +
         ["hr_trend", "hr_over_low", "clock", "minutes"] + [f"time_e{tau}" for tau in TIME_DECAYS])
 HRV_NAMES = ["meanNN", "sdnn", "lnrmssd", "pnn50", "lnlf", "lnhf", "lnlfhf", "resp_bpm", "hf_peaked", "dfa_a1",
@@ -319,6 +320,11 @@ def features(grav, hr, rr, span_start, n):
     F["since_move"], F["until_move"] = np.log1p(since), np.log1p(until)
     for w in CTX:
         F[f"act_ctx{w}"] = centred_mean(F["act_mean"], w)
+    # No jerk anywhere in the span (no gravity, or none in two consecutive seconds) is no motion measurement:
+    # its columns are missing, not the stillest night the model ever saw.
+    if np.all(np.isnan(jerk)):
+        for k in MOTION:
+            F[k] = np.full(n, np.nan)
 
     # posture: change of the z-angle between 5 s block means, relative to the night's median change
     ang = np.arctan2(g[:, 2], np.sqrt(g[:, 0] * g[:, 0] + g[:, 1] * g[:, 1])) * (180.0 / np.pi)
@@ -332,6 +338,10 @@ def features(grav, hr, rr, span_start, n):
     F["dangn"] = np.log1p(dang / (med if med > 0 else 1e-6))
     for w in CTX:
         F[f"dangn_ctx{w}"] = centred_mean(F["dangn"], w)
+    # Likewise no two consecutive blocks with gravity is no posture measurement.
+    if blocks.size < 2 or np.all(np.isnan(blocks[1:] - blocks[:-1])):
+        for k in POSTURE:
+            F[k] = np.full(n, np.nan)
 
     # heart rate
     ehr = np.array([nanmean(h[EPOCH_S * e: EPOCH_S * e + EPOCH_S]) for e in range(n)])

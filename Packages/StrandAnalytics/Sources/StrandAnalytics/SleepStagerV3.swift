@@ -315,6 +315,14 @@ public enum SleepStagerV3 {
         cols["since_move"] = since.map { Foundation.log1p($0) }
         cols["until_move"] = until.map { Foundation.log1p($0) }
         for w in ctx { cols["act_ctx\(w)"] = centredMean(actMean, w) }
+        // No jerk anywhere in the span (no gravity, or none in two consecutive seconds) is no motion
+        // measurement: its columns are missing, and so read as typical, not as the stillest night the model
+        // ever saw (zero activity and the time since movement at its cap). That is how a night with no motion
+        // at all reaches V3, through `SleepStager.hrOnlySessions`.
+        if !jerk.contains(where: { !$0.isNaN }) {
+            let motion = ["act_mean", "act_max", "move_frac", "since_move", "until_move"] + ctx.map { "act_ctx\($0)" }
+            for name in motion { cols[name] = [Double](repeating: .nan, count: n) }
+        }
 
         // Posture: z-angle change between 5 s block means, over the night's median change.
         let blocks = (0..<(S / 5)).map { j -> Double in
@@ -325,9 +333,11 @@ public enum SleepStagerV3 {
             return nanMean(vals)
         }
         var dblk = [Double](repeating: 0, count: blocks.count)
+        var postureMeasured = false
         if blocks.count > 1 {
             for j in 1..<blocks.count {
                 let d = Swift.abs(blocks[j] - blocks[j - 1])
+                if !d.isNaN { postureMeasured = true }
                 dblk[j] = d.isNaN ? 0 : d
             }
         }
@@ -337,6 +347,10 @@ public enum SleepStagerV3 {
         let dangn = dang.map { Foundation.log1p($0 / (dmed > 0 ? dmed : 1e-6)) }
         cols["dangn"] = dangn
         for w in ctx { cols["dangn_ctx\(w)"] = centredMean(dangn, w) }
+        // Likewise no two consecutive blocks with gravity is no posture measurement.
+        if !postureMeasured {
+            for name in ["dangn"] + ctx.map({ "dangn_ctx\($0)" }) { cols[name] = [Double](repeating: .nan, count: n) }
+        }
 
         // Heart rate.
         let ehr = (0..<n).map { e in nanMean(Array(h[(epochS * e)..<(epochS * e + epochS)])) }
