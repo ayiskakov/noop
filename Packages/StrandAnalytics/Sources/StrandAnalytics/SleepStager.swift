@@ -1261,9 +1261,16 @@ public enum SleepStager {
     static func applyBandStateLatencyTrim(_ stages: [StageSegment], start: Int, end: Int,
                                           bandSleepState: [(ts: Int, state: Int)],
                                           enabled: Bool = bandStateLatencyTrimEnabled) -> [StageSegment] {
-        guard !stages.isEmpty,
-              let window = bandSleepWindow(start: start, end: end, bandSleepState: bandSleepState,
-                                           enabled: enabled) else { return stages }
+        applyBandStateLatencyTrim(stages, start: start, end: end,
+                                  window: bandSleepWindow(start: start, end: end, bandSleepState: bandSleepState,
+                                                          enabled: enabled))
+    }
+
+    /// The trim against a window the caller already resolved with `bandSleepWindow`, so a caller that also
+    /// hands that window to the recipe scans the band once. nil is the no-op case.
+    static func applyBandStateLatencyTrim(_ stages: [StageSegment], start: Int, end: Int,
+                                          window: (from: Int, to: Int)?) -> [StageSegment] {
+        guard !stages.isEmpty, let window else { return stages }
         let n = Int(ceil(Double(end - start) / epochS))
         var labels = epochLabels(stages, start: start, epochs: n)
         var changed = false
@@ -1313,6 +1320,31 @@ public enum SleepStager {
             i += step
         }
         return nil
+    }
+
+    /// Stage `[start, end]` the way a detected night is staged: the chosen recipe, inside the band's sleep
+    /// window for V2 and V3, then the band latency trim and the band wake-veto. `detectSleep` stages every
+    /// accepted night through here, and so does the app's re-stage of an edited night, a manually added nap
+    /// and the post-sync self-heal, so a night re-staged over its own bounds reproduces its detected
+    /// hypnogram.
+    ///
+    /// The re-stage used to call the recipe alone, with no window and no trim. Moving "Got up" by five
+    /// minutes then staged a 5/MG night's lying-awake lead-in as sleep: on the owner's six banked nights V2's
+    /// first sleep moved up to 2 h 04 min earlier and V3's about 20 min, both before the band's own onset.
+    ///
+    /// The window is resolved once, handed to the recipe and reused by the trim. V1 has no window input and
+    /// relies on the trim alone. `trimmed` is the hypnogram before the wake-veto, which the #1210 shadow
+    /// trace in `detectSleep` reads.
+    public static func stageWindow(start: Int, end: Int, grav: [GravitySample], hr: [HRSample],
+                                   rr: [RRInterval], resp: [RespSample],
+                                   bandSleepState: [(ts: Int, state: Int)],
+                                   stager: SleepStagerVersion) -> (stages: [StageSegment], trimmed: [StageSegment]) {
+        let window = bandSleepWindow(start: start, end: end, bandSleepState: bandSleepState)
+        let raw = stager.stageSession(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp,
+                                      sleepWindow: stager == .v1 ? nil : window)
+        let trimmed = applyBandStateLatencyTrim(raw, start: start, end: end, window: window)
+        let stages = applyBandStateWakeVeto(trimmed, start: start, end: end, bandSleepState: bandSleepState)
+        return (stages, trimmed)
     }
 
     /// Off-wrist HR-gap spans (#500). The contiguous HR-coverage gaps of at least `offWristHRGapMin`
@@ -1676,24 +1708,17 @@ public enum SleepStager {
                     detail: "daytime=true restingHR=\(resting ?? -1) baseline=\(baseline.map { Int($0) } ?? -1) nightTail=false"))
                 continue
             }
-            // V2 and V3 stage with the band's sleep window as a constraint, so the latency trim below finds
-            // wake already in place and the recipe starts from the band's onset. V1 has no such input and
-            // relies on the trim alone.
-            let rawStages = stager.stageSession(start: p.start, end: p.end, grav: grav,
-                                                hr: hrS, rr: rrS, resp: respS,
-                                                sleepWindow: stager == .v1 ? nil
-                                                    : bandSleepWindow(start: p.start, end: p.end,
-                                                                      bandSleepState: bandSleepState))
-            // Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN band
-            // (`bandSleepState`) scored "asleep". No-op when the band is absent (WHOOP 4.0) or the flag is
-            // off; stager-agnostic (corrects whichever hypnogram the chosen recipe produced). Efficiency below is then
-            // computed on the corrected stages, so a night NOOP over-called wake on reports true efficiency.
-            // Band latency trim: relabel as wake the lying-still-awake lead-in and tail outside the band's
-            // own persistent "asleep" span. No-op without a band stream (WHOOP 4.0).
-            let trimmedStages = applyBandStateLatencyTrim(rawStages, start: p.start, end: p.end,
-                                                          bandSleepState: bandSleepState)
-            let stages = applyBandStateWakeVeto(trimmedStages, start: p.start, end: p.end,
-                                                bandSleepState: bandSleepState)
+            // `stageWindow`, the one staging funnel the app's re-stage shares: V2 and V3 stage inside the
+            // band's sleep window, so the recipe starts from the band's onset. Band latency trim: relabel as
+            // wake the lying-still-awake lead-in and tail outside the band's own persistent "asleep" span.
+            // Band sleep_state WAKE-veto: recover INTERIOR false-wake epochs the strap's OWN band scored
+            // "asleep". Both are no-ops without a band stream (WHOOP 4.0) and stager-agnostic. Efficiency
+            // below is computed on the final stages, so a night NOOP over-called wake on reports true
+            // efficiency.
+            let staged = stageWindow(start: p.start, end: p.end, grav: grav, hr: hrS, rr: rrS, resp: respS,
+                                     bandSleepState: bandSleepState, stager: stager)
+            let trimmedStages = staged.trimmed
+            let stages = staged.stages
             let eff = efficiency(start: p.start, end: p.end, stages: stages)
             let avgHrv = sessionAvgHRV(start: p.start, end: p.end, rr: rrS)
             sessions.append(SleepSession(start: p.start, end: p.end, efficiency: eff,

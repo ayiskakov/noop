@@ -1531,7 +1531,7 @@ final class Repository: ObservableObject {
     /// computed sources , only the namespace that holds the night updates; the other is a no-op.
     ///
     /// Stages are **re-derived from the raw streams** for the corrected `[newStartTs, newEndTs]` window
-    /// via `SleepStager.stageSession` , exactly what WHOOP does, so extending a boundary recovers real
+    /// via `SleepStager.stageWindow` , exactly what WHOOP does, so extending a boundary recovers real
     /// stages instead of a fabricated "awake" block. Only when the night has no raw data (an imported
     /// night) does it fall back to reshaping the stored summary (`SleepWindowReclip`). Refreshes so the
     /// hero re-reads the corrected night immediately.
@@ -1770,13 +1770,20 @@ final class Repository: ObservableObject {
         let steps = useMotionAwareWake
             ? ((try? await store.stepSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? [])
             : []
+        // The strap's own band state: the detected path stages inside its sleep window and trims the
+        // lying-awake lead-in and tail outside it, and this window must be staged the same way.
+        let band = ((try? await store.sleepStateSamples(deviceId: deviceId, from: lo, to: hi)) ?? [])
+            .map { (ts: $0.ts, state: $0.state) }
         // Which staging engine re-stages this window (Settings → Experimental · Sleep staging): V3 unless
         // the user picked V2 or V1. Read once here off the actor, through the same resolver the normal
         // staging path uses; the choice is purely which engine runs over the already-detected window —
         // detection is identical either way. (V7 Pillar 3b)
         let stager = PuffinExperiment.sleepStager
         let segs = await Task.detached(priority: .utility) {
-            let staged = stager.stageSession(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp)
+            // `stageWindow` is the function `detectSleep` stages every detected night with, so an edit that
+            // keeps a night's bounds reproduces its detected hypnogram.
+            let staged = SleepStager.stageWindow(start: start, end: end, grav: grav, hr: hr, rr: rr, resp: resp,
+                                                 bandSleepState: band, stager: stager).stages
             // #364 follow-up: motion-aware wake refinement post-pass, same toggle-shaped no-op when off
             // as every other Experimental switch here.
             return WakeMotionRefinement.apply(staged, grav: grav, steps: steps, enabled: useMotionAwareWake)
