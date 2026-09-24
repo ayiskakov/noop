@@ -134,6 +134,8 @@ enum Nights {
                 counts[stageOrder.firstIndex(of: labels[i])!][1] += 1
             }
             pooled.merge(c)
+            // Undefined (one class on both sides, or no scored epoch): out of the per-night mean, as
+            // `Tools/SleepTrain/train.py`'s summary leaves it out.
             if !c.kappa.isNaN { kappas.append(c.kappa) }
             for k in 0..<4 { minutes[k].append(Double(counts[k][1] - counts[k][0]) / 2) }
         }

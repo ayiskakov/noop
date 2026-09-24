@@ -60,9 +60,13 @@ def whole_night(rec, path):
 
 
 def kappa(m):
+    """Cohen's kappa of a confusion matrix, NaN where it is undefined (no epochs, or one class on both sides),
+    as `Confusion.kappa` in Tools/SleepPSG returns it."""
     n = m.sum()
+    if n == 0:
+        return np.nan
     po, pe = np.trace(m) / n, (m.sum(1) @ m.sum(0)) / n / n
-    return (po - pe) / (1 - pe)
+    return np.nan if pe >= 1 else (po - pe) / (1 - pe)
 
 
 def first_after_onset(labels, k):
@@ -92,9 +96,12 @@ def summary(name, pairs):
         ks.append(kappa(m))
         mins.append([(np.sum(p[ok] == i) - np.sum(t[ok] == i)) / 2.0 for i in range(4)])
     mins = np.array(mins)
+    # A night whose kappa is undefined is left out of the per-night mean, as `sleeppsg --section v3` leaves
+    # it out, so the two reports print the same figure for the same cohort.
+    ks = [k for k in ks if not np.isnan(k)]
     f1 = [2 * M[i, i] / (M[i].sum() + M[:, i].sum()) for i in range(4)]
     share = (M.sum(0) - M.sum(1)) / M.sum() * 100
-    return (f"| {name} | {len(pairs)} | {kappa(M):.3f} | {np.mean(ks):.3f} | "
+    return (f"| {name} | {len(pairs)} | {kappa(M):.3f} | {np.mean(ks) if ks else np.nan:.3f} | "
             + " / ".join(f"{x:.2f}" for x in f1) + " | " + " / ".join(f"{x:+.1f}" for x in share) + " | "
             + " / ".join(f"{mins[:, i].mean():+.0f} ± {1.96 * mins[:, i].std(ddof=1):.0f}" for i in range(4)) + " | "
             + f"{latency(pairs, 2)} / {latency(pairs, 3)} |")
