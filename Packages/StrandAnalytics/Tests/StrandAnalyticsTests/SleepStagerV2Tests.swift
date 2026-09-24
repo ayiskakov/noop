@@ -375,8 +375,9 @@ final class SleepStagerV2Tests: XCTestCase {
             rr.append(RRInterval(ts: ts, rrMs: (60_000 / bpm) + rsaWave(ph, i)))
         }
         let segs = SleepStagerV2.stageSession(start: start, end: start + dur, grav: grav, hr: hr, rr: rr, resp: [])
+        // The deep-latency guard holds the first 8 min to light; every later boundary is unchanged.
         let golden: [(Int, Int, String)] = [
-            (0, 5070, "deep"), (5070, 5310, "light"), (5310, 5550, "rem"),
+            (0, 480, "light"), (480, 5070, "deep"), (5070, 5310, "light"), (5310, 5550, "rem"),
             (5550, 10800, "light"), (10800, 16200, "rem"), (16200, 21600, "wake")]
         XCTAssertEqual(segs.count, golden.count, "segment count")
         for k in 0..<min(segs.count, golden.count) {

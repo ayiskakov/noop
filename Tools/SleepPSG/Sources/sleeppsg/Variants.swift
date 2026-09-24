@@ -147,6 +147,15 @@ enum Variants {
                        note: "c<0.12 step in the fraction domain, single Viterbi pass", config: c)
     }
 
+    /// The deep-latency guard removed. Without it the recipe stages deep within 5 min of sleep onset for 6 of
+    /// 30 subjects here (1 of 30 in the PSG truth), and for 12 of 30 once a band window fixes the onset.
+    static var deepGuardOff: Variant {
+        var c = RecipeConfig.shipped
+        c.deepLatencyPenalty = 0.0
+        return Variant(name: "deep-latency guard OFF",
+                       note: "deepLatencyPenalty 3.0→0", config: c)
+    }
+
     /// The shipped recipe itself, so a table row exists to difference against.
     static var incumbent: Variant {
         Variant(name: "incumbent (shipped)", note: "SleepStagerV2 as it ships today", config: .shipped)
@@ -154,6 +163,6 @@ enum Variants {
 
     static var all: [Variant] {
         [incumbent, pr987, p348Priors, p348Motion, p348Emissions, p348DeepGate,
-         p348Deadzone, p348OtherRows, p348All, preNine30Guard]
+         p348Deadzone, p348OtherRows, p348All, preNine30Guard, deepGuardOff]
     }
 }

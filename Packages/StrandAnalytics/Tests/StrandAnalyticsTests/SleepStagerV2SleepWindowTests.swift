@@ -111,7 +111,7 @@ final class SleepStagerV2SleepWindowTests: XCTestCase {
     func testRemLatencyGuardRunsFromTheWindowsOnset() {
         let night = goldenNight()
         XCTAssertEqual(relative(stage(night, window: nil)), [
-            "0-5070 deep", "5070-5310 light", "5310-5550 rem", "5550-10800 light",
+            "0-480 light", "480-5070 deep", "5070-5310 light", "5310-5550 rem", "5550-10800 light",
             "10800-16200 rem", "16200-21600 wake"])
         XCTAssertEqual(relative(stage(night, window: (from: start + 9000, to: start + 18_000))), [
             "0-9000 wake", "9000-12570 light", "12570-16200 rem", "16200-21600 wake"])

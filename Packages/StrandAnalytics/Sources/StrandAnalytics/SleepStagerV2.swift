@@ -476,6 +476,31 @@ public enum SleepStagerV2 {
         remLatencyPenalty * min(1.0, max(0.0, 1.0 - minutesSinceOnset / remLatencyMinutes))
     }
 
+    // ── the deep-latency guard ─────────────────────────────────────────────────────────────────────────
+
+    /// Log-odds penalty applied to the DEEP emission at sleep onset: the twin of `remLatencyPenalty`, with the
+    /// same magnitude for the same reason (strong suppression that sufficient evidence still overcomes).
+    /// Descent into N3 runs through N1 and N2, so the first N3 comes minutes after onset, not at it. The
+    /// recipe's deep terms (the HR-flatness gate and the early-night cycle prior) are strongest at onset
+    /// itself, and without this guard it staged deep within 5 min of onset for 12 of 30 PhysioNet sleep-accel
+    /// subjects, against 1 of 30 in the PSG truth.
+    static let deepLatencyPenalty = 3.0
+
+    /// Minutes over which `deepLatencyPenalty` decays linearly to zero, measured from sleep ONSET (the same
+    /// origin as the REM guard). Twenty minutes sits inside the classic first-cycle descent (N1 for a few
+    /// minutes, N2 for roughly 10–25 before the first N3). On sleep-accel (31 subjects, penalty 3.0) it is
+    /// also the decay at which staged first-deep latency is unbiased against PSG: bias −3.3 min unbanded and
+    /// +0.4 min with a band window, where 25 min overshoots (+0.8 / +5.2). Four-class kappa rises with the
+    /// decay across the whole 10–25 min grid (0.363 → 0.373 at 20 min, unbanded). The value was chosen for the
+    /// unbiased latency, not for the higher kappa a longer guard would buy.
+    static let deepLatencyMinutes = 20.0
+
+    /// The deep guard: `deepLatencyPenalty` at (and before) sleep onset, decaying linearly to 0 at
+    /// `deepLatencyMinutes` after it. Clamped to `[0, penalty]` exactly like `remLatencyGuard`.
+    static func deepLatencyGuard(_ minutesSinceOnset: Double) -> Double {
+        deepLatencyPenalty * min(1.0, max(0.0, 1.0 - minutesSinceOnset / deepLatencyMinutes))
+    }
+
     /// Soft sleep-cycle prior added to the log-emission: deep concentrated early (decays, never hard-wiped);
     /// REM suppressed around sleep onset (REM latency) then rising toward morning.
     ///
@@ -565,10 +590,10 @@ public enum SleepStagerV2 {
     /// Run the full recipe over a night's epochs and return one stage label per epoch (incl. "awake").
     /// All normalisation (z-scores, the HR-flatness percentile) is WITHIN the night.
     ///
-    /// TWO PASSES (#930). The REM-latency guard is measured from sleep ONSET, and onset is itself a staging
-    /// output, so the recipe cannot know it while building the emissions. Pass 1 stages the night with the
-    /// guard DISABLED (`cyclePrior(c, .infinity)`) and reads the first sustained sleep run out of the result;
-    /// pass 2 adds the guard, re-based on that onset, and re-runs Viterbi. Only the guard differs between the
+    /// TWO PASSES (#930). The REM- and deep-latency guards are measured from sleep ONSET, and onset is itself
+    /// a staging output, so the recipe cannot know it while building the emissions. Pass 1 stages the night
+    /// with the guards DISABLED (`cyclePrior(c, .infinity)`) and reads the first sustained sleep run out of it;
+    /// pass 2 adds the guards, re-based on that onset, and re-runs Viterbi. Only the guards differ between the
     /// passes — every emission term, z-score and percentile is computed ONCE and reused — so the extra cost is
     /// one Viterbi over an already-built lattice, not a second featurisation, and `stageSession` memoizes the
     /// whole thing anyway. When no sustained run exists the origin falls back to the window start, which is
@@ -578,7 +603,7 @@ public enum SleepStagerV2 {
     /// `forcedWakePenalty`, so both passes can only label it awake. The strap's band state used to be applied
     /// only after staging, by relabelling the lead-in and tail as wake. Pass 1 therefore read sleep onset from
     /// a hypnogram that still slept through the lead-in, up to two hours before the band's onset on a banked
-    /// 5/MG night (2 h 13 min before it). The REM-latency guard was spent before sleep began, and REM appeared
+    /// 5/MG night (2 h 13 min before it). The onset guards were spent before sleep began, and REM appeared
     /// 31 min after the real onset. The relabelling also cut straight from wake into whatever the recipe had
     /// staged there, often deep, which is the transition the awake row forbids. Only the labels are
     /// constrained: every emission, z-score and percentile is computed exactly as before, over the whole
@@ -644,9 +669,10 @@ public enum SleepStagerV2 {
         // minutes `features()` stamped on every epoch. No sustained run → 0.0, i.e. the window start.
         let originMin = sustainedSleepOnset(provisional).map { feats[$0].minutesSinceOnset } ?? 0.0
 
-        // PASS 2 — apply the guard against minutes since THAT onset and re-run the lattice.
+        // PASS 2 — apply the guards against minutes since THAT onset and re-run the lattice.
         for i in feats.indices {
             seq[i]["rem"]! -= remLatencyGuard(feats[i].minutesSinceOnset - originMin)
+            seq[i]["deep"]! -= deepLatencyGuard(feats[i].minutesSinceOnset - originMin)
         }
         return viterbi(seq)
     }
