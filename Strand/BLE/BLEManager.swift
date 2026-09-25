@@ -921,6 +921,9 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
     private var rawCaptureInFlight = false
+    /// Set when a raw-data session arms the stream, cleared by the first live 1244-byte buffer after it, whose
+    /// packet type and layout byte are logged: no capture had shown a live buffer's layout (W06-041).
+    private var awaitingFirstLiveImuBuffer = false
     private var rawCaptureStoppedAt = Date.distantPast
     private var unexpectedImuStopAt = Date.distantPast
     /// Ordered queue of frames awaiting drain through the serial Backfiller task.
@@ -2180,6 +2183,7 @@ public final class BLEManager: NSObject, ObservableObject {
     public func startGroundTruthRawCapture(sessionId: String) -> Bool {
         guard !rawCaptureInFlight else { return false }
         rawCaptureInFlight = true
+        awaitingFirstLiveImuBuffer = true
         send(.startRawData, payload: [0x01], writeType: .withResponse)
         send(.toggleIMUMode,
              payload: selectedModel.deviceFamily == .whoop5 ? [0x01, 0x01] : [0x01],
@@ -7088,6 +7092,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // 6-axis buffer into any open Raw Data Collector session, from the live stream and from
         // history sync alike. BEFORE the offload branch, which returns (W06-002).
         collector?.bankImuForSessions(frame)
+        if awaitingFirstLiveImuBuffer, !isOffload, frame.count == Whoop5RawImu.bufferLength {
+            awaitingFirstLiveImuBuffer = false
+            log("Raw-data session: first live 1244-byte buffer is packet type \(frame[8]), layout \(frame[9]), "
+                + (verifyFrame(frame, family: .whoop5).ok ? "intact" : "failing its CRC"))
+        }
         if isOffload {
             // Same policy as WHOOP4: historical offload frames are bulk sync traffic.
             // Keep them out of the live UI parser during backfill and let Backfiller

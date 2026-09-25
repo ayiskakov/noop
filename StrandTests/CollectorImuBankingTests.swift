@@ -78,6 +78,7 @@ final class ImuBankingRig {
     }
 
     static let dataChar = CBUUID(string: "fd4b0005-cce1-4033-93ce-002d5875f58a")
+    let live = LiveState()
     let manager: BLEManager
     let sessionId = "rig-\(UUID().uuidString)"
 
@@ -85,7 +86,7 @@ final class ImuBankingRig {
         let deviceId = "rig-\(UUID().uuidString)"
         let ts = Int64(Whoop5RawImu.baseTs(CollectorImuBankingTests.fixture)!)
         ImuSessionFileStore.shared.start(id: sessionId, deviceId: deviceId, fromMs: (ts - 10) * 1_000)
-        manager = BLEManager(state: LiveState(), collector: Collector(store: NullStore(), deviceId: deviceId))
+        manager = BLEManager(state: live, collector: Collector(store: NullStore(), deviceId: deviceId))
     }
 
     var banked: Bool { ImuSessionFileStore.shared.newestBankedTs(sessionId) != nil }
@@ -109,6 +110,19 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
     func testALiveBufferIsBanked() {
         rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
         XCTAssertTrue(rig.banked)
+    }
+
+    /// A raw-data session logs the packet type and layout byte of its first live buffer, once (W06-041).
+    func testASessionLogsItsFirstLiveBuffersLayout() {
+        let line = "Raw-data session: first live 1244-byte buffer is packet type 43, layout 21, intact"
+        func count() -> Int { rig.live.log.filter { $0.hasSuffix(line) }.count }
+        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(count(), 0, "no session armed")
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(count(), 1)
     }
 
     func testAnOffloadBufferIsBanked() {
