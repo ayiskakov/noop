@@ -374,9 +374,13 @@ final class Collector {
         recordGroundTruthImu(frame)
     }
 
-    /// An intact 1244-byte IMU buffer. `Whoop5RawImu` decodes without checking the CRC, so the gate does.
+    /// An intact 1244-byte R21 IMU buffer. `Whoop5RawImu` decodes without checking the CRC or the packet
+    /// type, so the gate does both (W06-029): live type 43, or historical type 47 with layout 21 at byte 9.
+    /// The live buffer's byte 9 is left unchecked because no capture of one has confirmed it.
     nonisolated static func isBankableImu(_ frame: [UInt8]) -> Bool {
-        frame.count == Whoop5RawImu.bufferLength && verifyFrame(frame, family: .whoop5).ok
+        guard frame.count == Whoop5RawImu.bufferLength,
+              frame[8] == 43 || (frame[8] == 47 && frame[9] == 21) else { return false }
+        return verifyFrame(frame, family: .whoop5).ok
     }
 
     private func recordGroundTruthImu(_ frame: [UInt8]) {

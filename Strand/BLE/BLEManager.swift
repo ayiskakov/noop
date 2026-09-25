@@ -2188,9 +2188,20 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
-    /// Stop and flush the current manually controlled raw-data session.
-    public func stopGroundTruthRawCapture() async {
-        if rawCaptureInFlight && !UserDefaults.standard.bool(forKey: "enableRawCapture") {
+    /// Why stopping the raw-data session now would send no stop, or nil when it would send one. The collector
+    /// waits for a session's tail only while this is nil, since only a stop discards it (W06-039), and a
+    /// disconnect makes it `.notArmed`.
+    var groundTruthStopUnsent: RawSessionTail.Unsent? {
+        if !rawCaptureInFlight { return .notArmed }
+        if UserDefaults.standard.bool(forKey: "enableRawCapture") { return .continuousCapture }
+        return nil
+    }
+
+    /// Stop the current manually controlled raw-data session. `tail` is what the collector saw of the
+    /// session's last full second before it asked for the stop (W06-025); it only shapes the log line.
+    func stopGroundTruthRawCapture(tail: RawSessionTail.Outcome = .notAwaited) async {
+        let unsent = groundTruthStopUnsent
+        if unsent == nil {
             send(.stopRawData, payload: [0x01], writeType: .withResponse)
             if selectedModel.deviceFamily == .whoop5 {
                 send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
@@ -2198,7 +2209,7 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         rawCaptureInFlight = false
         rawCaptureStoppedAt = Date()
-        log("Raw-data session: stopped + flushed")
+        log(RawSessionTail.stopLogLine(tail, unsent: unsent))
     }
 
     /// Stop a realtime IMU producer left armed after a crash, lost stop write, or another client.
@@ -5926,6 +5937,12 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // asked THIS link", and carrying it over would make a reconnect inside the window wait out the
         // previous link's timer before taking its first reading, on exactly the churn this is for.
         lastRssiDbm = nil; lastRssiAt = nil; lastRssiReadAt = nil
+        // W06-033: the link's bytes die with it. A frame half-received when the link dropped has a real
+        // header, so the gate passes it and it swallows the next link's first frames; a standing reconnect
+        // never runs connectCore, where the reassembler is otherwise rebuilt. The reject tally goes with it,
+        // because it folds the reassembler's drop counts as growth past the total it last saw.
+        reassembler = Reassembler(family: selectedModel.deviceFamily)
+        router.resetLinkTally()
 
         let timedOut = !intentionalDisconnect && error != nil
         let sinceArm = realtimeArmedAt.map { Date().timeIntervalSince($0) }

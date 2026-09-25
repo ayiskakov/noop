@@ -59,13 +59,25 @@ item as it lands.
       S2 rows are W02-002, W02-003, W02-005 and W06-002. First batches, one PR each, stacked on this
       branch: `review/w02-fixes`, `review/w01-fixes`, `review/w06-fixes`. W2's three S2s pass V1, V2 and V3;
       W06-002 waits on the strap run.
-- [ ] Strap run agreed with the owner (2026-09-25): one sync and one short Raw Data Collector session on a
-      build with the W1 and W6 batches, strap log attached. Verifies W06-002, W01-003 and W01-004.
+- [x] Strap run agreed with the owner (2026-09-25): one sync and one short Raw Data Collector session on a
+      build with the W1 and W6 batches, strap log attached. Done on 11.9.8 with a backup and the reject
+      archive as well: W06-002 banks, W01-003 and W01-004 hold on real traffic, and the run found W06-025.
+      Evidence in the W1 and W6 rows and logs.
+- [x] V2 of the W1 and W6 batches by independent reviewers (2026-09-25): all four hold; they added W01-010 …
+      W01-015 and W06-026 … W06-035, all S3 or S4.
+- [ ] Second W6 batch, `review/w06-fixes-2` (stacked on this branch): W06-025, W06-026, W06-027, W06-029,
+      W06-031, W06-032, W06-033. W06-027 completes W06-002's V1. Then a strap run of it: a Raw Data Collector
+      session that reads ready, and a reconnect. A code review of the batch added W06-036 … W06-049; W06-036,
+      W06-037, W06-039 and W06-044 are fixed on the same branch, and W06-043 reopens W06-027's V1.
+- [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
+      and night on the strap with 11.9.8 is due before their findings move to `Verified`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
       W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
-      (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups.
+      (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one
+      from 11.9.7, one from 11.9.8): 37 tables and about 4.28 M rows each come back identical after export,
+      import and a restore over an open store.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

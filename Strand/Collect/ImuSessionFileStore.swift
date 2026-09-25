@@ -14,18 +14,29 @@ final class ImuSessionFileStore {
     static let segmentSeconds: Int64 = 30 * 60
     private static let payloadBytes = sampleRate * axes * 2
     private static let magic = Data("NOOPIMU2".utf8)
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private let key = "imu-session-windows-v1"
     private let directory: URL
     private var seen: [String: Set<Int64>] = [:]
     private var pending: [String: [Record]] = [:]
+    private var newest: [String: Int64] = [:]
+    private var cachedWindows: [Window]?
+    /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
+    private(set) var segmentScans = 0
 
-    private init() {
+    private convenience init() {
         let fm = FileManager.default
         let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                 appropriateFor: nil, create: true)) ?? fm.temporaryDirectory
-        directory = base.appendingPathComponent("OpenWhoop/RawImuSessions", isDirectory: true)
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.init(directory: base.appendingPathComponent("OpenWhoop/RawImuSessions", isDirectory: true),
+                  defaults: .standard)
+    }
+
+    /// A store over `directory` and `defaults`; the app uses `shared`, tests pass throwaway ones.
+    init(directory: URL, defaults: UserDefaults) {
+        self.directory = directory
+        self.defaults = defaults
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
     func start(id: String, deviceId: String, fromMs: Int64) {
@@ -43,11 +54,15 @@ final class ImuSessionFileStore {
         try? FileManager.default.createDirectory(at: sessionDirectory(id), withIntermediateDirectories: true)
     }
     func remove(id: String) {
+        newest[id] = nil
         pending.keys.filter { $0.hasPrefix("\(id)/") }.forEach { pending[$0] = nil }
         seen.keys.filter { $0.hasPrefix(sessionDirectory(id).path) }.forEach { seen[$0] = nil }
         save(windows().filter { $0.id != id })
     }
     func prepareForRead(_ id: String) { flushSession(id) }
+
+    /// The start second of the newest buffer banked into session `id` since launch, or nil before the first.
+    func newestBankedTs(_ id: String) -> Int64? { newest[id] }
 
     func deleteFiles(_ id: String, removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
         flushSession(id); let dir = sessionDirectory(id)
@@ -67,10 +82,14 @@ final class ImuSessionFileStore {
         var count = 0
         for window in windows() where window.deviceId == deviceId && Int64(ts) >= window.from
             && (window.to == nil || Int64(ts) <= window.to!) {
+            newest[window.id] = max(newest[window.id] ?? Int64(ts), Int64(ts))
             let bucket = Self.bucketStart(Int64(ts)), url = segmentFile(window.id, bucket)
             var timestamps = seen[url.path] ?? scan(url)
-            guard timestamps.insert(Int64(ts)).inserted else { continue }
+            let inserted = timestamps.insert(Int64(ts)).inserted
+            // Cache the scan even for a duplicate: after a relaunch a history sync re-delivers seconds
+            // the live stream banked, and each would otherwise decode the whole segment again (W06-026).
             seen[url.path] = timestamps
+            guard inserted else { continue }
             let pendingKey = "\(window.id)/\(bucket)"
             pending[pendingKey, default: []].append(Record(ts: Int64(ts), receivedAtMs: receivedAtMs, columns: columns))
             if pending[pendingKey]!.count >= Self.blockSeconds { flushKey(pendingKey) }
@@ -172,12 +191,17 @@ final class ImuSessionFileStore {
         data.appendBigEndian(Int32(compressed.count)); data.append(compressed); return data
     }
 
-    private func windows() -> [Window] { defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([Window].self, from: $0) } ?? [] }
-    private func save(_ value: [Window]) { defaults.set(try? JSONEncoder().encode(value), forKey: key) }
+    // Every IMU frame reads the window list, so it is decoded once and kept; `save` is its only writer (W06-031).
+    private func windows() -> [Window] {
+        if let cachedWindows { return cachedWindows }
+        let value = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([Window].self, from: $0) } ?? []
+        cachedWindows = value; return value
+    }
+    private func save(_ value: [Window]) { cachedWindows = value; defaults.set(try? JSONEncoder().encode(value), forKey: key) }
     private func sessionDirectory(_ id: String) -> URL { directory.appendingPathComponent(id, isDirectory: true) }
     private func segmentFile(_ id: String, _ bucket: Int64) -> URL { sessionDirectory(id).appendingPathComponent("imu-\(Self.utcName(bucket)).imus") }
     private func segmentFiles(_ id: String) -> [URL] { ((try? FileManager.default.contentsOfDirectory(at: sessionDirectory(id), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "imus" }.sorted { $0.lastPathComponent < $1.lastPathComponent } }
-    private func scan(_ url: URL) -> Set<Int64> { Set(decode((try? Data(contentsOf: url)) ?? Data()).map(\.ts)) }
+    private func scan(_ url: URL) -> Set<Int64> { segmentScans += 1; return Set(decode((try? Data(contentsOf: url)) ?? Data()).map(\.ts)) }
     private static func bucketStart(_ ts: Int64) -> Int64 { ts >= 0 ? ts / segmentSeconds * segmentSeconds : ((ts - segmentSeconds + 1) / segmentSeconds) * segmentSeconds }
     private static func utcName(_ ts: Int64) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts))) }
     private func int32(_ bytes: [UInt8], _ offset: Int) -> Int { Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16 | Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3]) }
