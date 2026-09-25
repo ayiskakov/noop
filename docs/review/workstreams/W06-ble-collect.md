@@ -155,3 +155,10 @@ exactly what was tested on hardware.
   the stop line says when none did). `StrandTests` and both app builds pass. Next: W06-043 (source-text tests that
   cannot fail), W06-046 (the W06-025 row), then the remaining S4s. The batch's strap run also checks that a stopped
   session ends at the press, reads ready, and that its stop line names no stop it did not send.
+- 2026-09-25 — The 11.9.9 strap run of the second batch is recorded in the rows: the tail, the session end and the R21 gate
+  hold, and the offload half of W06-002 is proven; W06-033 was not exercised. The run found W06-050 (a SET_CLOCK
+  mid-session steps the IMU timeline), W06-051 (three app process deaths in four and a half minutes) and W06-052. Third
+  batch on `review/w06-fixes-3`: W06-043, W06-046, W06-042, W06-038, W06-047, W06-049 fixed, W06-041 step 1 (a log line
+  for the live layout byte). `StrandTests` (1,991) and both app builds pass. Waiting on the owner: the clock decision
+  (W06-050, and W06-040 with it), the iPhone's crash or jetsam reports for W06-051, and W06-052 with W06-018. Phase 3:
+  W06-045, W06-048.

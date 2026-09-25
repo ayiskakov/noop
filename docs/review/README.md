@@ -68,7 +68,10 @@ item as it lands.
 - [ ] Second W6 batch, `review/w06-fixes-2` (stacked on this branch): W06-025, W06-026, W06-027, W06-029,
       W06-031, W06-032, W06-033. W06-027 completes W06-002's V1. Then a strap run of it: a Raw Data Collector
       session that reads ready, and a reconnect. A code review of the batch added W06-036 … W06-049; W06-036,
-      W06-037, W06-039 and W06-044 are fixed on the same branch, and W06-043 reopens W06-027's V1.
+      W06-037, W06-039 and W06-044 are fixed on the same branch, and W06-043 reopens W06-027's V1. Merged as PR #28 and
+      shipped in 11.9.9; its strap run passed the tail and the R21 gate and found W06-050 … W06-052.
+- [ ] Third W6 batch, `review/w06-fixes-3`: W06-038, W06-041 (step 1), W06-042, W06-043, W06-046, W06-047,
+      W06-049. Owner input needed for W06-050 (clock), W06-051 (crash reports) and W06-052.
 - [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
       and night on the strap with 11.9.8 is due before their findings move to `Verified`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
