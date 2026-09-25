@@ -5,6 +5,13 @@ Guidance for anyone (human or AI agent) submitting a pull request. This is the h
 rules, add-a-metric/screen/command recipes), [`docs/BUILD.md`](docs/BUILD.md) covers signing/pairing,
 and [`docs/IOS.md`](docs/IOS.md) covers the iOS target. Read this first; follow the links for depth.
 
+## Whole-project review in progress
+
+This fork is running a whole-project review. Before any review, fix or refactor work, read
+[`docs/review/README.md`](docs/review/README.md): it holds the status board, one file per area with
+its findings and entry points, and the validation protocol every fix follows. Update those files in
+the same commit as the work they record.
+
 ## What NOOP is (and the hard scope limits)
 
 NOOP is an **offline-by-default, on-device** companion app for the **WHOOP 5.0 and WHOOP MG** straps,
