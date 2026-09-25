@@ -281,7 +281,7 @@ private func parseFrameWhoop5(_ frame: [UInt8], collectFields: Bool) -> ParsedFr
                 guard off + 2 <= limit else { break }
                 if let v = readDType(frame, off, "u16", limit), v > 0 {
                     let ms = Whoop5RR.milliseconds(ticks: UInt16(v))
-                    fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms from 1/1024 s ticks")
+                    fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms (the word is already milliseconds)")
                     rawTicks.append(v)
                     rrs.append(ms)
                 }
@@ -421,7 +421,7 @@ private func decodeWhoop5Historical(_ frame: [UInt8], fb: FieldBuilder, payloadE
         guard off + 2 <= limit else { break }
         if let v = readDType(frame, off, "u16", limit), v > 0 {
             let ms = Whoop5RR.milliseconds(ticks: UInt16(v))
-            fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms from 1/1024 s ticks")
+            fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms (the word is already milliseconds)")
             rawTicks.append(v)
             rrs.append(ms)
         }

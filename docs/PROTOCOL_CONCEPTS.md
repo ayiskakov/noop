@@ -12,7 +12,8 @@ Read the [scope and compatibility](PROTOCOL.md#scope-and-compatibility) before a
 | Battery | `180F` | Battery Level | `2A19` | single byte = battery percent |
 
 Heart Rate Measurement uses a flag byte, 8- or 16-bit HR, optional Energy Expended
-and R-R intervals in units of 1/1024 second. Battery Level is a single-byte percent.
+and R-R intervals in units of 1/1024 second, per the specification; WHOOP 5/MG sends
+milliseconds there instead (see `Whoop5RR`). Battery Level is a single-byte percent.
 These standard characteristics are separate from the custom command replies.
 
 ---
