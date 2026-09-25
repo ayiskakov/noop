@@ -81,25 +81,51 @@ final class RealBackupGateTests: XCTestCase {
                            "\(label): table \(table) changed while migrating to head")
         }
 
-        // 3. Export the migrated store with the applied settings, exactly as the app's writer does.
+        // 3. Export the migrated store through the app's folder-backup writer, with the store open on the
+        //    file as it is in the app: the archive carries a snapshot written through SQLite's backup API.
+        let full = try digests(of: first, restrictTo: try columns(of: first))
         let exported = dir.appendingPathComponent("round-trip.noopbak")
-        try DataBackup.writeBackupForTesting(databaseAt: first, to: exported, settings: settings)
+        let store = try await WhoopStore(path: first.path)
+        let written = await DataBackup.writeBackup(
+            snapshot: { url in (try? await store.writeSnapshot(to: url.path)) != nil },
+            liveDatabaseAt: first.path, to: exported)
+        guard case .exported = written else { return XCTFail("\(label): export failed: \(written)") }
 
-        // 4. Import the export into a second throwaway path and compare everything.
+        // 4. Import the export into a second throwaway path and compare every row.
         let second = dir.appendingPathComponent("second.sqlite")
-        let secondDefaults = try freshDefaults()
         guard case .imported = DataBackup.restore(from: exported, toDatabaseAt: second.path,
-                                                  settingsDefaults: secondDefaults) else {
+                                                  settingsDefaults: try freshDefaults()) else {
             return XCTFail("\(label): re-import of the exported backup failed")
         }
-        let full = try digests(of: first, restrictTo: try columns(of: first))
         let roundTripped = try digests(of: second, restrictTo: try columns(of: first))
         XCTAssertEqual(Set(roundTripped.keys), Set(full.keys), "\(label): same tables after the round trip")
         for (table, digest) in full {
             XCTAssertEqual(roundTripped[table], digest, "\(label): table \(table) changed in the round trip")
         }
-        XCTAssertEqual(NSDictionary(dictionary: BackupSettings.snapshot(from: secondDefaults)),
+
+        // 5. Settings: the writer above carries this device's own settings, so the backup's settings go
+        //    through the test seam's container instead.
+        let withSettings = dir.appendingPathComponent("settings.noopbak")
+        try DataBackup.writeBackupForTesting(databaseAt: second, to: withSettings, settings: settings)
+        let third = dir.appendingPathComponent("third.sqlite")
+        let thirdDefaults = try freshDefaults()
+        guard case .imported = DataBackup.restore(from: withSettings, toDatabaseAt: third.path,
+                                                  settingsDefaults: thirdDefaults) else {
+            return XCTFail("\(label): re-import with settings failed")
+        }
+        XCTAssertEqual(NSDictionary(dictionary: BackupSettings.snapshot(from: thirdDefaults)),
                        NSDictionary(dictionary: settings), "\(label): settings changed in the round trip")
+
+        // 6. Restore over a live store: the side file kept before the swap is the store it replaced.
+        guard case .imported(let kept) = DataBackup.restore(from: withSettings, toDatabaseAt: first.path,
+                                                            settingsDefaults: try freshDefaults()) else {
+            return XCTFail("\(label): restore over the open store failed")
+        }
+        withExtendedLifetime(store) {}
+        let keptDigests = try digests(of: kept, restrictTo: try columns(of: second))
+        for (table, digest) in full {
+            XCTAssertEqual(keptDigests[table], digest, "\(label): table \(table) differs in the kept side file")
+        }
 
         let rows = full.values.reduce(0) { $0 + $1.rows }
         print("RealBackupGate \(label): \(migrationsBefore.count) → \(migrationsAfter.count) migrations, "
