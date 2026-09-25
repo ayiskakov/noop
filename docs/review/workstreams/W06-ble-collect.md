@@ -169,3 +169,9 @@ exactly what was tested on hardware.
   W06-041 its layout evidence (step 2 next), and adds a second observation to W06-050 and W06-052. Next: the strap
   run of W06-053 (markers added, edited, cancelled, deleted), W06-041 step 2, then the owner decisions for W06-050
   and W06-052.
+- 2026-09-25 — PR #30 (W06-053) merged. Fifth batch on `review/w06-fixes-5`: W06-041 step 2 (live buffers need layout
+  21), W06-018 with W06-052 (the raw IMU fail-safe becomes a once-per-link note that forms no command and defers to a
+  session still open on disk), W06-007 (hold-ack tests, with a mutation run). Owner decisions: W06-050 reads the clock
+  before setting it, in its own PR with W06-001; W06-052 keeps an honest line, since the old one was the only trace of
+  a stream an ECG probe left running. Next: a code review of this batch, then its strap run (a relaunch mid-session
+  logs no Raw IMU line; a stray stream logs one line per link), the W06-053 marker run, and W06-050 with W06-001.
