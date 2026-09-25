@@ -148,9 +148,14 @@ final class ImuSessionFileStoreTests: XCTestCase {
         XCTAssertEqual(first.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 1)
         first.complete(id: "s", toMs: (ts + 10) * 1_000)
 
-        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults)
-        for _ in 0..<50 { XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0) }
-        XCTAssertEqual(relaunched.segmentScans, 1)
+        final class Reads { var count = 0 }
+        let reads = Reads()
+        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults,
+                                             read: { reads.count += 1; return try? Data(contentsOf: $0) })
+        XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0)
+        let afterOne = reads.count
+        for _ in 0..<49 { XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0) }
+        XCTAssertEqual(reads.count, afterOne, "49 more duplicates read no file again")
         XCTAssertEqual(relaunched.stats("s", from: Int(ts) - 10, to: Int(ts) + 10).coveredSeconds, 1)
     }
 

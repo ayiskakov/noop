@@ -22,8 +22,7 @@ final class ImuSessionFileStore {
     private var newest: [String: Int64] = [:]
     private var newestReadFromFiles: Set<String> = []
     private var cachedWindows: [Window]?
-    /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
-    private(set) var segmentScans = 0
+    private let read: (URL) -> Data?
 
     private convenience init() {
         let fm = FileManager.default
@@ -33,10 +32,12 @@ final class ImuSessionFileStore {
                   defaults: .standard)
     }
 
-    /// A store over `directory` and `defaults`; the app uses `shared`, tests pass throwaway ones.
-    init(directory: URL, defaults: UserDefaults) {
+    /// A store over `directory` and `defaults`, reading its files with `read`; the app uses `shared`, tests
+    /// pass throwaway ones.
+    init(directory: URL, defaults: UserDefaults, read: @escaping (URL) -> Data? = { try? Data(contentsOf: $0) }) {
         self.directory = directory
         self.defaults = defaults
+        self.read = read
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -69,7 +70,7 @@ final class ImuSessionFileStore {
     func newestBankedTs(_ id: String) -> Int64? {
         if !newestReadFromFiles.contains(id) {
             newestReadFromFiles.insert(id)
-            let onDisk = segmentFiles(id).last.flatMap { decode((try? Data(contentsOf: $0)) ?? Data()).map(\.ts).max() }
+            let onDisk = segmentFiles(id).last.flatMap { decode(read($0) ?? Data()).map(\.ts).max() }
             if let onDisk { newest[id] = max(newest[id] ?? onDisk, onDisk) }
         }
         return newest[id]
@@ -133,7 +134,7 @@ final class ImuSessionFileStore {
     }
 
     private func readRecords(_ id: String, from: Int, to: Int, includePending: Bool) -> [Record] {
-        var rows = segmentFiles(id).flatMap { decode((try? Data(contentsOf: $0)) ?? Data()) }
+        var rows = segmentFiles(id).flatMap { decode(read($0) ?? Data()) }
             .filter { $0.ts >= from && $0.ts <= to }
         if includePending { rows += pending.filter { $0.key.hasPrefix("\(id)/") }.values.flatMap { $0 }
             .filter { $0.ts >= from && $0.ts <= to } }
@@ -212,7 +213,7 @@ final class ImuSessionFileStore {
     private func sessionDirectory(_ id: String) -> URL { directory.appendingPathComponent(id, isDirectory: true) }
     private func segmentFile(_ id: String, _ bucket: Int64) -> URL { sessionDirectory(id).appendingPathComponent("imu-\(Self.utcName(bucket)).imus") }
     private func segmentFiles(_ id: String) -> [URL] { ((try? FileManager.default.contentsOfDirectory(at: sessionDirectory(id), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "imus" }.sorted { $0.lastPathComponent < $1.lastPathComponent } }
-    private func scan(_ url: URL) -> Set<Int64> { segmentScans += 1; return Set(decode((try? Data(contentsOf: url)) ?? Data()).map(\.ts)) }
+    private func scan(_ url: URL) -> Set<Int64> { Set(decode(read(url) ?? Data()).map(\.ts)) }
     private static func bucketStart(_ ts: Int64) -> Int64 { ts >= 0 ? ts / segmentSeconds * segmentSeconds : ((ts - segmentSeconds + 1) / segmentSeconds) * segmentSeconds }
     // Built once: every banked buffer names its segment, and a formatter per call cost about 45 µs (W06-047).
     private static let utcFormatter: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; return f }()
