@@ -9,6 +9,7 @@ struct RawDataCollectorView: View {
     @StateObject private var store = RawDataSessionStore()
 
     @State private var exportingId: String?
+    @State private var stopping = false
     @State private var deleteCandidate: RawDataSessionStore.Session?
     @State private var confirmDeleteAll = false
     @State private var exportError: String?
@@ -104,8 +105,9 @@ struct RawDataCollectorView: View {
 
     @ViewBuilder private var controls: some View {
         if store.active != nil {
-            NoopButton("Stop session", systemImage: "stop.fill", kind: .destructive,
+            NoopButton(stopping ? "Stopping…" : "Stop session", systemImage: "stop.fill", kind: .destructive,
                        fullWidth: true) { Task { await stop() } }
+                .disabled(stopping)
         } else {
             NoopButton("Start raw-data session", systemImage: "record.circle", kind: .primary,
                        fullWidth: true) { start() }
@@ -286,8 +288,21 @@ struct RawDataCollectorView: View {
     }
 
     private func stop() async {
-        await model.ble.stopGroundTruthRawCapture()
-        store.stop()
+        guard let active = store.active, !stopping else { return }
+        // The session ends when Stop is pressed. The strap has not produced its last seconds yet, and a stop
+        // would discard them, so the stream stops only once the last full second is banked (W06-025).
+        let pressedAt = Date()
+        stopping = true
+        var tail = RawSessionTail.Outcome.notAwaited
+        if let bounds = Self.fullSecondBounds(fromMs: active.startedAtMs,
+                                              toMs: Int64(pressedAt.timeIntervalSince1970 * 1_000)) {
+            tail = await RawSessionTail.wait(for: bounds.to,
+                                             newest: { ImuSessionFileStore.shared.newestBankedTs(active.id) },
+                                             streaming: { live.connected })
+        }
+        await model.ble.stopGroundTruthRawCapture(tail: tail)
+        store.stop(now: pressedAt)
+        stopping = false
         await refreshImuCoverage()
     }
 

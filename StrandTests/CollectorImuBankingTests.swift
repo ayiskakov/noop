@@ -65,7 +65,7 @@ final class CollectorImuBankingTests: XCTestCase {
     }
 }
 
-/// The Raw Data Collector's IMU session store (W06-026).
+/// The Raw Data Collector's IMU session store (W06-025, W06-026).
 @MainActor
 final class ImuSessionFileStoreTests: XCTestCase {
     private var directory: URL!
@@ -84,6 +84,12 @@ final class ImuSessionFileStoreTests: XCTestCase {
     }
 
     private let buffer = CollectorImuBankingTests.fixture
+    private func restamped(_ frame: [UInt8], by seconds: UInt32) -> [UInt8] {
+        var frame = frame
+        let ts = UInt32(try! XCTUnwrap(Whoop5RawImu.baseTs(frame))) + seconds
+        for i in 0..<4 { frame[15 + i] = UInt8(truncatingIfNeeded: ts >> (8 * UInt32(i))) }
+        return frame
+    }
 
     /// After a relaunch a history sync re-delivers seconds the live stream banked. Each duplicate used to
     /// decode the whole segment file again; the scan is now kept, so the segment is read once.
@@ -100,4 +106,18 @@ final class ImuSessionFileStoreTests: XCTestCase {
         XCTAssertEqual(relaunched.stats("s", from: Int(ts) - 10, to: Int(ts) + 10).coveredSeconds, 1)
     }
 
+    /// The collector waits on this second before it stops the stream (W06-025).
+    func testNewestBankedSecondFollowsTheNewestBuffer() throws {
+        let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
+        let store = ImuSessionFileStore(directory: directory, defaults: defaults)
+        store.start(id: "s", deviceId: "strap", fromMs: (ts - 10) * 1_000)
+        XCTAssertNil(store.newestBankedTs("s"))
+        store.append(deviceId: "strap", frame: restamped(buffer, by: 2), receivedAtMs: 0)
+        store.append(deviceId: "strap", frame: buffer, receivedAtMs: 0)
+        XCTAssertEqual(store.newestBankedTs("s"), ts + 2, "a late older buffer does not move it back")
+        store.append(deviceId: "other", frame: restamped(buffer, by: 5), receivedAtMs: 0)
+        XCTAssertEqual(store.newestBankedTs("s"), ts + 2, "another strap's buffer is not this session's")
+        store.remove(id: "s")
+        XCTAssertNil(store.newestBankedTs("s"))
+    }
 }

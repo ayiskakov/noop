@@ -2188,8 +2188,9 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
-    /// Stop and flush the current manually controlled raw-data session.
-    public func stopGroundTruthRawCapture() async {
+    /// Stop the current manually controlled raw-data session. `tail` is what the collector saw of the
+    /// session's last full second before it asked for the stop (W06-025); it only shapes the log line.
+    func stopGroundTruthRawCapture(tail: RawSessionTail.Outcome = .notAwaited) async {
         if rawCaptureInFlight && !UserDefaults.standard.bool(forKey: "enableRawCapture") {
             send(.stopRawData, payload: [0x01], writeType: .withResponse)
             if selectedModel.deviceFamily == .whoop5 {
@@ -2198,7 +2199,7 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         rawCaptureInFlight = false
         rawCaptureStoppedAt = Date()
-        log("Raw-data session: stopped + flushed")
+        log(RawSessionTail.stopLogLine(tail))
     }
 
     /// Stop a realtime IMU producer left armed after a crash, lost stop write, or another client.

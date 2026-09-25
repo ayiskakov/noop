@@ -235,3 +235,54 @@ final class RawDataSessionStore: ObservableObject {
         ]
     }
 }
+
+/// The end of a live 5/MG raw-data session (W06-025). The strap produces each one-second IMU buffer several
+/// seconds after that second (5.7 s from timestamp to arrival in a 2026-09-25 session, its clock just set),
+/// and a stop discards the buffers it has not produced yet, live and in its own history. Stopping the stream
+/// the moment Stop was pressed therefore lost the session's last seconds, and every session read
+/// "incomplete". The collector waits for the buffer of the last full second first, bounded so a stalled
+/// stream still stops.
+enum RawSessionTail {
+    static let timeout: TimeInterval = 10
+    static let pollInterval: TimeInterval = 0.25
+
+    enum Outcome: Equatable {
+        /// The session holds no full second, so there was nothing to wait for.
+        case notAwaited
+        /// The buffer for the session's last full second was banked before the stop.
+        case delivered
+        /// The stop went out without it, `missing` seconds short (nil when no buffer was banked at all),
+        /// because the strap disconnected or the wait timed out.
+        case short(missing: Int?, disconnected: Bool)
+    }
+
+    /// Waits until the buffer for `lastSecond` is banked, the stream ends, or `timeout` passes.
+    @MainActor
+    static func wait(for lastSecond: Int, newest: () -> Int64?, streaming: () -> Bool,
+                     timeout: TimeInterval = RawSessionTail.timeout, now: () -> Date = Date.init,
+                     sleep: (TimeInterval) async -> Void = {
+                         try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000))
+                     }) async -> Outcome {
+        let deadline = now().addingTimeInterval(timeout)
+        while true {
+            if let banked = newest(), banked >= Int64(lastSecond) { return .delivered }
+            let missing = newest().map { lastSecond - Int($0) }
+            if !streaming() { return .short(missing: missing, disconnected: true) }
+            if now() >= deadline { return .short(missing: missing, disconnected: false) }
+            await sleep(pollInterval)
+        }
+    }
+
+    /// The strap-log line for a stop with this outcome. It states what was banked, never why the strap
+    /// was late.
+    static func stopLogLine(_ outcome: Outcome) -> String {
+        switch outcome {
+        case .notAwaited: return "Raw-data session: stopped"
+        case .delivered: return "Raw-data session: stopped after the last full second was banked"
+        case .short(let missing, let disconnected):
+            let what = missing.map { "\($0) s short of the last full second" } ?? "with no IMU buffer banked"
+            let why = disconnected ? "the strap disconnected" : "waiting \(Int(timeout)) s"
+            return "Raw-data session: stopped \(what), after \(why)"
+        }
+    }
+}

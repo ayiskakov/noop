@@ -24,8 +24,15 @@ working bounded sequence is:
 1. `START_RAW_DATA` (81), payload `[0x01]`;
 2. `TOGGLE_IMU_MODE` (106), payload `[0x01, 0x01]`;
 3. receive and decode the 100 Hz six-axis buffers;
-4. on stop, send `STOP_RAW_DATA` (82), payload `[0x01]`, then `TOGGLE_IMU_MODE` with
-   `[0x01, 0x00]`.
+4. on stop, wait until the buffer for the session's last full second has been banked, then send
+   `STOP_RAW_DATA` (82), payload `[0x01]`, then `TOGGLE_IMU_MODE` with `[0x01, 0x00]`.
+
+The strap produces each one-second buffer several seconds after that second: in a 2026-09-25 session
+every buffer arrived 5.7 s after its own timestamp, the strap's clock read back as set moments before,
+and its own history ended at the same buffer as the live stream. A stop sent at once therefore
+discards the seconds the strap has not produced yet, and no later sync returns them. The collector
+waits for the last full second, for at most 10 s or until the strap disconnects, and logs which of
+the three ended the wait.
 
 The writes use the authenticated WHOOP command characteristic and require a connected/bonded strap.
 An accepted command is not evidence that samples arrived, so the collector reports connection state,

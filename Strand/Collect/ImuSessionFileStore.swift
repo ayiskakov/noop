@@ -19,6 +19,7 @@ final class ImuSessionFileStore {
     private let directory: URL
     private var seen: [String: Set<Int64>] = [:]
     private var pending: [String: [Record]] = [:]
+    private var newest: [String: Int64] = [:]
     private var cachedWindows: [Window]?
     /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
     private(set) var segmentScans = 0
@@ -53,11 +54,15 @@ final class ImuSessionFileStore {
         try? FileManager.default.createDirectory(at: sessionDirectory(id), withIntermediateDirectories: true)
     }
     func remove(id: String) {
+        newest[id] = nil
         pending.keys.filter { $0.hasPrefix("\(id)/") }.forEach { pending[$0] = nil }
         seen.keys.filter { $0.hasPrefix(sessionDirectory(id).path) }.forEach { seen[$0] = nil }
         save(windows().filter { $0.id != id })
     }
     func prepareForRead(_ id: String) { flushSession(id) }
+
+    /// The start second of the newest buffer banked into session `id` since launch, or nil before the first.
+    func newestBankedTs(_ id: String) -> Int64? { newest[id] }
 
     func deleteFiles(_ id: String, removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
         flushSession(id); let dir = sessionDirectory(id)
@@ -77,6 +82,7 @@ final class ImuSessionFileStore {
         var count = 0
         for window in windows() where window.deviceId == deviceId && Int64(ts) >= window.from
             && (window.to == nil || Int64(ts) <= window.to!) {
+            newest[window.id] = max(newest[window.id] ?? Int64(ts), Int64(ts))
             let bucket = Self.bucketStart(Int64(ts)), url = segmentFile(window.id, bucket)
             var timestamps = seen[url.path] ?? scan(url)
             let inserted = timestamps.insert(Int64(ts)).inserted
