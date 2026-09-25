@@ -103,12 +103,27 @@ public func isPlausibleHistoricalUnix(_ ts: Int, wallNow: Int,
 /// (`Reassembler.belowMinimumLengthDrops`, folded into `FrameRejectTally`) precisely so it stays visible.
 ///
 /// Accepted side effect: on a noisy link the raw archives grow. The existing eviction rule bounds that.
-public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFamily) -> [[UInt8]] {
+///
+/// `wallNow` and the session markers are the ones the chunk's `extractHistoricalStreams` gates with
+/// (its `wallNow` defaults the same way). An INTACT record whose own timestamp that #547 gate refuses
+/// yields no row, so without this screen the trim ack freed its only copy; it is archived instead,
+/// where a clock fix can re-date it (W01-004). The screen reads the record's raw unix: on 5/MG the
+/// extraction's clock reference is the identity, so that is the value the gate saw.
+public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFamily,
+                                      wallNow: Int? = nil,
+                                      sessionOldestUnix: Int? = nil,
+                                      sessionNewestUnix: Int? = nil) -> [[UInt8]] {
     // The type byte sits at the inner-record start: frame[4] on WHOOP 4.0, frame[8] on WHOOP 5/MG
     // (the puffin envelope is 4 bytes longer). hist_version sits one byte past the type+seq+cmd
     // header — frame[5] (4.0) / frame[9] (5/MG) — same shift.
     let typeIndex = family == .whoop5 ? 8 : 4
     let versionIndex = family == .whoop5 ? 9 : 5
+    let now = wallNow ?? Int(Date().timeIntervalSince1970)
+    func refusedByTimestampGate(_ p: ParsedFrame) -> Bool {
+        guard p.ok, p.crcOK != false, let unix = p.parsed["unix"]?.intValue else { return false }
+        return !isPlausibleHistoricalUnix(unix, wallNow: now, sessionOldestUnix: sessionOldestUnix,
+                                          sessionNewestUnix: sessionNewestUnix)
+    }
     return rawFrames.filter { f in
         // Only genuine HISTORICAL_DATA records (47). Console (50) and METADATA frames have a
         // different type byte, so they never pass this gate — they are excluded by construction.
@@ -119,7 +134,7 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         // is acked anyway. Bind the skip to the verdict, not to the version byte alone.
         if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 26 {
             let p = parseFrame(f, family: family)
-            return !(p.ok && p.crcOK != false)
+            return !(p.ok && p.crcOK != false) || refusedByTimestampGate(p)
         }
         // v16 MAX86176 FIFO (#891): skipped for the same reason as v26 above — `extractHistoricalStreams`
         // stores the FIFO durably in its own stream (`Streams.ecgCandidate` / WhoopStore's
@@ -136,7 +151,7 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 16 {
             let p = parseFrame(f, family: family)
             let banksARow = p.parsed["ecg_candidate"]?.intArrayValue?.isEmpty == false
-            return !(p.ok && p.crcOK != false && banksARow)
+            return !(p.ok && p.crcOK != false && banksARow) || refusedByTimestampGate(p)
         }
         // UNMAPPED LAYOUT (5/MG) — archive UNCONDITIONALLY, whatever it decoded.
         //
@@ -159,6 +174,7 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         // catches strictly MORE frames than it did before — which is the intended direction. The
         // `crcOK` half stays for exactly that reason: every condition here can only add to the archive.
         if !p.ok || p.crcOK == false { return true }
+        if refusedByTimestampGate(p) { return true }
         // Unmapped layout: the envelope parsed but no usable biometrics decoded. A record is genuinely
         // undecodable only if it has no timestamp, or NEITHER heart rate NOR motion. v25 (issue #30)
         // carries gravity but no per-second HR (PPG-derived), so a gravity-bearing record is real data

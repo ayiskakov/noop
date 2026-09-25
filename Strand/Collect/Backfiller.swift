@@ -633,7 +633,10 @@ final class Backfiller {
             let d = await Task.detached(priority: .utility) { () -> DecodedChunk in
                 let parsed = frames.map { parseFrame($0, family: fam) }
                 let decoded = extractFn(parsed, dev, wall, oldest, newest)
-                let rejected = rejectedHistoricalRecords(frames, family: fam)
+                // The same gate inputs the extraction used, so a record it refuses is archived (W01-004).
+                let rejected = rejectedHistoricalRecords(frames, family: fam,
+                                                         wallNow: max(wall, Int(Date().timeIntervalSince1970)),
+                                                         sessionOldestUnix: oldest, sessionNewestUnix: newest)
                 return DecodedChunk(parsed: parsed, decoded: decoded, rejected: rejected)
             }.value
             let parsed = d.parsed
@@ -760,7 +763,7 @@ final class Backfiller {
                         oldest: decoded.droppedImplausibleOldestTs,
                         newest: decoded.droppedImplausibleNewestTs,
                         now: Int(Date().timeIntervalSince1970))
-                    log?("Backfill: dropped record(s) with an implausible timestamp (trim=\(trim))\(span) — the strap's clock is wrong (records dated far in the past or future), so those samples were skipped rather than misfiled onto the wrong day. Fully charge and reconnect the strap so its clock re-syncs.")
+                    log?("Backfill: dropped record(s) with an implausible timestamp (trim=\(trim))\(span) — the strap's clock is wrong (records dated far in the past or future), so those samples were not stored as rows rather than misfiled onto the wrong day; their raw records go to the reject archive with this chunk. Fully charge and reconnect the strap so its clock re-syncs.")
                 }
             }
             // #324: the strap RTC-state events (RTC_LOST / BOOT / SET_RTC) the #547 gate dropped for a bad

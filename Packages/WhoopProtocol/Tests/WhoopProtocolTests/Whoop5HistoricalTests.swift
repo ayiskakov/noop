@@ -60,6 +60,15 @@ final class Whoop5HistoricalTests: XCTestCase {
         XCTAssertEqual(60000.0 / meanRR, Double(hr), accuracy: 4)
     }
 
+    /// W01-008: byte 63 is published under two names, and both notes must describe the same thing: the
+    /// activity class (0 still, 1 walk, 2 run), not a contact grade.
+    func testByte63NotesAgree() {
+        let fields = parseFrame(bytes(historicalHex), family: .whoop5, collectFields: true).fields
+        let notes = fields.filter { $0.off == 63 }.map { $0.note ?? "" }
+        XCTAssertEqual(notes.count, 2)
+        XCTAssertFalse(notes.contains { $0.contains("poor contact") }, "\(notes)")
+    }
+
     func testHistoricalV18BiometricFields() {
         // The cross-validated per-second fields beyond HR/gravity, each gated to a physical range and
         // verified against this real worn frame. (Optical/perfusion @69/71 still doesn't decode
@@ -78,7 +87,7 @@ final class Whoop5HistoricalTests: XCTestCase {
         let dyn = p["dynamic_acceleration"]?.doubleValue ?? -1
         XCTAssertTrue((0.0...8.0).contains(dyn))
         XCTAssertEqual(dyn, 0.0092, accuracy: 0.001)
-        // cumulative motion counter (full u16 at [57:59], not byte @57 alone) + wear/contact quality enum.
+        // cumulative motion counter (full u16 at [57:59], not byte @57 alone) + the older name of byte 63.
         XCTAssertEqual(p["step_motion_counter"]?.intValue, 50)
         XCTAssertEqual(p["motion_wear_quality"]?.intValue, 0)
         // @63 also reads as the activity-class enum (#316): this worn-still frame's byte is 0 => still.

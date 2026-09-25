@@ -215,12 +215,15 @@ opaque, not silently converted to zero measurements.
 | 14 | 2 / u16 | Additional time field; scale and epoch coupling unresolved |
 | 16 | 1 / u8 | Heart rate, bpm |
 | 17 | 1 / u8 | Declared interval count |
-| 18 + 2i | 2 / u16 | R-R ticks, 1/1024 second |
+| 18 + 2i | 2 / u16 | R-R interval, milliseconds |
 
 Read at most the declared number of complete words before the CRC trailer. Omit
-zero intervals and never consume an incomplete word. For positive ticks, integer
-milliseconds are `(ticks * 1000 + 512) // 1024`. Use a wide enough intermediate
-for multiplication. No packet-local quality flag or independent absolute timestamp
+zero intervals and never consume an incomplete word. The words are already
+milliseconds; do not convert them. An earlier reading as 1/1024-second ticks,
+`(ticks * 1000 + 512) // 1024`, shortened every interval by 2.4 %; the evidence for
+milliseconds is recorded on `Whoop5RR` in `Whoop5RR.swift`, and recorded nights agree
+(R-R against the strap's own per-second heart rate has a median ratio near 1.00, where
+ticks would give 1.024). No packet-local quality flag or independent absolute timestamp
 per interval is established. Do not reuse the unknown additional time field's
 scale from an unrelated clock command.
 
@@ -237,7 +240,7 @@ sensor guarantees for every firmware version.
 | 15 | 4 / u32 | Unix seconds; reject implausible dates according to the application's time-range policy |
 | 22 | 1 / u8 | Heart rate, bpm; retain quality context from byte 36 |
 | 23 | 1 / u8 | R-R count; the documented layout contains at most four complete positive words |
-| 24 + 2i | 2 / u16 | Up to four R-R words; 1/1024 s, same rounded-ms conversion as packet 40 |
+| 24 + 2i | 2 / u16 | Up to four R-R words, milliseconds, as packet 40 |
 | 33 | 1 / u8 | Cardiac-adjacent flags, meanings unresolved |
 | 36 | 1 / u8 | HR/R-R quality flags; bit 7 has an earlier validity interpretation not independently established here for the reference baseline |
 | 37 | 1 / u8 | Alternate HR in bpm; an earlier convention treats byte-36 bit 7 as its validity signal; validity for the reference baseline remains unresolved |

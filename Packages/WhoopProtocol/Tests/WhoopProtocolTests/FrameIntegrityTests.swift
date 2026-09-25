@@ -257,4 +257,14 @@ final class FrameIntegrityTests: XCTestCase {
         }
         XCTAssertEqual(checked, 10, "the corpus size is pinned so a lost resource cannot pass as green")
     }
+
+    /// W01-007: `PROTOCOL_TRANSPORT.md` states what NOOP accepts: exact length, at least 13 bytes, both
+    /// checksums, and no alignment check. Frames of 15, 16 and 17 bytes (bodies not padded to four) pass.
+    func testAcceptanceMatchesTheDocumentedPolicy() {
+        for data in [[], [0x01], [0x01, 0x02]] as [[UInt8]] {
+            let frame = w5Frame(data, type: 40)
+            XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok, "\(frame.count)-byte frame")
+        }
+        XCTAssertEqual(FrameLimits.whoop5MinimumFrameBytes, 13)
+    }
 }
