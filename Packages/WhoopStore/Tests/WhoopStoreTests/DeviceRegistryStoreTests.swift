@@ -155,6 +155,91 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(try store.activeDeviceId(), "my-whoop")
     }
 
+    // W02-005: the engine writes a device's derived days, sleeps, workouts and metric series under its
+    // computed sibling `<id>-noop`. "Delete all of this device's data" must clear that sibling too, or the
+    // scores computed from the deleted recordings stay on disk and on screen.
+    func testDeleteAllDataAlsoClearsTheComputedSibling() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try dbq.write { db in
+            for dev in ["my-whoop", "my-whoop-noop", "apple-health", "apple-health-noop"] {
+                try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES (?, ?, ?, ?)",
+                               arguments: [dev, "2026-06-15", "recovery", 50.0])
+            }
+        }
+        func count(_ deviceId: String) throws -> Int {
+            try dbq.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM metricSeries WHERE deviceId = ?",
+                                 arguments: [deviceId]) ?? 0
+            }
+        }
+
+        try store.deleteAllData(deviceId: "my-whoop")
+
+        XCTAssertEqual(try count("my-whoop"), 0)
+        XCTAssertEqual(try count("my-whoop-noop"), 0, "the computed sibling belongs to the deleted device")
+        XCTAssertEqual(try count("apple-health"), 1, "another device's rows survive")
+        XCTAssertEqual(try count("apple-health-noop"), 1, "another device's computed rows survive")
+    }
+
+    private func seedComputed(_ dbq: DatabaseQueue, _ deviceId: String) throws {
+        try dbq.write { db in
+            try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES (?, '2026-06-15', 'recovery', 50)",
+                           arguments: [deviceId])
+            try db.execute(sql: "INSERT INTO sleepSession (deviceId, startTs, endTs, userEdited) VALUES (?, 1000, 2000, 0)",
+                           arguments: [deviceId])
+            try db.execute(sql: "INSERT INTO sleepSession (deviceId, startTs, endTs, userEdited) VALUES (?, 5000, 6000, 1)",
+                           arguments: [deviceId])
+        }
+    }
+
+    private func rows(_ dbq: DatabaseQueue, _ table: String, _ deviceId: String) throws -> Int {
+        try dbq.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \(table) WHERE deviceId = ?", arguments: [deviceId]) ?? 0
+        }
+    }
+
+    /// V2 regression guard for W02-005: after a strap is re-added (`my-whoop` archived, `whoop-<uuid>`
+    /// active) the canonical `my-whoop-noop` also holds the days scored from the new strap, so deleting
+    /// `my-whoop`'s data must leave it alone.
+    func testDeletingTheCanonicalDeviceKeepsASharedComputedNamespace() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try store.add(PairedDevice(id: "whoop-new", brand: "WHOOP", model: "WHOOP 5.0 / MG", sourceKind: .liveBLE,
+                                   capabilities: [.hr], status: .paired, addedAt: 1, lastSeenAt: 1))
+        try seedComputed(dbq, "my-whoop-noop")
+
+        try store.deleteAllData(deviceId: "my-whoop")
+
+        XCTAssertEqual(try rows(dbq, "metricSeries", "my-whoop-noop"), 1)
+        XCTAssertEqual(try rows(dbq, "sleepSession", "my-whoop-noop"), 2)
+    }
+
+    /// With the canonical device registered alone, its computed rows are its own and go; a night the user
+    /// edited or added stays.
+    func testDeletingTheOnlyDeviceKeepsUserEditedNights() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try seedComputed(dbq, "my-whoop-noop")
+
+        try store.deleteAllData(deviceId: "my-whoop")
+
+        XCTAssertEqual(try rows(dbq, "metricSeries", "my-whoop-noop"), 0)
+        XCTAssertEqual(try rows(dbq, "sleepSession", "my-whoop-noop"), 1, "only the user-edited night stays")
+    }
+
+    /// A non-canonical device's computed sibling is its own, whatever else is registered.
+    func testDeletingAnotherDeviceClearsItsOwnComputedSibling() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try seedComputed(dbq, "whoop-new-noop")
+
+        try store.deleteAllData(deviceId: "whoop-new")
+
+        XCTAssertEqual(try rows(dbq, "metricSeries", "whoop-new-noop"), 0)
+        XCTAssertEqual(try rows(dbq, "sleepSession", "whoop-new-noop"), 1)
+    }
+
     // Regression guard (audit finding): every table with a `deviceId` column MUST appear in
     // `deviceScopedTables`, or `deleteAllData` silently leaves that device's rows behind — a privacy
     // defect for a delete-means-gone app. Enumerate the live schema and fail if any deviceId-keyed table

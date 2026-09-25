@@ -166,5 +166,34 @@ final class DatabasePoolConcurrencyTests: XCTestCase {
         }
     }
 
+    /// W02-008: the app opens two stores on one file (BLEManager's and Repository's). A write transaction
+    /// that reads before it writes must wait for the other instance's write like any other, not fail at
+    /// once with SQLITE_BUSY: SQLite cannot use the busy handler to upgrade a DEFERRED transaction that
+    /// has already read.
+    func testReadFirstWriteWaitsForTheOtherInstancesWrite() async throws {
+        let path = tempPath()
+        defer { removeDB(path) }
+        let repositoryStore = try await WhoopStore(path: path)
+        let bleStore = try await WhoopStore(path: path)
+        let night = CachedSleepSession(startTs: 1_000, endTs: 30_000, efficiency: nil, restingHr: nil,
+                                       avgHrv: nil, stagesJSON: nil)
+        _ = try await repositoryStore.upsertSleepSessions([night], deviceId: "dev-noop")
+
+        // The other instance holds a write transaction for 1.5 s, as a backfill chunk does.
+        let writing = DispatchSemaphore(value: 0)
+        let holder = Thread {
+            try? bleStore.registryWriter.write { db in
+                try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('dev', 1, 60)")
+                writing.signal()
+                Thread.sleep(forTimeInterval: 1.5)
+            }
+        }
+        holder.start()
+        writing.wait()
+
+        // upsertSleepSessions reads the stored night before it writes.
+        _ = try await repositoryStore.upsertSleepSessions([night], deviceId: "dev-noop")
+    }
+
     private enum ConcurrencyTimeout: Error { case readBlockedOnWriter }
 }

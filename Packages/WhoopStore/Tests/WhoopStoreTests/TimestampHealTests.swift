@@ -129,6 +129,23 @@ final class TimestampHealTests: XCTestCase {
         XCTAssertEqual(importedSleeps.count, 1, "imported sleep session preserved")
     }
 
+    /// W02-006: an imported activity file carries real per-second HR from any date, so the far-past floor
+    /// must not purge it, while a strap's garbage row below the floor is still removed.
+    func testImportedActivityHeartRateBelowFloorSurvives() async throws {
+        let store = try await WhoopStore.inMemory()
+        _ = try await store.insert(Streams(hr: [HRSample(ts: 1_600_000_000, bpm: 120)]), deviceId: "activity-file")
+        _ = try await store.insert(Streams(hr: [HRSample(ts: 1_500_000_000, bpm: 60)]), deviceId: "my-whoop")
+        _ = try await store.insert(Streams(hr: [HRSample(ts: now + 10 * 86_400, bpm: 61)]), deviceId: "activity-file")
+
+        let result = try await store.healImplausibleTimestamps(now: now, todayLocalDayKey: todayKey)
+
+        let imported = try await store.hrSamples(deviceId: "activity-file", from: 0, to: Int.max, limit: 10)
+        XCTAssertEqual(imported.map(\.ts), [1_600_000_000], "imported history survives; a future row does not")
+        let strap = try await store.hrSamples(deviceId: "my-whoop", from: 0, to: Int.max, limit: 10)
+        XCTAssertTrue(strap.isEmpty, "a strap row below the floor is still purged")
+        XCTAssertEqual(result.rawRowsDeleted, 2)
+    }
+
     func testTodayItselfIsKept() async throws {
         // The future-day filter is strict `> todayKey`, so TODAY's own row (== todayKey) survives.
         let store = try await WhoopStore.inMemory()

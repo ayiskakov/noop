@@ -192,6 +192,8 @@ final class SchemaOracleTests: XCTestCase {
         let oracle = try loadOracle()
         XCTAssertEqual(WhoopStore.makeMigrator().migrations, oracle.grdbMigrations,
                        "registered GRDB migrations differ from schema_oracle.json")
+        // W02-010: the version every backup manifest and version event records is the migration count.
+        XCTAssertEqual(WhoopStoreInfo.schemaVersion, oracle.grdbMigrations.count)
     }
 
     /// GRDB keys migrations by NAME and applies them in registration order; Room keys by integer

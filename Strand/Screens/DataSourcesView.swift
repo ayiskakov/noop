@@ -470,12 +470,14 @@ struct DataSourcesView: View {
                 try await store.upsertWorkouts([row], deviceId: ActivityFileImporter.sourceId)
 
                 // #137 (A): persist the ride's real per-sample HR under the activity-file source. The
-                // insert is keyed on (deviceId, ts), so re-importing the same file is idempotent (an
-                // identical ts overwrites, never duplicates). Skipped when the file carried no
+                // insert is keyed on (deviceId, ts) and keeps the FIRST row, so re-importing the same file
+                // is idempotent, and a corrected copy of it does not replace HR already stored for the
+                // same seconds. A failed insert fails the import, so the summary never reports a workout
+                // whose HR was dropped; a retry is idempotent (W02-014). Skipped when the file carried no
                 // timestamped HR (a pure GPS track) — nothing to store, so day Effort stays honestly dark.
                 if !activity.hrSamples.isEmpty {
                     let hr = activity.hrSamples.map { HRSample(ts: $0.ts, bpm: $0.bpm) }
-                    _ = try? await store.insert(Streams(hr: hr), deviceId: ActivityFileImporter.sourceId)
+                    _ = try await store.insert(Streams(hr: hr), deviceId: ActivityFileImporter.sourceId)
                 }
                 // #1058: recompute the day's activity-file step total as the SUM over ALL that day's
                 // sessions (now that each carries its own steps), so a second file for the same day ADDS

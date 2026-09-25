@@ -60,4 +60,15 @@ final class InsertTests: XCTestCase {
         let nb = try await store.insert(sampleStreams(), deviceId: "b")
         XCTAssertEqual(nb.hr, 2)   // same ts/bpm but different deviceId → not a conflict
     }
+
+    /// W02-014: an HR row that already exists for a (deviceId, ts) is kept, not overwritten, so a corrected
+    /// re-import of an activity file does not replace the heart rate stored for the same seconds.
+    func testDuplicateHeartRateKeepsTheFirstRow() async throws {
+        let store = try await WhoopStore.inMemory()
+        _ = try await store.insert(Streams(hr: [HRSample(ts: 1_000, bpm: 60)]), deviceId: "activity-file")
+        let again = try await store.insert(Streams(hr: [HRSample(ts: 1_000, bpm: 70)]), deviceId: "activity-file")
+        XCTAssertEqual(again.hr, 0)
+        let stored = try await store.hrSamples(deviceId: "activity-file", from: 0, to: 2_000, limit: 10)
+        XCTAssertEqual(stored.map(\.bpm), [60])
+    }
 }
