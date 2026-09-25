@@ -87,7 +87,7 @@ final class RealBackupGateTests: XCTestCase {
         let exported = dir.appendingPathComponent("round-trip.noopbak")
         let store = try await WhoopStore(path: first.path)
         let written = await DataBackup.writeBackup(
-            snapshot: { url in (try? await store.writeSnapshot(to: url.path)) != nil },
+            snapshot: { url in try await store.writeSnapshot(to: url.path) },
             liveDatabaseAt: first.path, to: exported)
         guard case .exported = written else { return XCTFail("\(label): export failed: \(written)") }
 

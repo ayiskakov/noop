@@ -92,7 +92,7 @@ final class DataBackupLiveStoreTests: XCTestCase {
 
         let backup = tmp.appendingPathComponent("folder.noopbak")
         let result = await DataBackup.writeBackup(
-            snapshot: { url in (try? await store.writeSnapshot(to: url.path)) != nil },
+            snapshot: { url in try await store.writeSnapshot(to: url.path) },
             liveDatabaseAt: live.path, to: backup)
         _ = try await store.insert(Streams(hr: [HRSample(ts: 1_003, bpm: 63)]), deviceId: "my-whoop")
         reader.release()

@@ -864,11 +864,15 @@ final class Repository: ObservableObject {
     }
 
     /// Write a consistent copy of the open store to `url` for a backup (`WhoopStore.writeSnapshot`).
-    /// False when no store is open yet or the copy failed; the export then fails rather than archive
-    /// the live file, which may be missing rows still in the WAL or be torn mid-write (W02-003).
-    func snapshotForBackup(to url: URL) async -> Bool {
-        guard let store else { return false }
-        do { try await store.writeSnapshot(to: url.path); return true } catch { return false }
+    /// Throws when no store is open yet or the copy failed; the export then fails with that reason rather
+    /// than archive the live file, which may be missing rows still in the WAL or be torn mid-write (W02-003).
+    func snapshotForBackup(to url: URL) async throws {
+        guard let store else { throw StoreNotOpen() }
+        try await store.writeSnapshot(to: url.path)
+    }
+
+    struct StoreNotOpen: Error, LocalizedError {
+        var errorDescription: String? { "The NOOP database is not open yet." }
     }
 
     /// One refresh's fully-merged dashboard caches, computed OFF the main actor (FIX 3) and applied to the

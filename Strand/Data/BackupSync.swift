@@ -300,7 +300,7 @@ enum FolderBackup {
     /// Write one snapshot into the bookmarked folder, stamp the last-backup time, then prune to keepN.
     /// Returns true on success. Runs the whole-DB ZIP off the caller's thread; never touches UI.
     @discardableResult
-    static func backupNow(snapshot: @escaping (URL) async -> Bool) async -> Bool {
+    static func backupNow(snapshot: @escaping (URL) async throws -> Void) async -> Bool {
         guard let folder = resolveFolder() else { return false }
         let scoped = folder.startAccessingSecurityScopedResource()
         defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
@@ -343,7 +343,7 @@ enum FolderBackup {
     /// On-launch catch-up: if auto is on, a folder is set, and it's been at least a day since the last
     /// backup, write one. Gated entirely on the toggle being ON (must-fix #4). The caller MUST invoke
     /// this off the launch-critical path; it does no UI work and is safe to run after the first refresh.
-    static func catchUpIfDue(snapshot: @escaping (URL) async -> Bool) async {
+    static func catchUpIfDue(snapshot: @escaping (URL) async throws -> Void) async {
         guard autoEnabled, hasFolder else { return }
         let nowMs = Int(Date().timeIntervalSince1970 * 1000.0)
         guard nowMs - lastBackupMs >= dayMs else { return }

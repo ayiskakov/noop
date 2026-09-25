@@ -310,7 +310,7 @@ struct RootView: View {
             // reached here). The screen also offers an explicit "Back up now". (Must-fix #4.)
             let backupRepo = repo
             Task.detached(priority: .utility) {
-                await FolderBackup.catchUpIfDue(snapshot: { await backupRepo.snapshotForBackup(to: $0) })
+                await FolderBackup.catchUpIfDue(snapshot: { try await backupRepo.snapshotForBackup(to: $0) })
             }
         }
         // Honour a cross-screen request to open a top-level destination (e.g. Live's "Manage devices"),

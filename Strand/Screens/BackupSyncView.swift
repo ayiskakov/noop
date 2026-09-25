@@ -232,7 +232,7 @@ struct BackupSyncView: View {
         busy = true
         Task {
             defer { busy = false }   // any exit, incl. cancellation — see chooseFolder
-            let ok = await FolderBackup.backupNow(snapshot: { await model.repo.snapshotForBackup(to: $0) })
+            let ok = await FolderBackup.backupNow(snapshot: { try await model.repo.snapshotForBackup(to: $0) })
             await MainActor.run {
                 lastMs = FolderBackup.lastBackupMs
                 alertTitle = ok ? String(localized: "Backed up") : String(localized: "Backup problem")

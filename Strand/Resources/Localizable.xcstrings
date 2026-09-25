@@ -64404,60 +64404,60 @@
         }
       }
     },
-    "Couldn't copy the NOOP database safely right now. Try again in a moment.": {
+    "Couldn't make a copy of the NOOP database to back up. %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die NOOP-Datenbank konnte gerade nicht sicher kopiert werden. Versuche es gleich noch einmal."
+            "value": "Die NOOP-Datenbank konnte für die Sicherung nicht kopiert werden. %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo copiar la base de datos de NOOP de forma segura ahora mismo. Vuelve a intentarlo en un momento."
+            "value": "No se pudo copiar la base de datos de NOOP para la copia de seguridad. %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de copier la base de données NOOP en toute sécurité pour le moment. Réessayez dans un instant."
+            "value": "Impossible de copier la base de données NOOP pour la sauvegarde. %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile copiare in sicurezza il database di NOOP adesso. Riprova tra un momento."
+            "value": "Impossibile copiare il database di NOOP per il backup. %@"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível copiar a base de dados do NOOP em segurança agora. Tente novamente dentro de momentos."
+            "value": "Não foi possível copiar a base de dados do NOOP para a cópia de segurança. %@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сейчас не удалось безопасно скопировать базу данных NOOP. Повторите попытку чуть позже."
+            "value": "Не удалось скопировать базу данных NOOP для резервной копии. %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "目前无法安全地复制 NOOP 数据库。请稍后再试。"
+            "value": "无法复制 NOOP 数据库以进行备份。%@"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "目前無法安全地複製 NOOP 資料庫。請稍後再試。"
+            "value": "無法複製 NOOP 資料庫以進行備份。%@"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nie udało się teraz bezpiecznie skopiować bazy danych NOOP. Spróbuj ponownie za chwilę."
+            "value": "Nie udało się skopiować bazy danych NOOP do kopii zapasowej. %@"
           }
         }
       }

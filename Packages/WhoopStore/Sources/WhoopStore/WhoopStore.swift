@@ -209,7 +209,38 @@ public actor WhoopStore {
     /// leaves the main file malformed (W02-003). `nonisolated` so a multi-second copy never holds up this
     /// actor's own reads and writes; the pool's reader connection does the work.
     public nonisolated func writeSnapshot(to path: String) async throws {
+        try Self.requireSpace(for: dbWriter, at: path)
         try Self.copying(to: path) { destination in try dbWriter.backup(to: destination) }
+    }
+
+    /// Not enough free space for a snapshot. Thrown BEFORE copying, because a copy that fills the volume
+    /// fails only at the end and meanwhile makes every other write fail too, the strap sync's included.
+    public struct SnapshotNoSpace: Error, LocalizedError {
+        public let neededBytes: Int64
+        public let availableBytes: Int64
+        public var errorDescription: String? {
+            let f = ByteCountFormatter()
+            return "A copy of the database needs about \(f.string(fromByteCount: neededBytes)) of free space "
+                + "and \(f.string(fromByteCount: availableBytes)) is available."
+        }
+    }
+
+    /// Throw `SnapshotNoSpace` unless the volume holding `path` can take a full copy of `source` plus a
+    /// 64 MB margin for everything else still writing. A copy is as large as the database: every page.
+    private static func requireSpace(for source: any DatabaseReader, at path: String) throws {
+        let needed = try source.read { db -> Int64 in
+            let pages = try Int64.fetchOne(db, sql: "PRAGMA page_count") ?? 0
+            let size = try Int64.fetchOne(db, sql: "PRAGMA page_size") ?? 0
+            return pages * size
+        }
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
+                                                                   .volumeAvailableCapacityKey]) else { return }
+        let available = values.volumeAvailableCapacityForImportantUsage
+            ?? values.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        if available < needed + 64 * 1_048_576 {
+            throw SnapshotNoSpace(neededBytes: needed, availableBytes: available)
+        }
     }
 
     /// `writeSnapshot(to:)` for a caller that holds no store: a consistent copy of the database file at
@@ -222,6 +253,7 @@ public actor WhoopStore {
         readOnly.readonly = true
         let source = try DatabaseQueue(path: sourcePath, configuration: readOnly)
         defer { try? source.close() }
+        try requireSpace(for: source, at: path)
         try copying(to: path) { destination in try source.backup(to: destination) }
     }
 

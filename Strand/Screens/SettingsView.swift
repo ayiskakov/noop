@@ -2744,7 +2744,7 @@ struct SettingsView: View {
     private func runExport() {
         backupBusy = true
         Task {
-            let result = await DataBackup.runExport(snapshot: { await model.repo.snapshotForBackup(to: $0) })
+            let result = await DataBackup.runExport(snapshot: { try await model.repo.snapshotForBackup(to: $0) })
             handleBackup(result)
         }
     }

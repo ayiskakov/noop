@@ -65,9 +65,9 @@ enum DataBackup {
     ///
     /// - Parameter snapshot: writes a consistent copy of the live store to the given file. Pass
     ///   `repo.snapshotForBackup`. It must succeed: without a whole copy there is nothing honest to
-    ///   archive, so the export fails loudly rather than ship a partial backup.
+    ///   archive, so the export fails loudly, with the reason, rather than ship a partial backup.
     @MainActor
-    static func runExport(snapshot: @escaping (URL) async -> Bool) async -> BackupResult {
+    static func runExport(snapshot: @escaping (URL) async throws -> Void) async -> BackupResult {
         let dbPath: String
         do { dbPath = try StorePaths.defaultDatabasePath() }
         catch { return .failure(String(localized: "Couldn't locate the NOOP database. \(error.localizedDescription)")) }
@@ -92,7 +92,11 @@ enum DataBackup {
 
         // Snapshot only now, after the panel: the backup is the store as of the moment the user confirmed,
         // however long the panel stayed open while a sync kept writing.
-        guard let staged = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        let staged: URL
+        switch await stageSnapshot(snapshot) {
+        case .success(let url): staged = url
+        case .failure(let error): return .failure(snapshotFailedMessage(error))
+        }
         defer { removeStaged(staged) }
 
         let fm = FileManager.default
@@ -111,7 +115,11 @@ enum DataBackup {
         }
         #else
         let fm = FileManager.default
-        guard let snapshotURL = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        let snapshotURL: URL
+        switch await stageSnapshot(snapshot) {
+        case .success(let url): snapshotURL = url
+        case .failure(let error): return .failure(snapshotFailedMessage(error))
+        }
         defer { removeStaged(snapshotURL) }
 
         // Stage the compressed backup in temp, then hand it to the share sheet.
@@ -302,7 +310,7 @@ enum DataBackup {
     /// `writeBackupZip` the interactive export uses, so folder / auto backups are byte-identical to a
     /// manual export. The CALLER owns any security-scoped access to `dest` (start/stop around this
     /// call). Never presents UI, so it is safe off the main actor.
-    static func writeBackup(snapshot: @escaping (URL) async -> Bool, to dest: URL) async -> BackupResult {
+    static func writeBackup(snapshot: @escaping (URL) async throws -> Void, to dest: URL) async -> BackupResult {
         let dbPath: String
         do { dbPath = try StorePaths.defaultDatabasePath() }
         catch { return .failure(String(localized: "Couldn't locate the NOOP database. \(error.localizedDescription)")) }
@@ -311,12 +319,16 @@ enum DataBackup {
 
     /// The folder-backup core with the live database path injected, so it is unit-testable against a
     /// throwaway store (the same reason `restore(from:toDatabaseAt:)` takes one).
-    static func writeBackup(snapshot: @escaping (URL) async -> Bool, liveDatabaseAt dbPath: String,
+    static func writeBackup(snapshot: @escaping (URL) async throws -> Void, liveDatabaseAt dbPath: String,
                             to dest: URL) async -> BackupResult {
         guard FileManager.default.fileExists(atPath: dbPath) else {
             return .failure(String(localized: "There's no NOOP data to export yet."))
         }
-        guard let staged = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        let staged: URL
+        switch await stageSnapshot(snapshot) {
+        case .success(let url): staged = url
+        case .failure(let error): return .failure(snapshotFailedMessage(error))
+        }
         defer { removeStaged(staged) }
         do {
             let fm = FileManager.default
@@ -331,15 +343,18 @@ enum DataBackup {
     /// Stage the copy an export archives. `snapshot` writes a consistent copy of the live store to a
     /// scratch file from one read snapshot (`Repository.snapshotForBackup`). Zipping the live main file
     /// after a checkpoint instead could ship rows that were missing, or a malformed file, while the app's
-    /// two pools kept writing or reading (W02-003). Nil when no copy could be made.
-    private static func stageSnapshot(_ snapshot: (URL) async -> Bool) async -> URL? {
+    /// two pools kept writing or reading (W02-003). The failure carries its reason (no store open yet,
+    /// not enough free space, a SQLite error) so the message can name it.
+    private static func stageSnapshot(_ snapshot: (URL) async throws -> Void) async -> Result<URL, Error> {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("noop-export-\(UUID().uuidString).sqlite")
-        guard await snapshot(url) else {
+        do {
+            try await snapshot(url)
+            return .success(url)
+        } catch {
             removeStaged(url)
-            return nil
+            return .failure(error)
         }
-        return url
     }
 
     private static func removeStaged(_ url: URL) {
@@ -348,8 +363,8 @@ enum DataBackup {
         }
     }
 
-    private static var snapshotFailedMessage: String {
-        String(localized: "Couldn't copy the NOOP database safely right now. Try again in a moment.")
+    private static func snapshotFailedMessage(_ error: Error) -> String {
+        String(localized: "Couldn't make a copy of the NOOP database to back up. \(error.localizedDescription)")
     }
 
     /// Test seam: write a `.noopbak` for an EXPLICIT source database (no snapshot, no `StorePaths`),
