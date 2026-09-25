@@ -30,6 +30,39 @@ final class DataBackupLiveStoreTests: XCTestCase {
         return d
     }
 
+    /// A valid, checkpointed `.noopbak` of an empty store.
+    private func makeBackup() async throws -> URL {
+        let source = tmp.appendingPathComponent("source.sqlite")
+        do {
+            let store = try await WhoopStore(path: source.path)
+            try await store.checkpointWAL()
+        }
+        let backup = tmp.appendingPathComponent("backup.noopbak")
+        try DataBackup.writeBackupForTesting(databaseAt: source, to: backup)
+        return backup
+    }
+
+    /// W02-002: the pre-import snapshot is the user's only copy of the store a restore replaces, so it
+    /// must hold the commits still in the WAL that the swap deletes.
+    func testPreImportSnapshotHoldsCommitsStillInTheWal() async throws {
+        let live = tmp.appendingPathComponent("whoop.sqlite")
+        let store = try await WhoopStore(path: live.path)
+        let rows = (0..<50).map { HRSample(ts: 1_000 + $0, bpm: 60) }
+        _ = try await store.insert(Streams(hr: rows), deviceId: "my-whoop")
+        let walBytes = (try FileManager.default.attributesOfItem(atPath: live.path + "-wal")[.size]
+                        as? NSNumber)?.intValue ?? 0
+        XCTAssertGreaterThan(walBytes, 0, "precondition: the rows are committed but not checkpointed")
+
+        let backup = try await makeBackup()
+        guard case .imported(let sidecar) = DataBackup.restore(from: backup, toDatabaseAt: live.path,
+                                                               settingsDefaults: try freshDefaults()) else {
+            return XCTFail("restore of a valid backup failed")
+        }
+        XCTAssertNotEqual(sidecar, live, "a live database existed, so a snapshot must have been taken")
+        XCTAssertEqual(try hrRows(in: sidecar), 50, "the pre-import snapshot must hold every committed row")
+        withExtendedLifetime(store) {}
+    }
+
     /// W02-003: a folder backup taken while another connection holds an older snapshot and a writer keeps
     /// committing restores to every row committed before the backup started. Before the fix the export
     /// zipped the live main file after a checkpoint the reader had cut short, which left it malformed.

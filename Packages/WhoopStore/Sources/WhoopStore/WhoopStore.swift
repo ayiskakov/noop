@@ -209,6 +209,20 @@ public actor WhoopStore {
         try destination.close()
     }
 
+    /// `writeSnapshot(to:)` for a caller that holds no store: a consistent copy of the database file at
+    /// `sourcePath`, including what its WAL holds, through a fresh connection that runs no migrator. A
+    /// restore uses it to keep the live store before replacing the file, since copying the main file alone
+    /// drops every commit still in the WAL (W02-002).
+    public static func writeSnapshot(ofDatabaseAt sourcePath: String, to path: String) throws {
+        let fm = FileManager.default
+        for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) }
+        let source = try DatabaseQueue(path: sourcePath)
+        let destination = try DatabaseQueue(path: path)
+        try source.backup(to: destination)
+        try destination.close()
+        try source.close()
+    }
+
     /// #1410: append one app-level event (e.g. `APP_VERSION_CHANGED`) onto the event table. Idempotent on
     /// the `(deviceId, ts, kind)` primary key. Twin of Android `WhoopRepository.recordEvent`.
     public func recordEvent(deviceId: String, ts: Int, kind: String, payloadJSON: String) async throws {

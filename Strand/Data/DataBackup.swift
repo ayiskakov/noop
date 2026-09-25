@@ -514,7 +514,7 @@ enum DataBackup {
                 .appendingPathComponent("whoop-replaced-\(timestamp()).sqlite")
             if fm.fileExists(atPath: dbURL.path) {
                 if fm.fileExists(atPath: sidecar.path) { try fm.removeItem(at: sidecar) }
-                try fm.copyItem(at: dbURL, to: sidecar)
+                try preserveLiveDatabase(dbURL, to: sidecar)
             } else {
                 // Nothing to preserve (fresh install); report a placeholder so the message reads sensibly.
                 sidecar = dbURL
@@ -534,8 +534,7 @@ enum DataBackup {
                 // leftover first — copyItem fails if the destination exists, which would otherwise
                 // block the restore.
                 if sidecar != dbURL, fm.fileExists(atPath: sidecar.path) {
-                    removeIfPresent(dbURL)
-                    try? fm.copyItem(at: sidecar, to: dbURL)
+                    rollBack(dbURL, from: sidecar)
                 }
                 return .failure(String(localized: "Import failed. Your existing data was kept. \(error.localizedDescription)"))
             }
@@ -552,7 +551,7 @@ enum DataBackup {
             if let complaint = DatabaseIntegrity.quickCheckFailure(atPath: dbURL.path) {
                 removeIfPresent(dbURL)
                 if sidecar != dbURL, fm.fileExists(atPath: sidecar.path) {
-                    try? fm.copyItem(at: sidecar, to: dbURL)
+                    rollBack(dbURL, from: sidecar)
                     return .failure(String(localized: "Import failed its post-restore integrity check (SQLite reports: \(DatabaseIntegrity.readableComplaint(complaint))). Your previous data was rolled back automatically and is unchanged."))
                 }
                 // Fresh install: there was no previous store to preserve, so removing the damaged
@@ -603,6 +602,34 @@ enum DataBackup {
     }
 
     // MARK: - Helpers
+
+    /// Keep the live store before a restore replaces it. The copy goes through SQLite's backup API, so it
+    /// carries the commits still in the WAL that the swap deletes; copying the main file alone lost them,
+    /// and after a partial checkpoint could even be malformed (W02-002). A live file too damaged to read
+    /// that way is kept byte for byte with its WAL instead: someone restoring over a broken store still
+    /// needs those bytes.
+    private static func preserveLiveDatabase(_ dbURL: URL, to sidecar: URL) throws {
+        do {
+            try WhoopStore.writeSnapshot(ofDatabaseAt: dbURL.path, to: sidecar.path)
+        } catch {
+            let fm = FileManager.default
+            try fm.copyItem(at: dbURL, to: sidecar)
+            for suffix in ["-wal", "-shm"] where fm.fileExists(atPath: dbURL.path + suffix) {
+                try? fm.removeItem(atPath: sidecar.path + suffix)
+                try? fm.copyItem(atPath: dbURL.path + suffix, toPath: sidecar.path + suffix)
+            }
+        }
+    }
+
+    /// Put the kept copy back at the live path, with the WAL it was kept with, if any.
+    private static func rollBack(_ dbURL: URL, from sidecar: URL) {
+        let fm = FileManager.default
+        removeIfPresent(dbURL)
+        try? fm.copyItem(at: sidecar, to: dbURL)
+        for suffix in ["-wal", "-shm"] where fm.fileExists(atPath: sidecar.path + suffix) {
+            try? fm.copyItem(atPath: sidecar.path + suffix, toPath: dbURL.path + suffix)
+        }
+    }
 
     /// Canonical entry name for the SQLite inside a `.noopbak` ZIP. Matches the Android exporter so
     /// a backup produced on either platform restores on the other.
