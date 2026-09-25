@@ -63,6 +63,22 @@ final class DataBackupLiveStoreTests: XCTestCase {
         withExtendedLifetime(store) {}
     }
 
+    /// W02-002 V2 follow-up: when the live file cannot be snapshotted (here it is not a database at all),
+    /// the restore keeps it byte for byte instead. A failed snapshot used to leave an empty side file that
+    /// then blocked that copy, so the restore aborted.
+    func testALiveFileThatCannotBeSnapshottedIsKeptByteForByte() async throws {
+        let live = tmp.appendingPathComponent("whoop.sqlite")
+        let garbage = Data(repeating: 0x5A, count: 64 * 1024)
+        try garbage.write(to: live)
+        let backup = try await makeBackup()
+
+        guard case .imported(let sidecar) = DataBackup.restore(from: backup, toDatabaseAt: live.path,
+                                                               settingsDefaults: try freshDefaults()) else {
+            return XCTFail("the restore must not abort because the old file could not be snapshotted")
+        }
+        XCTAssertEqual(try Data(contentsOf: sidecar), garbage)
+    }
+
     /// W02-003: a folder backup taken while another connection holds an older snapshot and a writer keeps
     /// committing restores to every row committed before the backup started. Before the fix the export
     /// zipped the live main file after a checkpoint the reader had cut short, which left it malformed.

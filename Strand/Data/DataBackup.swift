@@ -613,6 +613,7 @@ enum DataBackup {
             try WhoopStore.writeSnapshot(ofDatabaseAt: dbURL.path, to: sidecar.path)
         } catch {
             let fm = FileManager.default
+            for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: sidecar.path + suffix) }
             try fm.copyItem(at: dbURL, to: sidecar)
             for suffix in ["-wal", "-shm"] where fm.fileExists(atPath: dbURL.path + suffix) {
                 try? fm.removeItem(atPath: sidecar.path + suffix)

@@ -128,4 +128,34 @@ final class CheckpointBusyTests: XCTestCase {
         defer { sqlite3_finalize(stmt) }
         return Int(sqlite3_column_int64(stmt, 0))
     }
+
+    /// W02-002 V2 follow-up: a snapshot that fails part way (here the file-size limit stops it, as a full
+    /// disk would) leaves no partial copy behind, so the restore's byte-copy fallback can take its place.
+    func testAFailedSnapshotLeavesNoPartialCopy() async throws {
+        let path = tempPath()
+        let copy = tempPath()
+        defer { removeDB(path); removeDB(copy) }
+        do {
+            let store = try await WhoopStore(path: path)
+            let rows = (0..<20_000).map { HRSample(ts: 1_000 + $0, bpm: 60) }
+            _ = try await store.insert(Streams(hr: rows), deviceId: "dev")
+            try await store.checkpointWAL()
+        }
+        // Without the limit the same snapshot succeeds, so the throw below is the limit's doing.
+        try WhoopStore.writeSnapshot(ofDatabaseAt: path, to: copy)
+        XCTAssertGreaterThan((try FileManager.default.attributesOfItem(atPath: copy)[.size] as? NSNumber)?.intValue ?? 0,
+                             64 * 1024, "precondition: the copy is larger than the limit")
+        removeDB(copy)
+        signal(SIGXFSZ, SIG_IGN)
+        var saved = rlimit()
+        getrlimit(RLIMIT_FSIZE, &saved)
+        var limited = saved
+        limited.rlim_cur = 64 * 1024
+        setrlimit(RLIMIT_FSIZE, &limited)
+        var threw = false
+        do { try WhoopStore.writeSnapshot(ofDatabaseAt: path, to: copy) } catch { threw = true }
+        setrlimit(RLIMIT_FSIZE, &saved)
+        XCTAssertTrue(threw, "precondition: the limit stops the copy part way")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy), "no partial copy may be left behind")
+    }
 }

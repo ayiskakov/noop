@@ -209,25 +209,37 @@ public actor WhoopStore {
     /// leaves the main file malformed (W02-003). `nonisolated` so a multi-second copy never holds up this
     /// actor's own reads and writes; the pool's reader connection does the work.
     public nonisolated func writeSnapshot(to path: String) async throws {
-        let fm = FileManager.default
-        for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) }
-        let destination = try DatabaseQueue(path: path)
-        try dbWriter.backup(to: destination)
-        try destination.close()
+        try Self.copying(to: path) { destination in try dbWriter.backup(to: destination) }
     }
 
     /// `writeSnapshot(to:)` for a caller that holds no store: a consistent copy of the database file at
-    /// `sourcePath`, including what its WAL holds, through a fresh connection that runs no migrator. A
-    /// restore uses it to keep the live store before replacing the file, since copying the main file alone
-    /// drops every commit still in the WAL (W02-002).
+    /// `sourcePath`, including what its WAL holds, through a fresh READ-ONLY connection that runs no
+    /// migrator and so never checkpoints or otherwise changes the live file. A restore uses it to keep the
+    /// live store before replacing the file, since copying the main file alone drops every commit still in
+    /// the WAL (W02-002).
     public static func writeSnapshot(ofDatabaseAt sourcePath: String, to path: String) throws {
+        var readOnly = Configuration()
+        readOnly.readonly = true
+        let source = try DatabaseQueue(path: sourcePath, configuration: readOnly)
+        defer { try? source.close() }
+        try copying(to: path) { destination in try source.backup(to: destination) }
+    }
+
+    /// Run `backup` into a fresh file at `path`. On any failure the partial file is removed, so a caller's
+    /// fallback can take its place; an empty side file left behind used to block the restore's byte copy
+    /// (W02-002, found in V2).
+    private static func copying(to path: String, _ backup: (DatabaseQueue) throws -> Void) throws {
         let fm = FileManager.default
-        for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) }
-        let source = try DatabaseQueue(path: sourcePath)
-        let destination = try DatabaseQueue(path: path)
-        try source.backup(to: destination)
-        try destination.close()
-        try source.close()
+        func removeCopy() { for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) } }
+        removeCopy()
+        do {
+            let destination = try DatabaseQueue(path: path)
+            try backup(destination)
+            try destination.close()
+        } catch {
+            removeCopy()
+            throw error
+        }
     }
 
     /// #1410: append one app-level event (e.g. `APP_VERSION_CHANGED`) onto the event table. Idempotent on
