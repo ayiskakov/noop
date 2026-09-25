@@ -155,6 +155,33 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(try store.activeDeviceId(), "my-whoop")
     }
 
+    // W02-005: the engine writes a device's derived days, sleeps, workouts and metric series under its
+    // computed sibling `<id>-noop`. "Delete all of this device's data" must clear that sibling too, or the
+    // scores computed from the deleted recordings stay on disk and on screen.
+    func testDeleteAllDataAlsoClearsTheComputedSibling() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try dbq.write { db in
+            for dev in ["my-whoop", "my-whoop-noop", "apple-health", "apple-health-noop"] {
+                try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES (?, ?, ?, ?)",
+                               arguments: [dev, "2026-06-15", "recovery", 50.0])
+            }
+        }
+        func count(_ deviceId: String) throws -> Int {
+            try dbq.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM metricSeries WHERE deviceId = ?",
+                                 arguments: [deviceId]) ?? 0
+            }
+        }
+
+        try store.deleteAllData(deviceId: "my-whoop")
+
+        XCTAssertEqual(try count("my-whoop"), 0)
+        XCTAssertEqual(try count("my-whoop-noop"), 0, "the computed sibling belongs to the deleted device")
+        XCTAssertEqual(try count("apple-health"), 1, "another device's rows survive")
+        XCTAssertEqual(try count("apple-health-noop"), 1, "another device's computed rows survive")
+    }
+
     // Regression guard (audit finding): every table with a `deviceId` column MUST appear in
     // `deviceScopedTables`, or `deleteAllData` silently leaves that device's rows behind — a privacy
     // defect for a delete-means-gone app. Enumerate the live schema and fail if any deviceId-keyed table

@@ -178,15 +178,22 @@ public struct DeviceRegistryStore: Sendable {
     /// row is left intact — the caller archives/removes that separately. Tables are deleted defensively
     /// with `DELETE FROM <table> WHERE deviceId = ?`; a missing table would throw, but every table here
     /// is created unconditionally by the migrator, so the set is stable.
+    ///
+    /// The device's computed sibling (`<deviceId>-noop`: scored days, sleeps, detected workouts, metric
+    /// series) goes with it. Left behind, the scores computed from the deleted recordings stayed on screen,
+    /// and no rescore could evict them once their raw input was gone (W02-005).
     public func deleteAllData(deviceId: String) throws {
+        let ids = deviceId.hasSuffix(Self.computedSuffix)
+            ? [deviceId] : [deviceId, deviceId + Self.computedSuffix]
         try dbQueue.write { db in
-            for table in Self.deviceScopedTables {
-                try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [deviceId])
+            for id in ids {
+                for table in Self.deviceScopedTables {
+                    try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [id])
+                }
+                // Provenance also references the physical/import source separately from its computed
+                // namespace. Forgetting a provider must remove those associations too.
+                try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [id])
             }
-            // Provenance also references the physical/import source separately from its computed
-            // namespace. Forgetting a provider must remove those associations too.
-            try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?",
-                           arguments: [deviceId])
         }
     }
 
