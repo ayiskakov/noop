@@ -920,10 +920,15 @@ public final class BLEManager: NSObject, ObservableObject {
     private var restoreNeedsResubscribe = false
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
-    private var rawCaptureInFlight = false
+    private var rawCaptureInFlight = false {
+        // A capture that ends before its first live buffer, by a stop or with the link, has none to log, and a
+        // later buffer belongs to no session (W06-058).
+        didSet { if !rawCaptureInFlight { awaitingFirstLiveImuBuffer = false } }
+    }
     /// Set when a raw-data session arms the stream, cleared by the first live 1244-byte buffer after it, whose
-    /// packet type and layout byte are logged. The banking gate now requires layout 21 (W06-041), so on a
-    /// firmware that sends another layout this line is what shows why a session banks nothing.
+    /// packet type and layout byte are logged, or when the capture ends first. The banking gate now requires
+    /// layout 21 (W06-041), so on a firmware that sends another layout this line is what shows why a session
+    /// banks nothing.
     private var awaitingFirstLiveImuBuffer = false
     private var rawCaptureStoppedAt = Date.distantPast
     /// The research toggle that keeps the raw stream running (off by default). A property so a test can set it

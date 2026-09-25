@@ -127,6 +127,15 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
         XCTAssertEqual(count(), 1)
     }
 
+    /// A session stopped before its first live buffer claims no later buffer as its first (W06-058).
+    func testASessionStoppedBeforeItsFirstBufferClaimsNoLaterOne() async {
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        await rig.manager.stopGroundTruthRawCapture()
+        rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains("Raw-data session: first live") }.count, 0,
+                       rig.live.log.joined(separator: "\n"))
+    }
+
     func testAnOffloadBufferIsBanked() {
         let historical = CollectorImuBankingTests.fixture
         XCTAssertTrue(BLEManager.isOffloadFrame(historical, family: .whoop5), "precondition: routed to the Backfiller")
