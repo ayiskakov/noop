@@ -180,21 +180,40 @@ public struct DeviceRegistryStore: Sendable {
     /// is created unconditionally by the migrator, so the set is stable.
     ///
     /// The device's computed sibling (`<deviceId>-noop`: scored days, sleeps, detected workouts, metric
-    /// series) goes with it. Left behind, the scores computed from the deleted recordings stayed on screen,
-    /// and no rescore could evict them once their raw input was gone (W02-005).
+    /// series) goes with it when it is the device's alone. Left behind, the scores computed from the deleted
+    /// recordings stayed on screen, and no rescore could evict them once their raw input was gone (W02-005).
+    /// Nights the user edited or added by hand are user data, not scores, and are never cleared this way.
     public func deleteAllData(deviceId: String) throws {
-        let ids = deviceId.hasSuffix(Self.computedSuffix)
-            ? [deviceId] : [deviceId, deviceId + Self.computedSuffix]
         try dbQueue.write { db in
-            for id in ids {
-                for table in Self.deviceScopedTables {
-                    try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [id])
-                }
-                // Provenance also references the physical/import source separately from its computed
-                // namespace. Forgetting a provider must remove those associations too.
-                try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [id])
+            for table in Self.deviceScopedTables {
+                try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [deviceId])
             }
+            // Provenance also references the physical/import source separately from its computed
+            // namespace. Forgetting a provider must remove those associations too.
+            try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [deviceId])
+
+            guard let sibling = try Self.exclusiveComputedSibling(db, of: deviceId) else { return }
+            for table in Self.deviceScopedTables where table != "sleepSession" {
+                try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [sibling])
+            }
+            try db.execute(sql: "DELETE FROM sleepSession WHERE deviceId = ? AND userEdited = 0", arguments: [sibling])
+            try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [sibling])
         }
+    }
+
+    /// The computed sibling `deleteAllData` may clear along with `deviceId`, or nil when it is shared. The
+    /// engine writes every day it scores under the canonical `my-whoop-noop`, whichever registered source
+    /// supplied the day (a re-added strap, an activity file, Apple Health), so while any other device is
+    /// registered that namespace is not the canonical device's alone and is left in place. Clearing it
+    /// then deleted days scored from the active strap (W02-005 regression, found in V2); splitting the
+    /// shared namespace needs per-day attribution (W07-002).
+    static func exclusiveComputedSibling(_ db: Database, of deviceId: String) throws -> String? {
+        guard !deviceId.hasSuffix(computedSuffix) else { return nil }
+        let sibling = deviceId + computedSuffix
+        guard deviceId == "my-whoop" else { return sibling }
+        let others = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM pairedDevice WHERE id != ?",
+                                      arguments: [deviceId]) ?? 0
+        return others == 0 ? sibling : nil
     }
 
     /// #771: re-point the ACTIVE Oura device from its CoreBluetooth-UUID id (`activeId`, e.g.
