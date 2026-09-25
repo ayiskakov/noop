@@ -194,3 +194,7 @@ exactly what was tested on hardware.
   W06-061, W06-062); W06-064 is this file; W06-057 is not a bug. `StrandTests` (2,006) and both app builds pass.
   Next: W06-058, W06-059 and W06-063 (small, same area), then the batch's strap run: a relaunch mid-session logs no
   Raw IMU line, and an MG ECG session that brings a type-43 stream logs one line naming it.
+- 2026-09-25 — W06-058, W06-059 and W06-063 fixed on `review/w06-fixes-5`, each reproduced first (V0: a test or a
+  mutation that passed the old suite). `StrandTests` (2,010) and both app builds pass; one run hit the timing-dependent
+  control recorded as W11-002. Every finding from the batch's code review is now Fixed or Not a bug. Next: push and
+  a PR on the owner's word, then the batch's strap run.

@@ -79,8 +79,7 @@ item as it lands.
 - [ ] Fifth W6 batch, `review/w06-fixes-5`: W06-041 step 2 (live buffers need layout 21), W06-018 with W06-052
       (the raw IMU fail-safe becomes a note that sends nothing, one line per stream naming its owner), W06-007
       (tests pin every hold-ack path). A code review of the batch added W06-054 … W06-064: W06-054 (W06-052's fix
-      missed the relaunch's first frames), W06-055, W06-056, W06-060, W06-061, W06-062 and W06-064 are fixed on the
-      same branch. Owner decisions 2026-09-25: W06-050 reads the clock before setting it, in its own PR with W06-001;
+      missed the relaunch's first frames) and the rest are fixed on the same branch, except W06-057 (not a bug). Owner decisions 2026-09-25: W06-050 reads the clock before setting it, in its own PR with W06-001;
       W06-052 keeps an honest line rather than none. Then a strap run: a relaunch mid-session logs no Raw IMU line,
       and an MG ECG session that brings a type-43 stream logs one line naming it.
 - [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
