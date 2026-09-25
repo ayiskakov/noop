@@ -57,6 +57,7 @@ capture and audit tooling. `Tools/` has 4.4k Swift lines plus Python.
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
 | W11-001 | S4 | Reproduced | Four `check_source_references` tests fail on macOS: the checker resolves the doc path (`/var` → `/private/var`), the test expects the unresolved temp path. CI runs Linux, so it never sees this. Test-only; upstream-able | `Tools/test_check_source_references.py` `setUp` (`Path(self.temp.name)`), `docs/protocol-examples/check_source_references.py:111` | Phase 0 run: 112 tests, 4 failures, all `/var/folders/…` vs `/private/var/folders/…` | |
+| W11-002 | S4 | Reported | `UnescalatedWorkTests.testAwaitingADetachedTaskEscalatesItInstead` is timing-dependent: the detached task can read its own priority before the main-actor `await` escalates it, so the control fails now and then under load | `StrandTests/UnescalatedWorkTests.swift` | Seen once in a full `StrandTests` run on 2026-09-25 while the NOOPiOS build ran alongside (the body saw `.utility`, which prints as `.low`: not escalated); the rerun passed all 2,010. The test is unchanged since upstream #2202. A control that asserts a scheduling outcome needs the task held until the await is registered, or a note that it may flake |  |
 
 ## Log
 
@@ -65,3 +66,5 @@ capture and audit tooling. `Tools/` has 4.4k Swift lines plus Python.
   the fork owns every area, upstream frozen at `1c3f0f9f` (37 commits to decide: 26 clean, 11
   conflicting). Tools suites run: W11-001 reproduced. `Tools/Backfill` still builds. Next: the rest of
   this file in Phase 6.
+- 2026-09-25 — W11-002 recorded: a timing-dependent control test failed once in a full `StrandTests`
+  run during the fifth W6 batch and passed on the rerun. Not fixed yet.
