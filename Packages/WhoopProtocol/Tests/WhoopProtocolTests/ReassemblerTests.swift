@@ -171,4 +171,20 @@ final class ReassemblerTests: XCTestCase {
         for _ in 0..<10 { stream += oneRR }
         XCTAssertEqual(intactFrames(stream, fragment: stream.count), 10)
     }
+
+    /// Why BLEManager rebuilds the reassembler when a link drops (W06-033): the half of a real record the
+    /// dropped link delivered has a genuine header, so the gate keeps it, and it takes the next link's
+    /// first record as its tail. A fresh reassembler loses nothing.
+    func testAPartialRecordFromADroppedLinkCostsTheNextLinkItsFirstRecord() throws {
+        let (worn, oneRR) = try realV18Frames()
+        var nextLink: [UInt8] = []
+        for _ in 0..<10 { nextLink += oneRR }
+
+        let carried = Reassembler()
+        XCTAssertTrue(carried.feed(Array(worn.prefix(60))).isEmpty, "precondition: the head waits for its tail")
+        let afterCarry = carried.feed(nextLink).filter { verifyFrame($0, family: .whoop5).ok }.count
+        XCTAssertEqual(afterCarry, 9)
+
+        XCTAssertEqual(Reassembler().feed(nextLink).filter { verifyFrame($0, family: .whoop5).ok }.count, 10)
+    }
 }

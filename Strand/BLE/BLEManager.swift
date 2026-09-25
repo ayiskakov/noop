@@ -5926,6 +5926,12 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // asked THIS link", and carrying it over would make a reconnect inside the window wait out the
         // previous link's timer before taking its first reading, on exactly the churn this is for.
         lastRssiDbm = nil; lastRssiAt = nil; lastRssiReadAt = nil
+        // W06-033: the link's bytes die with it. A frame half-received when the link dropped has a real
+        // header, so the gate passes it and it swallows the next link's first frames; a standing reconnect
+        // never runs connectCore, where the reassembler is otherwise rebuilt. The reject tally goes with it,
+        // because it folds the reassembler's drop counts as growth past the total it last saw.
+        reassembler = Reassembler(family: selectedModel.deviceFamily)
+        router.resetLinkTally()
 
         let timedOut = !intentionalDisconnect && error != nil
         let sinceArm = realtimeArmedAt.map { Date().timeIntervalSince($0) }

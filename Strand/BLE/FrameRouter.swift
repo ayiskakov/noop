@@ -29,8 +29,14 @@ public final class FrameRouter {
         // connection by BLEManager (connectCore), so this is the per-session reset hook.
         didSet {
             rawDumpedRespCmds.removeAll(); loggedFirmwareGate = nil; deviceId = nil
-            rejectTally = FrameRejectTally(); loggedRejectReasons.removeAll()
+            resetLinkTally()
         }
+    }
+
+    /// Start the reject tally afresh for a new link. BLEManager also calls it when a link drops, with a
+    /// fresh reassembler, since a standing reconnect never sets `family` (W06-033).
+    func resetLinkTally() {
+        rejectTally = FrameRejectTally(); loggedRejectReasons.removeAll()
     }
 
     /// Rejected frames on this connection, per reason, plus the one named counter for the class that
