@@ -35,8 +35,9 @@ waits for the last full second, for at most 10 s or until the strap disconnects,
 the three ended the wait.
 
 The writes use the authenticated WHOOP command characteristic and require a connected/bonded strap.
-An accepted command is not evidence that samples arrived, so the collector reports connection state,
-request state, packet/byte counts, the last packet time, and history-sync progress separately.
+An accepted command is not evidence that samples arrived, so the collector reports connection and
+pairing state and history-sync progress separately, and for each stopped session the seconds of IMU
+actually banked against the seconds requested.
 
 The earlier NOOP decoder accepts 100 signed 16-bit samples for each of
 `ax, ay, az, gx, gy, gz`, keyed by a strap Unix timestamp, and applies
@@ -60,14 +61,15 @@ Consequences for consumers:
 
 - file order is not chronological: repaired older history may be appended after newer live data;
 - strap timestamp is authoritative and readers must sort by it;
-- export metadata reports actual chunk coverage and `imu_100hz_complete`; it must not infer complete
+- export metadata reports actual chunk coverage and `complete`; it must not infer complete
   capture merely because the user started and stopped a session;
 - history can repair only data the strap actually retained. The design does not promise that every
   firmware retains every high-rate buffer for later offload.
 
-The historical-range action is therefore useful even when the collector was not running at the time:
-it creates a session window over raw IMU buffers already available locally or delivered by the next
-history sync. A range is currently bounded to seven days to keep an accidental export finite.
+The historical-range action creates a session window that collects the raw IMU buffers later history
+syncs deliver for its range. It does not reach buffers an earlier sync already delivered: the strap
+frees those once they are acknowledged, and NOOP keeps them only in the raw reject archive, which
+sessions do not read. A range is currently bounded to seven days to keep an accidental export finite.
 
 ## Storage design
 
@@ -106,7 +108,7 @@ segments, written through the platform share sheet. Inspect the session metadata
 - `captured_started_at_ms` / `captured_ended_at_ms`, when present, preserve the physical recording
   interval even after the selected interval is edited;
 - `imu-coverage.json` identifies the segments actually present and carries the conservative
-  `imu_100hz_complete` result;
+  `complete` result;
 
 Exports stay local until the user invokes the operating system's share sheet. Raw captures are not
 part of routine cloud sync or telemetry, consistent with NOOP's offline-first privacy model. The
