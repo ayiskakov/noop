@@ -21,23 +21,31 @@ final class BackfillerHoldAckTests: XCTestCase {
         struct Refused: Error {}
         let journal: Journal
         var failing: Step?
+        /// Fail `failing` once, then succeed.
+        var failsOnce = false
         init(journal: Journal, failing: Step?) { self.journal = journal; self.failing = failing }
+
+        private func refuse(_ step: Step) throws {
+            guard failing == step else { return }
+            if failsOnce { failing = nil }
+            throw Refused()
+        }
 
         @discardableResult
         func insert(_ streams: Streams, deviceId: String) async throws
             -> (hr: Int, rr: Int, events: Int, battery: Int,
                 spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) {
             journal.steps.append("insert")
-            if failing == .insert { throw Refused() }
+            try refuse(.insert)
             return (0, 0, 0, 0, 0, 0, 0, 0, 0)
         }
         func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {
             journal.steps.append("raw")
-            if failing == .raw { throw Refused() }
+            try refuse(.raw)
         }
         func setCursor(_ name: String, _ value: Int) async throws {
             journal.steps.append("cursor \(name)=\(value)")
-            if failing == .cursor { throw Refused() }
+            try refuse(.cursor)
         }
         func cursor(_ name: String) async throws -> Int? { nil }
     }
@@ -50,14 +58,14 @@ final class BackfillerHoldAckTests: XCTestCase {
         return w5Frame(le32(1_700_000_000) + [0, 0] + le32(0) + le32(trim), type: 49, cmd: 2)
     }
 
-    private func makeBackfiller(failing: SpyBackfillStore.Step? = nil, archiveFails: Bool = false)
-        -> (Backfiller, SpyBackfillStore, Journal) {
+    private func makeBackfiller(failing: SpyBackfillStore.Step? = nil, archiveFails: Bool = false,
+                                rawCapture: Bool = true) -> (Backfiller, SpyBackfillStore, Journal) {
         let journal = Journal()
         let store = SpyBackfillStore(journal: journal, failing: failing)
         let backfiller = Backfiller(
             store: store, deviceId: "hold-ack",
             ackTrim: { trim, _ in journal.steps.append("ack \(trim)") },
-            enableRawCapture: true,
+            enableRawCapture: rawCapture,
             rejectedSink: { _, _, _ in journal.steps.append("archive"); return !archiveFails })
         backfiller.begin(family: .whoop5)
         return (backfiller, store, journal)
@@ -109,6 +117,31 @@ final class BackfillerHoldAckTests: XCTestCase {
         await offloadChunkThenEmptyEnd(backfiller)
         XCTAssertEqual(journal.steps, ["insert", "archive", "raw", "cursor strap_trim=100"])
         XCTAssertTrue(backfiller.persistStalled)
+    }
+
+    /// The production default, raw capture off: the same order without the raw batch (W06-063).
+    func testWithRawCaptureOffAChunkIsAckedAfterItsRowsArchiveAndCursor() async {
+        let (backfiller, _, journal) = makeBackfiller(rawCapture: false)
+        await offloadChunkThenEmptyEnd(backfiller)
+        XCTAssertEqual(journal.steps, ["insert", "archive", "cursor strap_trim=100", "ack 100",
+                                       "cursor strap_trim=101", "ack 101"])
+        XCTAssertFalse(backfiller.persistStalled)
+    }
+
+    /// A chunk with records that stores fine after a stall still holds its ack: acking it would let the strap
+    /// trim past the chunk that failed (W06-063).
+    func testAChunkStoredDuringAStallIsNotAcked() async {
+        for rawCapture in [false, true] {
+            let (backfiller, store, journal) = makeBackfiller(failing: .insert, rawCapture: rawCapture)
+            store.failsOnce = true
+            await backfiller.ingest(record)
+            await backfiller.ingest(historyEnd(trim: 100))
+            await backfiller.ingest(record)   // the next chunk, stored fine
+            await backfiller.ingest(historyEnd(trim: 101))
+            XCTAssertEqual(journal.steps, ["insert", "insert", "archive"] + (rawCapture ? ["raw"] : []),
+                           "raw capture \(rawCapture)")
+            XCTAssertTrue(backfiller.persistStalled)
+        }
     }
 
     /// The stall lasts for the session only: the next offload, with a working store, acks again.
