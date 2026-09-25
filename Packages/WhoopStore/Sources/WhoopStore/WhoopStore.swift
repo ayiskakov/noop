@@ -116,6 +116,11 @@ public actor WhoopStore {
             try db.execute(sql: "PRAGMA temp_store = MEMORY")
         }
         config.busyMode = .timeout(5)
+        // Two pools write this file (BLEManager's and Repository's). A DEFERRED write transaction that
+        // reads first cannot use the busy handler to upgrade to a write lock, so it failed at once with
+        // SQLITE_BUSY whenever the other pool was writing (W02-008). IMMEDIATE takes the write lock at
+        // BEGIN, where the busy timeout above applies. Readers stay deferred; GRDB forces that.
+        config.defaultTransactionKind = .immediate
         let pool = try await StoreOpenGate.shared.openAndMigrate(path: path, configuration: config)
         self.init(preMigrated: pool)
     }
