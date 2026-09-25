@@ -375,11 +375,11 @@ final class Collector {
     }
 
     /// An intact 1244-byte R21 IMU buffer. `Whoop5RawImu` decodes without checking the CRC or the packet
-    /// type, so the gate does both (W06-029): live type 43, or historical type 47 with layout 21 at byte 9.
-    /// The live buffer's byte 9 is left unchecked because no capture of one has confirmed it.
+    /// type, so the gate does both (W06-029): live type 43 or historical type 47, each with layout 21 at
+    /// byte 9. The 11.9.10 strap run logged layout 21 on every live arm of the stream (W06-041).
     nonisolated static func isBankableImu(_ frame: [UInt8]) -> Bool {
         guard frame.count == Whoop5RawImu.bufferLength,
-              frame[8] == 43 || (frame[8] == 47 && frame[9] == 21) else { return false }
+              frame[8] == 43 || frame[8] == 47, frame[9] == 21 else { return false }
         return verifyFrame(frame, family: .whoop5).ok
     }
 

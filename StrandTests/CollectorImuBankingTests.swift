@@ -57,8 +57,10 @@ final class CollectorImuBankingTests: XCTestCase {
     private func resealed(type: UInt8, layout: UInt8) -> [UInt8] { Self.fixture(type: type, layout: layout) }
 
     /// W06-029: an intact frame of the same length but another packet type or layout is not an IMU buffer.
+    /// W06-041: live buffers carry layout 21 at byte 9 too (every live arm in the 11.9.10 strap run logged it).
     func testOnlyR21BuffersAreBanked() {
         XCTAssertTrue(Collector.isBankableImu(resealed(type: 43, layout: 21)), "live R21")
+        XCTAssertFalse(Collector.isBankableImu(resealed(type: 43, layout: 20)), "live, another layout")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 47, layout: 20)), "historical, another layout")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 52, layout: 21)), "the dedicated IMU stream")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 0x24, layout: 9)), "a command frame")

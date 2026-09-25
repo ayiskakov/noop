@@ -922,7 +922,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
     private var rawCaptureInFlight = false
     /// Set when a raw-data session arms the stream, cleared by the first live 1244-byte buffer after it, whose
-    /// packet type and layout byte are logged: no capture had shown a live buffer's layout (W06-041).
+    /// packet type and layout byte are logged. The banking gate now requires layout 21 (W06-041), so on a
+    /// firmware that sends another layout this line is what shows why a session banks nothing.
     private var awaitingFirstLiveImuBuffer = false
     private var rawCaptureStoppedAt = Date.distantPast
     private var unexpectedImuStopAt = Date.distantPast
