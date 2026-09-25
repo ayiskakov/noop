@@ -46,6 +46,12 @@ final class Whoop5RRTests: XCTestCase {
                 : extractStreams([f], deviceClockRef: 0, wallClockRef: 0)
             XCTAssertEqual(streams.rr.map(\.rrMs), c.ms, c.name)
             XCTAssertEqual(streams.rr.compactMap { $0.srcChannel?.rawValue }, c.ms.map { _ in c.channel }, c.name)
+            // W01-005: the inspector note must not tell a reader the words are 1/1024 s ticks.
+            let inspected = parseFrame(bytes, family: .whoop5, collectFields: true).fields
+            XCTAssertEqual(inspected.filter { $0.name.hasPrefix("rr[") }.count, c.ms.count, c.name)
+            for field in inspected where field.name.hasPrefix("rr[") {
+                XCTAssertFalse(field.note?.contains("1024") ?? false, "\(c.name) \(field.name)")
+            }
         }
     }
 

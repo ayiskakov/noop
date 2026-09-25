@@ -61,6 +61,7 @@ the two biggest hot spots).
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
 | W07-001 | S3 | Reported | `"my-whoop"` literal at 193 sites, against the `AGENTS.md` rule that reads thread the active strap id | `MetricCatalog.swift` 43, `TodayView.swift` 21, `Repository.swift` 16 | Pattern scan in `BASELINE.md` | |
+| W07-002 | S2 | Reported | Deleting a re-added strap's data (`whoop-<uuid>`) leaves the scores computed from it, because the engine writes every computed row under the canonical `my-whoop-noop`; deleting `my-whoop` clears that canonical sibling, including days scored from another strap | `IntelligenceEngine.swift` `deviceId`; `DeviceRegistryStore.swift` `deleteAllData` | Remainder of W02-005: with more than one registered device the canonical computed namespace is shared, so `deleteAllData` now leaves it in place rather than deleting another device's days (the V2 regression of a617df30). Deleting a device in a multi-device install still leaves the scores computed from it on screen. Needs per-day attribution (`dayOwnership` records overrides only; provenance covers only some metrics). AD-7 | |
 
 ## Log
 

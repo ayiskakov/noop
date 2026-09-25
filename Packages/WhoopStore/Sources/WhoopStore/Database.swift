@@ -1127,10 +1127,11 @@ extension WhoopStore {
         // samples with values assembled from adjacent pairs — not an obviously broken row, just a wrong
         // one, in the exact table whose purpose is to hand a future analysis the ORIGINAL samples.
         //
-        // Deleting is the right repair rather than a loss: those rows are UNVALIDATED instrumentation that
-        // nothing reads, they were mis-decoded when written (every negative sample recorded ~65,536 too
-        // high), and the strap re-offloads v16 records on the next sync. Keeping a corrupt archive to
-        // avoid an empty one would be the worse trade. Additive-safe: no other table is touched.
+        // Deleting is the right repair, though it is a loss: those rows are UNVALIDATED instrumentation that
+        // nothing reads, and they were mis-decoded when written (every negative sample recorded ~65,536 too
+        // high). The strap does NOT re-send them: it trims history once NOOP acks it, so the records behind
+        // these rows are gone from the strap and the purge is permanent. Keeping a corrupt archive to avoid
+        // an empty one would still be the worse trade. Additive-safe: no other table is touched.
         migrator.registerMigration("v48-ecg-candidate-signed") { db in
             try db.execute(sql: "DELETE FROM ecgCandidateSample")
         }
@@ -1151,11 +1152,11 @@ extension WhoopStore {
         // avoid an empty table would put a lie in front of the user in the exact screen this data exists
         // to feed.
         //
-        // What makes the delete acceptable rather than merely necessary: nothing scores these rows, the
-        // Test Centre export can stage them to a file BEFORE upgrading for anyone who wants to keep them,
-        // and the strap re-offloads v16 records on the next sync within its retention window. Note the
-        // export caveat is load-bearing from here on — once the review screen ships, "nothing reads this
-        // table" stops being true, and a future encoding change must migrate rather than purge.
+        // What makes the delete acceptable rather than merely necessary: nothing scores these rows. It is
+        // still permanent: the strap trims history once NOOP acks it, so it does not re-send these records,
+        // and the Test Centre export can only keep them if run on the OLD build, before this migration runs
+        // on first open of the new one. Hence the rule from here on: once the review screen ships, "nothing
+        // reads this table" stops being true, and a future encoding change must migrate rather than purge.
         //
         // The added columns are additive and nullable-with-default, so the schema change itself touches no
         // other table. They carry the rest of the R16 record (docs/PROTOCOL_ECG.md §R16): the declared

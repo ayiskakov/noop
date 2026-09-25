@@ -31,6 +31,37 @@ final class RejectedHistoryTests: XCTestCase {
         XCTAssertTrue(rejected.isEmpty)
     }
 
+    // MARK: - W01-004: records the #547 timestamp gate refuses are archived
+
+    /// The v18 record with its own unix (byte 15) rewritten and its body CRC32 recomputed, so it is intact.
+    private func v18Dated(_ unix: UInt32) -> [UInt8] {
+        var f = bytes(whoop5V18Hex)
+        for k in 0..<4 { f[15 + k] = UInt8((unix >> (8 * k)) & 0xFF) }
+        let crc = crc32(f, 8, f.count - 4)
+        for k in 0..<4 { f[f.count - 4 + k] = UInt8((crc >> (8 * k)) & 0xFF) }
+        XCTAssertTrue(parseFrame(f, family: .whoop5).ok, "precondition: the re-dated record is intact")
+        return f
+    }
+
+    /// An intact record whose timestamp the gate refuses yields no row, so the trim ack would free its only
+    /// copy. It is archived instead, where a clock fix can re-date it later. Before the fix: 0 archived.
+    func testIntactRecordRefusedByTheTimestampGateIsArchived() {
+        let now = 1_750_000_000
+        let farPast = v18Dated(1_600_000_000)
+        let future = v18Dated(UInt32(now + 3 * 86_400))
+        XCTAssertEqual(extractHistoricalStreams([parseFrame(farPast, family: .whoop5)], deviceClockRef: 0,
+                                                wallClockRef: 0, wallNow: now).hr.count, 0,
+                       "precondition: the extraction's gate drops it")
+        let rejected = rejectedHistoricalRecords([farPast, future], family: .whoop5, wallNow: now)
+        XCTAssertEqual(rejected, [farPast, future])
+    }
+
+    func testIntactRecordWithAPlausibleTimestampIsStillNotArchived() {
+        let now = 1_750_000_000
+        let dated = v18Dated(UInt32(now - 3_600))
+        XCTAssertTrue(rejectedHistoricalRecords([dated], family: .whoop5, wallNow: now).isEmpty)
+    }
+
     // MARK: - undecodable records ARE rejected
 
 

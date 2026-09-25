@@ -7034,6 +7034,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 // Byte runs dropped below the family minimum still reach the reject tally.
                 let completedFrames = reassembler.feed(bytes)
                 router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
+                router.noteReassemblerHeaderDrops(reassembler.headerChecksumDrops)
                 for frame in completedFrames {
                     let isOffload = backfilling && BLEManager.isOffloadFrame(frame, family: .whoop5)
                     noteWhoop5R22Telemetry(frame, duringOffload: isOffload)   // #174 deep-data telemetry
@@ -7047,7 +7048,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
                     puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: characteristic.uuid, isOffload: isOffload)
                     stopUnexpectedRealtimeImu(frame, isOffload: isOffload)
-                    // #423: the queryable twin of that diagnostics line — persist the decoded 100 Hz 6-axis
+                    // #423 / #1709: the queryable twin of that diagnostics line — bank the decoded 100 Hz
+                    // 6-axis buffer into any open Raw Data Collector session, from the live stream and from
+                    // history sync alike. BEFORE the offload branch, which `continue`s (W06-002).
+                    collector?.bankImuForSessions(frame)
                     if isOffload {
                         // Same policy as WHOOP4: historical offload frames are bulk sync traffic.
                         // Keep them out of the live UI parser during backfill and let Backfiller

@@ -5,10 +5,12 @@ import WhoopProtocol
 /// OpenWhoop persistence library — decoded streams are durable; raw frames are a
 /// transient, compressed, prunable outbox. Built on GRDB/SQLite.
 public enum WhoopStoreInfo {
-    /// The store schema-version marker, bumped per migration. Surfaced in the backup manifest (#1410) so an
-    /// export records the platform's schema version (a platform-scoped indicator — Android reports its Room
-    /// version independently; the two numbering schemes are not expected to match).
-    public static let schemaVersion = 18
+    /// The store schema version: the number of registered migrations, so it cannot fall behind the schema.
+    /// Surfaced in the backup manifest (#1410) so an export records the platform's schema version (a
+    /// platform-scoped indicator — Android reports its Room version independently; the two numbering
+    /// schemes are not expected to match). It was a constant 18 from the first commit while the schema
+    /// reached 49 migrations, so every manifest and version event recorded 18 (W02-010).
+    public static var schemaVersion: Int { WhoopStore.makeMigrator().migrations.count }
 }
 
 /// Serializes `DatabasePool` creation + migration so two concurrent opens of the SAME file can never
@@ -116,6 +118,11 @@ public actor WhoopStore {
             try db.execute(sql: "PRAGMA temp_store = MEMORY")
         }
         config.busyMode = .timeout(5)
+        // Two pools write this file (BLEManager's and Repository's). A DEFERRED write transaction that
+        // reads first cannot use the busy handler to upgrade to a write lock, so it failed at once with
+        // SQLITE_BUSY whenever the other pool was writing (W02-008). IMMEDIATE takes the write lock at
+        // BEGIN, where the busy timeout above applies. Readers stay deferred; GRDB forces that.
+        config.defaultTransactionKind = .immediate
         let pool = try await StoreOpenGate.shared.openAndMigrate(path: path, configuration: config)
         self.init(preMigrated: pool)
     }
@@ -179,12 +186,98 @@ public actor WhoopStore {
 
     // MARK: - Maintenance
 
-    /// Fully checkpoint the WAL into the main database file and truncate the -wal file.
-    /// Used before a file-level backup so the single `whoop.sqlite` carries all committed data
-    /// (the -wal/-shm siblings can then be ignored). Runs outside a transaction — `wal_checkpoint`
-    /// must. Best-effort: throws on a hard SQLite error so callers can fall back to a plain copy.
+    /// Fully checkpoint the WAL into the main database file and truncate the -wal file, to reclaim the
+    /// space a bulk import grew. Runs outside a transaction — `wal_checkpoint` must. Throws on a hard
+    /// SQLite error, and throws `CheckpointBlocked` when a reader on another connection kept it from
+    /// finishing: SQLite then reports "busy" in the result row rather than as an error, and the main file
+    /// alone can be malformed (W02-003). Backups do not rely on this; they use `writeSnapshot(to:)`.
     public func checkpointWAL() async throws {
         try checkpointWALImpl()
+    }
+
+    /// A TRUNCATE checkpoint that could not finish because another connection held an older snapshot.
+    public struct CheckpointBlocked: Error, LocalizedError {
+        public var errorDescription: String? {
+            "The database checkpoint could not finish because another reader is active."
+        }
+    }
+
+    /// Write a consistent copy of the whole database to `path`, replacing any file there. The copy comes
+    /// from one read snapshot through SQLite's online backup API, so it holds exactly one committed state
+    /// even while other connections write or hold older snapshots. Copying the main file after a
+    /// checkpoint does not: rows committed after it are missing, and a checkpoint that a reader cut short
+    /// leaves the main file malformed (W02-003). `nonisolated` so a multi-second copy never holds up this
+    /// actor's own reads and writes; the pool's reader connection does the work.
+    public nonisolated func writeSnapshot(to path: String) async throws {
+        try Self.requireSpace(for: dbWriter, at: path)
+        try Self.copying(to: path) { destination in try dbWriter.backup(to: destination) }
+    }
+
+    /// Not enough free space for a snapshot. Thrown BEFORE copying, because a copy that fills the volume
+    /// fails only at the end and meanwhile makes every other write fail too, the strap sync's included.
+    public struct SnapshotNoSpace: Error, LocalizedError {
+        public let neededBytes: Int64
+        public let availableBytes: Int64
+        public var errorDescription: String? {
+            let f = ByteCountFormatter()
+            return "A copy of the database needs about \(f.string(fromByteCount: neededBytes)) of free space "
+                + "and \(f.string(fromByteCount: availableBytes)) is available."
+        }
+    }
+
+    /// Throw `SnapshotNoSpace` unless the volume holding `path` can take a full copy of `source` plus a
+    /// 64 MB margin for everything else still writing. A copy is as large as the database: every page.
+    private static func requireSpace(for source: any DatabaseReader, at path: String) throws {
+        let needed = try source.read { db -> Int64 in
+            let pages = try Int64.fetchOne(db, sql: "PRAGMA page_count") ?? 0
+            let size = try Int64.fetchOne(db, sql: "PRAGMA page_size") ?? 0
+            return pages * size
+        }
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        // The important-usage capacity is unavailable on watchOS, which builds this package for the watch app.
+        #if os(watchOS) || os(tvOS)
+        guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityKey]) else { return }
+        let available = values.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        #else
+        guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
+                                                                   .volumeAvailableCapacityKey]) else { return }
+        let available = values.volumeAvailableCapacityForImportantUsage
+            ?? values.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        #endif
+        if available < needed + 64 * 1_048_576 {
+            throw SnapshotNoSpace(neededBytes: needed, availableBytes: available)
+        }
+    }
+
+    /// `writeSnapshot(to:)` for a caller that holds no store: a consistent copy of the database file at
+    /// `sourcePath`, including what its WAL holds, through a fresh READ-ONLY connection that runs no
+    /// migrator and so never checkpoints or otherwise changes the live file. A restore uses it to keep the
+    /// live store before replacing the file, since copying the main file alone drops every commit still in
+    /// the WAL (W02-002).
+    public static func writeSnapshot(ofDatabaseAt sourcePath: String, to path: String) throws {
+        var readOnly = Configuration()
+        readOnly.readonly = true
+        let source = try DatabaseQueue(path: sourcePath, configuration: readOnly)
+        defer { try? source.close() }
+        try requireSpace(for: source, at: path)
+        try copying(to: path) { destination in try source.backup(to: destination) }
+    }
+
+    /// Run `backup` into a fresh file at `path`. On any failure the partial file is removed, so a caller's
+    /// fallback can take its place; an empty side file left behind used to block the restore's byte copy
+    /// (W02-002, found in V2).
+    private static func copying(to path: String, _ backup: (DatabaseQueue) throws -> Void) throws {
+        let fm = FileManager.default
+        func removeCopy() { for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) } }
+        removeCopy()
+        do {
+            let destination = try DatabaseQueue(path: path)
+            try backup(destination)
+            try destination.close()
+        } catch {
+            removeCopy()
+            throw error
+        }
     }
 
     /// #1410: append one app-level event (e.g. `APP_VERSION_CHANGED`) onto the event table. Idempotent on
@@ -201,9 +294,10 @@ public actor WhoopStore {
     /// Non-async so GRDB's synchronous `writeWithoutTransaction` overload is chosen (mirrors the
     /// syncRead/syncWrite pattern). Runs on the actor's executor, off the main thread.
     private func checkpointWALImpl() throws {
-        try dbWriter.writeWithoutTransaction { db in
-            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
+        let busy = try dbWriter.writeWithoutTransaction { db in
+            try Int.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") ?? 0
         }
+        if busy != 0 { throw CheckpointBlocked() }
     }
 
     /// Permanently delete every recorded sample/derived row for one device across all `deviceId`-keyed

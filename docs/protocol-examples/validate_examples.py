@@ -207,8 +207,7 @@ def main():
     struct.pack_into("<HH", imu, 24, 0, 0)
     assert imu_stream_spans(imu, 28) == [(28, 28)] * 6
 
-    assert [(n * 1000 + 512) // 1024 for n in (512, 1024, 1536)] == [500, 1000, 1500]
-    print("PASS: constructed R17 bounds/padding, signed ECG values/flags, contact boundaries, R26 clipping, RR arithmetic, response adoption, R21 ticks, shared requests, AFE sums, partial IMU count bounds")
+    print("PASS: constructed R17 bounds/padding, signed ECG values/flags, contact boundaries, R26 clipping, response adoption, R21 ticks, shared requests, AFE sums, partial IMU count bounds")
     print("Coverage: field arithmetic only; no CRC, device, firmware or calibration validation")
 
 

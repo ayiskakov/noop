@@ -249,6 +249,13 @@ public final class Reassembler {
     /// frames nothing else can read. Monotonic for the lifetime of the reassembler.
     public private(set) var belowMinimumLengthDrops = 0
 
+    /// How many start-of-frame bytes were dropped because the header checksum over their own length
+    /// field did not match. That is a 0xAA which is not a frame start: payload data, or the tail of a
+    /// frame the stream desynced inside. Counted separately from [belowMinimumLengthDrops] because the
+    /// two say different things about a link — a floor drop is a malformed frame, this is a misplaced
+    /// read cursor. Monotonic for the lifetime of the reassembler.
+    public private(set) var headerChecksumDrops = 0
+
     /// WHOOP 5.0 ("puffin") reads a u16 declared length at `buf[2..4]` (after the `0xAA` SOF and the
     /// `0x01` format byte), total = `declLength + 8` — the extra 4 covers the format byte and the
     /// CRC16 header that 5.0 inserts ahead of the inner record.
@@ -289,6 +296,34 @@ public final class Reassembler {
             if total > Reassembler.maxFrameBytes {
                 // Impossibly large declared length → this 0xAA is garbage. Drop it and resync to the
                 // next SOF instead of stalling the live stream until a reconnect.
+                head += 1
+                continue
+            }
+            // An in-range length is not the same as a real one. `indexOfSOF` matches a bare 0xAA, which
+            // occurs inside payload as readily as at a frame start, so a stream that has desynced (a
+            // subscribe landing mid-frame, or one earlier mis-parse) can put `head` on a payload byte
+            // whose next bytes read as a PLAUSIBLE length: past the family floor, under the 8 KB ceiling,
+            // and therefore accepted by both guards above. feed() then waited for that many bytes and
+            // emitted them as one frame — swallowing whatever valid frames fell inside it. Those frames
+            // were consumed, and nothing downstream can hand them back: the CRC32 check that rejects the
+            // bad frame runs after `head` has already advanced past them.
+            //
+            // The header checksum decides this without new protocol knowledge, because it already covers
+            // the length field: CRC-16-Modbus over the first six bytes of a 5/MG frame. A real frame always
+            // passes; a false SOF passes with probability 1/65536, so this converts a swallowed-frame stall
+            // into a one-byte resync in almost every case.
+            //
+            // Ordered AFTER the floor and ceiling checks so those keep their existing counters and the
+            // tests that pin them are untouched: this gate only sees lengths the old code accepted.
+            if avail < 8 { break }
+            let headerOK: Bool
+            switch family {
+            case .whoop5:
+                let got = UInt16(buf[head + 6]) | (UInt16(buf[head + 7]) << 8)
+                headerOK = crc16Modbus(buf, head, head + 6) == got
+            }
+            if !headerOK {
+                headerChecksumDrops += 1
                 head += 1
                 continue
             }

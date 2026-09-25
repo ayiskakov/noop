@@ -281,7 +281,7 @@ private func parseFrameWhoop5(_ frame: [UInt8], collectFields: Bool) -> ParsedFr
                 guard off + 2 <= limit else { break }
                 if let v = readDType(frame, off, "u16", limit), v > 0 {
                     let ms = Whoop5RR.milliseconds(ticks: UInt16(v))
-                    fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms from 1/1024 s ticks")
+                    fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms (the word is already milliseconds)")
                     rawTicks.append(v)
                     rrs.append(ms)
                 }
@@ -421,7 +421,7 @@ private func decodeWhoop5Historical(_ frame: [UInt8], fb: FieldBuilder, payloadE
         guard off + 2 <= limit else { break }
         if let v = readDType(frame, off, "u16", limit), v > 0 {
             let ms = Whoop5RR.milliseconds(ticks: UInt16(v))
-            fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms from 1/1024 s ticks")
+            fb.add(off, 2, "rr[\(i)]", "rr", value: .int(ms), note: "ms (the word is already milliseconds)")
             rawTicks.append(v)
             rrs.append(ms)
         }
@@ -480,7 +480,8 @@ private func decodeWhoop5Historical(_ frame: [UInt8], fb: FieldBuilder, payloadE
         fb.add(59, 1, "step_cadence", "activity", value: .int(cad), note: "cadence-like byte (raw)")
     }
     if let wear = readDType(frame, 63, "u8", limit), (0...2).contains(wear) {
-        fb.add(63, 1, "motion_wear_quality", "quality", value: .int(wear), note: "0=still/good, 1, 2=poor contact")
+        fb.add(63, 1, "motion_wear_quality", "quality", value: .int(wear),
+               note: "older name for activity_class below; not a contact grade (W01-008)")
     }
     // @63 also reads as a small validated ACTIVITY-CLASS enum (community finding, #316): 0=still, 1=walk,
     // 2=run, 0xFF=invalid. A lightweight, no-cloud per-record activity readout that rides alongside the

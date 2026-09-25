@@ -205,6 +205,20 @@ final class FrameDiagnosticsTests: XCTestCase {
         XCTAssertEqual(tally.count(.belowMinimumLength), r.belowMinimumLengthDrops)
     }
 
+    /// W01-003: a false start-of-frame the reassembler drops by its header checksum reaches no parser, so
+    /// its count is folded into the tally, once per drop however often the monotonic total is folded.
+    func testReassemblerHeaderDropsFoldIntoTheHeaderChecksumBucket() {
+        let r = Reassembler(family: .whoop5)
+        _ = r.feed([0xAA, 0x01, 0x40, 0x00, 0x00, 0x00, 0xFF, 0xFF])
+        XCTAssertEqual(r.headerChecksumDrops, 1)
+
+        var tally = FrameRejectTally()
+        tally.absorbReassemblerHeaderDrops(r.headerChecksumDrops)
+        tally.absorbReassemblerHeaderDrops(r.headerChecksumDrops)
+        XCTAssertEqual(tally.count(.headerChecksumMismatch), 1)
+        XCTAssertEqual(tally.count(.belowMinimumLength), 0, "a misplaced cursor is not a malformed frame")
+    }
+
     func testSummaryLineIsSilentWhenNothingWasRejected() {
         var tally = FrameRejectTally()
         tally.note(parseFrame(hex(FrameIntegrityTests.w5Valid), family: .whoop5))
