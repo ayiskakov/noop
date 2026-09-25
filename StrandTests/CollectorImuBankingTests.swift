@@ -135,36 +135,72 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
     }
 }
 
-/// A realtime raw stream no capture in this app armed is noted once per link, and nothing is sent to stop it
-/// (W06-018). A Raw Data Collector session still open on disk for the strap owns the stream (W06-052).
+/// A realtime raw stream is noted once per stream in the strap log, naming who in this app owns it, and
+/// nothing is sent to stop it (W06-018). Driven through the 5/MG frame handling, with the research toggle set
+/// on the manager rather than read from the host app's defaults (W06-062).
 @MainActor
-final class UnarmedRealtimeImuNoteTests: XCTestCase {
+final class RealtimeRawStreamNoteTests: XCTestCase {
     private var rig: ImuBankingRig!
-    private let note = "Raw IMU: realtime packet type 43 is arriving with no capture armed in this app"
+    private let unowned = "Raw IMU: realtime packet type 43 is arriving with no capture or ECG session armed"
+    private let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
 
-    override func setUp() async throws { rig = ImuBankingRig() }
+    override func setUp() async throws {
+        rig = ImuBankingRig()
+        rig.manager.continuousRawCapture = { false }
+    }
     override func tearDown() async throws { rig.close() }
 
     private func feedLiveBuffers(_ count: Int) {
-        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
         for _ in 0..<count { rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar) }
     }
     private func lines(containing text: String) -> [String] { rig.live.log.filter { $0.contains(text) } }
 
-    func testAStreamNoCaptureArmedIsNotedOnceAndNothingIsSent() {
+    func testAStreamNothingArmedIsNotedOnceAndNothingIsSent() {
         rig.close()   // no Raw Data Collector session open for the strap
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .none)
         feedLiveBuffers(3)
-        XCTAssertEqual(lines(containing: note).count, 1, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: unowned).count, 1, rig.live.log.joined(separator: "\n"))
         XCTAssertEqual(lines(containing: "send(").count, 0, "no command is formed for the stream")
     }
 
     /// After a relaunch mid-session the process has armed nothing, but the session on disk is still open and
-    /// its stream still banks into it.
+    /// its stream still banks into it (W06-052).
     func testASessionStillOpenOnDiskOwnsTheStream() {
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .openSession)
         feedLiveBuffers(3)
         XCTAssertEqual(lines(containing: "Raw IMU").count, 0, rig.live.log.joined(separator: "\n"))
         XCTAssertEqual(lines(containing: "send(").count, 0)
         XCTAssertTrue(rig.banked)
+    }
+
+    /// A state-restoration relaunch delivers the stream's first frames before `bootstrapStore` builds the
+    /// collector, so the strap the stream banks under is unknown and nothing is claimed about it (W06-054).
+    func testARelaunchBeforeTheStoreIsBuiltMakesNoClaim() {
+        let live = LiveState()
+        let manager = BLEManager(state: live, deviceId: "rig-\(UUID().uuidString)", collector: nil)
+        manager.continuousRawCapture = { false }
+        XCTAssertEqual(manager.realtimeRawOwner(), .unknownUntilStoreReady)
+        for _ in 0..<3 { manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar) }
+        XCTAssertEqual(live.log.filter { $0.contains("Raw IMU") }.count, 0, live.log.joined(separator: "\n"))
+    }
+
+    func testContinuousCaptureOwnsTheStream() {
+        rig.close()
+        rig.manager.continuousRawCapture = { true }
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture)
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: "Raw IMU").count, 0, rig.live.log.joined(separator: "\n"))
+    }
+
+    /// An armed capture owns the stream, and so does its tail for three seconds after the stop.
+    func testAnArmedCaptureAndItsTailOwnTheStream() async {
+        rig.close()
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture)
+        await rig.manager.stopGroundTruthRawCapture()
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture, "the tail")
+        XCTAssertEqual(rig.manager.realtimeRawOwner(now: Date().addingTimeInterval(RealtimeRawOwner.tailSeconds)),
+                       .none)
     }
 }
 
