@@ -9,7 +9,7 @@ struct RawDataCollectorView: View {
     @StateObject private var store = RawDataSessionStore()
 
     @State private var exportingId: String?
-    @State private var stopping = false
+    @State private var stoppingId: String?
     @State private var deleteCandidate: RawDataSessionStore.Session?
     @State private var confirmDeleteAll = false
     @State private var exportError: String?
@@ -104,10 +104,10 @@ struct RawDataCollectorView: View {
     }
 
     @ViewBuilder private var controls: some View {
-        if store.active != nil {
-            NoopButton(stopping ? "Stopping…" : "Stop session", systemImage: "stop.fill", kind: .destructive,
-                       fullWidth: true) { Task { await stop() } }
-                .disabled(stopping)
+        if store.active != nil || stoppingId != nil {
+            NoopButton(stoppingId != nil ? "Stopping…" : "Stop session", systemImage: "stop.fill",
+                       kind: .destructive, fullWidth: true) { Task { await stop() } }
+                .disabled(stoppingId != nil)
         } else {
             NoopButton("Start raw-data session", systemImage: "record.circle", kind: .primary,
                        fullWidth: true) { start() }
@@ -142,7 +142,7 @@ struct RawDataCollectorView: View {
             } else {
                 NoopButton("Delete all sessions", systemImage: "trash", kind: .destructive,
                            fullWidth: true) { confirmDeleteAll = true }
-                    .disabled(store.active != nil)
+                    .disabled(store.active != nil || stoppingId != nil)
                 ForEach(store.sessions) { session in sessionCard(session) }
             }
         }
@@ -150,10 +150,12 @@ struct RawDataCollectorView: View {
 
     private func sessionCard(_ session: RawDataSessionStore.Session) -> some View {
         let coverageText = imuCoverage[session.id, default: "no complete seconds"]
+        // A session being stopped has ended but still banks its tail, so it reads as recording until then.
+        let recording = session.active || session.id == stoppingId
         return StrandCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 Text(Self.range(session)).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
-                if !session.active, let endMs = session.endedAtMs {
+                if !recording, let endMs = session.endedAtMs {
                     DatePicker("From", selection: Binding(
                         get: { Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000) },
                         set: { store.setRange(sessionId: session.id, from: $0,
@@ -165,10 +167,10 @@ struct RawDataCollectorView: View {
                                               from: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000), to: $0) }
                     ))
                 }
-                Text(session.active ? String(localized: "Export status: recording")
+                Text(recording ? String(localized: "Export status: recording")
                      : String(localized: "IMU: \(coverageText)"))
                     .font(StrandFont.caption)
-                    .foregroundStyle(session.active ? StrandPalette.statusWarning : StrandPalette.statusPositive)
+                    .foregroundStyle(recording ? StrandPalette.statusWarning : StrandPalette.statusPositive)
                 if let exportedAt = session.lastExportedAtMs {
                     Text(String(localized: "Last exported \(Self.time(exportedAt)) · export remains available"))
                         .font(StrandFont.caption)
@@ -203,10 +205,10 @@ struct RawDataCollectorView: View {
                            systemImage: "square.and.arrow.up", kind: .secondary, fullWidth: true) {
                     Task { await export(session) }
                 }
-                .disabled(session.active || exportingId != nil)
+                .disabled(recording || exportingId != nil)
                 NoopButton("Delete session", systemImage: "trash", kind: .destructive,
                            fullWidth: true) { deleteCandidate = session }
-                    .disabled(session.active || exportingId != nil)
+                    .disabled(recording || exportingId != nil)
             }
         }
     }
@@ -288,21 +290,13 @@ struct RawDataCollectorView: View {
     }
 
     private func stop() async {
-        guard let active = store.active, !stopping else { return }
+        guard let active = store.active, stoppingId == nil else { return }
         // The session ends when Stop is pressed. The strap has not produced its last seconds yet, and a stop
         // would discard them, so the stream stops only once the last full second is banked (W06-025).
-        let pressedAt = Date()
-        stopping = true
-        var tail = RawSessionTail.Outcome.notAwaited
-        if let bounds = Self.fullSecondBounds(fromMs: active.startedAtMs,
-                                              toMs: Int64(pressedAt.timeIntervalSince1970 * 1_000)) {
-            tail = await RawSessionTail.wait(for: bounds.to,
-                                             newest: { ImuSessionFileStore.shared.newestBankedTs(active.id) },
-                                             streaming: { live.connected })
-        }
-        await model.ble.stopGroundTruthRawCapture(tail: tail)
-        store.stop(now: pressedAt)
-        stopping = false
+        stoppingId = active.id
+        await RawSessionTail.stop(store, pressedAt: Date(), streaming: { live.connected },
+                                  stopStream: { await model.ble.stopGroundTruthRawCapture(tail: $0) })
+        stoppingId = nil
         await refreshImuCoverage()
     }
 

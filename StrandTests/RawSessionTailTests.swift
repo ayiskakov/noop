@@ -1,4 +1,5 @@
 import XCTest
+import WhoopProtocol
 @testable import Strand
 
 /// W06-025: a live 5/MG raw-data session stops the strap's stream only once the buffer of its last full
@@ -60,6 +61,91 @@ final class RawSessionTailTests: XCTestCase {
         let outcome = await RawSessionTail.wait(for: 50, newest: { nil }, streaming: { true },
                                                 now: { clock.now }, sleep: clock.sleep)
         XCTAssertEqual(outcome, .short(missing: nil, disconnected: false))
+    }
+
+    // MARK: - The stop itself (W06-036)
+
+    /// A session store over throwaway files, its IMU store too.
+    private struct Rig {
+        let sessions: URL, imuFiles: URL, defaults: UserDefaults
+        let imu: ImuSessionFileStore, store: RawDataSessionStore
+    }
+
+    private func rig() throws -> Rig {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suite = "raw-session-tail-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sessions = root.appendingPathComponent("sessions"), imuFiles = root.appendingPathComponent("imu")
+        let imu = ImuSessionFileStore(directory: imuFiles, defaults: defaults)
+        return Rig(sessions: sessions, imuFiles: imuFiles, defaults: defaults, imu: imu,
+                   store: RawDataSessionStore(directory: sessions, imu: imu))
+    }
+
+    private struct Stopped {
+        let rig: Rig, session: RawDataSessionStore.Session, firstSecond: Int, pressedAt: Date
+        let outcome: RawSessionTail.Outcome?
+        /// The active session a collector opened at each poll of the wait would load.
+        let activeDuringWait: [String?]
+    }
+
+    /// A session whose first full second is banked at the press, two seconds short of its last one; one
+    /// more buffer arrives per poll of the wait, and a marker is added a quarter second after the press.
+    private func stopWithATwoSecondTail() async throws -> Stopped {
+        let rig = try rig()
+        let ts = try XCTUnwrap(Whoop5RawImu.baseTs(CollectorImuBankingTests.fixture))
+        let session = try XCTUnwrap(rig.store.start(deviceId: "strap",
+                                                    now: Date(timeIntervalSince1970: TimeInterval(ts))))
+        rig.imu.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture, receivedAtMs: 0)
+        let clock = Clock()
+        clock.now = Date(timeIntervalSince1970: TimeInterval(ts) + 3.5)
+        let pressedAt = clock.now
+        var outcome: RawSessionTail.Outcome?
+        var activeDuringWait: [String?] = []
+        await RawSessionTail.stop(rig.store, pressedAt: pressedAt, streaming: { true },
+                                  stopStream: { outcome = $0 }, now: { clock.now }, sleep: { seconds in
+            activeDuringWait.append(RawDataSessionStore(directory: rig.sessions, imu: rig.imu).active?.id)
+            if clock.sleeps == 1 { rig.store.addMarker(sessionId: session.id, at: clock.now, type: "moment", text: "") }
+            rig.imu.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: UInt32(clock.sleeps + 1)),
+                           receivedAtMs: 0)
+            await clock.sleep(seconds)
+        })
+        return Stopped(rig: rig, session: session, firstSecond: ts, pressedAt: pressedAt, outcome: outcome,
+                       activeDuringWait: activeDuringWait)
+    }
+
+    /// The session is saved as ended at the press, before the wait: a collector opened meanwhile loads no
+    /// active session, so it can neither re-arm the stream nor stop the session again and move its end.
+    func testTheSessionEndsAtThePressBeforeTheWait() async throws {
+        let stopped = try await stopWithATwoSecondTail()
+        XCTAssertEqual(stopped.outcome, .delivered)
+        XCTAssertEqual(stopped.activeDuringWait, [nil, nil])
+        let saved = try XCTUnwrap(RawDataSessionStore(directory: stopped.rig.sessions, imu: stopped.rig.imu).sessions.first)
+        XCTAssertEqual(saved.endedAtMs, Int64(stopped.pressedAt.timeIntervalSince1970 * 1_000))
+        XCTAssertEqual(saved.events.filter { $0.kind == "stop" }.count, 1)
+    }
+
+    /// A marker added while the tail is awaited is stamped inside the session (W06-044), not after its end,
+    /// where the export would drop it.
+    func testAMarkerAddedWhileStoppingStaysInTheSession() async throws {
+        let stopped = try await stopWithATwoSecondTail()
+        let saved = try XCTUnwrap(stopped.rig.store.sessions.first)
+        let markers = saved.events.filter { $0.kind == "marker" }
+        XCTAssertEqual(markers.map(\.atMs), [try XCTUnwrap(saved.endedAtMs)])
+        let events = try XCTUnwrap(stopped.rig.store.exportEntries(for: saved).first { $0.name == "events.jsonl" })
+        XCTAssertTrue(String(decoding: events.data, as: UTF8.self).contains("\"kind\":\"marker\""))
+    }
+
+    /// The tail that banks after the session ended is on disk once the stream stops, so a relaunch before
+    /// the export still finds every second.
+    func testTheTailIsOnDiskOnceTheStreamStops() async throws {
+        let stopped = try await stopWithATwoSecondTail()
+        let relaunched = ImuSessionFileStore(directory: stopped.rig.imuFiles, defaults: stopped.rig.defaults)
+        let stats = relaunched.stats(stopped.session.id, from: stopped.firstSecond, to: stopped.firstSecond + 2)
+        XCTAssertEqual(stats.coveredSeconds, 3)
     }
 
     /// The log states what was banked and never claims a flush the stop does not do.
