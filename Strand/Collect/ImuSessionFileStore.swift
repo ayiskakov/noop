@@ -19,6 +19,7 @@ final class ImuSessionFileStore {
     private let directory: URL
     private var seen: [String: Set<Int64>] = [:]
     private var pending: [String: [Record]] = [:]
+    private var cachedWindows: [Window]?
     /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
     private(set) var segmentScans = 0
 
@@ -184,8 +185,13 @@ final class ImuSessionFileStore {
         data.appendBigEndian(Int32(compressed.count)); data.append(compressed); return data
     }
 
-    private func windows() -> [Window] { defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([Window].self, from: $0) } ?? [] }
-    private func save(_ value: [Window]) { defaults.set(try? JSONEncoder().encode(value), forKey: key) }
+    // Every IMU frame reads the window list, so it is decoded once and kept; `save` is its only writer (W06-031).
+    private func windows() -> [Window] {
+        if let cachedWindows { return cachedWindows }
+        let value = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([Window].self, from: $0) } ?? []
+        cachedWindows = value; return value
+    }
+    private func save(_ value: [Window]) { cachedWindows = value; defaults.set(try? JSONEncoder().encode(value), forKey: key) }
     private func sessionDirectory(_ id: String) -> URL { directory.appendingPathComponent(id, isDirectory: true) }
     private func segmentFile(_ id: String, _ bucket: Int64) -> URL { sessionDirectory(id).appendingPathComponent("imu-\(Self.utcName(bucket)).imus") }
     private func segmentFiles(_ id: String) -> [URL] { ((try? FileManager.default.contentsOfDirectory(at: sessionDirectory(id), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "imus" }.sorted { $0.lastPathComponent < $1.lastPathComponent } }
