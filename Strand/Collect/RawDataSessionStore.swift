@@ -305,8 +305,12 @@ enum RawSessionTail {
         }
     }
 
+    /// Sleeps `seconds`, even in a cancelled task: `Task.sleep` would throw at once there, and the wait would
+    /// poll the main actor without pause until its deadline (W06-042). A cancelled stop still ends on time.
     static func pause(_ seconds: TimeInterval) async {
-        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { done.resume() }
+        }
     }
 
     /// The strap-log line for a stop with this outcome. It states what was banked and when no stop went

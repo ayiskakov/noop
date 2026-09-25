@@ -64,6 +64,21 @@ final class RawSessionTailTests: XCTestCase {
         XCTAssertEqual(outcome, .short(missing: nil, disarmed: false))
     }
 
+    /// A cancelled wait still sleeps between polls instead of spinning on the main actor until its deadline,
+    /// and still ends on time (W06-042).
+    func testACancelledWaitDoesNotSpin() async {
+        final class Polls { var count = 0 }
+        let polls = Polls()
+        let task = Task { @MainActor in
+            await RawSessionTail.wait(for: 50, newest: { polls.count += 1; return nil }, armed: { true },
+                                      timeout: 0.5)
+        }
+        task.cancel()
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .short(missing: nil, disarmed: false))
+        XCTAssertLessThanOrEqual(polls.count, 8, "two reads a poll, a poll every quarter second")
+    }
+
     // MARK: - The stop itself (W06-036)
 
     /// A session store over throwaway files, its IMU store too.

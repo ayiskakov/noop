@@ -20,9 +20,9 @@ final class ImuSessionFileStore {
     private var seen: [String: Set<Int64>] = [:]
     private var pending: [String: [Record]] = [:]
     private var newest: [String: Int64] = [:]
+    private var newestReadFromFiles: Set<String> = []
     private var cachedWindows: [Window]?
-    /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
-    private(set) var segmentScans = 0
+    private let read: (URL) -> Data?
 
     private convenience init() {
         let fm = FileManager.default
@@ -32,10 +32,12 @@ final class ImuSessionFileStore {
                   defaults: .standard)
     }
 
-    /// A store over `directory` and `defaults`; the app uses `shared`, tests pass throwaway ones.
-    init(directory: URL, defaults: UserDefaults) {
+    /// A store over `directory` and `defaults`, reading its files with `read`; the app uses `shared`, tests
+    /// pass throwaway ones.
+    init(directory: URL, defaults: UserDefaults, read: @escaping (URL) -> Data? = { try? Data(contentsOf: $0) }) {
         self.directory = directory
         self.defaults = defaults
+        self.read = read
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -55,14 +57,24 @@ final class ImuSessionFileStore {
     }
     func remove(id: String) {
         newest[id] = nil
+        newestReadFromFiles.remove(id)
         pending.keys.filter { $0.hasPrefix("\(id)/") }.forEach { pending[$0] = nil }
         seen.keys.filter { $0.hasPrefix(sessionDirectory(id).path) }.forEach { seen[$0] = nil }
         save(windows().filter { $0.id != id })
     }
     func prepareForRead(_ id: String) { flushSession(id) }
 
-    /// The start second of the newest buffer banked into session `id` since launch, or nil before the first.
-    func newestBankedTs(_ id: String) -> Int64? { newest[id] }
+    /// The start second of the newest buffer banked into session `id`, or nil while it holds none. The
+    /// session's files are read once per launch, so a relaunch mid-session still counts what was banked
+    /// before it (W06-038).
+    func newestBankedTs(_ id: String) -> Int64? {
+        if !newestReadFromFiles.contains(id) {
+            newestReadFromFiles.insert(id)
+            let onDisk = segmentFiles(id).last.flatMap { decode(read($0) ?? Data()).map(\.ts).max() }
+            if let onDisk { newest[id] = max(newest[id] ?? onDisk, onDisk) }
+        }
+        return newest[id]
+    }
 
     func deleteFiles(_ id: String, removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
         flushSession(id); let dir = sessionDirectory(id)
@@ -82,7 +94,7 @@ final class ImuSessionFileStore {
         var count = 0
         for window in windows() where window.deviceId == deviceId && Int64(ts) >= window.from
             && (window.to == nil || Int64(ts) <= window.to!) {
-            newest[window.id] = max(newest[window.id] ?? Int64(ts), Int64(ts))
+            newest[window.id] = max(newestBankedTs(window.id) ?? Int64(ts), Int64(ts))
             let bucket = Self.bucketStart(Int64(ts)), url = segmentFile(window.id, bucket)
             var timestamps = seen[url.path] ?? scan(url)
             let inserted = timestamps.insert(Int64(ts)).inserted
@@ -122,7 +134,7 @@ final class ImuSessionFileStore {
     }
 
     private func readRecords(_ id: String, from: Int, to: Int, includePending: Bool) -> [Record] {
-        var rows = segmentFiles(id).flatMap { decode((try? Data(contentsOf: $0)) ?? Data()) }
+        var rows = segmentFiles(id).flatMap { decode(read($0) ?? Data()) }
             .filter { $0.ts >= from && $0.ts <= to }
         if includePending { rows += pending.filter { $0.key.hasPrefix("\(id)/") }.values.flatMap { $0 }
             .filter { $0.ts >= from && $0.ts <= to } }
@@ -201,9 +213,11 @@ final class ImuSessionFileStore {
     private func sessionDirectory(_ id: String) -> URL { directory.appendingPathComponent(id, isDirectory: true) }
     private func segmentFile(_ id: String, _ bucket: Int64) -> URL { sessionDirectory(id).appendingPathComponent("imu-\(Self.utcName(bucket)).imus") }
     private func segmentFiles(_ id: String) -> [URL] { ((try? FileManager.default.contentsOfDirectory(at: sessionDirectory(id), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "imus" }.sorted { $0.lastPathComponent < $1.lastPathComponent } }
-    private func scan(_ url: URL) -> Set<Int64> { segmentScans += 1; return Set(decode((try? Data(contentsOf: url)) ?? Data()).map(\.ts)) }
+    private func scan(_ url: URL) -> Set<Int64> { Set(decode(read(url) ?? Data()).map(\.ts)) }
     private static func bucketStart(_ ts: Int64) -> Int64 { ts >= 0 ? ts / segmentSeconds * segmentSeconds : ((ts - segmentSeconds + 1) / segmentSeconds) * segmentSeconds }
-    private static func utcName(_ ts: Int64) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts))) }
+    // Built once: every banked buffer names its segment, and a formatter per call cost about 45 µs (W06-047).
+    private static let utcFormatter: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; return f }()
+    private static func utcName(_ ts: Int64) -> String { utcFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(ts))) }
     private func int32(_ bytes: [UInt8], _ offset: Int) -> Int { Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16 | Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3]) }
     private func deflate(_ input: Data) -> Data? { let capacity = input.count + 128; var output = Data(count: capacity); let written = output.withUnsafeMutableBytes { dst in input.withUnsafeBytes { src in compression_encode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, capacity, src.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_ZLIB) } }; guard written > 0 else { return nil }; output.count = written; return output }
     private func inflate(_ input: Data, size: Int) -> Data? { var output = Data(count: size); let written = output.withUnsafeMutableBytes { dst in input.withUnsafeBytes { src in compression_decode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, size, src.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_ZLIB) } }; return written == size ? output : nil }

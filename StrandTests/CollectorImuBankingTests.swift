@@ -1,5 +1,7 @@
 import XCTest
+import CoreBluetooth
 import WhoopProtocol
+import WhoopStore
 @testable import Strand
 
 /// W06-002: the 5/MG frame loop banks IMU buffers into Raw Data Collector sessions through
@@ -43,15 +45,16 @@ final class CollectorImuBankingTests: XCTestCase {
         XCTAssertFalse(Collector.isBankableImu([]))
     }
 
-    /// `realBuffer` with bytes 8 and 9 replaced and its CRC32 recomputed, so only the type check can refuse it.
-    private func resealed(type: UInt8, layout: UInt8) -> [UInt8] {
-        var frame = realBuffer
+    /// `fixture` with bytes 8 and 9 replaced and its CRC32 recomputed, so only the type check can refuse it.
+    static func fixture(type: UInt8, layout: UInt8) -> [UInt8] {
+        var frame = fixture
         frame[8] = type; frame[9] = layout
         let crc = crc32(frame, 8, 1240)
         for i in 0..<4 { frame[1240 + i] = UInt8(truncatingIfNeeded: crc >> (8 * UInt32(i))) }
         XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok, "precondition: an intact frame")
         return frame
     }
+    private func resealed(type: UInt8, layout: UInt8) -> [UInt8] { Self.fixture(type: type, layout: layout) }
 
     /// W06-029: an intact frame of the same length but another packet type or layout is not an IMU buffer.
     func testOnlyR21BuffersAreBanked() {
@@ -61,16 +64,72 @@ final class CollectorImuBankingTests: XCTestCase {
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 0x24, layout: 9)), "a command frame")
     }
 
-    /// W06-002's call site: the 5/MG frame loop hands every frame to the session store before the offload
-    /// branch, which `continue`s. Nothing else would fail if the call were removed.
-    func testTheFrameLoopBanksBeforeTheOffloadBranch() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(contentsOf: root.appendingPathComponent("Strand/BLE/BLEManager.swift"))
-        let loop = try XCTUnwrap(source.range(of: "let completedFrames = reassembler.feed(bytes)"))
-        let tail = source[loop.upperBound...]
-        let bank = try XCTUnwrap(tail.range(of: "collector?.bankImuForSessions(frame)"))
-        let offload = try XCTUnwrap(tail.range(of: "routeBackfillFrame(frame)"))
-        XCTAssertLessThan(bank.lowerBound, offload.lowerBound)
+}
+
+/// A `BLEManager` whose collector banks for a fresh strap id, with an open Raw Data Collector session for
+/// that strap in the shared IMU store. `close()` removes the session and its files.
+@MainActor
+final class ImuBankingRig {
+    private final class NullStore: StoreWriting {
+        func insert(_ streams: Streams, deviceId: String) async throws
+            -> (hr: Int, rr: Int, events: Int, battery: Int,
+                spo2: Int, skinTemp: Int, resp: Int, gravity: Int, v18Aux: Int) { (0, 0, 0, 0, 0, 0, 0, 0, 0) }
+        func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws {}
+    }
+
+    static let dataChar = CBUUID(string: "fd4b0005-cce1-4033-93ce-002d5875f58a")
+    let live = LiveState()
+    let manager: BLEManager
+    let sessionId = "rig-\(UUID().uuidString)"
+
+    init() {
+        let deviceId = "rig-\(UUID().uuidString)"
+        let ts = Int64(Whoop5RawImu.baseTs(CollectorImuBankingTests.fixture)!)
+        ImuSessionFileStore.shared.start(id: sessionId, deviceId: deviceId, fromMs: (ts - 10) * 1_000)
+        manager = BLEManager(state: live, collector: Collector(store: NullStore(), deviceId: deviceId))
+    }
+
+    var banked: Bool { ImuSessionFileStore.shared.newestBankedTs(sessionId) != nil }
+
+    func close() {
+        _ = ImuSessionFileStore.shared.deleteFiles(sessionId)
+        ImuSessionFileStore.shared.remove(id: sessionId)
+    }
+}
+
+/// W06-002's call site, driven through the 5/MG frame handling itself (W06-043): a buffer banks into an open
+/// session from the live stream and from an offload alike. Removing the call fails both; moving it inside the
+/// offload branch fails the first, and after it the second.
+@MainActor
+final class Whoop5FrameImuBankingTests: XCTestCase {
+    private var rig: ImuBankingRig!
+
+    override func setUp() async throws { rig = ImuBankingRig() }
+    override func tearDown() async throws { rig.close() }
+
+    func testALiveBufferIsBanked() {
+        rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
+        XCTAssertTrue(rig.banked)
+    }
+
+    /// A raw-data session logs the packet type and layout byte of its first live buffer, once (W06-041).
+    func testASessionLogsItsFirstLiveBuffersLayout() {
+        let line = "Raw-data session: first live 1244-byte buffer is packet type 43, layout 21, intact"
+        func count() -> Int { rig.live.log.filter { $0.hasSuffix(line) }.count }
+        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(count(), 0, "no session armed")
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(count(), 1)
+    }
+
+    func testAnOffloadBufferIsBanked() {
+        let historical = CollectorImuBankingTests.fixture
+        XCTAssertTrue(BLEManager.isOffloadFrame(historical, family: .whoop5), "precondition: routed to the Backfiller")
+        rig.manager.handleWhoop5Frame(historical, char: ImuBankingRig.dataChar, offloading: true)
+        XCTAssertTrue(rig.banked)
     }
 }
 
@@ -103,10 +162,45 @@ final class ImuSessionFileStoreTests: XCTestCase {
         XCTAssertEqual(first.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 1)
         first.complete(id: "s", toMs: (ts + 10) * 1_000)
 
-        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults)
-        for _ in 0..<50 { XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0) }
-        XCTAssertEqual(relaunched.segmentScans, 1)
+        final class Reads { var count = 0 }
+        let reads = Reads()
+        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults,
+                                             read: { reads.count += 1; return try? Data(contentsOf: $0) })
+        XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0)
+        let afterOne = reads.count
+        for _ in 0..<49 { XCTAssertEqual(relaunched.append(deviceId: "strap", frame: buffer, receivedAtMs: 0), 0) }
+        XCTAssertEqual(reads.count, afterOne, "49 more duplicates read no file again")
         XCTAssertEqual(relaunched.stats("s", from: Int(ts) - 10, to: Int(ts) + 10).coveredSeconds, 1)
+    }
+
+    /// After a relaunch the newest banked second comes from the session's files (W06-038), even when a sync
+    /// first re-delivers an older buffer; a newer buffer moves it on.
+    func testTheNewestBankedSecondSurvivesARelaunch() throws {
+        let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
+        let first = ImuSessionFileStore(directory: directory, defaults: defaults)
+        first.start(id: "s", deviceId: "strap", fromMs: (ts - 10) * 1_000)
+        first.append(deviceId: "strap", frame: buffer, receivedAtMs: 0)
+        first.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 3), receivedAtMs: 0)
+        first.prepareForRead("s")
+
+        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults)
+        relaunched.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 1), receivedAtMs: 0)
+        XCTAssertEqual(relaunched.newestBankedTs("s"), ts + 3, "the files hold a newer second than the sync's")
+        relaunched.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 5), receivedAtMs: 0)
+        XCTAssertEqual(relaunched.newestBankedTs("s"), ts + 5)
+        XCTAssertNil(ImuSessionFileStore(directory: directory, defaults: defaults).newestBankedTs("none"))
+    }
+
+    /// A segment is named for the UTC start of its half hour, on disk and in the export (pinned for W06-047).
+    func testSegmentsAreNamedForTheirUTCHalfHour() throws {
+        let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
+        let store = ImuSessionFileStore(directory: directory, defaults: defaults)
+        store.start(id: "s", deviceId: "strap", fromMs: (ts - 10) * 1_000)
+        store.append(deviceId: "strap", frame: buffer, receivedAtMs: 0)
+        XCTAssertEqual(store.exportSegments("s", from: Int(ts) - 10, to: Int(ts) + 10).map(\.name),
+                       ["imu-20260714T133000Z.imus"])
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("s/imu-20260714T133000Z.imus").path))
     }
 
     /// The collector waits on this second before it stops the stream (W06-025).
