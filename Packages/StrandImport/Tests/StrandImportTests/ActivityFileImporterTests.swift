@@ -1,10 +1,17 @@
 import XCTest
+import WhoopStore
 @testable import StrandImport
 
 /// Pins ActivityFileImporter: GPX, TCX and FIT each parse into one normalized `ActivityFile` with the
 /// right time window, GPS-point / HR-sample counts and summary figures. Includes the malformed-input
 /// contract (must not crash, must reject gracefully) and the security guards (XXE entity, bad coords).
 final class ActivityFileImporterTests: XCTestCase {
+
+    /// W02-006: the timestamp heal spares imported raw sources by id, and WhoopStore cannot import this
+    /// package to read the id itself.
+    func testTimestampHealSparesThisSource() {
+        XCTAssertTrue(WhoopStore.importedRawSourceIds.contains(ActivityFileImporter.sourceId))
+    }
 
     func testRouteDistanceOrderedThreePointsUsesCanonicalBitPattern() {
         // Fork governance #99: exact twin parity matters even when the numerical delta is too small

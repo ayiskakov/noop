@@ -57,10 +57,15 @@ extension WhoopStore {
             // and that drift is not hypothetical: `storageStats`' comment records its old fixed sum
             // omitting six of these tables. One list means a stream added later is healed AND counted AND
             // named in the breakdown, or none of the three - never silently one of them.
+            // The far-PAST floor spares imported sources, as (b) below does for imported computed rows: an
+            // activity file carries real per-second HR from any date, and purging it left a workout with
+            // no heart rate (W02-006). A FUTURE row is implausible whatever wrote it.
             var rawDeleted = 0
+            let spared = WhoopStore.importedRawSourceIds
+            let placeholders = spared.map { _ in "?" }.joined(separator: ", ")
             for (_, table) in WhoopStore.rawTableKeys {
-                try db.execute(sql: "DELETE FROM \(table) WHERE ts < ? OR ts > ?",
-                               arguments: [lo, hi])
+                try db.execute(sql: "DELETE FROM \(table) WHERE ts > ? OR (ts < ? AND deviceId NOT IN (\(placeholders)))",
+                               arguments: StatementArguments([hi, lo]) + StatementArguments(spared))
                 rawDeleted += db.changesCount
             }
 
@@ -84,6 +89,11 @@ extension WhoopStore {
                                        computedRowsDeleted: computedDeleted)
         }
     }
+
+    /// Raw-stream sources whose timestamps come from an imported file rather than a strap's clock, so the
+    /// heal's far-past floor does not apply to them. `"activity-file"` is `ActivityFileImporter.sourceId`
+    /// in StrandImport, which this package cannot import; a StrandImport test pins the two together.
+    public static let importedRawSourceIds = ["activity-file"]
 
     /// `yyyy-MM-dd` for `date` in the LOCAL calendar — matches how dailyMetric `day` keys are written.
     public static func localDayKey(_ date: Date) -> String {
