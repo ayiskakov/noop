@@ -56,7 +56,13 @@ item as it lands.
       Done 2026-09-25, run `wf_f9451f0b-2c7`: 5 reviewers and 3 adversaries; findings in W1, W2 and W6.
 - [x] Settle AD-2, AD-5 and AD-6 in [`DECISIONS.md`](DECISIONS.md): all three Amend.
 - [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch. No S1 reported; the
-      S2 rows are W02-002, W02-003, W02-005 and W06-002.
+      S2 rows are W02-002, W02-003, W02-005 and W06-002. First batches, one PR each, stacked on this
+      branch: `review/w02-fixes`, `review/w01-fixes`, `review/w06-fixes`. W2's three S2s pass V1, V2 and V3;
+      W06-002 waits on the strap run.
+- [ ] Strap run agreed with the owner (2026-09-25): one sync and one short Raw Data Collector session on a
+      build with the W1 and W6 batches, strap log attached. Verifies W06-002, W01-003 and W01-004.
+- [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
+      W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups.
