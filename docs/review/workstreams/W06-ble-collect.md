@@ -110,3 +110,7 @@ exactly what was tested on hardware.
   ack; a second HISTORY_START mid-session), the kill-mid-offload strap run, R22 deep-data routing, the RR
   source-precedence read filter. Next: V0 (pass 4) for every `Reported` row; the hold-ack tests (W06-007)
   come before any fix in this area.
+- 2026-09-25 — Pass 4 and fixes started with the only S2: W06-002 fixed (IMU buffers banked into Raw Data Collector
+  sessions from the 5/MG frame loop); `StrandTests` and both app builds green. Branch `review/w06-fixes`. Next: the
+  strap run the owner agreed to (one sync, one short Raw Data Collector session, strap log attached), then the S3s,
+  starting with W06-007 (hold-ack tests) before any safe-trim change and W06-005 (the false sync warning).
