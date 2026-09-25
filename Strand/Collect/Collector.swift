@@ -366,6 +366,19 @@ final class Collector {
         rawCapture.open(at: monotonic(), duration: seconds)
     }
 
+    /// Bank one 5/MG 100 Hz IMU buffer into any open Raw Data Collector session (#1709). The 5/MG frame
+    /// loop calls this for every frame, live and from history sync, because that loop never calls
+    /// `ingest(frame:parsed:)`, where the only writer sat, so sessions recorded nothing (W06-002).
+    func bankImuForSessions(_ frame: [UInt8]) {
+        guard Self.isBankableImu(frame) else { return }
+        recordGroundTruthImu(frame)
+    }
+
+    /// An intact 1244-byte IMU buffer. `Whoop5RawImu` decodes without checking the CRC, so the gate does.
+    nonisolated static func isBankableImu(_ frame: [UInt8]) -> Bool {
+        frame.count == Whoop5RawImu.bufferLength && verifyFrame(frame, family: .whoop5).ok
+    }
+
     private func recordGroundTruthImu(_ frame: [UInt8]) {
         _ = ImuSessionFileStore.shared.append(deviceId: deviceId, frame: frame,
             receivedAtMs: Int64(Date().timeIntervalSince1970 * 1_000))
