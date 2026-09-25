@@ -5937,12 +5937,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // asked THIS link", and carrying it over would make a reconnect inside the window wait out the
         // previous link's timer before taking its first reading, on exactly the churn this is for.
         lastRssiDbm = nil; lastRssiAt = nil; lastRssiReadAt = nil
-        // W06-033: the link's bytes die with it. A frame half-received when the link dropped has a real
-        // header, so the gate passes it and it swallows the next link's first frames; a standing reconnect
-        // never runs connectCore, where the reassembler is otherwise rebuilt. The reject tally goes with it,
-        // because it folds the reassembler's drop counts as growth past the total it last saw.
-        reassembler = Reassembler(family: selectedModel.deviceFamily)
-        router.resetLinkTally()
+        // W06-033: the link's bytes die with it. A standing reconnect never runs connectCore, where the
+        // reassembler is otherwise rebuilt.
+        resetLinkFraming()
 
         let timedOut = !intentionalDisconnect && error != nil
         let sinceArm = realtimeArmedAt.map { Date().timeIntervalSince($0) }
@@ -7048,130 +7045,149 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             // timestamps are already real-unix seconds.) Live HR/battery still also come from the
             // standard 0x2A37 / 0x2A19 profiles handled above.
             if BLEManager.whoop5NotifyChars.contains(characteristic.uuid) {
-                // Byte runs dropped below the family minimum still reach the reject tally.
-                let completedFrames = reassembler.feed(bytes)
-                router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
-                router.noteReassemblerHeaderDrops(reassembler.headerChecksumDrops)
-                for frame in completedFrames {
-                    let isOffload = backfilling && BLEManager.isOffloadFrame(frame, family: .whoop5)
-                    noteWhoop5R22Telemetry(frame, duringOffload: isOffload)   // #174 deep-data telemetry
-                    // Durable EVENT-frame log for deep-data research (#103) — BEFORE the offload
-                    // branch, so it sees both live events and their history replays (either path
-                    // may be the only one that delivers a given record). Single byte compare when
-                    // the frame is not an EVENT; no-op unless the capture toggle is on.
-                    puffinEventLog.appendIfEvent(frame: frame, char: characteristic.uuid)
-                    // Durable log of the big high-rate R22 deep buffers (type-0x2F ≥ 1 KB) for #423
-                    // reverse-engineering — its own file the bulk-capture eviction never churns.
-                    // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
-                    puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: characteristic.uuid, isOffload: isOffload)
-                    stopUnexpectedRealtimeImu(frame, isOffload: isOffload)
-                    // #423 / #1709: the queryable twin of that diagnostics line — bank the decoded 100 Hz
-                    // 6-axis buffer into any open Raw Data Collector session, from the live stream and from
-                    // history sync alike. BEFORE the offload branch, which `continue`s (W06-002).
-                    collector?.bankImuForSessions(frame)
-                    if isOffload {
-                        // Same policy as WHOOP4: historical offload frames are bulk sync traffic.
-                        // Keep them out of the live UI parser during backfill and let Backfiller
-                        // preserve/order/process them in the sliced drain.
-                        // Same tally hand-off as the WHOOP 4.0 loop, and for the same reason (D3):
-                        // the router counts rejections, so a frame that skips it would be invisible
-                        // to the counter the hardware run is judged on. One verdict, no parse.
-                        router.noteOffloadFrameVerdict(verifyFrame(frame, family: .whoop5))
-                        armBackfillTimeout()
-                        routeBackfillFrame(frame)
-                        // A real-time double-tap / wrist gesture still fires during a 5/MG offload (which
-                        // runs for minutes, #69); the ts≈now gate rejects replayed historical EVENTs.
-                        router.dispatchLiveGestureIfFresh(frame: frame, now: strapClockNow)
-                        // …and the strap's own console narration, which it emits precisely DURING a sync.
-                        router.mirrorStrapConsoleIfPresent(frame: frame)
-                        continue
-                    }
-                    router.handle(frame: frame)
-                    // The same split as the WHOOP 4.0 loop above, and for the same reasons: the probe
-                    // dispatches below branch on a raw opcode compare; the ones that verify do it inside
-                    // their own decoder, the extended-battery / body-location probes and the write-ack
-                    // branches do not, and are recorded there as a standing risk rather than hardened.
-                    // #592: a 5/MG extended-battery probe COMMAND_RESPONSE (puffin envelope: type @8, cmd
-                    // @10). Format + publish it for the Devices dialog, exactly like the 4.0 path above.
-                    if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getExtendedBatteryInfo.rawValue {
-                        handleExtendedBatteryProbeResponse(frame, isWhoop5: true)
-                    }
-                    // #690: a 5/MG body-location probe COMMAND_RESPONSE (puffin envelope: type @8, cmd @10).
-                    if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getBodyLocationAndStatus.rawValue {
-                        handleBodyLocationProbeResponse(frame, isWhoop5: true)
-                    }
-                    // #761: a 5/MG reply to the read-only feature-flag enumeration (117/118), same puffin
-                    // envelope offsets. In-flight-guarded inside.
-                    if frame.count > 10, frame[8] == 0x24,
-                       frame[10] == WhoopCommand.startFeatureFlagKeyExchange.rawValue
-                        || frame[10] == WhoopCommand.sendNextFeatureFlag.rawValue {
-                        handleFeatureFlagProbeResponse(frame, isWhoop5: true)
-                    }
-                    // #103: a 5/MG reply to the read-only device-config READ probe (121/128), same puffin
-                    // envelope offsets. In-flight-guarded inside.
-                    if frame.count > 10, frame[8] == 0x24,
-                       DeviceConfigReadProbe.isReadOnlyOpcode(frame[10]) {
-                        handleDeviceConfigProbeResponse(frame, isWhoop5: true)
-                    }
-                    // #174: a reply belonging to an R22 DISABLE run — either the SET_FF_VALUE(120) write ack
-                    // or the GET_FF_VALUE(128) read-back that verifies it. In-flight-guarded inside, so this
-                    // is a byte compare on every other frame. Note 128 is also matched by the read-probe
-                    // clause above; both handlers guard on their OWN run being live, so exactly one acts.
-                    if frame.count > 10, frame[8] == 0x24,
-                       frame[10] == WhoopCommand.setConfig.rawValue
-                        || frame[10] == WhoopCommand.getFeatureFlagValue.rawValue {
-                        handleR22DisableResponse(frame, isWhoop5: true)
-                    }
-                    // #891: a reply belonging to an ECG raw-data gate write — either the SET_DEVICE_CONFIG(119)
-                    // write ack (recorded, never the proof) or the GET_DEVICE_CONFIG_VALUE(121) read-back that
-                    // decides the verdict. Both handlers guard on ecgGateReport being live, so they no-op
-                    // outside a verification (and the 121 read-probe clause above no-ops too, its run not live).
-                    // #1061 shares the SAME opcodes for its Broadcast-HR write read-back; only one gate is ever
-                    // in flight (both are single-flight), and each handler no-ops unless its own report is live.
-                    if frame.count > 10, frame[8] == 0x24 {
-                        if frame[10] == WhoopCommand.setDeviceConfig.rawValue {
-                            handleEcgGateWriteAck(frame, cmdOff: 10)
-                            handleBroadcastHrGateWriteAck(frame, cmdOff: 10)
-                        } else if frame[10] == WhoopCommand.getDeviceConfigValue.rawValue {
-                            handleEcgGateReadBack(frame, isWhoop5: true)
-                            handleBroadcastHrGateReadBack(frame, isWhoop5: true)
-                        }
-                    }
-                    // #695: a 5/MG GET_DATA_RANGE COMMAND_RESPONSE (puffin envelope: type @8, cmd @10). Feeds
-                    // the SAME newest/oldest window + backfill gate + diagnostics as the 4.0 path above — this
-                    // reply was previously ignored on 5/MG (the 4.0 handler keyed on frame[6]). cmdOff = 10.
-                    // MG ECG (Labrador) probe: settle each command's outcome and hunt for the packet type
-                    // the ECG records arrive under. `ecgProbeArmed` is false outside a user-initiated
-                    // run, so this costs one Bool read on every other frame.
-                    if ecgProbeArmed { noteEcgProbeFrame(frame) }
-                    // The session settles its own replies for as long as it is active, which outlasts the
-                    // probe window; outside a session this is one optional read per frame.
-                    if ecgSession?.isActive == true { noteEcgSessionReply(frame) }
-                    noteEcgLiveFrame(frame)
-                    // Gated on the FULL verdict for the same reason as the 4.0 path: this reply sets the
-                    // window the offload judges its records against. The verdict is taken here rather
-                    // than threaded from the seam because the 5/MG loop hands the router raw bytes; a
-                    // data-range reply arrives once or twice per connection, so the parse is not a cost
-                    // on the frame flood.
-                    if frame.count > 10, frame[8] == 0x24,
-                       DataRange.acceptsReply(frame, cmdOff: 10, opcode: WhoopCommand.getDataRange.rawValue,
-                                              verdictOK: parseFrame(frame, family: .whoop5).ok) {
-                        // feedsSync: false — #695 diagnostic-only on 5/MG: log the dump/backlog/newest/oldest so
-                        // a strap log validates the decode, but DON'T feed strapNewestTs/backfill/state yet.
-                        // Flip to true once a real 5.0/MG strap confirms the newest/oldest are correct.
-                        handleDataRangeResponse(frame, cmdOff: 10, feedsSync: false)
-                    }
-                    // NOTE: we deliberately do NOT ingest live 5/MG REALTIME_DATA into the Collector
-                    // here. For a 5/MG the standard 0x2A37 Heart-Rate profile is already the RELIABLE,
-                    // continuously-persisted live source (see didUpdateValueFor 0x2A37 → ingestStandardHR);
-                    // decoding HR a second time off the puffin stream stored a duplicate row per heartbeat
-                    // at a slightly different second (strap-unix vs Mac-receive), inflating the sample
-                    // store. 0x2A37 stays the single authoritative live HR/RR source for 5/MG.
-                    // Capture for protocol mapping (no-op unless the Settings toggle is on). PR #20.
-                    puffinRecorder.capture(frame: frame, char: characteristic.uuid)
-                }
+                feedWhoop5(bytes, char: characteristic.uuid)
             }
         }
+    }
+
+    /// Rebuilds the reassembler and resets the reject tally, together (W06-033). A frame half-received when
+    /// a link dropped has a real header, so the gate passes it and it swallows the next link's first frames.
+    /// The tally goes with it because it folds the reassembler's drop counts as growth past the total it
+    /// last saw, so a fresh reassembler under an old tally would hide the next link's drops.
+    func resetLinkFraming() {
+        reassembler = Reassembler(family: selectedModel.deviceFamily)
+        router.resetLinkTally()
+    }
+
+    /// Bytes from a 5/MG notify characteristic: reassembled into frames, each handled in arrival order.
+    /// Byte runs dropped below the family minimum still reach the reject tally.
+    func feedWhoop5(_ bytes: [UInt8], char: CBUUID) {
+        let completedFrames = reassembler.feed(bytes)
+        router.noteReassemblerDrops(reassembler.belowMinimumLengthDrops)
+        router.noteReassemblerHeaderDrops(reassembler.headerChecksumDrops)
+        for frame in completedFrames { handleWhoop5Frame(frame, char: char, offloading: backfilling) }
+    }
+
+    /// One reassembled 5/MG frame from notify characteristic `char`. During an offload a historical frame
+    /// goes to the Backfiller; every other frame drives the live UI and the probe replies. It takes the
+    /// offload state as a parameter so a test can drive both paths without a peripheral (W06-043).
+    func handleWhoop5Frame(_ frame: [UInt8], char: CBUUID, offloading: Bool) {
+        let isOffload = offloading && BLEManager.isOffloadFrame(frame, family: .whoop5)
+        noteWhoop5R22Telemetry(frame, duringOffload: isOffload)   // #174 deep-data telemetry
+        // Durable EVENT-frame log for deep-data research (#103) — BEFORE the offload
+        // branch, so it sees both live events and their history replays (either path
+        // may be the only one that delivers a given record). Single byte compare when
+        // the frame is not an EVENT; no-op unless the capture toggle is on.
+        puffinEventLog.appendIfEvent(frame: frame, char: char)
+        // Durable log of the big high-rate R22 deep buffers (type-0x2F ≥ 1 KB) for #423
+        // reverse-engineering — its own file the bulk-capture eviction never churns.
+        // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
+        puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: char, isOffload: isOffload)
+        stopUnexpectedRealtimeImu(frame, isOffload: isOffload)
+        // #423 / #1709: the queryable twin of that diagnostics line — bank the decoded 100 Hz
+        // 6-axis buffer into any open Raw Data Collector session, from the live stream and from
+        // history sync alike. BEFORE the offload branch, which returns (W06-002).
+        collector?.bankImuForSessions(frame)
+        if isOffload {
+            // Same policy as WHOOP4: historical offload frames are bulk sync traffic.
+            // Keep them out of the live UI parser during backfill and let Backfiller
+            // preserve/order/process them in the sliced drain.
+            // Same tally hand-off as the WHOOP 4.0 loop, and for the same reason (D3):
+            // the router counts rejections, so a frame that skips it would be invisible
+            // to the counter the hardware run is judged on. One verdict, no parse.
+            router.noteOffloadFrameVerdict(verifyFrame(frame, family: .whoop5))
+            armBackfillTimeout()
+            routeBackfillFrame(frame)
+            // A real-time double-tap / wrist gesture still fires during a 5/MG offload (which
+            // runs for minutes, #69); the ts≈now gate rejects replayed historical EVENTs.
+            router.dispatchLiveGestureIfFresh(frame: frame, now: strapClockNow)
+            // …and the strap's own console narration, which it emits precisely DURING a sync.
+            router.mirrorStrapConsoleIfPresent(frame: frame)
+            return
+        }
+        router.handle(frame: frame)
+        // The same split as the WHOOP 4.0 loop above, and for the same reasons: the probe
+        // dispatches below branch on a raw opcode compare; the ones that verify do it inside
+        // their own decoder, the extended-battery / body-location probes and the write-ack
+        // branches do not, and are recorded there as a standing risk rather than hardened.
+        // #592: a 5/MG extended-battery probe COMMAND_RESPONSE (puffin envelope: type @8, cmd
+        // @10). Format + publish it for the Devices dialog, exactly like the 4.0 path above.
+        if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getExtendedBatteryInfo.rawValue {
+            handleExtendedBatteryProbeResponse(frame, isWhoop5: true)
+        }
+        // #690: a 5/MG body-location probe COMMAND_RESPONSE (puffin envelope: type @8, cmd @10).
+        if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getBodyLocationAndStatus.rawValue {
+            handleBodyLocationProbeResponse(frame, isWhoop5: true)
+        }
+        // #761: a 5/MG reply to the read-only feature-flag enumeration (117/118), same puffin
+        // envelope offsets. In-flight-guarded inside.
+        if frame.count > 10, frame[8] == 0x24,
+           frame[10] == WhoopCommand.startFeatureFlagKeyExchange.rawValue
+            || frame[10] == WhoopCommand.sendNextFeatureFlag.rawValue {
+            handleFeatureFlagProbeResponse(frame, isWhoop5: true)
+        }
+        // #103: a 5/MG reply to the read-only device-config READ probe (121/128), same puffin
+        // envelope offsets. In-flight-guarded inside.
+        if frame.count > 10, frame[8] == 0x24,
+           DeviceConfigReadProbe.isReadOnlyOpcode(frame[10]) {
+            handleDeviceConfigProbeResponse(frame, isWhoop5: true)
+        }
+        // #174: a reply belonging to an R22 DISABLE run — either the SET_FF_VALUE(120) write ack
+        // or the GET_FF_VALUE(128) read-back that verifies it. In-flight-guarded inside, so this
+        // is a byte compare on every other frame. Note 128 is also matched by the read-probe
+        // clause above; both handlers guard on their OWN run being live, so exactly one acts.
+        if frame.count > 10, frame[8] == 0x24,
+           frame[10] == WhoopCommand.setConfig.rawValue
+            || frame[10] == WhoopCommand.getFeatureFlagValue.rawValue {
+            handleR22DisableResponse(frame, isWhoop5: true)
+        }
+        // #891: a reply belonging to an ECG raw-data gate write — either the SET_DEVICE_CONFIG(119)
+        // write ack (recorded, never the proof) or the GET_DEVICE_CONFIG_VALUE(121) read-back that
+        // decides the verdict. Both handlers guard on ecgGateReport being live, so they no-op
+        // outside a verification (and the 121 read-probe clause above no-ops too, its run not live).
+        // #1061 shares the SAME opcodes for its Broadcast-HR write read-back; only one gate is ever
+        // in flight (both are single-flight), and each handler no-ops unless its own report is live.
+        if frame.count > 10, frame[8] == 0x24 {
+            if frame[10] == WhoopCommand.setDeviceConfig.rawValue {
+                handleEcgGateWriteAck(frame, cmdOff: 10)
+                handleBroadcastHrGateWriteAck(frame, cmdOff: 10)
+            } else if frame[10] == WhoopCommand.getDeviceConfigValue.rawValue {
+                handleEcgGateReadBack(frame, isWhoop5: true)
+                handleBroadcastHrGateReadBack(frame, isWhoop5: true)
+            }
+        }
+        // #695: a 5/MG GET_DATA_RANGE COMMAND_RESPONSE (puffin envelope: type @8, cmd @10). Feeds
+        // the SAME newest/oldest window + backfill gate + diagnostics as the 4.0 path above — this
+        // reply was previously ignored on 5/MG (the 4.0 handler keyed on frame[6]). cmdOff = 10.
+        // MG ECG (Labrador) probe: settle each command's outcome and hunt for the packet type
+        // the ECG records arrive under. `ecgProbeArmed` is false outside a user-initiated
+        // run, so this costs one Bool read on every other frame.
+        if ecgProbeArmed { noteEcgProbeFrame(frame) }
+        // The session settles its own replies for as long as it is active, which outlasts the
+        // probe window; outside a session this is one optional read per frame.
+        if ecgSession?.isActive == true { noteEcgSessionReply(frame) }
+        noteEcgLiveFrame(frame)
+        // Gated on the FULL verdict for the same reason as the 4.0 path: this reply sets the
+        // window the offload judges its records against. The verdict is taken here rather
+        // than threaded from the seam because the 5/MG loop hands the router raw bytes; a
+        // data-range reply arrives once or twice per connection, so the parse is not a cost
+        // on the frame flood.
+        if frame.count > 10, frame[8] == 0x24,
+           DataRange.acceptsReply(frame, cmdOff: 10, opcode: WhoopCommand.getDataRange.rawValue,
+                                  verdictOK: parseFrame(frame, family: .whoop5).ok) {
+            // feedsSync: false — #695 diagnostic-only on 5/MG: log the dump/backlog/newest/oldest so
+            // a strap log validates the decode, but DON'T feed strapNewestTs/backfill/state yet.
+            // Flip to true once a real 5.0/MG strap confirms the newest/oldest are correct.
+            handleDataRangeResponse(frame, cmdOff: 10, feedsSync: false)
+        }
+        // NOTE: we deliberately do NOT ingest live 5/MG REALTIME_DATA into the Collector
+        // here. For a 5/MG the standard 0x2A37 Heart-Rate profile is already the RELIABLE,
+        // continuously-persisted live source (see didUpdateValueFor 0x2A37 → ingestStandardHR);
+        // decoding HR a second time off the puffin stream stored a duplicate row per heartbeat
+        // at a slightly different second (strap-unix vs Mac-receive), inflating the sample
+        // store. 0x2A37 stays the single authoritative live HR/RR source for 5/MG.
+        // Capture for protocol mapping (no-op unless the Settings toggle is on). PR #20.
+        puffinRecorder.capture(frame: frame, char: char)
     }
 
     public func peripheral(_ peripheral: CBPeripheral,

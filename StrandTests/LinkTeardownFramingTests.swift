@@ -7,15 +7,32 @@ import WhoopProtocol
 @MainActor
 final class LinkTeardownFramingTests: XCTestCase {
 
-    /// The disconnect handler rebuilds the reassembler and resets the tally.
-    func testTheDisconnectHandlerRebuildsTheLinkFraming() throws {
+    /// Half a buffer carried over from a dropped link swallows the next link's first buffer; after
+    /// `resetLinkFraming` that buffer arrives whole and banks (W06-043).
+    func testResettingTheFramingSavesTheNextLinksFirstBuffer() {
+        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+        for reset in [false, true] {
+            let rig = ImuBankingRig()
+            defer { rig.close() }
+            rig.manager.feedWhoop5(Array(buffer.prefix(600)), char: ImuBankingRig.dataChar)
+            if reset { rig.manager.resetLinkFraming() }
+            rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+            XCTAssertEqual(rig.banked, reset, reset ? "reset: the buffer banks" : "no reset: the buffer is lost")
+        }
+    }
+
+    /// Every disconnect runs the reset: the handler calls it at its top level, not under a condition and not
+    /// commented out. The handler takes a `CBPeripheral`, which a test cannot make, so this one reads the
+    /// source with comments removed.
+    func testTheDisconnectHandlerResetsTheFraming() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Strand/BLE/BLEManager.swift"))
         let start = try XCTUnwrap(source.range(of: "didDisconnectPeripheral peripheral: CBPeripheral,"))
         let end = try XCTUnwrap(source.range(of: "\n    public func centralManager(", range: start.upperBound..<source.endIndex))
-        let handler = source[start.upperBound..<end.lowerBound]
-        XCTAssertTrue(handler.contains("reassembler = Reassembler(family: selectedModel.deviceFamily)"))
-        XCTAssertTrue(handler.contains("router.resetLinkTally()"))
+        let code = source[start.upperBound..<end.lowerBound].split(separator: "\n").map { line in
+            line.range(of: "//").map { line[..<$0.lowerBound] } ?? line
+        }
+        XCTAssertTrue(code.contains("        resetLinkFraming()"))
     }
 
     /// The tally folds a reassembler's drops as growth past the total it last saw, so a fresh reassembler
