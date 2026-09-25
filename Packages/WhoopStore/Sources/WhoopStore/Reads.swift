@@ -566,9 +566,12 @@ extension WhoopStore {
         }
     }
 
-    /// Bounded process-local invalidator over the UTC days touched by this window. The instance token
-    /// prevents a static cycle cache surviving a store reopen from reusing revisions from the old DB.
-    /// Kotlin twin: `WhoopRepository.stepDataRevisionSignature`.
+    /// Bounded invalidator over the UTC days touched by this window, kept per `WhoopStore` INSTANCE, not
+    /// per process. The app opens two instances on one file, and each sees only the step inserts made
+    /// through it: strap steps arrive through BLEManager's, while the cycle cache reads Repository's, so
+    /// for strap data this component does not move and the cache's days witness does the invalidating
+    /// (W02-013). The instance token prevents a static cycle cache surviving a store reopen from reusing
+    /// revisions from the old DB. Kotlin twin: `WhoopRepository.stepDataRevisionSignature`.
     public func stepDataRevisionSignature(deviceId: String, from: Int, to: Int) async -> String {
         "\(revisionInstanceToken):\(deviceId):\(stepDataRevision.signature(deviceId: deviceId, from: from, to: to))"
     }
