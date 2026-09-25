@@ -23,17 +23,17 @@ Claude Doc (NOOP — Whole-Project Code Review Plan); where the two disagree, th
 Each fact on this board lives here only. Findings live only in their workstream file; verdicts live
 only in `DECISIONS.md`. Do not copy counts from those files onto this board — link instead.
 
-**Current phase:** 1 — Data integrity (not started). Phase 0 closed 2026-09-25; its numbers are in
+**Current phase:** 1 — Data integrity (in review since 2026-09-25). Phase 0 closed 2026-09-25; its numbers are in
 [`BASELINE.md`](BASELINE.md#phase-0-measurements). See [`PLAN.md`](PLAN.md#phases).
 
 | WS | Area | File | Phase | Status |
 |---|---|---|---|---|
-| W1 | Protocol | [W01-protocol.md](workstreams/W01-protocol.md) | 1 | Not started |
-| W2 | Storage | [W02-storage.md](workstreams/W02-storage.md) | 1 | Not started |
+| W1 | Protocol | [W01-protocol.md](workstreams/W01-protocol.md) | 1 | In review |
+| W2 | Storage | [W02-storage.md](workstreams/W02-storage.md) | 1 | In review |
 | W3 | Analytics | [W03-analytics.md](workstreams/W03-analytics.md) | 2 | Not started |
 | W4 | Import and export | [W04-import.md](workstreams/W04-import.md) | 2 | Not started |
 | W5 | Local access (MCP / CLI) | [W05-local-access.md](workstreams/W05-local-access.md) | 4 | Not started |
-| W6 | BLE and collection | [W06-ble-collect.md](workstreams/W06-ble-collect.md) | 1 (safe-trim), 3 (rest) | Not started |
+| W6 | BLE and collection | [W06-ble-collect.md](workstreams/W06-ble-collect.md) | 1 (safe-trim), 3 (rest) | In review |
 | W7 | App data layer | [W07-app-data.md](workstreams/W07-app-data.md) | 2 | Not started |
 | W8 | Screens and design system | [W08-screens-design.md](workstreams/W08-screens-design.md) | 4 | Not started |
 | W9 | App shell and services | [W09-app-shell.md](workstreams/W09-app-shell.md) | 3 | Not started |
@@ -50,13 +50,16 @@ five review passes are ticked.
 Phase 1 — Data integrity: W2 Storage, W1 Protocol, and the safe-trim and backfill part of W6. Tick each
 item as it lands.
 
-- [ ] Run the Phase 1 review workflow (owner's choice: one multi-agent workflow per phase, under ten
+- [x] Run the Phase 1 review workflow (owner's choice: one multi-agent workflow per phase, under ten
       agents): passes 1 Map, 2 Static sweep, 3 Deep read and 5 Adversarial for each of the three areas.
       Agents return findings; one writer records them as `Reported` rows, so the files never collide.
-- [ ] Settle AD-2, AD-5 and AD-6 in [`DECISIONS.md`](DECISIONS.md).
-- [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch.
+      Done 2026-09-25, run `wf_f9451f0b-2c7`: 5 reviewers and 3 adversaries; findings in W1, W2 and W6.
+- [x] Settle AD-2, AD-5 and AD-6 in [`DECISIONS.md`](DECISIONS.md): all three Amend.
+- [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch. No S1 reported; the
+      S2 rows are W02-002, W02-003, W02-005 and W06-002.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
-      backup, and no open S1 or S2 in the three areas.
+      backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
+      (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

@@ -41,20 +41,26 @@ Tests: `Packages/WhoopStore/Tests/WhoopStoreTests`.
 
 ## Checks
 
-- [ ] No existing migration was mutated (`git log -p` on `Database.swift`); each new one has a test.
-- [ ] A copy of the newest real backup migrates to head, with row counts per table preserved.
-- [ ] Every dedup, merge, heal and dismiss path has a test proving unrelated rows survive; window-wide
-      deletes get extra scrutiny.
-- [ ] Every key and hash that reaches disk is platform-stable (no `hashValue`).
-- [ ] Backup export → import reproduces the same rows and settings; each whitelist kind matches how the
-      app reads that key.
-- [ ] Two `WhoopStore` instances on one file cannot run the migrator concurrently (AD-2).
-- [ ] Prune never removes raw data for a chunk whose decoded rows are not committed.
-- [ ] Integrity failure leads to a defined, visible outcome, not a crash or silent reset.
+- [x] No existing migration was mutated (`git log -p` on `Database.swift`); each new one has a test. Pass:
+      all 49 bodies unchanged over 48 commits; all 49 ids pinned by the schema oracle (W02-015 refuted).
+- [x] A copy of the newest real backup migrates to head, with row counts per table preserved. Pass:
+      `StrandTests/RealBackupGateTests` over three backups (v46, v48, v49 to v49); every table that existed
+      before is unchanged, apart from the ECG purge v48 and v49 document.
+- [x] Every dedup, merge, heal and dismiss path has a test proving unrelated rows survive; window-wide
+      deletes get extra scrutiny. Fail: W02-005, W02-006.
+- [x] Every key and hash that reaches disk is platform-stable (no `hashValue`). Pass: `hashValue` appears
+      only in an in-memory memo key.
+- [x] Backup export → import reproduces the same rows and settings; each whitelist kind matches how the
+      app reads that key. Pass on a quiescent file (`RealBackupGateTests`: 37 tables, every row and setting
+      equal); kinds match. Not under live writers: W02-002, W02-003, W02-004.
+- [x] Two `WhoopStore` instances on one file cannot run the migrator concurrently (AD-2). Pass in process
+      (`StoreOpenGate`); `Tools/Backfill` is outside the gate. Write contention: W02-008.
+- [x] Prune never removes raw data for a chunk whose decoded rows are not committed. Pass.
+- [x] Integrity failure leads to a defined, visible outcome, not a crash or silent reset. Fail: W02-009.
 
 ## Review passes
 
-- [ ] 1 Map · [ ] 2 Static sweep · [ ] 3 Deep read · [ ] 4 Run · [ ] 5 Adversarial
+- [x] 1 Map · [x] 2 Static sweep · [x] 3 Deep read · [ ] 4 Run · [x] 5 Adversarial
 
 ## Gate
 
@@ -64,7 +70,29 @@ Migration test on a copy of a real backup; `.noopbak` round-trip; row-level diff
 
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
+| W02-001 | S4 | Reported | A restore stamps `backup.lastRestoreAt` into `UserDefaults.standard` even when the caller injects `settingsDefaults`, so every restore test writes the test host's real defaults and a later debug export reports a restore that never happened | `Strand/Data/DataBackup.swift` `restore(from:toDatabaseAt:…)` | Found while building the Phase 1 gate: the write is unconditional; only `DebugDataDiagnostics` reads it |  |
+| W02-002 | S2 | Reported | Restore's pre-import snapshot and its failed-import rollback copy only the main file after deleting the live WAL, so uncheckpointed commits are lost while the UI says the data was kept; a main-only copy after a partial checkpoint can be malformed | `DataBackup.swift` `restore` snapshot and rollback | P5 confirmed with caveat (found by both slices). Probe: 50 committed rows still in the WAL, snapshot holds 0. Harm needs the rollback path; the success side file is never shown |  |
+| W02-003 | S2 | Reported | Export can ship an incomplete or torn database: a TRUNCATE checkpoint blocked by a reader returns normally, the live main file is zipped with no snapshot while writers commit, and the pre-zip `quick_check` reads through the WAL so it cannot see either; on macOS the checkpoint runs before the save panel opens | `WhoopStore.swift` `checkpointWALImpl`; `DataBackup.swift` `runExport`, `writeVerifiedBackupZip` | P5 confirmed with caveat. Oracle: the checkpoint returns `[1, 2, 1]` with no error and the main file alone holds 1 of 3 committed rows, or is malformed after a partial checkpoint. Folder backups keep only the newest N, so bad ones can age out good ones. AD-2 |  |
+| W02-004 | S3 | Reported | A restore swaps the file under both open pools and nothing closes them or relaunches: until the user quits, every offload stalls and every Repository write fails (mostly behind `try?`), while comments claim a restore forces a relaunch | `DataBackup.swift` `restore`; `BackupSettings.swift` `apply` comment | P5: the first pass's silent-loss claim is refuted for the real stack (writes through a pre-swap GRDB pool throw SQLITE_IOERR_VNODE, so the Backfiller holds acks). Degraded behaviour and a false claim remain. AD-2 |  |
+| W02-005 | S2 | Reported | "Delete all of this device's data" and "Forget device" leave the device's computed `<id>-noop` rows (scored days, sleeps, workouts, metric series) on disk and on screen | `Strand/Data/DeviceRegistry.swift` `deleteDeviceData`, `forget`; `DeviceRegistryStore.swift` `deleteAllData` | P5 confirmed. `deleteAllData` matches the exact id; `Repository.computedReadIds` keeps reading the sibling and no rescore evicts it once raw HR is gone |  |
+| W02-006 | S3 | Reported | The #547 timestamp heal deletes every raw row before 2023-11-14 from every source, including imported workout-file HR, while it exempts imported computed rows | `TimestampHeal.swift` `healImplausibleTimestamps` | P5 confirmed with caveat: needs a heal re-run (a bad-clock sync) and an activity file older than the floor; owner logs show 0 implausible drops |  |
+| W02-007 | S3 | Reported | Deleted-sleep and dismissed-workout tombstones live only in UserDefaults, outside the database and the backup whitelist, so a restore on a new device re-detects nights and workouts the user deleted | `Repository.swift` `dismissedSleepSpans`; `WorkoutSource.swift` `dismissedDefaultsKey`; `BackupSettings.swift` | P5 confirmed with caveat: new device or fresh install only; `workouts.autoDetectDismissed` is a 30-day list and out of scope. AD-9 evidence |  |
+| W02-008 | S3 | Reported | Two pool writers on one file use deferred transactions, so a write transaction that reads first fails at once with SQLITE_BUSY while the other instance writes; the 5 s busy timeout never applies, and `IntelligenceEngine` swallows the failure | `WhoopStore.swift` `init(path:)`; `MetricsCache.swift` `upsertSleepSessions` | P5 confirmed: read-first upsert fails in about 1 ms, write-first insert waits 1.3 s. BLE-side writes are write-first, so the ack path is safe. AD-2 |  |
+| W02-009 | S3 | Reported | A live store that fails to open (corrupt file, failed migration, locked data protection) leaves no visible state: `Repository` logs to NSLog and every read returns empty, so the app looks like a fresh install | `Strand/Data/Repository.swift` `ensureStore` | P5 confirmed. A NOTADB file is not quarantined (the probe returns early), so the open fails on every launch |  |
+| W02-010 | S4 | Reported | `WhoopStoreInfo.schemaVersion` is 18 while the schema is at 49, and that value goes into every backup manifest and every `APP_VERSION_CHANGED` event | `WhoopStore.swift` `WhoopStoreInfo`; `DataBackup.swift` `currentManifestJSON`; `AppModel.swift` | P5 confirmed (found by both slices). All 6 owner manifests say 18; nothing reads it back; five tests pin 18 |  |
+| W02-011 | S4 | Reported | The v48 and v49 migration comments justify the ECG purge with "the strap re-offloads v16 records on the next sync"; acked records are trimmed, so the purge was permanent | `Database.swift` v48, v49 comments | P5 confirmed. Comment-only; fork-only |  |
+| W02-012 | S4 | Reported | `StreamStore.insert` counts v18 aux rows offered, not accepted, so a re-offload prints `v18aux=N` as newly banked beside zeros | `StreamStore.swift` `insert(_:deviceId:…)` | P5 confirmed: a duplicate insert reports hr=0, v18Aux=2 |  |
+| W02-013 | S4 | Reported | The step-revision cache witness is per `WhoopStore` instance, not per process as documented, so Repository's instance never sees BLEManager's step inserts | `Reads.swift` `stepDataRevisionSignature` | P5 confirmed with caveat: no wrong step count shown; the days witness still invalidates. AD-2 |  |
+| W02-014 | S4 | Reported | The activity-file import comment says an identical timestamp overwrites; the insert keeps the first row, and its `try?` drops the HR silently while the import reports success | `Strand/Screens/DataSourcesView.swift` activity import | P5 confirmed |  |
+| W02-015 | — | Not a bug | The v36 migration's stored output depends on a helper that changed after it shipped | `Database.swift` v36 | P5 refuted: the divergence needs spaced capability tokens, which no Apple writer produces and the restore gate refuses from Android. All 49 migration bodies are otherwise unchanged |  |
+| W02-016 | S3 | Reported | AD-2 Amend: one `WhoopStore` per process per path, immediate transactions, and a single owner that can close, swap and reopen the file for restore and snapshot it for export | `WhoopStore.swift` `StoreOpenGate`; `BLEManager.swift`, `Repository.swift` opens | Design row for the AD-2 verdict ([DECISIONS.md](../DECISIONS.md#ad-2)). `defaultTransactionKind = .immediate` can land first as a fix for W02-008; the shared instance is Phase 5 |  |
 
 ## Log
 
 - 2026-09-25 — File created from the plan.
+- 2026-09-25 — Phase 1 claimed. Passes 1 Map, 2 Static sweep, 3 Deep read and 5 Adversarial running as one multi-agent workflow (AD-2 evidence included); one writer records the results here.
+- 2026-09-25 — Passes 1, 2, 3 and 5 done in workflow run `wf_f9451f0b-2c7` (two reviewers, one
+  adversary). W02-001 found while building the gate test; W02-002 … W02-015 from the workflow (duplicates
+  merged, W02-015 refuted by pass 5). Exit-gate half done: `RealBackupGateTests` passes on three real
+  backups. Not covered: a stress run of offload inserts against a rescore, Repository write transactions
+  longer than 5 s, the full-disk path, NoopLocalAccess opens (W5). Next: V0 (pass 4) for every `Reported` row.

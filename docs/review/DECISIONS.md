@@ -9,11 +9,11 @@ Verdict values: `Open` → `Keep` | `Amend` | `Replace`.
 | ID | Decision as built | Owner WS | Phase | Verdict |
 |---|---|---|---|---|
 | [AD-1](#ad-1) | Pure packages, thin app shell | W7 | 2 | Open |
-| [AD-2](#ad-2) | `WhoopStore` actor opened separately by `BLEManager` and `Repository` on one SQLite file | W2 | 1 | Open |
+| [AD-2](#ad-2) | `WhoopStore` actor opened separately by `BLEManager` and `Repository` on one SQLite file | W2 | 1 | Amend |
 | [AD-3](#ad-3) | BLE, routing, collection and backfill all `@MainActor`; CoreBluetooth on the main queue | W6 | 3 | Open |
 | [AD-4](#ad-4) | Swift 5 language mode, strict concurrency `minimal` | W9 | 3 | Open |
-| [AD-5](#ad-5) | Live and historical paths split; live frames dropped during offload | W6 | 1 | Open |
-| [AD-6](#ad-6) | Decoded-first durability, resumable safe-trim, prunable raw outbox | W6 | 1 | Open |
+| [AD-5](#ad-5) | Live and historical paths split; live frames dropped during offload | W6 | 1 | Amend |
+| [AD-6](#ad-6) | Decoded-first durability, resumable safe-trim, prunable raw outbox | W6 | 1 | Amend |
 | [AD-7](#ad-7) | `"my-whoop"` constant as the device partition key | W7 | 2 | Open |
 | [AD-8](#ad-8) | Derived caches with background rescore; no algorithm version on rows | W7 | 2 | Open |
 | [AD-9](#ad-9) | Settings in `UserDefaults` / `@AppStorage` plus the `.noopbak` whitelist | W8 | 4 | Open |
@@ -59,9 +59,28 @@ double migration race when both open at launch during an offload?
 **Evidence to gather.** Every open per process (app, widgets, watch, `NoopLocalAccess`); busy or locked
 errors in strap logs; a stress test running offload inserts and a rescore concurrently.
 
-**Evidence found.** —
+**Evidence found.** 2026-09-25, Phase 1 review (workflow run `wf_f9451f0b-2c7`).
 
-**Verdict.** Open.
+- Opens: two `DatabasePool`s per app process on one file (`BLEManager`, `Repository`), both WAL with a
+  5 s busy timeout; `StoreOpenGate` serialises open and migrate within the process. Out of process,
+  `Tools/Backfill` migrates outside the gate, and `NoopLocalAccess` holds a read-only `DatabaseQueue` whose
+  table list is cached at init. Widgets and the watch open nothing.
+- No double-migration race in process (gate, plus `testConcurrentOpensOfSameFreshFileAllSucceed`), and no
+  in-process reader can see a pre-migration schema.
+- Deferred transactions let a read-first write fail at once with `SQLITE_BUSY` while the other pool
+  writes ([W02-008](workstreams/W02-storage.md#findings)). The BLE ack path writes first and waits.
+- In-memory state splits across the two instances: the step-revision witness (W02-013), the prune
+  budgets, the device-row name.
+- Neither owner can quiesce the file. A restore swaps it under both pools (W02-004), the restore snapshot
+  misses the WAL (W02-002), and an export cannot pin a consistent snapshot (W02-003).
+- Strap logs: 0 locked, busy or migration errors in 9 logs. Weak evidence, since Repository failures
+  never reach the strap log.
+
+**Verdict.** Amend. Keep WAL and one `DatabasePool`, but one `WhoopStore` per process per path: the
+open gate hands the same instance to `BLEManager` and `Repository`. First step, independent of the
+refactor: `defaultTransactionKind = .immediate`. The single owner then gets a close, swap and reopen path
+for restore and a snapshot-based export, which retires W02-002, W02-003 and W02-004 as a class. The Phase 5
+refactor is a `design` finding in W2 when it is scheduled.
 
 ### AD-3
 
@@ -75,7 +94,9 @@ buffering the only ordering guarantee, and does anything bypass the serial drain
 **Evidence to gather.** Time Profiler trace of a full offload on the iPhone; hitches recorded by
 `DisplayPerformanceMonitor`; every path into `Backfiller`.
 
-**Evidence found.** —
+**Evidence found.** Early lead from Phase 1: every over-cap reject-archive rewrite runs on the main actor, about 290 ms per
+rewrite on an M-series Mac, recurring through each offload
+([W06-004](workstreams/W06-ble-collect.md#findings)). Not yet measured on the iPhone.
 
 **Verdict.** Open.
 
@@ -111,9 +132,25 @@ that have no historical twin?
 **Evidence to gather.** Strap-log replay across offload start and end; the list of live frame types
 with no historical copy; what `stopUnexpectedRealtimeImu` stops and when.
 
-**Evidence found.** —
+**Evidence found.** 2026-09-25, Phase 1 review (workflow run `wf_f9451f0b-2c7`).
 
-**Verdict.** Open.
+- On 5/MG only types 47, 48, 49, 50 and 56 are diverted while backfilling. Everything else (36, 40, 43,
+  51, ECG R17) still reaches `router.handle`, so "the live flood is dropped" is false for the fork
+  ([W06-020](workstreams/W06-ble-collect.md#findings)).
+- The only persisted live source, 0x2A37 HR and R-R, runs on its own branch that never reads
+  `backfilling`: 1,977 readings and 112 flushes inside offload windows in the owner logs, 0 insert
+  failures. Live puffin frames are persisted nowhere, offload or not.
+- Live-only facts: ECG R17 (display only, never diverted) and the realtime IMU (never diverted; its
+  writer is unreachable, W06-002). HR, R-R, events and battery are banked in flash, so a loss at the
+  boundary is recovered by the next offload.
+- Split defects: types 52 and 54 misrouted (W06-009), historical EVENTs after an early exit treated as
+  live (W06-013), live EVENT side effects suppressed during an offload (W06-015), the single drain broken
+  across a disconnect (W06-008).
+
+**Verdict.** Amend. Keep the frame-loop split: on this firmware no live-only stored fact is lost at
+the offload boundary. Rewrite `ARCHITECTURE.md` §4–5 and this entry to describe the code; align
+`isOffloadFrame` with the Android twin and the transport doc under a pinned test; gate EVENT side effects
+on the event's age instead of on `backfilling`; make the drain reset-safe with a generation token.
 
 ### AD-6
 
@@ -128,9 +165,26 @@ at trim.
 **Evidence to gather.** Every path from frame to trim ack; a kill-mid-offload test on the strap; the
 mapped-version list against the layouts that have a storage lane.
 
-**Evidence found.** —
+**Evidence found.** 2026-09-25, Phase 1 review (workflow run `wf_f9451f0b-2c7`).
 
-**Verdict.** Open.
+- The ordering holds on every path. The one ack site is reached only after an awaited, error-checked
+  insert, then the archive, then raw, then the cursor; each failure returns and sets `persistStalled`,
+  which also holds later empty ENDs. No abort, timeout or disconnect path acks. All 9 owner logs show
+  insert before ack and 0 persist failures.
+- No test pins any hold path ([W06-007](workstreams/W06-ble-collect.md#findings)), and the durability is
+  against app death only (W06-011).
+- The `strap_trim` cursor is write-only; resumability comes from the strap's own trim (W06-016).
+- Mapped does not mean stored. v20 and v21 have no lane and live in a 5 MB rolling archive that one sync
+  saturates (W06-003, W06-004). v16 and v26 drop decoded bytes
+  ([W01-006](workstreams/W01-protocol.md#findings)). Records refused by the timestamp gate are not
+  archived (W01-004). An unreadable over-cap archive is wiped (W06-010). A reassembler swallow hides
+  records from both lanes (W01-003).
+
+**Verdict.** Amend. Keep decoded-first and hold-the-ack. Restate the invariant as "every record the
+strap will free is in a durable lane or the archive before the ack", not "the cursor is durable". A layout
+is not declared mapped without its own lane; the archive's cap never evicts records NOOP understands;
+records the timestamp gate refuses are archived. State the power-loss trade-off, or write the offload with
+`synchronous=FULL`. The hold-ack tests (W06-007) land before any fix in this area.
 
 ### AD-7
 
@@ -179,7 +233,10 @@ backups, and which keys are read with different defaults at different sites?
 **Evidence to gather.** All keys extracted with their defaults and read sites; diff against the
 whitelist.
 
-**Evidence found.** —
+**Evidence found.** Early evidence from Phase 1: durable deletions of rows (`sleep.dismissedSessions`,
+`workouts.dismissedDetected`) and one-shot repair flags live in UserDefaults, outside the database and the
+backup whitelist ([W02-007](workstreams/W02-storage.md#findings)). Preferences are fine there; decisions
+about rows belong beside the rows.
 
 **Verdict.** Open.
 
