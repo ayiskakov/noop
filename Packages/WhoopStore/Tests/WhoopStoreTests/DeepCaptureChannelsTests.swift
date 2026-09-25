@@ -145,6 +145,17 @@ final class DeepCaptureChannelsTests: XCTestCase {
         XCTAssertEqual(g, 1)
     }
 
+    /// W02-012: the insert reports v18 aux rows ACCEPTED, like every other channel, so a reconnect that
+    /// re-offloads records already on disk reports nothing new for it.
+    func testResyncReportsNoNewAuxRows() async throws {
+        let s = try await store()
+        let streams = Streams(v18Aux: [V18AuxSample(ts: 100, statusWord: 7), V18AuxSample(ts: 101, statusWord: 8)])
+        let first = try await s.insert(streams, deviceId: "dev1")
+        let again = try await s.insert(streams, deviceId: "dev1")
+        XCTAssertEqual(first.v18Aux, 2)
+        XCTAssertEqual(again.v18Aux, 0)
+    }
+
     // MARK: - Codec
 
     func testCodecHeaderShapeAndSize() {

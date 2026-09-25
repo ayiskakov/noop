@@ -598,7 +598,7 @@ extension WhoopStore {
                     let blob = V18AuxCodec.pack(s)
                     if blob.isEmpty { continue }
                     try stmt.execute(arguments: [deviceId, s.ts, blob])
-                    v18Written += 1
+                    v18Written += db.changesCount   // accepted, not offered: DO NOTHING on a re-offload (W02-012)
                 }
             }
             return (hr, rr, ev, bat, spo2, skin, resp, grav)
