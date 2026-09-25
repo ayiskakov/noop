@@ -51,6 +51,18 @@ final class CollectorImuBankingTests: XCTestCase {
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 52, layout: 21)), "the dedicated IMU stream")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 0x24, layout: 9)), "a command frame")
     }
+
+    /// W06-002's call site: the 5/MG frame loop hands every frame to the session store before the offload
+    /// branch, which `continue`s. Nothing else would fail if the call were removed.
+    func testTheFrameLoopBanksBeforeTheOffloadBranch() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Strand/BLE/BLEManager.swift"))
+        let loop = try XCTUnwrap(source.range(of: "let completedFrames = reassembler.feed(bytes)"))
+        let tail = source[loop.upperBound...]
+        let bank = try XCTUnwrap(tail.range(of: "collector?.bankImuForSessions(frame)"))
+        let offload = try XCTUnwrap(tail.range(of: "routeBackfillFrame(frame)"))
+        XCTAssertLessThan(bank.lowerBound, offload.lowerBound)
+    }
 }
 
 /// The Raw Data Collector's IMU session store (W06-026).
