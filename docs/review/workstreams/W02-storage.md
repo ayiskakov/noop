@@ -105,3 +105,8 @@ Migration test on a copy of a real backup; `.noopbak` round-trip; row-level diff
   fixes, all fixed; W02-017 to W02-020 added from V2. W02-004, W02-007 and W02-009 deferred by the owner. V3:
   `RealBackupGateTests` passes on three real backups after every fix. Branch `review/w02-fixes`. Next: batch
   check on the strap once merged, then W02-017 to W02-020.
+- 2026-09-25 — The W02-003 space check broke the watch app build (PR #24 `NOOPiOS` leg): the watch app
+  compiles WhoopStore and `volumeAvailableCapacityForImportantUsageKey` is unavailable on watchOS. It now
+  reads the plain available capacity there. Checked by cross-compiling StrandAnalytics and its
+  dependencies for the watchOS 10 simulator with SwiftPM: the two CI errors without the fix, a clean build
+  with it. The full `NOOPiOS` build still needs CI, since no watchOS runtime is installed locally.

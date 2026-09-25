@@ -234,10 +234,16 @@ public actor WhoopStore {
             return pages * size
         }
         let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        // The important-usage capacity is unavailable on watchOS, which builds this package for the watch app.
+        #if os(watchOS) || os(tvOS)
+        guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityKey]) else { return }
+        let available = values.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        #else
         guard let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
                                                                    .volumeAvailableCapacityKey]) else { return }
         let available = values.volumeAvailableCapacityForImportantUsage
             ?? values.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        #endif
         if available < needed + 64 * 1_048_576 {
             throw SnapshotNoSpace(neededBytes: needed, availableBytes: available)
         }
