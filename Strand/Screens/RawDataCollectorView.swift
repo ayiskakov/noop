@@ -80,7 +80,10 @@ struct RawDataCollectorView: View {
         )) {
             Button("OK", role: .cancel) { deleteError = nil }
         } message: { Text(deleteError ?? "Unknown error") }
-        .sheet(item: $markerDraft) { draft in markerSheet(draft) }
+        .sheet(item: $markerDraft) { draft in
+            MarkerSheet(initial: draft, session: store.sessions.first(where: { $0.id == draft.sessionId }),
+                        save: saveMarker, delete: deleteMarker, cancel: { markerDraft = nil })
+        }
     }
 
     private var coverageCard: some View {
@@ -213,52 +216,67 @@ struct RawDataCollectorView: View {
         }
     }
 
-    private func markerSheet(_ initial: MarkerDraft) -> some View {
-        NavigationStack {
-            if let binding = Binding($markerDraft) {
-                let session = store.sessions.first(where: { $0.id == binding.wrappedValue.sessionId })
+    /// The marker editor. It edits its own copy of the draft: a binding unwrapped from `markerDraft` is
+    /// read again while the sheet closes, after Save or Cancel has set `markerDraft` to nil, and its
+    /// force unwrap ended the app on every closing that hit a render (W06-053).
+    private struct MarkerSheet: View {
+        @State private var draft: MarkerDraft
+        let session: RawDataSessionStore.Session?
+        let save: (MarkerDraft) -> Void
+        let delete: (MarkerDraft) -> Void
+        let cancel: () -> Void
+
+        init(initial: MarkerDraft, session: RawDataSessionStore.Session?,
+             save: @escaping (MarkerDraft) -> Void, delete: @escaping (MarkerDraft) -> Void,
+             cancel: @escaping () -> Void) {
+            _draft = State(initialValue: initial)
+            self.session = session
+            self.save = save
+            self.delete = delete
+            self.cancel = cancel
+        }
+
+        var body: some View {
+            NavigationStack {
                 Form {
                     Section {
                         TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                            let current = Self.markerCurrentTime(session: session, now: timeline.date)
-                            Text("Marker: \(binding.wrappedValue.at.formatted(date: .omitted, time: .standard))")
+                            let current = RawDataCollectorView.markerCurrentTime(session: session, now: timeline.date)
+                            Text("Marker: \(draft.at.formatted(date: .omitted, time: .standard))")
                             Text("Current time: \(current.formatted(date: .omitted, time: .standard))")
                                 .foregroundStyle(.secondary)
                             HStack {
-                                Button { binding.wrappedValue.at.addTimeInterval(-10) } label: { Text(verbatim: "−10 s") }
+                                Button { draft.at.addTimeInterval(-10) } label: { Text(verbatim: "−10 s") }
                                 Spacer()
                                 Button("0") {
-                                    binding.wrappedValue.at = Self.markerCurrentTime(session: session, now: Date())
+                                    draft.at = RawDataCollectorView.markerCurrentTime(session: session, now: Date())
                                 }
                                 Spacer()
-                                Button { binding.wrappedValue.at.addTimeInterval(10) } label: { Text(verbatim: "+10 s") }
+                                Button { draft.at.addTimeInterval(10) } label: { Text(verbatim: "+10 s") }
                             }
                         }
                     }
                     Section("Marker type") {
-                        Picker("Marker type", selection: binding.type) {
+                        Picker("Marker type", selection: $draft.type) {
                             ForEach(RawDataSessionStore.markerTypes, id: \.self) { type in
-                                Text(Self.markerLabel(type)).tag(type)
+                                Text(RawDataCollectorView.markerLabel(type)).tag(type)
                             }
                         }.pickerStyle(.segmented)
                     }
                     Section("Marker note") {
-                        TextField("Marker note", text: binding.text, axis: .vertical).lineLimit(2...4)
+                        TextField("Marker note", text: $draft.text, axis: .vertical).lineLimit(2...4)
                     }
-                    if let markerId = binding.wrappedValue.markerId {
+                    if draft.markerId != nil {
                         Section {
-                            Button("Delete marker", role: .destructive) {
-                                store.deleteMarker(sessionId: binding.wrappedValue.sessionId, markerId: markerId)
-                                markerDraft = nil
-                            }
+                            Button("Delete marker", role: .destructive) { delete(draft) }
                         }
                     }
                 }
-                .navigationTitle(initial.markerId == nil ? "Add marker" : "Edit marker")
+                .navigationTitle(draft.markerId == nil ? "Add marker" : "Edit marker")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { markerDraft = nil } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { cancel() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") { saveMarker(binding.wrappedValue) }
+                        Button("Save") { save(draft) }
                     }
                 }
             }
@@ -279,6 +297,11 @@ struct RawDataCollectorView: View {
         } else {
             store.addMarker(sessionId: draft.sessionId, at: draft.at, type: draft.type, text: draft.text)
         }
+        markerDraft = nil
+    }
+
+    private func deleteMarker(_ draft: MarkerDraft) {
+        if let markerId = draft.markerId { store.deleteMarker(sessionId: draft.sessionId, markerId: markerId) }
         markerDraft = nil
     }
 
