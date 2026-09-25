@@ -172,6 +172,18 @@ final class ImuSessionFileStoreTests: XCTestCase {
         XCTAssertNil(ImuSessionFileStore(directory: directory, defaults: defaults).newestBankedTs("none"))
     }
 
+    /// A segment is named for the UTC start of its half hour, on disk and in the export (pinned for W06-047).
+    func testSegmentsAreNamedForTheirUTCHalfHour() throws {
+        let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
+        let store = ImuSessionFileStore(directory: directory, defaults: defaults)
+        store.start(id: "s", deviceId: "strap", fromMs: (ts - 10) * 1_000)
+        store.append(deviceId: "strap", frame: buffer, receivedAtMs: 0)
+        XCTAssertEqual(store.exportSegments("s", from: Int(ts) - 10, to: Int(ts) + 10).map(\.name),
+                       ["imu-20260714T133000Z.imus"])
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("s/imu-20260714T133000Z.imus").path))
+    }
+
     /// The collector waits on this second before it stops the stream (W06-025).
     func testNewestBankedSecondFollowsTheNewestBuffer() throws {
         let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
