@@ -5,10 +5,12 @@ import WhoopProtocol
 /// OpenWhoop persistence library — decoded streams are durable; raw frames are a
 /// transient, compressed, prunable outbox. Built on GRDB/SQLite.
 public enum WhoopStoreInfo {
-    /// The store schema-version marker, bumped per migration. Surfaced in the backup manifest (#1410) so an
-    /// export records the platform's schema version (a platform-scoped indicator — Android reports its Room
-    /// version independently; the two numbering schemes are not expected to match).
-    public static let schemaVersion = 18
+    /// The store schema version: the number of registered migrations, so it cannot fall behind the schema.
+    /// Surfaced in the backup manifest (#1410) so an export records the platform's schema version (a
+    /// platform-scoped indicator — Android reports its Room version independently; the two numbering
+    /// schemes are not expected to match). It was a constant 18 from the first commit while the schema
+    /// reached 49 migrations, so every manifest and version event recorded 18 (W02-010).
+    public static var schemaVersion: Int { WhoopStore.makeMigrator().migrations.count }
 }
 
 /// Serializes `DatabasePool` creation + migration so two concurrent opens of the SAME file can never
