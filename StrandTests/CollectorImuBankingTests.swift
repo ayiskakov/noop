@@ -154,6 +154,24 @@ final class ImuSessionFileStoreTests: XCTestCase {
         XCTAssertEqual(relaunched.stats("s", from: Int(ts) - 10, to: Int(ts) + 10).coveredSeconds, 1)
     }
 
+    /// After a relaunch the newest banked second comes from the session's files (W06-038), even when a sync
+    /// first re-delivers an older buffer; a newer buffer moves it on.
+    func testTheNewestBankedSecondSurvivesARelaunch() throws {
+        let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))
+        let first = ImuSessionFileStore(directory: directory, defaults: defaults)
+        first.start(id: "s", deviceId: "strap", fromMs: (ts - 10) * 1_000)
+        first.append(deviceId: "strap", frame: buffer, receivedAtMs: 0)
+        first.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 3), receivedAtMs: 0)
+        first.prepareForRead("s")
+
+        let relaunched = ImuSessionFileStore(directory: directory, defaults: defaults)
+        relaunched.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 1), receivedAtMs: 0)
+        XCTAssertEqual(relaunched.newestBankedTs("s"), ts + 3, "the files hold a newer second than the sync's")
+        relaunched.append(deviceId: "strap", frame: CollectorImuBankingTests.fixture(shiftedBy: 5), receivedAtMs: 0)
+        XCTAssertEqual(relaunched.newestBankedTs("s"), ts + 5)
+        XCTAssertNil(ImuSessionFileStore(directory: directory, defaults: defaults).newestBankedTs("none"))
+    }
+
     /// The collector waits on this second before it stops the stream (W06-025).
     func testNewestBankedSecondFollowsTheNewestBuffer() throws {
         let ts = Int64(try XCTUnwrap(Whoop5RawImu.baseTs(buffer)))

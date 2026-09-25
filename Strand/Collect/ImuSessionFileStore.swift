@@ -20,6 +20,7 @@ final class ImuSessionFileStore {
     private var seen: [String: Set<Int64>] = [:]
     private var pending: [String: [Record]] = [:]
     private var newest: [String: Int64] = [:]
+    private var newestReadFromFiles: Set<String> = []
     private var cachedWindows: [Window]?
     /// Segment files decoded to learn which seconds they hold; a test reads it to pin the scan cost.
     private(set) var segmentScans = 0
@@ -55,14 +56,24 @@ final class ImuSessionFileStore {
     }
     func remove(id: String) {
         newest[id] = nil
+        newestReadFromFiles.remove(id)
         pending.keys.filter { $0.hasPrefix("\(id)/") }.forEach { pending[$0] = nil }
         seen.keys.filter { $0.hasPrefix(sessionDirectory(id).path) }.forEach { seen[$0] = nil }
         save(windows().filter { $0.id != id })
     }
     func prepareForRead(_ id: String) { flushSession(id) }
 
-    /// The start second of the newest buffer banked into session `id` since launch, or nil before the first.
-    func newestBankedTs(_ id: String) -> Int64? { newest[id] }
+    /// The start second of the newest buffer banked into session `id`, or nil while it holds none. The
+    /// session's files are read once per launch, so a relaunch mid-session still counts what was banked
+    /// before it (W06-038).
+    func newestBankedTs(_ id: String) -> Int64? {
+        if !newestReadFromFiles.contains(id) {
+            newestReadFromFiles.insert(id)
+            let onDisk = segmentFiles(id).last.flatMap { decode((try? Data(contentsOf: $0)) ?? Data()).map(\.ts).max() }
+            if let onDisk { newest[id] = max(newest[id] ?? onDisk, onDisk) }
+        }
+        return newest[id]
+    }
 
     func deleteFiles(_ id: String, removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
         flushSession(id); let dir = sessionDirectory(id)
@@ -82,7 +93,7 @@ final class ImuSessionFileStore {
         var count = 0
         for window in windows() where window.deviceId == deviceId && Int64(ts) >= window.from
             && (window.to == nil || Int64(ts) <= window.to!) {
-            newest[window.id] = max(newest[window.id] ?? Int64(ts), Int64(ts))
+            newest[window.id] = max(newestBankedTs(window.id) ?? Int64(ts), Int64(ts))
             let bucket = Self.bucketStart(Int64(ts)), url = segmentFile(window.id, bucket)
             var timestamps = seen[url.path] ?? scan(url)
             let inserted = timestamps.insert(Int64(ts)).inserted
