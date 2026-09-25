@@ -936,6 +936,8 @@ public final class BLEManager: NSObject, ObservableObject {
     var continuousRawCapture: () -> Bool = { UserDefaults.standard.bool(forKey: "enableRawCapture") }
     /// Which realtime raw stream has been noted in the strap log (W06-018), reset when the link ends.
     private var realtimeRawNote = RealtimeRawNote()
+    /// Set when this link has noted a live buffer the banking gate refused for its layout (W06-059).
+    private var imuLayoutRefusalNotedThisLink = false
     /// Ordered queue of frames awaiting drain through the serial Backfiller task.
     private var backfillFrameQueue: [[UInt8]] = []
     /// True while the drain task is running (prevents a second drain task from launching).
@@ -5952,6 +5954,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // previous link's timer before taking its first reading, on exactly the churn this is for.
         lastRssiDbm = nil; lastRssiAt = nil; lastRssiReadAt = nil
         realtimeRawNote.reset()
+        imuLayoutRefusalNotedThisLink = false
         // W06-033: the link's bytes die with it. A standing reconnect never runs connectCore, where the
         // reassembler is otherwise rebuilt.
         resetLinkFraming()
@@ -7107,6 +7110,17 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             awaitingFirstLiveImuBuffer = false
             log("Raw-data session: first live 1244-byte buffer is packet type \(frame[8]), layout \(frame[9]), "
                 + (verifyFrame(frame, family: .whoop5).ok ? "intact" : "failing its CRC"))
+        }
+        // W06-059: an intact live type-43 buffer of full length that the banking gate still refuses was refused
+        // for its layout byte. Noted once per link, armed or not, so a firmware that moves the layout leaves a
+        // trace even with no session armed to log its first buffer. A buffer failing its CRC is not noted,
+        // since its layout byte cannot be trusted.
+        if !imuLayoutRefusalNotedThisLink, !isOffload, frame.count == Whoop5RawImu.bufferLength, frame[8] == 43,
+           !Collector.isBankableImu(frame), verifyFrame(frame, family: .whoop5).ok {
+            imuLayoutRefusalNotedThisLink = true
+            log("Raw IMU: a live 1244-byte type-43 buffer carries layout \(frame[9]); Raw Data Collector "
+                + "sessions bank layout \(Collector.bankableImuLayout) only, so buffers like it are not banked "
+                + "(noted once per link)")
         }
         if isOffload {
             // Same policy as WHOOP4: historical offload frames are bulk sync traffic.

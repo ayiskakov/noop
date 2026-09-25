@@ -136,6 +136,22 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
                        rig.live.log.joined(separator: "\n"))
     }
 
+    /// An intact live buffer the layout gate refuses is noted once per link, armed or not (W06-059). A buffer
+    /// failing its CRC is not, since its layout byte cannot be trusted.
+    func testALiveBufferRefusedForItsLayoutIsNotedOncePerLink() {
+        let line = "Raw IMU: a live 1244-byte type-43 buffer carries layout 20"
+        var corrupt = CollectorImuBankingTests.fixture(type: 43, layout: 20)
+        corrupt[600] ^= 0x01
+        rig.manager.feedWhoop5(corrupt, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains(line) }.count, 0, "a corrupt buffer")
+        for _ in 0..<3 {
+            rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 20), char: ImuBankingRig.dataChar)
+        }
+        rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains(line) }.count, 1, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(rig.live.log.filter { $0.contains("carries layout") }.count, 1, "layout 21 is not noted")
+    }
+
     func testAnOffloadBufferIsBanked() {
         let historical = CollectorImuBankingTests.fixture
         XCTAssertTrue(BLEManager.isOffloadFrame(historical, family: .whoop5), "precondition: routed to the Backfiller")

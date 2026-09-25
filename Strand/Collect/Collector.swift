@@ -379,9 +379,12 @@ final class Collector {
     /// byte 9. The 11.9.10 strap run logged layout 21 on every live arm of the stream (W06-041).
     nonisolated static func isBankableImu(_ frame: [UInt8]) -> Bool {
         guard frame.count == Whoop5RawImu.bufferLength,
-              frame[8] == 43 || frame[8] == 47, frame[9] == 21 else { return false }
+              frame[8] == 43 || frame[8] == 47, frame[9] == bankableImuLayout else { return false }
         return verifyFrame(frame, family: .whoop5).ok
     }
+
+    /// The one layout byte `isBankableImu` admits; the strap log names it when a live buffer carries another.
+    nonisolated static let bankableImuLayout: UInt8 = 21
 
     private func recordGroundTruthImu(_ frame: [UInt8]) {
         _ = ImuSessionFileStore.shared.append(deviceId: deviceId, frame: frame,
