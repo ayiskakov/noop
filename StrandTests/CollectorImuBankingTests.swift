@@ -135,6 +135,39 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
     }
 }
 
+/// A realtime raw stream no capture in this app armed is noted once per link, and nothing is sent to stop it
+/// (W06-018). A Raw Data Collector session still open on disk for the strap owns the stream (W06-052).
+@MainActor
+final class UnarmedRealtimeImuNoteTests: XCTestCase {
+    private var rig: ImuBankingRig!
+    private let note = "Raw IMU: realtime packet type 43 is arriving with no capture armed in this app"
+
+    override func setUp() async throws { rig = ImuBankingRig() }
+    override func tearDown() async throws { rig.close() }
+
+    private func feedLiveBuffers(_ count: Int) {
+        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+        for _ in 0..<count { rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar) }
+    }
+    private func lines(containing text: String) -> [String] { rig.live.log.filter { $0.contains(text) } }
+
+    func testAStreamNoCaptureArmedIsNotedOnceAndNothingIsSent() {
+        rig.close()   // no Raw Data Collector session open for the strap
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: note).count, 1, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "send(").count, 0, "no command is formed for the stream")
+    }
+
+    /// After a relaunch mid-session the process has armed nothing, but the session on disk is still open and
+    /// its stream still banks into it.
+    func testASessionStillOpenOnDiskOwnsTheStream() {
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: "Raw IMU").count, 0, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "send(").count, 0)
+        XCTAssertTrue(rig.banked)
+    }
+}
+
 /// The Raw Data Collector's IMU session store (W06-025, W06-026).
 @MainActor
 final class ImuSessionFileStoreTests: XCTestCase {

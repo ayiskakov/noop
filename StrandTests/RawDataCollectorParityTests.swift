@@ -40,12 +40,4 @@ final class RawDataCollectorParityTests: XCTestCase {
             }
         }
     }
-
-    func testAppleKeepsTheOffSessionRealtimeImuFailSafe() throws {
-        let source = try String(contentsOf: repoRoot.appendingPathComponent("Strand/BLE/BLEManager.swift"))
-        XCTAssertTrue(source.contains("stopUnexpectedRealtimeImu(frame, isOffload: isOffload)"))
-        XCTAssertTrue(source.contains("frame[8] == 43 || frame[8] == 51"))
-        XCTAssertTrue(source.contains("send(.stopRawData, payload: [0x01]"))
-        XCTAssertTrue(source.contains("send(.toggleIMUMode, payload: [0x01, 0x00]"))
-    }
 }

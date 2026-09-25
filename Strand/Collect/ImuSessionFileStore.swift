@@ -63,6 +63,8 @@ final class ImuSessionFileStore {
         save(windows().filter { $0.id != id })
     }
     func prepareForRead(_ id: String) { flushSession(id) }
+    /// True while a live session for `deviceId` is started and not yet completed, relaunches included.
+    func hasOpenWindow(deviceId: String) -> Bool { windows().contains { $0.deviceId == deviceId && $0.to == nil } }
 
     /// The start second of the newest buffer banked into session `id`, or nil while it holds none. The
     /// session's files are read once per launch, so a relaunch mid-session still counts what was banked

@@ -926,7 +926,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// firmware that sends another layout this line is what shows why a session banks nothing.
     private var awaitingFirstLiveImuBuffer = false
     private var rawCaptureStoppedAt = Date.distantPast
-    private var unexpectedImuStopAt = Date.distantPast
+    /// Set when this link has noted a realtime raw stream no capture armed (W06-018), cleared when the link ends.
+    private var unarmedImuNotedThisLink = false
     /// Ordered queue of frames awaiting drain through the serial Backfiller task.
     private var backfillFrameQueue: [[UInt8]] = []
     /// True while the drain task is running (prevents a second drain task from launching).
@@ -2217,28 +2218,26 @@ public final class BLEManager: NSObject, ObservableObject {
         log(RawSessionTail.stopLogLine(tail, unsent: unsent))
     }
 
-    /// Stop a realtime IMU producer left armed after a crash, lost stop write, or another client.
-    private func stopUnexpectedRealtimeImu(_ frame: [UInt8], isOffload: Bool, now: Date = Date()) {
-        guard selectedModel.deviceFamily == .whoop5, !isOffload, frame.count > 8,
+    /// Note, once per link, a realtime raw stream that no capture in this app armed: one a probe, a crashed
+    /// session or another client left running. Nothing is sent. The fail-safe that stood here asked for a
+    /// stop, but the 5/MG allowlist admits one only while a capture is armed, so no stop ever reached the
+    /// strap while its line said "stop requested" every 30 s (W06-018); an automatic stop is outside the BLE
+    /// contract anyway. A Raw Data Collector session still open on disk for this strap owns the stream: after
+    /// a relaunch mid-session the process has armed nothing, yet the stream is the session's and still banks
+    /// into it (W06-052). So does an ECG session, whose companion requests include the IMU.
+    private func noteUnarmedRealtimeImu(_ frame: [UInt8], isOffload: Bool, now: Date = Date()) {
+        guard !isOffload, !unarmedImuNotedThisLink, frame.count > 8,
               frame[8] == 43 || frame[8] == 51,
-              // Type 43 also carries the MG's live ECG. Its records are the stream an ECG session asked
-              // for, not a stray IMU producer. An ECG record is recognised by packet type, layout byte and
-              // exact length, so the fail-safe still fires on any other type-43 shape.
+              // Type 43 also carries the MG's live ECG, recognised by packet type, layout byte and exact
+              // length, so any other type-43 shape is still noted.
               !Whoop5EcgFilteredRecord.isLiveRecord(frame), !Whoop5EcgRawRecord.isLiveRecord(frame),
-              !rawCaptureInFlight, !UserDefaults.standard.bool(forKey: "enableRawCapture"),
+              !rawCaptureInFlight, !ecgSessionRunning, !UserDefaults.standard.bool(forKey: "enableRawCapture"),
               now.timeIntervalSince(rawCaptureStoppedAt) >= 3,
-              now.timeIntervalSince(unexpectedImuStopAt) >= 30 else { return }
-        unexpectedImuStopAt = now
-        // While an ECG session runs, a raw stop can clear that session's companion optical/IMU requests
-        // (docs/PROTOCOL_ECG.md §Commands), so the fail-safe leaves it to the session's own stop and says so.
-        if ecgSessionRunning {
-            log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) during an ECG session; "
-                + "not stopping raw data, which could clear the session's companion requests")
-            return
-        }
-        send(.stopRawData, payload: [0x01], writeType: .withResponse)
-        send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
-        log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) while capture was off; stop requested")
+              !(collector.map { ImuSessionFileStore.shared.hasOpenWindow(deviceId: $0.deviceId) } ?? false)
+        else { return }
+        unarmedImuNotedThisLink = true
+        log("Raw IMU: realtime packet type \(frame[8]) is arriving with no capture armed in this app; "
+            + "nothing is sent to stop it (noted once per link)")
     }
 
     public func groundTruthHistoryCSV(from: Int, to: Int) async -> Data {
@@ -5942,6 +5941,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // asked THIS link", and carrying it over would make a reconnect inside the window wait out the
         // previous link's timer before taking its first reading, on exactly the churn this is for.
         lastRssiDbm = nil; lastRssiAt = nil; lastRssiReadAt = nil
+        unarmedImuNotedThisLink = false
         // W06-033: the link's bytes die with it. A standing reconnect never runs connectCore, where the
         // reassembler is otherwise rebuilt.
         resetLinkFraming()
@@ -7088,7 +7088,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // reverse-engineering — its own file the bulk-capture eviction never churns.
         // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
         puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: char, isOffload: isOffload)
-        stopUnexpectedRealtimeImu(frame, isOffload: isOffload)
+        noteUnarmedRealtimeImu(frame, isOffload: isOffload)
         // #423 / #1709: the queryable twin of that diagnostics line — bank the decoded 100 Hz
         // 6-axis buffer into any open Raw Data Collector session, from the live stream and from
         // history sync alike. BEFORE the offload branch, which returns (W06-002).
