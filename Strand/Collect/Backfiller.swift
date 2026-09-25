@@ -6,7 +6,7 @@ import StrandAnalytics
 // MARK: - BackfillStoreWriting protocol
 
 /// The async subset the Backfiller needs. Plain async protocol (not @MainActor) so both the
-/// real WhoopStore actor and a @MainActor SpyBackfillStore in tests can satisfy it.
+/// real WhoopStore actor and the SpyBackfillStore in `BackfillerHoldAckTests` can satisfy it.
 protocol BackfillStoreWriting: AnyObject {
     @discardableResult
     func insert(_ streams: Streams, deviceId: String) async throws
