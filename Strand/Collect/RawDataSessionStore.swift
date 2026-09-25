@@ -250,48 +250,57 @@ enum RawSessionTail {
     static let pollInterval: TimeInterval = 0.25
 
     enum Outcome: Equatable {
-        /// The session holds no full second, so there was nothing to wait for.
+        /// Nothing was awaited: the session holds no full second, or no stop will go out to discard its tail.
         case notAwaited
         /// The buffer for the session's last full second was banked before the stop.
         case delivered
-        /// The stop went out without it, `missing` seconds short (nil when no buffer was banked at all),
-        /// because the strap disconnected or the wait timed out.
-        case short(missing: Int?, disconnected: Bool)
+        /// The wait ended without it, `missing` seconds short (nil when no buffer was banked at all): the
+        /// capture was disarmed, as a disconnect does, after which no stop can go out; or the wait timed out.
+        case short(missing: Int?, disarmed: Bool)
+    }
+
+    /// Why a stop sends no STOP_RAW_DATA.
+    enum Unsent: Equatable {
+        /// No capture is armed on this link: none was, or a disconnect cleared it.
+        case notArmed
+        /// Continuous raw capture is on, so the stream keeps running.
+        case continuousCapture
     }
 
     /// Ends the live session in `store` at `pressedAt`, then stops the stream once its tail is banked.
     /// The session is saved as ended before the wait (W06-036): a collector opened during the wait loads it
     /// ended, so it can neither re-arm the stream for it nor stop it a second time and move its end. The tail
     /// still banks, because the session's IMU window closes at the press, after its last full second, and it
-    /// is written to disk once the stream has stopped.
+    /// is written to disk once the stream has stopped. The wait runs only while `armed` says a stop will go
+    /// out, since only a stop discards the tail (W06-039).
     @MainActor
-    static func stop(_ store: RawDataSessionStore, pressedAt: Date, streaming: () -> Bool,
+    static func stop(_ store: RawDataSessionStore, pressedAt: Date, armed: () -> Bool,
                      stopStream: (Outcome) async -> Void,
                      timeout: TimeInterval = RawSessionTail.timeout, now: () -> Date = Date.init,
                      sleep: (TimeInterval) async -> Void = RawSessionTail.pause) async {
         guard let active = store.active else { return }
         store.stop(now: pressedAt)
         var outcome = Outcome.notAwaited
-        if let bounds = RawDataCollectorView.fullSecondBounds(fromMs: active.startedAtMs,
-                                                              toMs: Int64(pressedAt.timeIntervalSince1970 * 1_000)) {
+        if armed(), let bounds = RawDataCollectorView.fullSecondBounds(
+            fromMs: active.startedAtMs, toMs: Int64(pressedAt.timeIntervalSince1970 * 1_000)) {
             outcome = await wait(for: bounds.to, newest: { store.imu.newestBankedTs(active.id) },
-                                 streaming: streaming, timeout: timeout, now: now, sleep: sleep)
+                                 armed: armed, timeout: timeout, now: now, sleep: sleep)
         }
         await stopStream(outcome)
         store.imu.prepareForRead(active.id)
     }
 
-    /// Waits until the buffer for `lastSecond` is banked, the stream ends, or `timeout` passes.
+    /// Waits until the buffer for `lastSecond` is banked, the capture is disarmed, or `timeout` passes.
     @MainActor
-    static func wait(for lastSecond: Int, newest: () -> Int64?, streaming: () -> Bool,
+    static func wait(for lastSecond: Int, newest: () -> Int64?, armed: () -> Bool,
                      timeout: TimeInterval = RawSessionTail.timeout, now: () -> Date = Date.init,
                      sleep: (TimeInterval) async -> Void = RawSessionTail.pause) async -> Outcome {
         let deadline = now().addingTimeInterval(timeout)
         while true {
             if let banked = newest(), banked >= Int64(lastSecond) { return .delivered }
             let missing = newest().map { lastSecond - Int($0) }
-            if !streaming() { return .short(missing: missing, disconnected: true) }
-            if now() >= deadline { return .short(missing: missing, disconnected: false) }
+            if !armed() { return .short(missing: missing, disarmed: true) }
+            if now() >= deadline { return .short(missing: missing, disarmed: false) }
             await sleep(pollInterval)
         }
     }
@@ -300,16 +309,23 @@ enum RawSessionTail {
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
-    /// The strap-log line for a stop with this outcome. It states what was banked, never why the strap
-    /// was late.
-    static func stopLogLine(_ outcome: Outcome) -> String {
+    /// The strap-log line for a stop with this outcome. It states what was banked and when no stop went
+    /// out, never why the strap was late.
+    static func stopLogLine(_ outcome: Outcome, unsent: Unsent? = nil) -> String {
+        var line: String
         switch outcome {
-        case .notAwaited: return "Raw-data session: stopped"
-        case .delivered: return "Raw-data session: stopped after the last full second was banked"
-        case .short(let missing, let disconnected):
+        case .notAwaited: line = "Raw-data session: stopped"
+        case .delivered: line = "Raw-data session: stopped after the last full second was banked"
+        case .short(let missing, let disarmed):
             let what = missing.map { "\($0) s short of the last full second" } ?? "with no IMU buffer banked"
-            let why = disconnected ? "the strap disconnected" : "waiting \(Int(timeout)) s"
-            return "Raw-data session: stopped \(what), after \(why)"
+            let why = disarmed ? "when the capture was disarmed" : "after waiting \(Int(timeout)) s"
+            line = "Raw-data session: stopped \(what), \(why)"
         }
+        switch unsent {
+        case nil: break
+        case .notArmed: line += "; no stop sent: no capture is armed on this link"
+        case .continuousCapture: line += "; no stop sent: continuous raw capture is on"
+        }
+        return line
     }
 }

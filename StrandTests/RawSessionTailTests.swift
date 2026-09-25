@@ -25,14 +25,14 @@ final class RawSessionTailTests: XCTestCase {
         let outcome = await RawSessionTail.wait(
             for: lastSecond,
             newest: { Int64(lastSecond - 4) + Int64(clock.now.timeIntervalSince(pressedAt)) },
-            streaming: { true }, now: { clock.now }, sleep: clock.sleep)
+            armed: { true }, now: { clock.now }, sleep: clock.sleep)
         XCTAssertEqual(outcome, .delivered)
         XCTAssertEqual(clock.now.timeIntervalSince(pressedAt), 4, accuracy: RawSessionTail.pollInterval)
     }
 
     func testAlreadyBankedStopsAtOnce() async {
         let clock = Clock()
-        let outcome = await RawSessionTail.wait(for: 50, newest: { 50 }, streaming: { true },
+        let outcome = await RawSessionTail.wait(for: 50, newest: { 50 }, armed: { true },
                                                 now: { clock.now }, sleep: clock.sleep)
         XCTAssertEqual(outcome, .delivered)
         XCTAssertEqual(clock.sleeps, 0)
@@ -41,26 +41,27 @@ final class RawSessionTailTests: XCTestCase {
     func testAStalledStreamStopsAfterTheTimeout() async {
         let clock = Clock()
         let start = clock.now
-        let outcome = await RawSessionTail.wait(for: 50, newest: { 46 }, streaming: { true },
+        let outcome = await RawSessionTail.wait(for: 50, newest: { 46 }, armed: { true },
                                                 now: { clock.now }, sleep: clock.sleep)
-        XCTAssertEqual(outcome, .short(missing: 4, disconnected: false))
+        XCTAssertEqual(outcome, .short(missing: 4, disarmed: false))
         XCTAssertEqual(clock.now.timeIntervalSince(start), RawSessionTail.timeout,
                        accuracy: RawSessionTail.pollInterval)
     }
 
-    func testADisconnectEndsTheWait() async {
+    /// A disconnect disarms the capture, and then no stop can go out to discard anything.
+    func testADisarmedCaptureEndsTheWait() async {
         let clock = Clock()
-        let outcome = await RawSessionTail.wait(for: 50, newest: { 47 }, streaming: { clock.sleeps < 2 },
+        let outcome = await RawSessionTail.wait(for: 50, newest: { 47 }, armed: { clock.sleeps < 2 },
                                                 now: { clock.now }, sleep: clock.sleep)
-        XCTAssertEqual(outcome, .short(missing: 3, disconnected: true))
+        XCTAssertEqual(outcome, .short(missing: 3, disarmed: true))
         XCTAssertEqual(clock.sleeps, 2)
     }
 
     func testNothingBankedIsNamedAsSuch() async {
         let clock = Clock()
-        let outcome = await RawSessionTail.wait(for: 50, newest: { nil }, streaming: { true },
+        let outcome = await RawSessionTail.wait(for: 50, newest: { nil }, armed: { true },
                                                 now: { clock.now }, sleep: clock.sleep)
-        XCTAssertEqual(outcome, .short(missing: nil, disconnected: false))
+        XCTAssertEqual(outcome, .short(missing: nil, disarmed: false))
     }
 
     // MARK: - The stop itself (W06-036)
@@ -105,7 +106,7 @@ final class RawSessionTailTests: XCTestCase {
         let pressedAt = clock.now
         var outcome: RawSessionTail.Outcome?
         var activeDuringWait: [String?] = []
-        await RawSessionTail.stop(rig.store, pressedAt: pressedAt, streaming: { true },
+        await RawSessionTail.stop(rig.store, pressedAt: pressedAt, armed: { true },
                                   stopStream: { outcome = $0 }, now: { clock.now }, sleep: { seconds in
             activeDuringWait.append(RawDataSessionStore(directory: rig.sessions, imu: rig.imu).active?.id)
             if clock.sleeps == 1 { rig.store.addMarker(sessionId: session.id, at: clock.now, type: "moment", text: "") }
@@ -139,6 +140,21 @@ final class RawSessionTailTests: XCTestCase {
         XCTAssertTrue(String(decoding: events.data, as: UTF8.self).contains("\"kind\":\"marker\""))
     }
 
+    /// With no stop to go out (no capture armed on the link, or continuous raw capture on) nothing discards
+    /// the tail, so Stop does not wait, and the outcome claims no disconnect (W06-037, W06-039).
+    func testNothingIsAwaitedWhenNoStopWillGoOut() async throws {
+        let rig = try rig()
+        let started = Date(timeIntervalSince1970: 2_000)
+        _ = try XCTUnwrap(rig.store.start(deviceId: "strap", now: started))
+        let clock = Clock()
+        var outcome: RawSessionTail.Outcome?
+        await RawSessionTail.stop(rig.store, pressedAt: started.addingTimeInterval(60.5), armed: { false },
+                                  stopStream: { outcome = $0 }, now: { clock.now }, sleep: clock.sleep)
+        XCTAssertEqual(outcome, .notAwaited)
+        XCTAssertEqual(clock.sleeps, 0)
+        XCTAssertEqual(rig.store.sessions.first?.endedAtMs, 2_060_500)
+    }
+
     /// The tail that banks after the session ended is on disk once the stream stops, so a relaunch before
     /// the export still finds every second.
     func testTheTailIsOnDiskOnceTheStreamStops() async throws {
@@ -148,14 +164,20 @@ final class RawSessionTailTests: XCTestCase {
         XCTAssertEqual(stats.coveredSeconds, 3)
     }
 
-    /// The log states what was banked and never claims a flush the stop does not do.
+    /// The log states what was banked and when no stop went out. It never claims a flush the stop does not
+    /// do, nor a disconnect it did not see.
     func testStopLogLines() {
         XCTAssertEqual(RawSessionTail.stopLogLine(.notAwaited), "Raw-data session: stopped")
         XCTAssertEqual(RawSessionTail.stopLogLine(.delivered),
                        "Raw-data session: stopped after the last full second was banked")
-        XCTAssertEqual(RawSessionTail.stopLogLine(.short(missing: 4, disconnected: false)),
+        XCTAssertEqual(RawSessionTail.stopLogLine(.short(missing: 4, disarmed: false)),
                        "Raw-data session: stopped 4 s short of the last full second, after waiting 10 s")
-        XCTAssertEqual(RawSessionTail.stopLogLine(.short(missing: nil, disconnected: true)),
-                       "Raw-data session: stopped with no IMU buffer banked, after the strap disconnected")
+        XCTAssertEqual(RawSessionTail.stopLogLine(.short(missing: nil, disarmed: true), unsent: .notArmed),
+                       "Raw-data session: stopped with no IMU buffer banked, when the capture was disarmed; "
+                       + "no stop sent: no capture is armed on this link")
+        XCTAssertEqual(RawSessionTail.stopLogLine(.notAwaited, unsent: .notArmed),
+                       "Raw-data session: stopped; no stop sent: no capture is armed on this link")
+        XCTAssertEqual(RawSessionTail.stopLogLine(.notAwaited, unsent: .continuousCapture),
+                       "Raw-data session: stopped; no stop sent: continuous raw capture is on")
     }
 }

@@ -294,7 +294,7 @@ struct RawDataCollectorView: View {
         // The session ends when Stop is pressed. The strap has not produced its last seconds yet, and a stop
         // would discard them, so the stream stops only once the last full second is banked (W06-025).
         stoppingId = active.id
-        await RawSessionTail.stop(store, pressedAt: Date(), streaming: { live.connected },
+        await RawSessionTail.stop(store, pressedAt: Date(), armed: { model.ble.groundTruthStopUnsent == nil },
                                   stopStream: { await model.ble.stopGroundTruthRawCapture(tail: $0) })
         stoppingId = nil
         await refreshImuCoverage()

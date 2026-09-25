@@ -67,7 +67,8 @@ item as it lands.
       W01-015 and W06-026 … W06-035, all S3 or S4.
 - [ ] Second W6 batch, `review/w06-fixes-2` (stacked on this branch): W06-025, W06-026, W06-027, W06-029,
       W06-031, W06-032, W06-033. W06-027 completes W06-002's V1. Then a strap run of it: a Raw Data Collector
-      session that reads ready, and a reconnect.
+      session that reads ready, and a reconnect. A code review of the batch added W06-036 … W06-049; W06-036,
+      W06-037, W06-039 and W06-044 are fixed on the same branch, and W06-043 reopens W06-027's V1.
 - [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
       and night on the strap with 11.9.8 is due before their findings move to `Verified`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;

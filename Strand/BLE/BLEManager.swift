@@ -2188,10 +2188,20 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
+    /// Why stopping the raw-data session now would send no stop, or nil when it would send one. The collector
+    /// waits for a session's tail only while this is nil, since only a stop discards it (W06-039), and a
+    /// disconnect makes it `.notArmed`.
+    var groundTruthStopUnsent: RawSessionTail.Unsent? {
+        if !rawCaptureInFlight { return .notArmed }
+        if UserDefaults.standard.bool(forKey: "enableRawCapture") { return .continuousCapture }
+        return nil
+    }
+
     /// Stop the current manually controlled raw-data session. `tail` is what the collector saw of the
     /// session's last full second before it asked for the stop (W06-025); it only shapes the log line.
     func stopGroundTruthRawCapture(tail: RawSessionTail.Outcome = .notAwaited) async {
-        if rawCaptureInFlight && !UserDefaults.standard.bool(forKey: "enableRawCapture") {
+        let unsent = groundTruthStopUnsent
+        if unsent == nil {
             send(.stopRawData, payload: [0x01], writeType: .withResponse)
             if selectedModel.deviceFamily == .whoop5 {
                 send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
@@ -2199,7 +2209,7 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         rawCaptureInFlight = false
         rawCaptureStoppedAt = Date()
-        log(RawSessionTail.stopLogLine(tail))
+        log(RawSessionTail.stopLogLine(tail, unsent: unsent))
     }
 
     /// Stop a realtime IMU producer left armed after a crash, lost stop write, or another client.
