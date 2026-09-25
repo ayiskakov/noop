@@ -61,28 +61,19 @@ enum DataBackup {
 
     // MARK: - Export
 
-    /// Checkpoint the store and write the live database as a compressed `.noopbak` (single-entry
-    /// ZIP) to a user-chosen file.
+    /// Snapshot the store and write that snapshot as a compressed `.noopbak` to a user-chosen file.
     ///
-    /// - Parameter checkpoint: invoked first to flush the WAL into the main file. Pass
-    ///   `repo.checkpointForBackup`. Must succeed — a failed checkpoint means committed pages still
-    ///   live in the WAL and would be silently absent from the ZIP; we fail loudly rather than ship
-    ///   a partial backup.
+    /// - Parameter snapshot: writes a consistent copy of the live store to the given file. Pass
+    ///   `repo.snapshotForBackup`. It must succeed: without a whole copy there is nothing honest to
+    ///   archive, so the export fails loudly rather than ship a partial backup.
     @MainActor
-    static func runExport(checkpoint: @escaping () async -> Bool) async -> BackupResult {
+    static func runExport(snapshot: @escaping (URL) async -> Bool) async -> BackupResult {
         let dbPath: String
         do { dbPath = try StorePaths.defaultDatabasePath() }
         catch { return .failure(String(localized: "Couldn't locate the NOOP database. \(error.localizedDescription)")) }
 
-        let dbURL = URL(fileURLWithPath: dbPath)
         guard FileManager.default.fileExists(atPath: dbPath) else {
             return .failure(String(localized: "There's no NOOP data to export yet. Import or record some first."))
-        }
-
-        // Flush the WAL so the single .sqlite carries everything. Required for ZIP (no sidecar
-        // fallback in a single-file archive).
-        guard await checkpoint() else {
-            return .failure(String(localized: "Couldn't safely export right now. Recent changes are still in the database's write-ahead log. Close any in-flight sync, then try again."))
         }
 
         #if os(macOS)
@@ -99,6 +90,11 @@ enum DataBackup {
         let scoped = dest.startAccessingSecurityScopedResource()
         defer { if scoped { dest.stopAccessingSecurityScopedResource() } }
 
+        // Snapshot only now, after the panel: the backup is the store as of the moment the user confirmed,
+        // however long the panel stayed open while a sync kept writing.
+        guard let staged = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        defer { removeStaged(staged) }
+
         let fm = FileManager.default
         do {
             // NSSavePanel already handled the "replace existing?" confirmation; clear the target.
@@ -107,14 +103,16 @@ enum DataBackup {
             // (and #1014 added a quick_check read of the whole file first); run it off the main
             // actor so the UI never beach-balls. Only file paths cross the hop.
             try await Task.detached(priority: .utility) {
-                try writeVerifiedBackupZip(dbURL: dbURL, to: dest, settingsJSON: currentSettingsJSON())
+                try writeVerifiedBackupZip(dbURL: staged, to: dest, settingsJSON: currentSettingsJSON())
             }.value
-            return exportOutcome(dest, dbURL: dbURL)
+            return exportOutcome(dest, dbURL: staged)
         } catch {
             return .failure(String(localized: "Export failed: \(error.localizedDescription)"))
         }
         #else
         let fm = FileManager.default
+        guard let snapshotURL = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        defer { removeStaged(snapshotURL) }
 
         // Stage the compressed backup in temp, then hand it to the share sheet.
         let staged = fm.temporaryDirectory.appendingPathComponent(defaultBackupName())
@@ -122,13 +120,13 @@ enum DataBackup {
             if fm.fileExists(atPath: staged.path) { try fm.removeItem(at: staged) }
             // Off the main actor: same reason as the macOS branch (heavy read + DEFLATE). Only paths hop.
             try await Task.detached(priority: .utility) {
-                try writeVerifiedBackupZip(dbURL: dbURL, to: staged, settingsJSON: currentSettingsJSON())
+                try writeVerifiedBackupZip(dbURL: snapshotURL, to: staged, settingsJSON: currentSettingsJSON())
             }.value
         } catch {
             return .failure(String(localized: "Export failed: \(error.localizedDescription)"))
         }
         guard let dest = await DocumentPicker.export(staged) else { return .cancelled }
-        return exportOutcome(dest, dbURL: dbURL)
+        return exportOutcome(dest, dbURL: snapshotURL)
         #endif
     }
 
@@ -160,12 +158,11 @@ enum DataBackup {
         }
     }
 
-    /// The production export path: verify, then archive. GRDB checkpoints the WAL first (the
-    /// callers' `checkpoint()` guard), so at this point the single file IS the whole store — run a
-    /// read-only `PRAGMA quick_check` over it BEFORE zipping (#1014). Archiving an already-corrupt
-    /// database writes a `.noopbak` that only fails the import-side integrity gate months later,
-    /// when the original data may be long gone; failing loudly NOW is the honest move. The read-only
-    /// probe sits safely beside the app's open GRDB pool (WAL allows concurrent readers).
+    /// The production export path: verify, then archive. The file is the staged snapshot (the callers'
+    /// `snapshot` closure), a standalone copy of the whole store, so the `PRAGMA quick_check` run over
+    /// it BEFORE zipping (#1014) checks the very bytes the archive will carry. Archiving an
+    /// already-corrupt database writes a `.noopbak` that only fails the import-side integrity gate
+    /// months later, when the original data may be long gone; failing loudly NOW is the honest move.
     /// `writeBackupForTesting` deliberately bypasses this so tests can build damaged containers.
     /// `.exported`, or `.exportedOversize` when the database is past the ceiling the restore path
     /// enforces. Measured on the DATABASE, not the finished archive: the archive is `.deflate`d and the
@@ -301,39 +298,65 @@ enum DataBackup {
     }
 
     /// (Backup & Sync) Write a `.noopbak` to a SPECIFIC `dest` URL with NO save panel: the folder /
-    /// auto-backup path. Checkpoints the WAL (so the single `.sqlite` is whole) then writes the same
-    /// deflate ZIP via the same `writeBackupZip` the interactive export uses, so folder / auto backups
-    /// are byte-identical to a manual export. The CALLER owns any security-scoped access to `dest`
-    /// (start/stop around this call). Never presents UI, so it is safe off the main actor.
-    static func writeBackup(checkpoint: @escaping () async -> Bool, to dest: URL) async -> BackupResult {
+    /// auto-backup path. Snapshots the store, then writes the same deflate ZIP via the same
+    /// `writeBackupZip` the interactive export uses, so folder / auto backups are byte-identical to a
+    /// manual export. The CALLER owns any security-scoped access to `dest` (start/stop around this
+    /// call). Never presents UI, so it is safe off the main actor.
+    static func writeBackup(snapshot: @escaping (URL) async -> Bool, to dest: URL) async -> BackupResult {
         let dbPath: String
         do { dbPath = try StorePaths.defaultDatabasePath() }
         catch { return .failure(String(localized: "Couldn't locate the NOOP database. \(error.localizedDescription)")) }
+        return await writeBackup(snapshot: snapshot, liveDatabaseAt: dbPath, to: dest)
+    }
 
-        let dbURL = URL(fileURLWithPath: dbPath)
+    /// The folder-backup core with the live database path injected, so it is unit-testable against a
+    /// throwaway store (the same reason `restore(from:toDatabaseAt:)` takes one).
+    static func writeBackup(snapshot: @escaping (URL) async -> Bool, liveDatabaseAt dbPath: String,
+                            to dest: URL) async -> BackupResult {
         guard FileManager.default.fileExists(atPath: dbPath) else {
             return .failure(String(localized: "There's no NOOP data to export yet."))
         }
-        // Flush the WAL into the single file (same requirement as the interactive export: a single-file
-        // ZIP has no sidecar fallback, so committed pages still in the WAL would otherwise be absent).
-        guard await checkpoint() else {
-            return .failure(String(localized: "Couldn't safely back up right now. Recent changes are still in the write-ahead log."))
-        }
+        guard let staged = await stageSnapshot(snapshot) else { return .failure(snapshotFailedMessage) }
+        defer { removeStaged(staged) }
         do {
             let fm = FileManager.default
             if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-            try writeVerifiedBackupZip(dbURL: dbURL, to: dest, settingsJSON: currentSettingsJSON())
-            return exportOutcome(dest, dbURL: dbURL)
+            try writeVerifiedBackupZip(dbURL: staged, to: dest, settingsJSON: currentSettingsJSON())
+            return exportOutcome(dest, dbURL: staged)
         } catch {
             return .failure(String(localized: "Backup failed: \(error.localizedDescription)"))
         }
     }
 
-    /// Test seam: write a `.noopbak` for an EXPLICIT source database (no checkpoint, no `StorePaths`),
+    /// Stage the copy an export archives. `snapshot` writes a consistent copy of the live store to a
+    /// scratch file from one read snapshot (`Repository.snapshotForBackup`). Zipping the live main file
+    /// after a checkpoint instead could ship rows that were missing, or a malformed file, while the app's
+    /// two pools kept writing or reading (W02-003). Nil when no copy could be made.
+    private static func stageSnapshot(_ snapshot: (URL) async -> Bool) async -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noop-export-\(UUID().uuidString).sqlite")
+        guard await snapshot(url) else {
+            removeStaged(url)
+            return nil
+        }
+        return url
+    }
+
+    private static func removeStaged(_ url: URL) {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
+    private static var snapshotFailedMessage: String {
+        String(localized: "Couldn't copy the NOOP database safely right now. Try again in a moment.")
+    }
+
+    /// Test seam: write a `.noopbak` for an EXPLICIT source database (no snapshot, no `StorePaths`),
     /// so a unit test can round-trip a throwaway SQLite through the exact ZIP container the app writes.
     /// `settings` (canonical `BackupSettings` keys) adds the `settings.json` entry; nil writes the
     /// legacy single-entry ZIP — tests cover both shapes. Not used by app code; production goes
-    /// through `writeBackup(checkpoint:to:)`.
+    /// through `writeBackup(snapshot:to:)`.
     static func writeBackupForTesting(databaseAt dbURL: URL, to dest: URL,
                                       settings: [String: Any]? = nil) throws {
         let fm = FileManager.default

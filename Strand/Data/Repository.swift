@@ -863,12 +863,12 @@ final class Repository: ObservableObject {
                           workouts: workouts.count, lastRenderRows: renderDays.count)
     }
 
-    /// Checkpoint the WAL into the main DB file if the store is already open, so a file-level
-    /// backup captures everything. No-op (returns false) if no handle exists yet , the caller
-    /// then copies the on-disk files as-is, which still includes the -wal sidecar.
-    func checkpointForBackup() async -> Bool {
+    /// Write a consistent copy of the open store to `url` for a backup (`WhoopStore.writeSnapshot`).
+    /// False when no store is open yet or the copy failed; the export then fails rather than archive
+    /// the live file, which may be missing rows still in the WAL or be torn mid-write (W02-003).
+    func snapshotForBackup(to url: URL) async -> Bool {
         guard let store else { return false }
-        do { try await store.checkpointWAL(); return true } catch { return false }
+        do { try await store.writeSnapshot(to: url.path); return true } catch { return false }
     }
 
     /// One refresh's fully-merged dashboard caches, computed OFF the main actor (FIX 3) and applied to the

@@ -300,7 +300,7 @@ enum FolderBackup {
     /// Write one snapshot into the bookmarked folder, stamp the last-backup time, then prune to keepN.
     /// Returns true on success. Runs the whole-DB ZIP off the caller's thread; never touches UI.
     @discardableResult
-    static func backupNow(checkpoint: @escaping () async -> Bool) async -> Bool {
+    static func backupNow(snapshot: @escaping (URL) async -> Bool) async -> Bool {
         guard let folder = resolveFolder() else { return false }
         let scoped = folder.startAccessingSecurityScopedResource()
         defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
@@ -310,7 +310,7 @@ enum FolderBackup {
         // #1807: an oversize write still WROTE the file, so it is a success here. The folder sync has
         // nowhere to surface a warning and must not report failure for a backup that exists — the
         // interactive export is where the user is told, because that is where they can act on it.
-        switch await DataBackup.writeBackup(checkpoint: checkpoint, to: dest) {
+        switch await DataBackup.writeBackup(snapshot: snapshot, to: dest) {
         case .exported, .exportedOversize: break
         default:
             // Remove whatever this run left behind, and note that this is the OPPOSITE of what the
@@ -343,11 +343,11 @@ enum FolderBackup {
     /// On-launch catch-up: if auto is on, a folder is set, and it's been at least a day since the last
     /// backup, write one. Gated entirely on the toggle being ON (must-fix #4). The caller MUST invoke
     /// this off the launch-critical path; it does no UI work and is safe to run after the first refresh.
-    static func catchUpIfDue(checkpoint: @escaping () async -> Bool) async {
+    static func catchUpIfDue(snapshot: @escaping (URL) async -> Bool) async {
         guard autoEnabled, hasFolder else { return }
         let nowMs = Int(Date().timeIntervalSince1970 * 1000.0)
         guard nowMs - lastBackupMs >= dayMs else { return }
-        await backupNow(checkpoint: checkpoint)
+        await backupNow(snapshot: snapshot)
     }
 
     /// Diagnostic-only snapshot of the restore list's health: the chosen folder's name, its raw entry

@@ -179,12 +179,34 @@ public actor WhoopStore {
 
     // MARK: - Maintenance
 
-    /// Fully checkpoint the WAL into the main database file and truncate the -wal file.
-    /// Used before a file-level backup so the single `whoop.sqlite` carries all committed data
-    /// (the -wal/-shm siblings can then be ignored). Runs outside a transaction — `wal_checkpoint`
-    /// must. Best-effort: throws on a hard SQLite error so callers can fall back to a plain copy.
+    /// Fully checkpoint the WAL into the main database file and truncate the -wal file, to reclaim the
+    /// space a bulk import grew. Runs outside a transaction — `wal_checkpoint` must. Throws on a hard
+    /// SQLite error, and throws `CheckpointBlocked` when a reader on another connection kept it from
+    /// finishing: SQLite then reports "busy" in the result row rather than as an error, and the main file
+    /// alone can be malformed (W02-003). Backups do not rely on this; they use `writeSnapshot(to:)`.
     public func checkpointWAL() async throws {
         try checkpointWALImpl()
+    }
+
+    /// A TRUNCATE checkpoint that could not finish because another connection held an older snapshot.
+    public struct CheckpointBlocked: Error, LocalizedError {
+        public var errorDescription: String? {
+            "The database checkpoint could not finish because another reader is active."
+        }
+    }
+
+    /// Write a consistent copy of the whole database to `path`, replacing any file there. The copy comes
+    /// from one read snapshot through SQLite's online backup API, so it holds exactly one committed state
+    /// even while other connections write or hold older snapshots. Copying the main file after a
+    /// checkpoint does not: rows committed after it are missing, and a checkpoint that a reader cut short
+    /// leaves the main file malformed (W02-003). `nonisolated` so a multi-second copy never holds up this
+    /// actor's own reads and writes; the pool's reader connection does the work.
+    public nonisolated func writeSnapshot(to path: String) async throws {
+        let fm = FileManager.default
+        for suffix in ["", "-wal", "-shm", "-journal"] { try? fm.removeItem(atPath: path + suffix) }
+        let destination = try DatabaseQueue(path: path)
+        try dbWriter.backup(to: destination)
+        try destination.close()
     }
 
     /// #1410: append one app-level event (e.g. `APP_VERSION_CHANGED`) onto the event table. Idempotent on
@@ -201,9 +223,10 @@ public actor WhoopStore {
     /// Non-async so GRDB's synchronous `writeWithoutTransaction` overload is chosen (mirrors the
     /// syncRead/syncWrite pattern). Runs on the actor's executor, off the main thread.
     private func checkpointWALImpl() throws {
-        try dbWriter.writeWithoutTransaction { db in
-            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
+        let busy = try dbWriter.writeWithoutTransaction { db in
+            try Int.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") ?? 0
         }
+        if busy != 0 { throw CheckpointBlocked() }
     }
 
     /// Permanently delete every recorded sample/derived row for one device across all `deviceId`-keyed

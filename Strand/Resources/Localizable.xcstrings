@@ -64404,118 +64404,60 @@
         }
       }
     },
-    "Couldn't safely back up right now. Recent changes are still in the write-ahead log.": {
+    "Couldn't copy the NOOP database safely right now. Try again in a moment.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Konnte gerade nicht sicher sichern. Jüngste Änderungen liegen noch im Write-Ahead-Log."
+            "value": "Die NOOP-Datenbank konnte gerade nicht sicher kopiert werden. Versuche es gleich noch einmal."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo hacer la copia de seguridad de forma segura ahora mismo. Los cambios recientes siguen en el registro de escritura anticipada."
+            "value": "No se pudo copiar la base de datos de NOOP de forma segura ahora mismo. Vuelve a intentarlo en un momento."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de sauvegarder en toute sécurité pour le moment. Les modifications récentes sont encore dans le journal des écritures anticipées."
+            "value": "Impossible de copier la base de données NOOP en toute sécurité pour le moment. Réessayez dans un instant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile fare il backup in sicurezza adesso. Le modifiche recenti sono ancora nel write-ahead log."
+            "value": "Impossibile copiare in sicurezza il database di NOOP adesso. Riprova tra un momento."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível fazer o cópia de segurança em segurança agora. As alterações recentes ainda estão no registo de gravação antecipada."
+            "value": "Não foi possível copiar a base de dados do NOOP em segurança agora. Tente novamente dentro de momentos."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сейчас невозможно безопасно создать резервную копию. Недавние изменения ещё находятся в журнале упреждающей записи."
+            "value": "Сейчас не удалось безопасно скопировать базу данных NOOP. Повторите попытку чуть позже."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "目前无法安全备份。最近的更改仍在预写日志中。"
+            "value": "目前无法安全地复制 NOOP 数据库。请稍后再试。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "目前無法安全備份。最近的變更仍在預寫日誌中。"
+            "value": "目前無法安全地複製 NOOP 資料庫。請稍後再試。"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nie udało się teraz bezpiecznie wykonać kopii zapasowej. Ostatnie zmiany nadal znajdują się w dzienniku zapisów z wyprzedzeniem."
-          }
-        }
-      }
-    },
-    "Couldn't safely export right now. Recent changes are still in the database's write-ahead log. Close any in-flight sync, then try again.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Konnte gerade nicht sicher exportieren. Jüngste Änderungen liegen noch im Write-Ahead-Log der Datenbank. Beende laufende Synchronisierungen und versuch es erneut."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo exportar de forma segura ahora mismo. Los cambios recientes siguen en el registro de escritura anticipada de la base de datos. Cierra cualquier sincronización en curso y vuelve a intentarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d'exporter en toute sécurité pour le moment. Les modifications récentes sont encore dans le journal des écritures anticipées de la base de données. Fermez toute synchronisation en cours, puis réessayez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossibile esportare in sicurezza adesso. Le modifiche recenti sono ancora nel write-ahead log del database. Chiudi eventuali sincronizzazioni in corso, poi riprova."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível exportar em segurança agora. As alterações recentes ainda estão no registo de gravação antecipada da base de dados. Feche qualquer sincronização durante o voo e tente novamente."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сейчас невозможно безопасно выполнить экспорт. Недавние изменения ещё находятся в журнале упреждающей записи базы данных. Завершите текущую синхронизацию и попробуйте снова."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "目前无法安全导出。最近的更改仍在数据库的预写日志中。请先结束正在进行的同步，然后重试。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "目前無法安全匯出。最近的變更仍在資料庫的預寫日誌中。請先結束任何進行中的同步，然後再試一次。"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nie można teraz bezpiecznie eksportować. Ostatnie zmiany nadal znajdują się w dzienniku zapisu z wyprzedzeniem bazy danych. Zamknij synchronizację w trakcie lotu i spróbuj ponownie."
+            "value": "Nie udało się teraz bezpiecznie skopiować bazy danych NOOP. Spróbuj ponownie za chwilę."
           }
         }
       }

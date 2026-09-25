@@ -181,7 +181,7 @@ struct RootTabView: View {
             // 100MB+ whole-DB ZIP never blocks startup; gated on the auto toggle (default OFF). (Must-fix #4.)
             let backupRepo = repo
             Task.detached(priority: .utility) {
-                await FolderBackup.catchUpIfDue(checkpoint: { await backupRepo.checkpointForBackup() })
+                await FolderBackup.catchUpIfDue(snapshot: { await backupRepo.snapshotForBackup(to: $0) })
             }
         }
         // Quick-action sheet presents with the calm easing (~0.42s) per the README sheet spec —
