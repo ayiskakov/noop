@@ -33,6 +33,24 @@ final class CollectorImuBankingTests: XCTestCase {
         XCTAssertFalse(Collector.isBankableImu(Array(realBuffer.prefix(124))))
         XCTAssertFalse(Collector.isBankableImu([]))
     }
+
+    /// `realBuffer` with bytes 8 and 9 replaced and its CRC32 recomputed, so only the type check can refuse it.
+    private func resealed(type: UInt8, layout: UInt8) -> [UInt8] {
+        var frame = realBuffer
+        frame[8] = type; frame[9] = layout
+        let crc = crc32(frame, 8, 1240)
+        for i in 0..<4 { frame[1240 + i] = UInt8(truncatingIfNeeded: crc >> (8 * UInt32(i))) }
+        XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok, "precondition: an intact frame")
+        return frame
+    }
+
+    /// W06-029: an intact frame of the same length but another packet type or layout is not an IMU buffer.
+    func testOnlyR21BuffersAreBanked() {
+        XCTAssertTrue(Collector.isBankableImu(resealed(type: 43, layout: 21)), "live R21")
+        XCTAssertFalse(Collector.isBankableImu(resealed(type: 47, layout: 20)), "historical, another layout")
+        XCTAssertFalse(Collector.isBankableImu(resealed(type: 52, layout: 21)), "the dedicated IMU stream")
+        XCTAssertFalse(Collector.isBankableImu(resealed(type: 0x24, layout: 9)), "a command frame")
+    }
 }
 
 /// The Raw Data Collector's IMU session store (W06-026).
