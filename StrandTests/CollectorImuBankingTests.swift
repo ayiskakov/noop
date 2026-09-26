@@ -57,8 +57,10 @@ final class CollectorImuBankingTests: XCTestCase {
     private func resealed(type: UInt8, layout: UInt8) -> [UInt8] { Self.fixture(type: type, layout: layout) }
 
     /// W06-029: an intact frame of the same length but another packet type or layout is not an IMU buffer.
+    /// W06-041: live buffers carry layout 21 at byte 9 too (every live arm in the 11.9.10 strap run logged it).
     func testOnlyR21BuffersAreBanked() {
         XCTAssertTrue(Collector.isBankableImu(resealed(type: 43, layout: 21)), "live R21")
+        XCTAssertFalse(Collector.isBankableImu(resealed(type: 43, layout: 20)), "live, another layout")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 47, layout: 20)), "historical, another layout")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 52, layout: 21)), "the dedicated IMU stream")
         XCTAssertFalse(Collector.isBankableImu(resealed(type: 0x24, layout: 9)), "a command frame")
@@ -125,11 +127,105 @@ final class Whoop5FrameImuBankingTests: XCTestCase {
         XCTAssertEqual(count(), 1)
     }
 
+    /// A session stopped before its first live buffer claims no later buffer as its first (W06-058).
+    func testASessionStoppedBeforeItsFirstBufferClaimsNoLaterOne() async {
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        await rig.manager.stopGroundTruthRawCapture()
+        rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains("Raw-data session: first live") }.count, 0,
+                       rig.live.log.joined(separator: "\n"))
+    }
+
+    /// An intact live buffer the layout gate refuses is noted once per link, armed or not (W06-059). A buffer
+    /// failing its CRC is not, since its layout byte cannot be trusted.
+    func testALiveBufferRefusedForItsLayoutIsNotedOncePerLink() {
+        let line = "Raw IMU: a live 1244-byte type-43 buffer carries layout 20"
+        var corrupt = CollectorImuBankingTests.fixture(type: 43, layout: 20)
+        corrupt[600] ^= 0x01
+        rig.manager.feedWhoop5(corrupt, char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains(line) }.count, 0, "a corrupt buffer")
+        for _ in 0..<3 {
+            rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 20), char: ImuBankingRig.dataChar)
+        }
+        rig.manager.feedWhoop5(CollectorImuBankingTests.fixture(type: 43, layout: 21), char: ImuBankingRig.dataChar)
+        XCTAssertEqual(rig.live.log.filter { $0.contains(line) }.count, 1, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(rig.live.log.filter { $0.contains("carries layout") }.count, 1, "layout 21 is not noted")
+    }
+
     func testAnOffloadBufferIsBanked() {
         let historical = CollectorImuBankingTests.fixture
         XCTAssertTrue(BLEManager.isOffloadFrame(historical, family: .whoop5), "precondition: routed to the Backfiller")
         rig.manager.handleWhoop5Frame(historical, char: ImuBankingRig.dataChar, offloading: true)
         XCTAssertTrue(rig.banked)
+    }
+}
+
+/// A realtime raw stream is noted once per stream in the strap log, naming who in this app owns it, and
+/// nothing is sent to stop it (W06-018). Driven through the 5/MG frame handling, with the research toggle set
+/// on the manager rather than read from the host app's defaults (W06-062).
+@MainActor
+final class RealtimeRawStreamNoteTests: XCTestCase {
+    private var rig: ImuBankingRig!
+    private let unowned = "Raw IMU: realtime packet type 43 is arriving with no capture or ECG session armed"
+    private let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+
+    override func setUp() async throws {
+        rig = ImuBankingRig()
+        rig.manager.continuousRawCapture = { false }
+    }
+    override func tearDown() async throws { rig.close() }
+
+    private func feedLiveBuffers(_ count: Int) {
+        for _ in 0..<count { rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar) }
+    }
+    private func lines(containing text: String) -> [String] { rig.live.log.filter { $0.contains(text) } }
+
+    func testAStreamNothingArmedIsNotedOnceAndNothingIsSent() {
+        rig.close()   // no Raw Data Collector session open for the strap
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .none)
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: unowned).count, 1, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "send(").count, 0, "no command is formed for the stream")
+    }
+
+    /// After a relaunch mid-session the process has armed nothing, but the session on disk is still open and
+    /// its stream still banks into it (W06-052).
+    func testASessionStillOpenOnDiskOwnsTheStream() {
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .openSession)
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: "Raw IMU").count, 0, rig.live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "send(").count, 0)
+        XCTAssertTrue(rig.banked)
+    }
+
+    /// A state-restoration relaunch delivers the stream's first frames before `bootstrapStore` builds the
+    /// collector, so the strap the stream banks under is unknown and nothing is claimed about it (W06-054).
+    func testARelaunchBeforeTheStoreIsBuiltMakesNoClaim() {
+        let live = LiveState()
+        let manager = BLEManager(state: live, deviceId: "rig-\(UUID().uuidString)", collector: nil)
+        manager.continuousRawCapture = { false }
+        XCTAssertEqual(manager.realtimeRawOwner(), .unknownUntilStoreReady)
+        for _ in 0..<3 { manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar) }
+        XCTAssertEqual(live.log.filter { $0.contains("Raw IMU") }.count, 0, live.log.joined(separator: "\n"))
+    }
+
+    func testContinuousCaptureOwnsTheStream() {
+        rig.close()
+        rig.manager.continuousRawCapture = { true }
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture)
+        feedLiveBuffers(3)
+        XCTAssertEqual(lines(containing: "Raw IMU").count, 0, rig.live.log.joined(separator: "\n"))
+    }
+
+    /// An armed capture owns the stream, and so does its tail for three seconds after the stop.
+    func testAnArmedCaptureAndItsTailOwnTheStream() async {
+        rig.close()
+        XCTAssertTrue(rig.manager.startGroundTruthRawCapture(sessionId: rig.sessionId))
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture)
+        await rig.manager.stopGroundTruthRawCapture()
+        XCTAssertEqual(rig.manager.realtimeRawOwner(), .capture, "the tail")
+        XCTAssertEqual(rig.manager.realtimeRawOwner(now: Date().addingTimeInterval(RealtimeRawOwner.tailSeconds)),
+                       .none)
     }
 }
 

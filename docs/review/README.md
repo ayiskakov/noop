@@ -74,8 +74,14 @@ item as it lands.
       W06-049. Merged as PR #29 and shipped in 11.9.10. Its strap run passed W06-025's V3 (a session read ready),
       gave W06-041 its layout evidence, and found W06-053.
 - [ ] Fourth W6 batch, `review/w06-fixes-4`: W06-053 (S1, closing the marker sheet ends the app; it accounts for
-      the marker-linked deaths in W06-051). Then a strap run: markers added, edited, cancelled and deleted during
-      a session. Owner input still needed for W06-050 (clock) and W06-052.
+      the marker-linked deaths in W06-051). Merged as PR #30. Then a strap run: markers added, edited, cancelled
+      and deleted during a session.
+- [ ] Fifth W6 batch, `review/w06-fixes-5`: W06-041 step 2 (live buffers need layout 21), W06-018 with W06-052
+      (the raw IMU fail-safe becomes a note that sends nothing, one line per stream naming its owner), W06-007
+      (tests pin every hold-ack path). A code review of the batch added W06-054 … W06-064: W06-054 (W06-052's fix
+      missed the relaunch's first frames) and the rest are fixed on the same branch, except W06-057 (not a bug). Owner decisions 2026-09-25: W06-050 reads the clock before setting it, in its own PR with W06-001;
+      W06-052 keeps an honest line rather than none. Then a strap run: a relaunch mid-session logs no Raw IMU line,
+      and an MG ECG session that brings a type-43 stream logs one line naming it.
 - [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
       and night on the strap with 11.9.8 is due before their findings move to `Verified`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
