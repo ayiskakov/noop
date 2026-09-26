@@ -97,18 +97,20 @@ public enum StrapClock {
     /// was sent. The strap read its clock at some moment in that window, and a whole-second reading `s` means
     /// its clock stood in [s, s + 1) then. So the offset strap − phone lies in
     /// (s − receivedAt, s + 1 − (receivedAt − roundTrip)), and the clock is judged off only when that whole
-    /// range lies past the threshold. A long round trip widens the range and so never produces a set by itself.
+    /// range lies past `driftThresholdSeconds`. A long round trip widens the range and so never produces a set
+    /// by itself. The threshold is fixed rather than a parameter, because `describe` states it and `Verdict`
+    /// does not carry it (W06-082).
     ///
     /// The phone's wall clock is sampled once, at the reply, and the round trip must come from a monotonic
     /// clock (W06-074): with two wall samples, a phone clock stepped back during the read collapsed the range
     /// onto the pre-step send time and judged a correct strap off. The one wall sample is the clock a set would
     /// copy, so a step before the reply is absorbed. A negative round trip counts as zero.
-    public static func judge(_ reading: Reading, receivedAt: Double, roundTrip: Double,
-                             threshold: Double = driftThresholdSeconds) -> Verdict {
+    public static func judge(_ reading: Reading, receivedAt: Double, roundTrip: Double) -> Verdict {
         guard reading.result == resultSuccess, let s = reading.seconds else { return .unread(result: reading.result) }
         guard s > validityFloor else { return .invalid(seconds: s) }
         let low = Double(s) - receivedAt
         let high = Double(s) + 1 - (receivedAt - max(0, roundTrip))
+        let threshold = driftThresholdSeconds
         if high < -threshold || low > threshold { return .off(seconds: s, low: low, high: high) }
         if low >= -threshold && high <= threshold { return .inSync(seconds: s, low: low, high: high) }
         return .unresolved(seconds: s, low: low, high: high)
