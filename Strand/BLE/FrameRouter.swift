@@ -183,9 +183,16 @@ public final class FrameRouter {
                 // line quotes the reply; BLEManager's "WHOOP 5/MG clock:" line judges it. The WHOLE frame
                 // (#900's format) stays, uncapped, so a moved offset on another firmware stays visible.
                 let result = parsed.parsed["result"]?.stringValue ?? "none"
-                let reading = StrapClock.decodeReply(frame)?.seconds.map { " strap=\($0)" } ?? ""
-                state.append(log: "clock: \(cmd) result=\(result)\(reading) frame=\(Self.fullFrameHex(frame))",
-                             domain: .connection)
+                let seconds = StrapClock.decodeReply(frame)?.seconds
+                let reading = seconds.map { " strap=\($0)" } ?? ""
+                // W06-100: a GET_CLOCK reply with a reading is every connect's routine readout, and BLEManager's
+                // verdict line says what it means, so it sits behind Test Centre like that line. A SET_CLOCK reply,
+                // which is how a default log shows every set (W06-079), and any reply without a reading stay on.
+                let routine = cmd.hasPrefix("GET_CLOCK") && seconds != nil
+                if !routine || TestCentre.active(.connection) {
+                    state.append(log: "clock: \(cmd) result=\(result)\(reading) frame=\(Self.fullFrameHex(frame))",
+                                 domain: .connection)
+                }
             }
             // #1303: the hunt for a stable per-strap id, which is what multi-strap identity waits on —
             // the pack serial from cmd 151 identifies a REMOVABLE PART rather than the strap wearing it.

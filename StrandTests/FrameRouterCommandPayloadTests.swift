@@ -86,4 +86,45 @@ final class FrameRouterCommandPayloadTests: XCTestCase {
         XCTAssertEqual(clock.count, 1, live.log.joined(separator: "\n"))
         XCTAssertFalse(clock.first?.contains("strap=") == true, clock.first ?? "nil")
     }
+
+    // MARK: - W06-100: the routine GET_CLOCK reading is a Test Centre readout
+
+    /// Runs `body` with Test Centre's connection domain set as given and the master flag, which implies every
+    /// domain, off. Both keys live in the test host's defaults, so they are restored afterwards.
+    private func withTestCentreConnection(_ on: Bool, _ body: () -> Void) {
+        let keys = ["testcentre.active.connection", "testcentre.active.master"]
+        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+            }
+        }
+        UserDefaults.standard.removeObject(forKey: keys[1])
+        if on { TestCentre.activate(.connection) } else { TestCentre.deactivate(.connection) }
+        body()
+    }
+
+    private func clockLines(after frame: [UInt8]) -> [String] {
+        let live = LiveState()
+        FrameRouter(state: live).handle(frame: frame)
+        return live.log.filter { $0.contains("clock: ") }
+    }
+
+    func testARoutineClockReadingIsATestCentreReadout() {
+        let reading = puffinCommandFrame(cmd: 11, seq: 0x40,
+                                         payload: [0x07, 0x01, 0x80, 0x0b, 0xb0, 0x6a] + [UInt8](repeating: 0, count: 7),
+                                         type: 36, header: [0x01, 0x00])
+        withTestCentreConnection(false) { XCTAssertEqual(clockLines(after: reading), []) }
+        withTestCentreConnection(true) { XCTAssertEqual(clockLines(after: reading).count, 1) }
+    }
+
+    /// Rare evidence stays in a default log: every SET_CLOCK reply (W06-079), and any clock reply without a reading.
+    func testASetClockReplyAndAReplyWithoutAReadingStayAlwaysOn() {
+        withTestCentreConnection(false) {
+            XCTAssertEqual(clockLines(after: bytes("aa010c000100271124220ae701000000bcc4efc3")).count, 1)
+            let failed = puffinCommandFrame(cmd: 11, seq: 0x40, payload: [0x07, 0x00] + [UInt8](repeating: 0, count: 11),
+                                            type: 36, header: [0x01, 0x00])
+            XCTAssertEqual(clockLines(after: failed).count, 1)
+        }
+    }
 }
