@@ -148,7 +148,8 @@ final class StrapClockCheckTests: XCTestCase {
         manager.strapClockCheckTimedOut(token: token)
         XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
         XCTAssertEqual(lines(containing: "setting the clock without a reading").count, 0)
-        XCTAssertEqual(lines(containing: "the handshake, clock check included, runs again on the next link").count, 1)
+        XCTAssertEqual(lines(containing: "the handshake, clock check included, runs again when a CLIENT_HELLO is next "
+                                          + "acknowledged").count, 1)
         XCTAssertFalse(live.historyReady)
         XCTAssertEqual(handshakeDoneLines, 0)
         XCTAssertEqual(live.connectSettled, 0)
@@ -204,6 +205,8 @@ final class StrapClockCheckTests: XCTestCase {
                                               hasCommandCharacteristic: cmd, helloOutstanding: helloOut)
         }
         XCTAssertEqual(link(same: true), .same)
+        // W06-091: the link the check began on, with no command characteristic, cannot take the set.
+        XCTAssertEqual(link(same: true, cmd: false), .none)
         XCTAssertEqual(link(same: false), .newer)                  // a later link past its CLIENT_HELLO
         XCTAssertEqual(link(same: false, helloOut: true), .none)   // its hello acknowledgement runs the handshake
         XCTAssertEqual(link(same: false, cmd: false), .none)       // not discovered yet: its hello is still to come

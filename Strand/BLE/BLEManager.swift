@@ -6904,9 +6904,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         restoreNeedsResubscribe = false   // #613: forced re-subscribe pass is done (5/MG path)
     }
 
-    /// What the clock check's timeout finds of the link (W06-085): the one the check began on; a newer one that
-    /// came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-083) and is past its CLIENT_HELLO,
-    /// so it skipped the handshake; or neither.
+    /// What the clock check's timeout finds of the link (W06-085): the one the check began on, still able to take
+    /// a command (W06-091); a newer one that came up without `didDisconnectPeripheral` (a Bluetooth power-off,
+    /// W06-083) and is past its CLIENT_HELLO, so it skipped the handshake; or neither.
     enum ClockCheckLink: Equatable { case same, newer, none }
 
     /// The link as the clock check's timeout sees it. W06-069: a Bluetooth power-off does not end the link
@@ -6926,7 +6926,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                                                    hasCommandCharacteristic: Bool,
                                                    helloOutstanding: Bool) -> ClockCheckLink {
         guard connected, peripheralConnected else { return .none }
-        if sameGeneration { return .same }
+        // W06-091: `send` needs the command characteristic too, so without it the set would be logged and dropped.
+        if sameGeneration { return hasCommandCharacteristic ? .same : .none }
         // The command characteristic and the CLIENT_HELLO write come in one callback, so a newer link that has
         // the characteristic and no hello outstanding had its hello acknowledged. One whose hello is still out
         // counts as none: that acknowledgement runs the handshake once the session flag is clear.
@@ -6960,15 +6961,16 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 + "the link that replaced it")
             beginStrapClockCheck()
         case .none:
-            // W06-085: settle nothing on a dead link. Settling here bumped `connectSettled`, which spent the
-            // alarm re-arm on a link whose sends are dropped, and left the reconnect, which inherits
+            // W06-085: settle nothing on a link that cannot take commands, whether it is gone or, on the same
+            // link, has lost its command characteristic (W06-091). Settling here bumped `connectSettled`, which
+            // spent the alarm re-arm on a link whose sends are dropped, and left the reconnect, which inherits
             // `whoop5SessionStarted` and skips the handshake, with no clock check at all. Clearing the flag lets
             // the next CLIENT_HELLO acknowledgement run the whole handshake, check included. The check began with
             // the handshake undone and nothing has settled since, so `connectHandshakeDone` and
             // `connectSettledSignaled` are still clear.
             whoop5SessionStarted = false
-            log("WHOOP 5/MG clock: \(waited), and the link the check began on is gone — nothing is set on it; "
-                + "the handshake, clock check included, runs again on the next link")
+            log("WHOOP 5/MG clock: \(waited), and no link is ready for the check's commands — nothing is set; "
+                + "the handshake, clock check included, runs again when a CLIENT_HELLO is next acknowledged")
         }
     }
 
