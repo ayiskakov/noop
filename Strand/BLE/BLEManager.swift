@@ -6887,7 +6887,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // Settle either way (W06-072): a reconnect after a power-off inherits `whoop5SessionStarted` and skips
         // the 5/MG handshake, so an unsettled check would leave that link's backfill blocked for good. The
         // sends this unblocks on a dead link are dropped by `send`'s guard.
-        strapClockSettled()
+        strapClockSettled(setJustSent: sameLinkUp)
     }
 
     /// W06-050: fold one GET_CLOCK reply into this link's clock check and act on its verdict. Verified first,
@@ -6902,11 +6902,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("WHOOP 5/MG clock: GET_CLOCK answered PENDING — waiting for the reading")
         case let .settle(verdict, roundTrip):
             log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
-            strapClockSettled()
+            strapClockSettled(setJustSent: false)
         case let .set(verdict, roundTrip):
             log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
             setStrapClock()
-            strapClockSettled()
+            strapClockSettled(setJustSent: true)
         case let .readback(r, roundTrip):
             let reads = r.seconds.map { "reads \($0)" } ?? "gave no reading"
             log("WHOOP 5/MG clock: after the set the strap \(reads) (result \(r.result)), answered "
@@ -6922,18 +6922,29 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         }
     }
 
+    /// How long after the clock check settles the first 5/MG offload is requested. The hardware-validated
+    /// order is SET_CLOCK, ~1.5 s, then SEND_HISTORICAL_DATA, and the same 1.5 s lets the puffin notify
+    /// subscriptions settle after the handshake, mirroring the WHOOP4 kick. So after a set the full 1.5 s runs
+    /// from the set (W06-071: counting it from the handshake gave a set sent after the 10 s timeout no gap at
+    /// all), and without one, whatever remains of it since the handshake.
+    nonisolated static func firstOffloadDelay(sinceHandshake: TimeInterval?, setJustSent: Bool) -> TimeInterval {
+        let settle: TimeInterval = 1.5
+        return setJustSent ? settle : max(0, settle - (sinceHandshake ?? 0))
+    }
+
     /// The 5/MG clock check has decided, so the connect handshake is done. The first offload, the sync
-    /// controls and the alarm re-arm unblock here, after any SET_CLOCK the check sent.
-    private func strapClockSettled() {
+    /// controls and the alarm re-arm unblock here, after any SET_CLOCK the check sent; `setJustSent` says
+    /// whether it sent one just now.
+    private func strapClockSettled(setJustSent: Bool) {
         connectHandshakeDone = true     // unblocks beginBackfill()'s guard
         state.historyReady = true       // and the sync controls, which must not offer what it declines
         log("WHOOP 5/MG: connect handshake done — backfill unblocked")
         log("WHOOP 5/MG: scheduling first historical offload (connect)")
-        // ~1.5 s after the handshake, so the puffin notify subscriptions settle before SEND_HISTORICAL_DATA,
-        // mirroring the WHOOP4 kick. requestSync → beginBackfill is itself gated on connectHandshakeDone, so a
+        // See `firstOffloadDelay`. requestSync → beginBackfill is itself gated on connectHandshakeDone, so a
         // racing foreground/restore trigger can't fire it early.
-        let elapsed = whoop5HandshakeAt.map { Date().timeIntervalSince($0) } ?? 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, 1.5 - elapsed)) { [weak self] in
+        let sinceHandshake = whoop5HandshakeAt.map { Date().timeIntervalSince($0) }
+        let delay = Self.firstOffloadDelay(sinceHandshake: sinceHandshake, setJustSent: setJustSent)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.requestConnectSync()
         }
         // #34: signal settled directly (skip the cmd-notify gate `maybeSignalConnectSettled()` uses) —

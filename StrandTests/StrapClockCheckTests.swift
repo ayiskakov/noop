@@ -101,3 +101,17 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 }
+
+/// W06-071: the first 5/MG offload keeps the hardware-validated 1.5 s after a SET_CLOCK, however late the set.
+final class FirstOffloadDelayTests: XCTestCase {
+    func testASetGetsTheFullSettleWhateverTheHandshakeAge() {
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 10.2, setJustSent: true), 1.5)
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 0.1, setJustSent: true), 1.5)
+    }
+
+    func testWithoutASetOnlyWhatRemainsSinceTheHandshake() {
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 0.5, setJustSent: false), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 4.0, setJustSent: false), 0)
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: nil, setJustSent: false), 1.5)
+    }
+}
