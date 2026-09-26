@@ -160,13 +160,18 @@ not protocol requirements.
   historical root cause of the strap refusing to stream type-47.
 - The handshake re-arms the puffin notify subscriptions, arms realtime HR only if
   a screen asked for it, and reads the strap clock with `GET_CLOCK`. It sends
-  `SET_CLOCK` in the eight-byte form, followed by a `GET_CLOCK` readback, only when
-  the reading is invalid, refused, or more than 2 s from the phone's clock over the
-  whole request round trip, or when no reply comes within 10 s. The strap applies a
-  set value when it processes the command, which on a busy link can be seconds after
-  the phone stamped it, so an unconditional set left a correct clock seconds behind.
-  The handshake counts as done once that check settles: the first historical offload
-  (about 1.5 s after the handshake at the earliest) and the alarm re-arm wait for it.
+  `SET_CLOCK` in the eight-byte form, followed by a `GET_CLOCK` readback, only
+  when the reading is invalid, refused, or more than 2 s from the phone's clock
+  over the whole request round trip, or when no reply comes within 10 s. A reply
+  that comes back more than 1 s after its request and cannot be judged, as on a
+  relaunch where the read waits behind the notify re-subscriptions, is followed by
+  one more `GET_CLOCK`, which decides; if that one goes unanswered, the first
+  reading stands and nothing is set. The strap applies a set value when it
+  processes the command, which on a busy link can be seconds after the phone
+  stamped it, so an unconditional set left a correct clock seconds behind. The
+  handshake counts as done once that check settles: the first historical offload
+  (about 1.5 s after the handshake at the earliest) and the alarm re-arm wait for
+  it.
 - A 15-minute backfill timer (`backfillIntervalSeconds`, matching WHOOP) and a
   30-second keep-alive timer (`keepAliveIntervalSeconds`: re-arm realtime, poll
   battery, watchdog the link) are then started. With Low refresh enabled the

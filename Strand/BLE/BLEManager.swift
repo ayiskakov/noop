@@ -1116,7 +1116,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// `StrapClockCheckTests` can put a read in flight without a strap.
     var strapClockCheck = StrapClock.Check()
     /// Fences a previous link's clock-check timeout, so it can never settle the next link's handshake.
-    private var strapClockCheckToken = 0
+    /// Readable by `StrapClockCheckTests`, which time out the check a second read re-arms.
+    private(set) var strapClockCheckToken = 0
     /// The `connectGeneration` of the link the clock check began on, so its timeout can tell that link from a
     /// later one that came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-069).
     private var strapClockCheckLink = 0
@@ -6850,16 +6851,15 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
 
     /// W06-050: read the 5/MG strap clock. Its reply (`handleStrapClockReply`) or the timeout settles the
     /// check, and a SET_CLOCK follows only when the reading is invalid or provably more than
-    /// `StrapClock.driftThresholdSeconds` off. A strap that never answers is set without a reading after
+    /// `StrapClock.driftThresholdSeconds` off. A first reply over a round trip too long to judge it is read once
+    /// more (W06-084). A strap that never answers is set without a reading after
     /// `StrapClock.replyTimeoutSeconds`, as every connect did before, since an un-clocked strap banks nothing.
     ///
     /// Returns the check's token, which its timeout carries. Internal for `StrapClockCheckTests`.
     @discardableResult
     func beginStrapClockCheck() -> Int {
         strapClockCheck = StrapClock.Check()
-        strapClockCheckToken &+= 1
         strapClockCheckLink = connectGeneration
-        let token = strapClockCheckToken
         // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer. W06-067:
         // and only when it was sent.
         if let sequence = sendReturningSequence(.getClock, payload: []) {
@@ -6870,10 +6870,30 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("WHOOP 5/MG: GET_CLOCK was not sent, so the clock check waits out its "
                 + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
         }
+        return armStrapClockTimeout()
+    }
+
+    /// Arm the clock check's reply timeout under a fresh token, which fences every earlier one.
+    @discardableResult
+    private func armStrapClockTimeout() -> Int {
+        strapClockCheckToken &+= 1
+        let token = strapClockCheckToken
         DispatchQueue.main.asyncAfter(deadline: .now() + StrapClock.replyTimeoutSeconds) { [weak self] in
             self?.strapClockCheckTimedOut(token: token)
         }
         return token
+    }
+
+    /// W06-084: the check's one second read, sent once the first came back over a round trip too long to judge
+    /// it, with a timeout of its own.
+    private func readStrapClockAgain() {
+        if let sequence = sendReturningSequence(.getClock, payload: []) {
+            strapClockCheck.beginRead(sequence: sequence, at: Self.monotonicSeconds())
+        } else {
+            log("WHOOP 5/MG clock: the second GET_CLOCK was not sent, so the first reading waits out the "
+                + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
+        }
+        armStrapClockTimeout()
     }
 
     /// What the clock check's timeout finds of the link (W06-085): the one the check began on; a newer one that
@@ -6902,9 +6922,18 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         let waited = "no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s"
         switch link ?? clockCheckLink {
         case .same:
-            log("WHOOP 5/MG clock: \(waited) — setting the clock without a reading")
-            setStrapClock()
-            strapClockSettled(setJustSent: true)
+            if strapClockCheck.standingVerdict != nil {
+                // W06-084: the first read was answered and did not show the clock off, and a set without a
+                // reading could only undo that; its verdict stands.
+                log("WHOOP 5/MG clock: no reply to the second GET_CLOCK within "
+                    + "\(Int(StrapClock.replyTimeoutSeconds)) s — the first reading stands, and it does not show the "
+                    + "clock more than \(Int(StrapClock.driftThresholdSeconds)) s off; not set")
+                strapClockSettled(setJustSent: false)
+            } else {
+                log("WHOOP 5/MG clock: \(waited) — setting the clock without a reading")
+                setStrapClock()
+                strapClockSettled(setJustSent: true)
+            }
         case .newer:
             // W06-085: the link that replaced it inherited `whoop5SessionStarted` and skipped the handshake, so
             // nothing has read its clock. It gets its own check, whose reply or timeout settles it on a live link.
@@ -6944,6 +6973,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
             setStrapClock()
             strapClockSettled(setJustSent: true)
+        case let .readAgain(verdict, roundTrip):
+            // W06-084: on a relaunch the first read waits behind the notify re-subscribe writes, so this is a
+            // routine readout, behind Test Centre like the in-sync verdict. The second read decides.
+            clockReadout("WHOOP 5/MG clock: " + StrapClock.describeReadAgain(verdict, roundTrip: roundTrip))
+            readStrapClockAgain()
         case let .readback(r, roundTrip):
             let reads = r.seconds.map { "reads \($0)" } ?? "gave no reading"
             log("WHOOP 5/MG clock: after the set the strap \(reads) (result \(r.result)), answered "

@@ -4,7 +4,8 @@ import WhoopProtocol
 
 /// W06-050's app-layer half (W06-073): what `BLEManager` does with each clock-check outcome. `StrapClockTests`
 /// pins the verdicts; these pin that a verdict needing no set sends none, that the connect handshake waits for
-/// the check, that a set settles it, and that the timeout settles only the link the check began on (W06-085).
+/// the check, that a set settles it, that the timeout settles only the link the check began on (W06-085), and
+/// that a first read answered over a round trip too long to judge is read once more (W06-084).
 /// The manager has no strap, so `send` writes nothing and logs "send(<label>) ignored" instead, which is how a
 /// test sees that a SET_CLOCK was asked for.
 @MainActor
@@ -148,6 +149,46 @@ final class StrapClockCheckTests: XCTestCase {
         manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
         manager.strapClockCheckTimedOut(token: token)
         XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
+        XCTAssertEqual(handshakeDoneLines, 1)
+    }
+
+    /// W06-084: on a restored link the first read waits behind the notify re-subscribe writes, and over that
+    /// round trip even a clock in sync reads unresolved, so the check reads once more before anything settles.
+    func testASlowUnresolvedReadIsReadAgainBeforeTheHandshakeSettles() {
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds() - 4)   // sent 4 s ago
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+        XCTAssertEqual(lines(containing: "the second GET_CLOCK was not sent").count, 1, live.log.joined(separator: "\n"))
+        XCTAssertFalse(live.historyReady)
+        XCTAssertEqual(handshakeDoneLines, 0)
+        // This manager has no strap, so the second read goes in flight by hand; its reply decides.
+        manager.strapClockCheck.beginRead(sequence: 8, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(clockReply(origin: 8, seconds: UInt32(now)))
+        XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
+        XCTAssertTrue(live.historyReady)
+        XCTAssertEqual(handshakeDoneLines, 1)
+    }
+
+    /// W06-084: a strap 4 s behind reads unresolved over a restored link's round trip; the second read shows it
+    /// off, and it is set.
+    func testAStrapFourSecondsBehindOnASlowLinkIsSetAfterTheSecondRead() {
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds() - 4)
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now) - 4))
+        XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
+        manager.strapClockCheck.beginRead(sequence: 8, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(clockReply(origin: 8, seconds: UInt32(now) - 4))
+        XCTAssertEqual(setClockAsks, 1, live.log.joined(separator: "\n"))
+        XCTAssertTrue(live.historyReady)
+    }
+
+    /// W06-084: an unanswered second read leaves the first reading standing, and that reading did not show the
+    /// clock off, so the timeout settles without the set it makes when no reading came at all.
+    func testAnUnansweredSecondReadLeavesTheFirstReadingStanding() {
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds() - 4)
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+        manager.strapClockCheckTimedOut(token: manager.strapClockCheckToken, link: .same)
+        XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "the first reading stands").count, 1)
+        XCTAssertTrue(live.historyReady)
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 }

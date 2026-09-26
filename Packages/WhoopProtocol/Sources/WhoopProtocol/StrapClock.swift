@@ -25,6 +25,13 @@ public enum StrapClock {
     /// never answers, and its strap must still be clocked, because an un-clocked WHOOP 5 banks no sensor data.
     public static let replyTimeoutSeconds: Double = 10
 
+    /// A first read answered more than this long after it was sent, whose verdict is unresolved, is read once
+    /// more before the check decides (W06-084). Up to one second the range `judge` allows is at most two seconds
+    /// wide, so a strap exactly in sync is always judged in sync; above it, one can come out unresolved. On a
+    /// restored link the first read queues behind the relaunch's notify re-subscribe writes and is answered
+    /// 3–5 s later, while a second read, sent once they are through, is answered promptly.
+    public static let readAgainAfterRoundTripSeconds: Double = 1
+
     /// The whole second a 5/MG SET_CLOCK stamps for phone Unix time `unix`: the nearest one. The set carries
     /// whole seconds with zero subseconds, so truncating left the strap up to 1 s behind before any processing
     /// delay, and a set the strap then applied late was judged off and set again on the next connect
@@ -116,7 +123,8 @@ public enum StrapClock {
         return .unresolved(seconds: s, low: low, high: high)
     }
 
-    /// One connection's clock check: one read, then a set only when its verdict needs one.
+    /// One connection's clock check: one read, or two when the first is answered over a round trip too long to
+    /// judge it (W06-084), then a set only when the deciding verdict needs one.
     public struct Check: Equatable, Sendable {
 
         /// A GET_CLOCK in flight: its request sequence and when it was sent, in monotonic seconds.
@@ -131,6 +139,11 @@ public enum StrapClock {
         public private(set) var readback: Request?
         /// True once the check has decided, by a reply or by the timeout.
         public private(set) var settled = false
+        /// The first read's verdict while the check waits on its second read (W06-084); it stands if that read
+        /// goes unanswered.
+        public private(set) var standingVerdict: Verdict?
+        /// True once the check has asked for its one second read.
+        public private(set) var secondReadAsked = false
 
         public init() {}
 
@@ -144,6 +157,8 @@ public enum StrapClock {
             case settle(Verdict, roundTrip: Double)
             /// The read is answered and the clock needs a set.
             case set(Verdict, roundTrip: Double)
+            /// The read is answered, but over a round trip too long to judge it; read once more (W06-084).
+            case readAgain(Verdict, roundTrip: Double)
             /// The reply to the readback after a set; `roundTrip` counts from the set.
             case readback(Reading, roundTrip: Double)
         }
@@ -166,9 +181,15 @@ public enum StrapClock {
             if let r = read, !settled, reading.originSequence == r.sequence {
                 if reading.result == resultPending { return .pending }
                 read = nil
-                settled = true
                 let roundTrip = at - r.sentAt
                 let verdict = judge(reading, receivedAt: wallClock, roundTrip: roundTrip)
+                if case .unresolved = verdict, !secondReadAsked, roundTrip > readAgainAfterRoundTripSeconds {
+                    secondReadAsked = true
+                    standingVerdict = verdict
+                    return .readAgain(verdict, roundTrip: roundTrip)
+                }
+                settled = true
+                standingVerdict = nil
                 return verdict.needsSet ? .set(verdict, roundTrip: roundTrip) : .settle(verdict, roundTrip: roundTrip)
             }
             if let r = readback, reading.originSequence == r.sequence {
@@ -179,8 +200,9 @@ public enum StrapClock {
             return .notOurs
         }
 
-        /// The read went unanswered for `replyTimeoutSeconds`. True when this settles the check, and the
-        /// caller then sets the clock without a reading; false when a reply already settled it.
+        /// The read went unanswered for `replyTimeoutSeconds`. True when this settles the check: the caller then
+        /// sets the clock without a reading, unless `standingVerdict` holds a first reading, which stands instead.
+        /// False when a reply already settled it.
         public mutating func expire() -> Bool {
             guard !settled else { return false }
             settled = true
@@ -208,6 +230,15 @@ public enum StrapClock {
             return "strap clock reads \(s), \(range(low, high)) from the phone over a \(rt) s round trip — "
                 + "more than \(Int(driftThresholdSeconds)) s off, setting it"
         }
+    }
+
+    /// The log line for a first read answered over a round trip too long to judge it, before the second read
+    /// (W06-084).
+    public static func describeReadAgain(_ verdict: Verdict, roundTrip: Double) -> String {
+        guard case let .unresolved(s, low, high) = verdict else { return describe(verdict, roundTrip: roundTrip) }
+        let rt = String(format: "%.1f", max(0, roundTrip))
+        return "strap clock reads \(s), \(range(low, high)) from the phone over a \(rt) s round trip — "
+            + "too long to judge, reading it again"
     }
 
     private static func range(_ low: Double, _ high: Double) -> String {

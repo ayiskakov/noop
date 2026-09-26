@@ -248,6 +248,126 @@ final class StrapClockTests: XCTestCase {
         XCTAssertTrue(check.expire())
     }
 
+    // MARK: Check, second read (W06-084)
+
+    /// A read answered over a restored link's round trip cannot be judged, so the check reads once more, and
+    /// the second read decides.
+    func testAnUnresolvedReadOverALongRoundTripIsReadOnceMore() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case let .readAgain(first, rt) = check.receive(reading(9), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(rt, 4)
+        XCTAssertEqual(first, .unresolved(seconds: 1_790_000_000, low: -0.5, high: 4.5))
+        XCTAssertFalse(check.settled)
+        XCTAssertEqual(check.standingVerdict, first)
+        check.beginRead(sequence: 10, at: 104.25)
+        guard case let .settle(second, _) = check.receive(reading(10), at: 104.5, wallClock: now + 0.75) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(second, .inSync(seconds: 1_790_000_000, low: -0.75, high: 0.5))
+        XCTAssertTrue(check.settled)
+        XCTAssertNil(check.standingVerdict)
+    }
+
+    func testAStrapFourSecondsBehindOverALongRoundTripIsSetAfterTheSecondRead() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case .readAgain = check.receive(reading(9, seconds: 1_789_999_996), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        check.beginRead(sequence: 10, at: 104.25)
+        XCTAssertEqual(check.receive(reading(10, seconds: 1_789_999_996), at: 104.5, wallClock: now + 0.75),
+                       .set(.off(seconds: 1_789_999_996, low: -4.75, high: -3.5), roundTrip: 0.25))
+    }
+
+    func testThereIsNoThirdRead() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case .readAgain = check.receive(reading(9), at: 104, wallClock: now + 0.5) else { return XCTFail() }
+        check.beginRead(sequence: 10, at: 104.25)
+        guard case let .settle(v, _) = check.receive(reading(10, seconds: 1_790_000_004), at: 108.25,
+                                                     wallClock: now + 4.75) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(v, .unresolved(seconds: 1_790_000_004, low: -0.75, high: 4.25))
+        XCTAssertTrue(check.settled)
+    }
+
+    /// Up to one second the range is at most two seconds wide, so an unresolved verdict there comes from the
+    /// clock, not the round trip, and a second read would not change it.
+    func testAnUnresolvedReadOverAShortRoundTripSettlesAtOnce() {
+        for (rt, readsAgain) in [(0.5, false), (1.0, false), (1.25, true)] {
+            var check = StrapClock.Check()
+            check.beginRead(sequence: 9, at: 100)
+            let step = check.receive(reading(9, seconds: 1_789_999_998), at: 100 + rt, wallClock: now + 0.5)
+            if case .readAgain = step {
+                XCTAssertTrue(readsAgain, "\(rt)")
+            } else if case .settle(.unresolved, _) = step {
+                XCTAssertFalse(readsAgain, "\(rt)")
+            } else {
+                XCTFail("\(rt): \(step)")
+            }
+        }
+    }
+
+    /// A second read that goes unanswered leaves the first reading standing, and the caller settles on it
+    /// rather than setting the clock without a reading.
+    func testAnUnansweredSecondReadLeavesTheFirstVerdictStanding() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case let .readAgain(first, _) = check.receive(reading(9), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        check.beginRead(sequence: 10, at: 104.25)
+        XCTAssertTrue(check.expire())
+        XCTAssertEqual(check.standingVerdict, first)
+        XCTAssertFalse(check.expire())
+    }
+
+    /// The review's oracle (W06-084), run through the check: first reads answered 0.9 s and 3.2–4.7 s after
+    /// they were sent (the strap reads its clock 50 ms before the reply lands), second reads 0.3 s, 100
+    /// sub-second phases each. With one read, every case at 3.2–4.7 s ended unresolved.
+    func testASecondReadResolvesWhatARestoredLinksRoundTripCannot() {
+        func tally(offset: Double, firstRoundTrip rt1: Double) -> [String: Int] {
+            let rt2 = 0.3
+            var out: [String: Int] = [:]
+            for i in 0..<100 {
+                let t0 = now + Double(i) / 100
+                var check = StrapClock.Check()
+                check.beginRead(sequence: 9, at: 1000)
+                let s1 = UInt32((t0 + rt1 - 0.05 + offset).rounded(.down))
+                var step = check.receive(reading(9, seconds: s1), at: 1000 + rt1, wallClock: t0 + rt1)
+                var reads = 1
+                if case .readAgain = step {
+                    reads = 2
+                    let t1 = t0 + rt1 + 0.01
+                    check.beginRead(sequence: 10, at: 1000 + rt1 + 0.01)
+                    let s2 = UInt32((t1 + rt2 - 0.05 + offset).rounded(.down))
+                    step = check.receive(reading(10, seconds: s2), at: 1000 + rt1 + 0.01 + rt2, wallClock: t1 + rt2)
+                }
+                let verdict: String
+                switch step {
+                case .settle(.inSync, _): verdict = "inSync"
+                case .settle(.unresolved, _): verdict = "unresolved"
+                case .set(.off, _): verdict = "off"
+                default: verdict = "\(step)"
+                }
+                out["\(verdict)/\(reads)", default: 0] += 1
+            }
+            return out
+        }
+        XCTAssertEqual(tally(offset: 0, firstRoundTrip: 0.9), ["inSync/1": 100])
+        XCTAssertEqual(tally(offset: -4, firstRoundTrip: 0.9), ["off/1": 100])
+        for rt1 in [3.2, 4.0, 4.7] {
+            XCTAssertEqual(tally(offset: 0, firstRoundTrip: rt1), ["inSync/2": 100], "\(rt1)")
+            XCTAssertEqual(tally(offset: -3, firstRoundTrip: rt1), ["off/2": 74, "unresolved/2": 26], "\(rt1)")
+            XCTAssertEqual(tally(offset: -4, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
+            XCTAssertEqual(tally(offset: -5, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
+        }
+    }
+
     // MARK: describe
 
     func testLogLinesStateTheReadingAndTheRange() {
@@ -264,5 +384,9 @@ final class StrapClockTests: XCTestCase {
                        "strap clock reads 0, not a wall clock (at or below 1293840001) — setting it")
         XCTAssertEqual(StrapClock.describe(.unread(result: 3), roundTrip: 0.1),
                        "GET_CLOCK answered result 3 with no reading — setting the clock")
+        XCTAssertEqual(StrapClock.describeReadAgain(.unresolved(seconds: 1_790_000_000, low: -0.5, high: 4.5),
+                                                    roundTrip: 4),
+                       "strap clock reads 1790000000, -0.5…+4.5 s from the phone over a 4.0 s round trip — "
+                       + "too long to judge, reading it again")
     }
 }
