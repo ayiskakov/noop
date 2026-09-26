@@ -72,6 +72,18 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 
+    /// W06-069: a Bluetooth power-off leaves `connected` set (W06-083), so the timeout must ask the link itself
+    /// rather than claim a set that `send` will drop. The handshake still settles (W06-072).
+    func testTheTimeoutOnALinkThatIsGoneSetsNothingAndSaysSo() {
+        live.connected = true   // what a power-off leaves behind: the flag, with no connected peripheral
+        let token = manager.beginStrapClockCheck()
+        manager.strapClockCheckTimedOut(token: token)
+        XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "setting the clock without a reading").count, 0)
+        XCTAssertEqual(lines(containing: "is gone — the clock is neither read nor set").count, 1)
+        XCTAssertTrue(live.historyReady)
+    }
+
     func testTheTimeoutOfAReplacedCheckDoesNothing() {
         let stale = manager.beginStrapClockCheck()
         manager.beginStrapClockCheck()

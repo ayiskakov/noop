@@ -1116,6 +1116,9 @@ public final class BLEManager: NSObject, ObservableObject {
     var strapClockCheck = StrapClock.Check()
     /// Fences a previous link's clock-check timeout, so it can never settle the next link's handshake.
     private var strapClockCheckToken = 0
+    /// The `connectGeneration` of the link the clock check began on, so its timeout can tell that link from a
+    /// later one that came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-069).
+    private var strapClockCheckLink = 0
     /// When this link's 5/MG handshake ran, so the first offload keeps its ~1.5 s settle delay after it.
     private var whoop5HandshakeAt: Date?
     private var intentionalDisconnect = false
@@ -6846,6 +6849,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     func beginStrapClockCheck() -> Int {
         strapClockCheck = StrapClock.Check()
         strapClockCheckToken &+= 1
+        strapClockCheckLink = connectGeneration
         let token = strapClockCheckToken
         // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer. W06-067:
         // and only when it was sent.
@@ -6867,17 +6871,22 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// reply settled it or a later link replaced it. Internal for `StrapClockCheckTests`.
     func strapClockCheckTimedOut(token: Int) {
         guard token == strapClockCheckToken, strapClockCheck.expire() else { return }
-        // W06-067: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the
-        // token can outlive it. Say so rather than claim a set nothing can send; the handshake flags still
-        // settle, as they did when the handshake set them directly.
-        if state.connected {
+        // W06-069: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the token
+        // outlives it and `state.connected` stays set (W06-083). Ask the link itself, as `send` does, and
+        // whether it is still the one the check began on, since a reconnect after a power-off bumps no token.
+        let sameLinkUp = state.connected && peripheral?.state == .connected
+            && connectGeneration == strapClockCheckLink
+        if sameLinkUp {
             log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
                 + "setting the clock without a reading")
             setStrapClock()
         } else {
             log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s, "
-                + "and the link is down — the clock is neither read nor set")
+                + "and the link it was sent on is gone — the clock is neither read nor set")
         }
+        // Settle either way (W06-072): a reconnect after a power-off inherits `whoop5SessionStarted` and skips
+        // the 5/MG handshake, so an unsettled check would leave that link's backfill blocked for good. The
+        // sends this unblocks on a dead link are dropped by `send`'s guard.
         strapClockSettled()
     }
 
