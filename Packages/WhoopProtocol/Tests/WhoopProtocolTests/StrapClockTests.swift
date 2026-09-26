@@ -40,9 +40,24 @@ final class StrapClockTests: XCTestCase {
         let setClockReply = bytes("aa010c000100271124220ae701000000bcc4efc3")
         XCTAssertTrue(verifyFrame(setClockReply, family: .whoop5).ok)
         XCTAssertNil(StrapClock.decodeReply(setClockReply))
-        // Command 11 in a COMMAND frame (type 35) is our own request, not a reply.
-        XCTAssertNil(StrapClock.decodeReply(puffinCommandFrame(cmd: 11, seq: 3, payload: [])))
+        // Command 11 in a COMMAND frame (type 35) is our own request, not a reply. The body passes both length
+        // guards, so only the type check can reject it (W06-097: a padded empty request never reached it).
+        XCTAssertNil(StrapClock.decodeReply(w5Frame([7, 1] + u32(1_790_000_000), type: 35, cmd: 11)))
         XCTAssertNil(StrapClock.decodeReply([0xAA, 0x01]))
+    }
+
+    /// W06-097: the guards sit on bodies ending at 12/13 (the result) and 16/17 (the seconds). `puffinCommandFrame`
+    /// pads to 4 bytes, so its fixtures end at 12, 16, 20 or 24 and a guard could move between them unseen;
+    /// `w5Frame` builds the exact lengths.
+    func testTheGuardsSitOnTheResultAndTheSeconds() {
+        let seconds = u32(1_790_000_000)
+        XCTAssertNil(StrapClock.decodeReply(w5Frame([7], type: 36, cmd: 11)), "ends at 12: no result")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1], type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: nil), "ends at 13: result only")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1] + seconds.prefix(3), type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: nil), "ends at 16: three bytes of four")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1] + seconds, type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: 1_790_000_000), "ends at 17: a reading")
     }
 
     func testAFailureReplyWithNoBodyDecodesWithoutSeconds() {
