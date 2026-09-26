@@ -4,8 +4,9 @@ import WhoopProtocol
 
 /// W06-050's app-layer half (W06-073): what `BLEManager` does with each clock-check outcome. `StrapClockTests`
 /// pins the verdicts; these pin that a verdict needing no set sends none, that the connect handshake waits for
-/// the check, and that a set and the timeout both settle it. The manager has no strap, so `send` writes
-/// nothing and logs "send(<label>) ignored" instead, which is how a test sees that a SET_CLOCK was asked for.
+/// the check, that a set settles it, and that the timeout settles only the link the check began on (W06-085).
+/// The manager has no strap, so `send` writes nothing and logs "send(<label>) ignored" instead, which is how a
+/// test sees that a SET_CLOCK was asked for.
 @MainActor
 final class StrapClockCheckTests: XCTestCase {
     private var live: LiveState!
@@ -88,23 +89,49 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertEqual(handshakeDoneLines, 0)
     }
 
-    func testTheTimeoutSettlesTheHandshake() {
+    /// The link the check began on is still up, so the strap is set without a reading, as every connect did
+    /// before W06-050, and the handshake settles. `link` stands in for a connected peripheral.
+    func testTheTimeoutOnTheSameLinkSetsTheClockWithoutAReadingAndSettles() {
         let token = manager.beginStrapClockCheck()
-        manager.strapClockCheckTimedOut(token: token)
-        XCTAssertTrue(live.historyReady, live.log.joined(separator: "\n"))
+        manager.strapClockCheckTimedOut(token: token, link: .same)
+        XCTAssertEqual(setClockAsks, 1, live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "setting the clock without a reading").count, 1)
+        XCTAssertTrue(live.historyReady)
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 
+    /// W06-085: a link that came up after a power-off inherited the session flag and skipped the handshake, so
+    /// the timeout gives it a check of its own rather than settling the dead link.
+    func testTheTimeoutWithANewerLinkUpChecksThatLinkInstead() {
+        manager.whoop5SessionStarted = true
+        let token = manager.beginStrapClockCheck()
+        manager.strapClockCheckTimedOut(token: token, link: .newer)
+        XCTAssertEqual(lines(containing: "reading the clock on the link that replaced it").count, 1,
+                       live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "GET_CLOCK was not sent").count, 2)   // the first check's, then the new one's
+        XCTAssertFalse(manager.strapClockCheck.settled, "a fresh check waits on the newer link")
+        XCTAssertEqual(setClockAsks, 0)
+        XCTAssertFalse(live.historyReady)
+        XCTAssertEqual(live.connectSettled, 0)
+        XCTAssertTrue(manager.whoop5SessionStarted, "the newer link's handshake must not run again mid-link")
+    }
+
     /// W06-069: a Bluetooth power-off leaves `connected` set (W06-083), so the timeout must ask the link itself
-    /// rather than claim a set that `send` will drop. The handshake still settles (W06-072).
-    func testTheTimeoutOnALinkThatIsGoneSetsNothingAndSaysSo() {
+    /// rather than claim a set that `send` will drop. W06-085: and settle nothing on the dead link. Settling
+    /// there spent the alarm re-arm on it and left the reconnect, which inherits the session flag and skips the
+    /// handshake, with no clock check; clearing the flag lets the next link run the handshake, check included.
+    func testTheTimeoutOnALinkThatIsGoneSettlesNothingAndLetsTheNextLinkRunTheHandshake() {
         live.connected = true   // what a power-off leaves behind: the flag, with no connected peripheral
+        manager.whoop5SessionStarted = true   // as the handshake that began the check left it
         let token = manager.beginStrapClockCheck()
         manager.strapClockCheckTimedOut(token: token)
         XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
         XCTAssertEqual(lines(containing: "setting the clock without a reading").count, 0)
-        XCTAssertEqual(lines(containing: "is gone — the clock is neither read nor set").count, 1)
-        XCTAssertTrue(live.historyReady)
+        XCTAssertEqual(lines(containing: "the handshake, clock check included, runs again on the next link").count, 1)
+        XCTAssertFalse(live.historyReady)
+        XCTAssertEqual(handshakeDoneLines, 0)
+        XCTAssertEqual(live.connectSettled, 0)
+        XCTAssertFalse(manager.whoop5SessionStarted)
     }
 
     func testTheTimeoutOfAReplacedCheckDoesNothing() {

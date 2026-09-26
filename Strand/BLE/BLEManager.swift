@@ -1077,7 +1077,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Once-per-connection guard for the 5/MG offload kick (connectHandshakeDone + requestSync +
     /// startBackfillTimer). Stops the HISTORY_END acks re-entering didWriteValueFor from re-triggering
     /// the offload mid-stream (the 5/MG twin of the WHOOP4 connectHandshakeDone ack-storm guard).
-    private var whoop5SessionStarted = false
+    /// Internal for `StrapClockCheckTests`, which cannot run the handshake that sets it.
+    var whoop5SessionStarted = false
     /// Backfill ACKs can arrive hundreds or thousands of times in one offload. Keep the strap log
     /// readable and avoid forcing SwiftUI to auto-scroll on every ACK row.
     private var historicalAckLogCounter = 0
@@ -6875,27 +6876,52 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         return token
     }
 
+    /// What the clock check's timeout finds of the link (W06-085): the one the check began on; a newer one that
+    /// came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-083) and is past its CLIENT_HELLO,
+    /// so it skipped the handshake; or neither.
+    enum ClockCheckLink: Equatable { case same, newer, none }
+
+    /// The link as the clock check's timeout sees it. W06-069: a Bluetooth power-off does not end the link
+    /// through `didDisconnectPeripheral`, so the token outlives it and `state.connected` stays set (W06-083).
+    /// Ask the link itself, as `send` does, and whether it is still the one the check began on, since a
+    /// reconnect after a power-off bumps no token.
+    private var clockCheckLink: ClockCheckLink {
+        guard state.connected, peripheral?.state == .connected else { return .none }
+        if connectGeneration == strapClockCheckLink { return .same }
+        // The command characteristic and the CLIENT_HELLO write come in one callback, so a newer link that has
+        // the characteristic and no hello outstanding had its hello acknowledged. One whose hello is still out
+        // counts as none: that acknowledgement runs the handshake once the session flag is clear.
+        return cmdCharacteristic != nil && clientHelloWriteAt == nil ? .newer : .none
+    }
+
     /// The clock check begun with `token` got no reply in `StrapClock.replyTimeoutSeconds`. A no-op when a
-    /// reply settled it or a later link replaced it. Internal for `StrapClockCheckTests`.
-    func strapClockCheckTimedOut(token: Int) {
+    /// reply settled it or a later link replaced it. `link` stands in for what the manager sees of the link, for
+    /// `StrapClockCheckTests`, which cannot connect a peripheral. Internal for those tests.
+    func strapClockCheckTimedOut(token: Int, link: ClockCheckLink? = nil) {
         guard token == strapClockCheckToken, strapClockCheck.expire() else { return }
-        // W06-069: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the token
-        // outlives it and `state.connected` stays set (W06-083). Ask the link itself, as `send` does, and
-        // whether it is still the one the check began on, since a reconnect after a power-off bumps no token.
-        let sameLinkUp = state.connected && peripheral?.state == .connected
-            && connectGeneration == strapClockCheckLink
-        if sameLinkUp {
-            log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
-                + "setting the clock without a reading")
+        let waited = "no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s"
+        switch link ?? clockCheckLink {
+        case .same:
+            log("WHOOP 5/MG clock: \(waited) — setting the clock without a reading")
             setStrapClock()
-        } else {
-            log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s, "
-                + "and the link it was sent on is gone — the clock is neither read nor set")
+            strapClockSettled(setJustSent: true)
+        case .newer:
+            // W06-085: the link that replaced it inherited `whoop5SessionStarted` and skipped the handshake, so
+            // nothing has read its clock. It gets its own check, whose reply or timeout settles it on a live link.
+            log("WHOOP 5/MG clock: \(waited), and the link the check began on is gone — reading the clock on "
+                + "the link that replaced it")
+            beginStrapClockCheck()
+        case .none:
+            // W06-085: settle nothing on a dead link. Settling here bumped `connectSettled`, which spent the
+            // alarm re-arm on a link whose sends are dropped, and left the reconnect, which inherits
+            // `whoop5SessionStarted` and skips the handshake, with no clock check at all. Clearing the flag lets
+            // the next CLIENT_HELLO acknowledgement run the whole handshake, check included. The check began with
+            // the handshake undone and nothing has settled since, so `connectHandshakeDone` and
+            // `connectSettledSignaled` are still clear.
+            whoop5SessionStarted = false
+            log("WHOOP 5/MG clock: \(waited), and the link the check began on is gone — nothing is set on it; "
+                + "the handshake, clock check included, runs again on the next link")
         }
-        // Settle either way (W06-072): a reconnect after a power-off inherits `whoop5SessionStarted` and skips
-        // the 5/MG handshake, so an unsettled check would leave that link's backfill blocked for good. The
-        // sends this unblocks on a dead link are dropped by `send`'s guard.
-        strapClockSettled(setJustSent: sameLinkUp)
     }
 
     /// W06-050: fold one GET_CLOCK reply into this link's clock check and act on its verdict. Verified first,
