@@ -6831,6 +6831,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         send(.setClock, payload: BLEManager.setClockPayload(now: now))
     }
 
+    /// Seconds on a clock that no wall-clock step moves and that keeps counting while the device sleeps, for the
+    /// clock check's round trips (W06-074). Only differences between two readings mean anything.
+    static func monotonicSeconds() -> Double {
+        let c = (ContinuousClock.now - monotonicOrigin).components
+        return Double(c.seconds) + Double(c.attoseconds) / 1e18
+    }
+    private static let monotonicOrigin = ContinuousClock.now
+
     /// `send`, returning the request sequence the frame carried, or nil when `send` wrote nothing. A reply
     /// names its request by that sequence (format-1 byte 11).
     private func sendReturningSequence(_ command: WhoopCommand, payload: [UInt8]) -> UInt8? {
@@ -6854,7 +6862,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer. W06-067:
         // and only when it was sent.
         if let sequence = sendReturningSequence(.getClock, payload: []) {
-            strapClockCheck.beginRead(sequence: sequence, at: Date().timeIntervalSince1970)
+            strapClockCheck.beginRead(sequence: sequence, at: Self.monotonicSeconds())
             log("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or provably "
                 + "more than \(Int(StrapClock.driftThresholdSeconds)) s off")
         } else {
@@ -6894,7 +6902,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// since the verdict can send a SET_CLOCK. Internal for `StrapClockCheckTests`.
     func handleStrapClockReply(_ frame: [UInt8]) {
         guard verifyFrame(frame, family: .whoop5).ok, let reading = StrapClock.decodeReply(frame) else { return }
-        switch strapClockCheck.receive(reading, at: Date().timeIntervalSince1970) {
+        switch strapClockCheck.receive(reading, at: Self.monotonicSeconds(), wallClock: Date().timeIntervalSince1970) {
         case .notOurs:
             log("WHOOP 5/MG clock: a GET_CLOCK reply to request \(reading.originSequence) answers no read in "
                 + "flight — ignored")
@@ -6918,7 +6926,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     private func setStrapClock() {
         send(.setClock, payload: BLEManager.setClockPayload())
         if let sequence = sendReturningSequence(.getClock, payload: []) {
-            strapClockCheck.beginReadback(sequence: sequence, at: Date().timeIntervalSince1970)
+            strapClockCheck.beginReadback(sequence: sequence, at: Self.monotonicSeconds())
         }
     }
 

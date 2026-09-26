@@ -85,17 +85,22 @@ public enum StrapClock {
         }
     }
 
-    /// Judge a reading from a GET_CLOCK sent at `sentAt` and answered at `receivedAt`, both phone Unix
-    /// seconds. The strap read its clock at some moment in that window, and a whole-second reading `s` means
-    /// its clock stood in [s, s + 1) then. So the offset strap − phone lies in (s − receivedAt, s + 1 − sentAt),
-    /// and the clock is judged off only when that whole range lies past the threshold. A long round trip
-    /// widens the range and so never produces a set by itself.
-    public static func judge(_ reading: Reading, sentAt: Double, receivedAt: Double,
+    /// Judge a reading from a GET_CLOCK answered at phone Unix time `receivedAt`, `roundTrip` seconds after it
+    /// was sent. The strap read its clock at some moment in that window, and a whole-second reading `s` means
+    /// its clock stood in [s, s + 1) then. So the offset strap − phone lies in
+    /// (s − receivedAt, s + 1 − (receivedAt − roundTrip)), and the clock is judged off only when that whole
+    /// range lies past the threshold. A long round trip widens the range and so never produces a set by itself.
+    ///
+    /// The phone's wall clock is sampled once, at the reply, and the round trip must come from a monotonic
+    /// clock (W06-074): with two wall samples, a phone clock stepped back during the read collapsed the range
+    /// onto the pre-step send time and judged a correct strap off. The one wall sample is the clock a set would
+    /// copy, so a step before the reply is absorbed. A negative round trip counts as zero.
+    public static func judge(_ reading: Reading, receivedAt: Double, roundTrip: Double,
                              threshold: Double = driftThresholdSeconds) -> Verdict {
         guard reading.result == resultSuccess, let s = reading.seconds else { return .unread(result: reading.result) }
         guard s > validityFloor else { return .invalid(seconds: s) }
-        let low = Double(s) - max(receivedAt, sentAt)
-        let high = Double(s) + 1 - sentAt
+        let low = Double(s) - receivedAt
+        let high = Double(s) + 1 - (receivedAt - max(0, roundTrip))
         if high < -threshold || low > threshold { return .off(seconds: s, low: low, high: high) }
         if low >= -threshold && high <= threshold { return .inSync(seconds: s, low: low, high: high) }
         return .unresolved(seconds: s, low: low, high: high)
@@ -104,7 +109,7 @@ public enum StrapClock {
     /// One connection's clock check: one read, then a set only when its verdict needs one.
     public struct Check: Equatable, Sendable {
 
-        /// A GET_CLOCK in flight: its request sequence and when it was sent.
+        /// A GET_CLOCK in flight: its request sequence and when it was sent, in monotonic seconds.
         public struct Request: Equatable, Sendable {
             public let sequence: UInt8
             public let sentAt: Double
@@ -133,25 +138,27 @@ public enum StrapClock {
             case readback(Reading, roundTrip: Double)
         }
 
-        /// A read went out with request sequence `sequence` at `at`.
+        /// A read went out with request sequence `sequence` at `at`, in seconds on a monotonic clock: one that
+        /// no wall-clock step moves and that keeps counting while the device sleeps.
         public mutating func beginRead(sequence: UInt8, at: Double) {
             guard !settled else { return }
             read = Request(sequence: sequence, sentAt: at)
         }
 
-        /// A readback went out after a set.
+        /// A readback went out after a set, at `at` on the same monotonic clock.
         public mutating func beginReadback(sequence: UInt8, at: Double) {
             readback = Request(sequence: sequence, sentAt: at)
         }
 
-        /// Fold in one decoded reply received at `at`.
-        public mutating func receive(_ reading: Reading, at: Double) -> Step {
+        /// Fold in one decoded reply received at `at` on the monotonic clock of `beginRead`, when the phone's
+        /// wall clock read `wallClock` Unix seconds.
+        public mutating func receive(_ reading: Reading, at: Double, wallClock: Double) -> Step {
             if let r = read, !settled, reading.originSequence == r.sequence {
                 if reading.result == resultPending { return .pending }
                 read = nil
                 settled = true
-                let verdict = judge(reading, sentAt: r.sentAt, receivedAt: at)
                 let roundTrip = at - r.sentAt
+                let verdict = judge(reading, receivedAt: wallClock, roundTrip: roundTrip)
                 return verdict.needsSet ? .set(verdict, roundTrip: roundTrip) : .settle(verdict, roundTrip: roundTrip)
             }
             if let r = readback, reading.originSequence == r.sequence {

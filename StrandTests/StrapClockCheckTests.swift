@@ -30,7 +30,7 @@ final class StrapClockCheckTests: XCTestCase {
     private var handshakeDoneLines: Int { lines(containing: "connect handshake done").count }
 
     func testAReadingInSyncSendsNoSetAndSettlesTheHandshake() {
-        manager.strapClockCheck.beginRead(sequence: 7, at: now)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
         manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
         XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))
         XCTAssertTrue(live.historyReady)
@@ -38,7 +38,7 @@ final class StrapClockCheckTests: XCTestCase {
     }
 
     func testAReadingOffSetsTheClockAndThenSettles() {
-        manager.strapClockCheck.beginRead(sequence: 7, at: now)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
         manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now) - 100))
         XCTAssertEqual(setClockAsks, 1, live.log.joined(separator: "\n"))
         XCTAssertTrue(live.historyReady)
@@ -46,14 +46,14 @@ final class StrapClockCheckTests: XCTestCase {
     }
 
     func testAnInvalidReadingSetsTheClock() {
-        manager.strapClockCheck.beginRead(sequence: 7, at: now)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
         manager.handleStrapClockReply(clockReply(origin: 7, seconds: 60))
         XCTAssertEqual(setClockAsks, 1, live.log.joined(separator: "\n"))
         XCTAssertTrue(live.historyReady)
     }
 
     func testAReplyToNoReadInFlightChangesNothing() {
-        manager.strapClockCheck.beginRead(sequence: 7, at: now)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
         manager.handleStrapClockReply(clockReply(origin: 8, seconds: UInt32(now) - 100))
         XCTAssertEqual(setClockAsks, 0)
         XCTAssertFalse(live.historyReady)
@@ -94,7 +94,7 @@ final class StrapClockCheckTests: XCTestCase {
 
     func testTheTimeoutAfterAReplyDoesNothing() {
         let token = manager.beginStrapClockCheck()
-        manager.strapClockCheck.beginRead(sequence: 7, at: now)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
         manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
         manager.strapClockCheckTimedOut(token: token)
         XCTAssertEqual(setClockAsks, 0, live.log.joined(separator: "\n"))

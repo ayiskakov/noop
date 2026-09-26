@@ -59,11 +59,11 @@ final class StrapClockTests: XCTestCase {
 
     // MARK: judge
 
-    private let t0 = 1_790_000_000.25   // phone time the read was sent
+    private let t0 = 1_790_000_000.25   // phone time the read was sent; each reply time is t0 + its round trip
 
     func testAClockWithinTheThresholdIsNotSet() {
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
-        let v = StrapClock.judge(r, sentAt: t0, receivedAt: t0 + 0.5)
+        let v = StrapClock.judge(r, receivedAt: t0 + 0.5, roundTrip: 0.5)
         XCTAssertEqual(v, .inSync(seconds: 1_790_000_000, low: -0.75, high: 0.75))
         XCTAssertFalse(v.needsSet)
     }
@@ -71,14 +71,14 @@ final class StrapClockTests: XCTestCase {
     func testAClockProvablyBehindIsSet() {
         // Four seconds behind, answered quickly: the whole range lies past −2 s.
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_996)
-        let v = StrapClock.judge(r, sentAt: t0, receivedAt: t0 + 0.5)
+        let v = StrapClock.judge(r, receivedAt: t0 + 0.5, roundTrip: 0.5)
         XCTAssertEqual(v, .off(seconds: 1_789_999_996, low: -4.75, high: -3.25))
         XCTAssertTrue(v.needsSet)
     }
 
     func testAClockProvablyAheadIsSet() {
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_005)
-        XCTAssertEqual(StrapClock.judge(r, sentAt: t0, receivedAt: t0 + 1),
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: t0 + 1, roundTrip: 1),
                        .off(seconds: 1_790_000_005, low: 3.75, high: 5.75))
     }
 
@@ -86,7 +86,7 @@ final class StrapClockTests: XCTestCase {
         // The relaunch shape: the reply came four seconds after the request and reads the second it was
         // sent. The strap may have read its clock at once (in sync) or four seconds later (four behind).
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
-        let v = StrapClock.judge(r, sentAt: t0, receivedAt: t0 + 4)
+        let v = StrapClock.judge(r, receivedAt: t0 + 4, roundTrip: 4)
         XCTAssertEqual(v, .unresolved(seconds: 1_790_000_000, low: -4.25, high: 0.75))
         XCTAssertFalse(v.needsSet)
     }
@@ -94,36 +94,46 @@ final class StrapClockTests: XCTestCase {
     func testAnExactlyTwoSecondRangeEdgeIsNotOff() {
         // high == −2 is not past the threshold.
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_997)
-        XCTAssertFalse(StrapClock.judge(r, sentAt: 1_790_000_000, receivedAt: 1_790_000_000.5).needsSet)
+        XCTAssertFalse(StrapClock.judge(r, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
         let r2 = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_996)
-        XCTAssertTrue(StrapClock.judge(r2, sentAt: 1_790_000_000, receivedAt: 1_790_000_000.5).needsSet)
+        XCTAssertTrue(StrapClock.judge(r2, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
     }
 
     func testNoWallClockIsSetWhateverTheResult() {
         for s: UInt32 in [0, 86_400, StrapClock.validityFloor] {
-            let v = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: s), sentAt: t0, receivedAt: t0)
+            let v = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: s), receivedAt: t0, roundTrip: 0)
             XCTAssertEqual(v, .invalid(seconds: s))
             XCTAssertTrue(v.needsSet)
         }
         // One second past the floor is a wall clock, and this one is decades off.
         let past = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: StrapClock.validityFloor + 1),
-                                    sentAt: t0, receivedAt: t0)
+                                    receivedAt: t0, roundTrip: 0)
         guard case .off = past else { return XCTFail("\(past)") }
     }
 
     func testAReplyWithoutAReadingIsSet() {
         let refused = StrapClock.judge(.init(originSequence: 1, result: 3, seconds: 1_790_000_000),
-                                       sentAt: t0, receivedAt: t0)
+                                       receivedAt: t0, roundTrip: 0)
         XCTAssertEqual(refused, .unread(result: 3))
-        XCTAssertEqual(StrapClock.judge(.init(originSequence: 1, result: 1, seconds: nil), sentAt: t0, receivedAt: t0),
+        XCTAssertEqual(StrapClock.judge(.init(originSequence: 1, result: 1, seconds: nil), receivedAt: t0, roundTrip: 0),
                        .unread(result: 1))
         XCTAssertTrue(refused.needsSet)
     }
 
-    func testAPhoneClockThatStepsBackMidReadDoesNotNarrowTheRange() {
+    /// W06-074: the phone runs 4 s fast and is stepped back to the right time during a 0.25 s read of a strap
+    /// that is right. With the send time taken from the wall clock (T + 4) the range was −4…−3 s and the strap
+    /// was set; from the reply's wall time and the monotonic round trip it is in sync.
+    func testAPhoneClockSteppedBackDuringTheReadDoesNotSetACorrectStrap() {
+        let T = 1_790_000_000.0
         let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
-        XCTAssertEqual(StrapClock.judge(r, sentAt: t0, receivedAt: t0 - 3),
-                       .inSync(seconds: 1_790_000_000, low: -0.25, high: 0.75))
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: T + 0.25, roundTrip: 0.25),
+                       .inSync(seconds: 1_790_000_000, low: -0.25, high: 1.0))
+    }
+
+    func testANegativeRoundTripCountsAsZero() {
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: t0, roundTrip: -3),
+                       StrapClock.judge(r, receivedAt: t0, roundTrip: 0))
     }
 
     // MARK: Check
@@ -136,7 +146,9 @@ final class StrapClockTests: XCTestCase {
     func testAnInSyncReadSettlesWithoutASet() {
         var check = StrapClock.Check()
         check.beginRead(sequence: 9, at: now)
-        guard case let .settle(v, rt) = check.receive(reading(9), at: now + 0.5) else { return XCTFail() }
+        guard case let .settle(v, rt) = check.receive(reading(9), at: now + 0.5, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
         XCTAssertFalse(v.needsSet)
         XCTAssertEqual(rt, 0.5)
         XCTAssertTrue(check.settled)
@@ -146,31 +158,46 @@ final class StrapClockTests: XCTestCase {
     func testAnOffReadAsksForASetAndItsReadbackIsReportedNotJudged() {
         var check = StrapClock.Check()
         check.beginRead(sequence: 9, at: now)
-        guard case let .set(v, _) = check.receive(reading(9, seconds: 1_789_999_990), at: now + 0.2) else {
+        guard case let .set(v, _) = check.receive(reading(9, seconds: 1_789_999_990), at: now + 0.2,
+                                                  wallClock: now + 0.2) else {
             return XCTFail()
         }
         XCTAssertTrue(v.needsSet)
         check.beginReadback(sequence: 11, at: now + 0.3)
-        XCTAssertEqual(check.receive(reading(11, seconds: 1_790_000_000), at: now + 1.3),
+        XCTAssertEqual(check.receive(reading(11, seconds: 1_790_000_000), at: now + 1.3, wallClock: now + 1.3),
                        .readback(reading(11, seconds: 1_790_000_000), roundTrip: 1.0))
         // A second copy of the readback answers nothing in flight.
-        XCTAssertEqual(check.receive(reading(11), at: now + 2), .notOurs)
+        XCTAssertEqual(check.receive(reading(11), at: now + 2, wallClock: now + 2), .notOurs)
     }
 
     func testPendingWaitsForTheAnswer() {
         var check = StrapClock.Check()
         check.beginRead(sequence: 9, at: now)
-        XCTAssertEqual(check.receive(reading(9, result: 2, seconds: nil), at: now + 0.1), .pending)
+        XCTAssertEqual(check.receive(reading(9, result: 2, seconds: nil), at: now + 0.1, wallClock: now + 0.1),
+                       .pending)
         XCTAssertFalse(check.settled)
-        guard case .settle = check.receive(reading(9), at: now + 0.6) else { return XCTFail() }
+        guard case .settle = check.receive(reading(9), at: now + 0.6, wallClock: now + 0.6) else { return XCTFail() }
         check.beginReadback(sequence: 10, at: now + 1)
-        XCTAssertEqual(check.receive(reading(10, result: 2, seconds: nil), at: now + 1.1), .pending)
+        XCTAssertEqual(check.receive(reading(10, result: 2, seconds: nil), at: now + 1.1, wallClock: now + 1.1),
+                       .pending)
+    }
+
+    /// The round trip comes from the monotonic clock and the reading is judged against the wall clock at the
+    /// reply, so the two may sit on different bases (W06-074).
+    func testTheVerdictUsesTheWallClockAtTheReplyAndTheMonotonicRoundTrip() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 500)   // seconds since some monotonic origin
+        guard case let .settle(v, rt) = check.receive(reading(9), at: 500.25, wallClock: now + 0.25) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(rt, 0.25)
+        XCTAssertEqual(v, .inSync(seconds: 1_790_000_000, low: -0.25, high: 1.0))
     }
 
     func testAReplyToAnotherRequestIsNotOurs() {
         var check = StrapClock.Check()
         check.beginRead(sequence: 9, at: now)
-        XCTAssertEqual(check.receive(reading(8), at: now + 0.2), .notOurs)
+        XCTAssertEqual(check.receive(reading(8), at: now + 0.2, wallClock: now + 0.2), .notOurs)
         XCTAssertFalse(check.settled)
     }
 
@@ -179,7 +206,8 @@ final class StrapClockTests: XCTestCase {
         check.beginRead(sequence: 9, at: now)
         XCTAssertTrue(check.expire())
         XCTAssertFalse(check.expire())
-        XCTAssertEqual(check.receive(reading(9, seconds: 1_789_000_000), at: now + 12), .notOurs)
+        XCTAssertEqual(check.receive(reading(9, seconds: 1_789_000_000), at: now + 12, wallClock: now + 12),
+                       .notOurs)
         check.beginRead(sequence: 12, at: now + 13)
         XCTAssertNil(check.read, "a settled check starts no second read")
     }
