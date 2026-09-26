@@ -6842,17 +6842,29 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         strapClockCheck = StrapClock.Check()
         strapClockCheckToken &+= 1
         let token = strapClockCheckToken
+        // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer. W06-067:
+        // and only when it was sent.
         if let sequence = sendReturningSequence(.getClock, payload: []) {
             strapClockCheck.beginRead(sequence: sequence, at: Date().timeIntervalSince1970)
+            log("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or provably "
+                + "more than \(Int(StrapClock.driftThresholdSeconds)) s off")
+        } else {
+            log("WHOOP 5/MG: GET_CLOCK was not sent, so the clock check waits out its "
+                + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
         }
-        // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer.
-        log("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or more than "
-            + "\(Int(StrapClock.driftThresholdSeconds)) s off")
         DispatchQueue.main.asyncAfter(deadline: .now() + StrapClock.replyTimeoutSeconds) { [weak self] in
             guard let self, token == self.strapClockCheckToken, self.strapClockCheck.expire() else { return }
-            self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
-                     + "setting the clock without a reading")
-            self.setStrapClock()
+            // W06-067: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the
+            // token can outlive it. Say so rather than claim a set nothing can send; the handshake flags still
+            // settle, as they did when the handshake set them directly.
+            if self.state.connected {
+                self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
+                         + "setting the clock without a reading")
+                self.setStrapClock()
+            } else {
+                self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s, "
+                         + "and the link is down — the clock is neither read nor set")
+            }
             self.strapClockSettled()
         }
     }
