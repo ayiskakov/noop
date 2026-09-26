@@ -6694,23 +6694,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             // .withResponse ack during the offload (each HISTORY_END ack), so the trigger work MUST fire
             // once or it would re-issue SEND_HISTORICAL_DATA mid-stream and storm the strap. The notify
             // re-subscribe + realtime-arm above are idempotent and intentionally run on every re-entry;
-            // only this block is gated. `whoop5SessionStarted` resets on disconnect.
-            if !whoop5SessionStarted {
-                whoop5SessionStarted = true
-                whoop5HandshakeAt = Self.monotonicSeconds()
-                noteRebootReconnectIfNeeded()
-                // Re-apply the Broadcast-HR device-config flag if the user opted in (#181).
-                if PuffinExperiment.broadcastHrEnabled { setBroadcastHr(true) }
-                // Clock the strap BEFORE history: an un-clocked WHOOP 5 discards sensor data ("RTC
-                // timestamp … is invalid; not saving data to flash") and history offloads "succeed"
-                // with metadata only (#78 fork). W06-050: read the clock first and set it only when the
-                // reading says it is wrong. `connectHandshakeDone`, which the first offload, the sync
-                // controls and the alarm re-arm all wait on, is set when this check settles
-                // (`strapClockSettled`), so a SET_CLOCK it sends still precedes all three.
-                beginStrapClockCheck()
-                startBackfillTimer()            // re-offload the type-47 store every backfillIntervalSeconds
-                restoreNeedsResubscribe = false   // #613: forced re-subscribe pass is done (5/MG path)
-            }
+            // only `startWhoop5SessionIfNeeded` is gated. `whoop5SessionStarted` resets on disconnect.
+            startWhoop5SessionIfNeeded()
             return
         }
 
@@ -6898,6 +6883,27 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         armStrapClockTimeout()
     }
 
+    /// The 5/MG handshake's once-per-link work, run from the CLIENT_HELLO acknowledgement and a no-op on every
+    /// later write acknowledgement of the link. Internal for `StrapClockCheckTests` (W06-096), which cannot drive
+    /// `didWriteValueFor`.
+    func startWhoop5SessionIfNeeded() {
+        guard !whoop5SessionStarted else { return }
+        whoop5SessionStarted = true
+        whoop5HandshakeAt = Self.monotonicSeconds()
+        noteRebootReconnectIfNeeded()
+        // Re-apply the Broadcast-HR device-config flag if the user opted in (#181).
+        if PuffinExperiment.broadcastHrEnabled { setBroadcastHr(true) }
+        // Clock the strap BEFORE history: an un-clocked WHOOP 5 discards sensor data ("RTC
+        // timestamp … is invalid; not saving data to flash") and history offloads "succeed"
+        // with metadata only (#78 fork). W06-050: read the clock first and set it only when the
+        // reading says it is wrong. `connectHandshakeDone`, which the first offload, the sync
+        // controls and the alarm re-arm all wait on, is set when this check settles
+        // (`strapClockSettled`), so a SET_CLOCK it sends still precedes all three.
+        beginStrapClockCheck()
+        startBackfillTimer()            // re-offload the type-47 store every backfillIntervalSeconds
+        restoreNeedsResubscribe = false   // #613: forced re-subscribe pass is done (5/MG path)
+    }
+
     /// What the clock check's timeout finds of the link (W06-085): the one the check began on; a newer one that
     /// came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-083) and is past its CLIENT_HELLO,
     /// so it skipped the handshake; or neither.
@@ -6908,12 +6914,23 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// Ask the link itself, as `send` does, and whether it is still the one the check began on, since a
     /// reconnect after a power-off bumps no token.
     private var clockCheckLink: ClockCheckLink {
-        guard state.connected, peripheral?.state == .connected else { return .none }
-        if connectGeneration == strapClockCheckLink { return .same }
+        Self.classifyClockCheckLink(connected: state.connected, peripheralConnected: peripheral?.state == .connected,
+                                    sameGeneration: connectGeneration == strapClockCheckLink,
+                                    hasCommandCharacteristic: cmdCharacteristic != nil,
+                                    helloOutstanding: clientHelloWriteAt != nil)
+    }
+
+    /// `clockCheckLink` from the link's facts, pure so `StrapClockCheckTests` can pin it without a peripheral
+    /// (W06-096).
+    nonisolated static func classifyClockCheckLink(connected: Bool, peripheralConnected: Bool, sameGeneration: Bool,
+                                                   hasCommandCharacteristic: Bool,
+                                                   helloOutstanding: Bool) -> ClockCheckLink {
+        guard connected, peripheralConnected else { return .none }
+        if sameGeneration { return .same }
         // The command characteristic and the CLIENT_HELLO write come in one callback, so a newer link that has
         // the characteristic and no hello outstanding had its hello acknowledged. One whose hello is still out
         // counts as none: that acknowledgement runs the handshake once the session flag is clear.
-        return cmdCharacteristic != nil && clientHelloWriteAt == nil ? .newer : .none
+        return hasCommandCharacteristic && !helloOutstanding ? .newer : .none
     }
 
     /// The clock check begun with `token` got no reply in `StrapClock.replyTimeoutSeconds`. A no-op when a

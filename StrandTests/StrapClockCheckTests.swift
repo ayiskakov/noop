@@ -172,6 +172,45 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 
+    /// W06-096: a GET_CLOCK reply reaches the check through the 5/MG frame loop, the path every connect takes.
+    func testAClockReplyThroughTheFrameLoopSettlesTheCheck() {
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        manager.handleWhoop5Frame(clockReply(origin: 7, seconds: UInt32(now)), char: BLEManager.whoop5CmdNotifyChar,
+                                  offloading: false)
+        XCTAssertTrue(live.historyReady, live.log.joined(separator: "\n"))
+        XCTAssertEqual(handshakeDoneLines, 1)
+        XCTAssertEqual(setClockAsks, 0)
+    }
+
+    /// W06-096: the handshake's once-per-link work begins the clock check and leaves the handshake undone until
+    /// the check settles, and a later write acknowledgement on the same link does not begin a second one.
+    func testTheHandshakeBeginsTheCheckOnceAndWaitsForIt() {
+        manager.startWhoop5SessionIfNeeded()
+        XCTAssertTrue(manager.whoop5SessionStarted)
+        XCTAssertEqual(lines(containing: "GET_CLOCK was not sent").count, 1, live.log.joined(separator: "\n"))
+        XCTAssertFalse(live.historyReady)
+        XCTAssertEqual(handshakeDoneLines, 0)
+        XCTAssertEqual(setClockAsks, 0)
+        manager.startWhoop5SessionIfNeeded()
+        XCTAssertEqual(lines(containing: "GET_CLOCK was not sent").count, 1)
+    }
+
+    /// W06-096: what the timeout sees of the link, pinned without a peripheral. The generation term tells the
+    /// link the check began on from a later one that came up after a power-off (W06-069, W06-085).
+    func testTheTimeoutTellsTheLinkItBeganOnFromALaterOne() {
+        func link(connected: Bool = true, up: Bool = true, same: Bool, cmd: Bool = true,
+                  helloOut: Bool = false) -> BLEManager.ClockCheckLink {
+            BLEManager.classifyClockCheckLink(connected: connected, peripheralConnected: up, sameGeneration: same,
+                                              hasCommandCharacteristic: cmd, helloOutstanding: helloOut)
+        }
+        XCTAssertEqual(link(same: true), .same)
+        XCTAssertEqual(link(same: false), .newer)                  // a later link past its CLIENT_HELLO
+        XCTAssertEqual(link(same: false, helloOut: true), .none)   // its hello acknowledgement runs the handshake
+        XCTAssertEqual(link(same: false, cmd: false), .none)       // not discovered yet: its hello is still to come
+        XCTAssertEqual(link(up: false, same: true), .none)         // a power-off: the flag outlives the link
+        XCTAssertEqual(link(connected: false, same: true), .none)
+    }
+
     /// W06-084: on a restored link the first read waits behind the notify re-subscribe writes, and over that
     /// round trip even a clock in sync reads unresolved, so the check reads once more before anything settles.
     func testASlowUnresolvedReadIsReadAgainBeforeTheHandshakeSettles() {
