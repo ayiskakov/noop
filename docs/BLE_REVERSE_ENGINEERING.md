@@ -480,7 +480,8 @@ stub payloads on this firmware (so the firmware version lives in the `GET_HELLO`
 `GET_CLOCK` (11) isn't served at all. Record dating does not need it, since realtime (type-40) and
 historical (type-47) both carry real unix rather than a device epoch. Firmware 50.39.1.0 does serve it:
 twenty replies carry the format-1 result at `frame[12]` and the strap's unix seconds as a u32 LE at
-`frame[13]`, then seven zero bytes (`StrapClock.decodeReply`).
+`frame[13]`, then seven zero bytes. NOOP reads it on connect and sets the clock only when the reading is
+invalid or more than 2 s off (`StrapClock`).
 
 > **Privacy.** The `GET_HELLO` response also contains a **session token**, which the decoder never
 > reads or exposes — only the device name and firmware version are surfaced. The `device_name`/

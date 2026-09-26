@@ -12,7 +12,7 @@ latched; if every timestamp is still far off, it warns (e.g. a wrong-length SET_
 Phone Bluetooth must be OFF and the strap bonded + advertising.
 
 It reads the strap clock first and only writes when it has drifted past `--if-drift` seconds (mirrors
-the app's ClockPolicy — avoid gratuitous resets), then re-reads to verify the new clock latched.
+the app's StrapClock — avoid gratuitous resets), then re-reads to verify the new clock latched.
 
 Usage:
   python3 whoop_setclock.py --model whoop4 --address AA:BB:CC:DD:EE:FF            # set to now
@@ -111,7 +111,7 @@ async def run(args) -> int:
     async with BleakClient(dev) as client:
         print(f"connected: {client.is_connected}")
 
-        # 1. READ the strap clock first (so we only write when needed — mirrors the app's ClockPolicy).
+        # 1. READ the strap clock first (so we only write when needed — mirrors the app's StrapClock).
         before = await read_strap_clock(client, cfg, args.model)
         wall = int(time.time())
         if before is None:

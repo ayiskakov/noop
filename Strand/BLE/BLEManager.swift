@@ -915,8 +915,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// deliver, and the subscribe loops skip anything already `isNotifying` — so nothing re-arms and no live
     /// HR/R-R arrive, while `didUpdateNotificationStateFor` never fires (→ `cmdNotifyConfirmedActive` →
     /// `connectSettled` never latch). While this is true, `requestNotify` forces one real off→on
-    /// re-subscribe so delivery — and the settle/alarm-re-arm chain — is re-established. Cleared the moment
-    /// `connectSettled` bumps, and on disconnect.
+    /// re-subscribe so delivery — and the settle/alarm-re-arm chain — is re-established. Cleared once that
+    /// forced pass has run (the 5/MG handshake, or `connectSettled` bumping on WHOOP 4), and on disconnect.
     private var restoreNeedsResubscribe = false
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
@@ -1111,6 +1111,12 @@ public final class BLEManager: NSObject, ObservableObject {
     private var clockRequested = false
     /// #700: retry count for GET_CLOCK when no correlation establishes before backfill. Capped at 3.
     private var clockRetries = 0
+    /// W06-050: this link's read-first strap clock check (5/MG). Reset on disconnect.
+    private var strapClockCheck = StrapClock.Check()
+    /// Fences a previous link's clock-check timeout, so it can never settle the next link's handshake.
+    private var strapClockCheckToken = 0
+    /// When this link's 5/MG handshake ran, so the first offload keeps its ~1.5 s settle delay after it.
+    private var whoop5HandshakeAt: Date?
     private var intentionalDisconnect = false
     /// Consecutive `didFailToConnect` count, for the auto-reconnect backoff (#414). Reset to 0 on a
     /// successful connect; grows the reschedule delay so a strap that's genuinely out of range doesn't
@@ -6083,6 +6089,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         whoop5SessionStarted = false
         clockRequested = false
         clockRetries = 0
+        strapClockCheck = StrapClock.Check()
+        strapClockCheckToken &+= 1
+        whoop5HandshakeAt = nil
         connectHandshakeDone = false
         // Mirrors the flag above: a new link has not done the handshake, so it cannot hand over history
         // until it does. Cleared HERE and nowhere else, so the two can never disagree.
@@ -6679,41 +6688,19 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             // only this block is gated. `whoop5SessionStarted` resets on disconnect.
             if !whoop5SessionStarted {
                 whoop5SessionStarted = true
-                connectHandshakeDone = true     // unblocks beginBackfill()'s guard
-                state.historyReady = true       // and the sync controls, which must not offer what it declines
-                log("WHOOP 5/MG: connect handshake done — backfill unblocked")
+                whoop5HandshakeAt = Date()
                 noteRebootReconnectIfNeeded()
                 // Re-apply the Broadcast-HR device-config flag if the user opted in (#181).
                 if PuffinExperiment.broadcastHrEnabled { setBroadcastHr(true) }
                 // Clock the strap BEFORE history: an un-clocked WHOOP 5 discards sensor data ("RTC
                 // timestamp … is invalid; not saving data to flash") and history offloads "succeed"
-                // with metadata only. Same 8-byte payload as the WHOOP4 handshake, puffin-framed;
-                // GET_CLOCK's reply rides the puffin notify chars and never touches the WHOOP4
-                // clockRef correlation path. The 1.5s deferral below keeps clock-before-history.
-                // Hardware-validated ordering (#78 fork).
-                send(.setClock, payload: BLEManager.setClockPayload())
-                send(.getClock, payload: [])
-                // #1823: say what was SENT, not what resulted. This previously read "clock synced —
-                // strap can persist history now", logged before any reply had arrived, so a log could
-                // assert the clock was set while the Devices readout said 1970/71. The strap's actual
-                // answer now arrives as the "clock: …" ack line from FrameRouter.
-                log("WHOOP 5/MG: SET_CLOCK + GET_CLOCK sent — awaiting the strap's answer")
-                log("WHOOP 5/MG: scheduling first historical offload (connect)")
-                // Deferred ~1.5s so the puffin notify subscriptions settle before SEND_HISTORICAL_DATA,
-                // mirroring the WHOOP4 kick. requestSync → beginBackfill is itself gated on
-                // connectHandshakeDone, so a racing foreground/restore trigger can't fire it early.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.requestConnectSync() }
+                // with metadata only (#78 fork). W06-050: read the clock first and set it only when the
+                // reading says it is wrong. `connectHandshakeDone`, which the first offload, the sync
+                // controls and the alarm re-arm all wait on, is set when this check settles
+                // (`strapClockSettled`), so a SET_CLOCK it sends still precedes all three.
+                beginStrapClockCheck()
                 startBackfillTimer()            // re-offload the type-47 store every backfillIntervalSeconds
-                // #34: signal settled directly (skip the cmd-notify gate `maybeSignalConnectSettled()`
-                // uses) — armStrapAlarm's 5/MG branch never sends GET_ALARM_TIME (log-only readback is
-                // WHOOP4-only, and the 5/MG alarm itself stays behind the Experimental toggle), so there's
-                // no reply-channel race to wait out here; this just keeps the re-arm-on-bond signal firing
-                // for 5/MG the way it did before `connectSettled` replaced raw `bonded`.
-                if !connectSettledSignaled {
-                    connectSettledSignaled = true
-                    state.connectSettled &+= 1
-                    restoreNeedsResubscribe = false   // #613: forced re-subscribe pass is done (5/MG path)
-                }
+                restoreNeedsResubscribe = false   // #613: forced re-subscribe pass is done (5/MG path)
             }
             return
         }
@@ -6755,7 +6742,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             // ignores the empty form (#120). Send both — the strap answers whichever its firmware
             // accepts, and the `clockRef == nil` correlation guard makes a second reply a no-op.
             // Without the [0x00] form, correlation never establishes on 41.17.x, so a lost RTC (the
-            // 1971 clock behind #120) stays invisible and ClockPolicy can never re-fix it. Both
+            // 1971 clock behind #120) stays invisible and no drift check can re-fix it. Both
             // GET_CLOCKs ride behind both SET_CLOCKs above, so the reply reflects the corrected clock.
             // (Offload doesn't depend on this — Backfiller falls back to an identity clockRef — but a
             // real correlation drives realtime decode and the drift re-set.)
@@ -6837,6 +6824,94 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     func sendSetClockBothForms() {
         let now = UInt32(Date().timeIntervalSince1970)
         send(.setClock, payload: BLEManager.setClockPayload(now: now))
+    }
+
+    /// `send`, returning the request sequence the frame carried, or nil when `send` wrote nothing. A reply
+    /// names its request by that sequence (format-1 byte 11).
+    private func sendReturningSequence(_ command: WhoopCommand, payload: [UInt8]) -> UInt8? {
+        let before = seq
+        send(command, payload: payload)
+        return seq == before ? nil : seq
+    }
+
+    /// W06-050: read the 5/MG strap clock. Its reply (`handleStrapClockReply`) or the timeout settles the
+    /// check, and a SET_CLOCK follows only when the reading is invalid or provably more than
+    /// `StrapClock.driftThresholdSeconds` off. A strap that never answers is set without a reading after
+    /// `StrapClock.replyTimeoutSeconds`, as every connect did before, since an un-clocked strap banks nothing.
+    private func beginStrapClockCheck() {
+        strapClockCheck = StrapClock.Check()
+        strapClockCheckToken &+= 1
+        let token = strapClockCheckToken
+        if let sequence = sendReturningSequence(.getClock, payload: []) {
+            strapClockCheck.beginRead(sequence: sequence, at: Date().timeIntervalSince1970)
+        }
+        // #1823: say what was SENT, not what resulted; the verdict line follows the strap's answer.
+        log("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or more than "
+            + "\(Int(StrapClock.driftThresholdSeconds)) s off")
+        DispatchQueue.main.asyncAfter(deadline: .now() + StrapClock.replyTimeoutSeconds) { [weak self] in
+            guard let self, token == self.strapClockCheckToken, self.strapClockCheck.expire() else { return }
+            self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
+                     + "setting the clock without a reading")
+            self.setStrapClock()
+            self.strapClockSettled()
+        }
+    }
+
+    /// W06-050: fold one GET_CLOCK reply into this link's clock check and act on its verdict. Verified first,
+    /// since the verdict can send a SET_CLOCK.
+    private func handleStrapClockReply(_ frame: [UInt8]) {
+        guard verifyFrame(frame, family: .whoop5).ok, let reading = StrapClock.decodeReply(frame) else { return }
+        switch strapClockCheck.receive(reading, at: Date().timeIntervalSince1970) {
+        case .notOurs:
+            log("WHOOP 5/MG clock: a GET_CLOCK reply to request \(reading.originSequence) answers no read in "
+                + "flight — ignored")
+        case .pending:
+            log("WHOOP 5/MG clock: GET_CLOCK answered PENDING — waiting for the reading")
+        case let .settle(verdict, roundTrip):
+            log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
+            strapClockSettled()
+        case let .set(verdict, roundTrip):
+            log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
+            setStrapClock()
+            strapClockSettled()
+        case let .readback(r, roundTrip):
+            let reads = r.seconds.map { "reads \($0)" } ?? "gave no reading"
+            log("WHOOP 5/MG clock: after the set the strap \(reads) (result \(r.result)), answered "
+                + String(format: "%.1f", roundTrip) + " s after the set was sent")
+        }
+    }
+
+    /// Set the 5/MG strap clock to the phone's and read it back, so the log shows what latched.
+    private func setStrapClock() {
+        send(.setClock, payload: BLEManager.setClockPayload())
+        if let sequence = sendReturningSequence(.getClock, payload: []) {
+            strapClockCheck.beginReadback(sequence: sequence, at: Date().timeIntervalSince1970)
+        }
+    }
+
+    /// The 5/MG clock check has decided, so the connect handshake is done. The first offload, the sync
+    /// controls and the alarm re-arm unblock here, after any SET_CLOCK the check sent.
+    private func strapClockSettled() {
+        connectHandshakeDone = true     // unblocks beginBackfill()'s guard
+        state.historyReady = true       // and the sync controls, which must not offer what it declines
+        log("WHOOP 5/MG: connect handshake done — backfill unblocked")
+        log("WHOOP 5/MG: scheduling first historical offload (connect)")
+        // ~1.5 s after the handshake, so the puffin notify subscriptions settle before SEND_HISTORICAL_DATA,
+        // mirroring the WHOOP4 kick. requestSync → beginBackfill is itself gated on connectHandshakeDone, so a
+        // racing foreground/restore trigger can't fire it early.
+        let elapsed = whoop5HandshakeAt.map { Date().timeIntervalSince($0) } ?? 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, 1.5 - elapsed)) { [weak self] in
+            self?.requestConnectSync()
+        }
+        // #34: signal settled directly (skip the cmd-notify gate `maybeSignalConnectSettled()` uses) —
+        // armStrapAlarm's 5/MG branch never sends GET_ALARM_TIME (log-only readback is WHOOP4-only, and the
+        // 5/MG alarm itself stays behind the Experimental toggle), so there's no reply-channel race to wait
+        // out here; this just keeps the re-arm-on-bond signal firing for 5/MG the way it did before
+        // `connectSettled` replaced raw `bonded`.
+        if !connectSettledSignaled {
+            connectSettledSignaled = true
+            state.connectSettled &+= 1
+        }
     }
 
     /// Newest plausible-unix marker in a GET_DATA_RANGE COMMAND_RESPONSE = the strap's newest stored
@@ -7189,6 +7264,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 handleEcgGateReadBack(frame, isWhoop5: true)
                 handleBroadcastHrGateReadBack(frame, isWhoop5: true)
             }
+        }
+        // W06-050: a GET_CLOCK reply decides whether this link sets the strap clock. Verified inside.
+        if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getClock.rawValue {
+            handleStrapClockReply(frame)
         }
         // #695: a 5/MG GET_DATA_RANGE COMMAND_RESPONSE (puffin envelope: type @8, cmd @10). Feeds
         // the SAME newest/oldest window + backfill gate + diagnostics as the 4.0 path above — this

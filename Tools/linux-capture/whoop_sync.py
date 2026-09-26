@@ -407,7 +407,7 @@ async def _acquire(address, tries=6):
 
 async def preflight_clock(fam, args):
     """Before syncing, read the strap RTC and set it to now if it has drifted past
-    `args.clock_threshold` seconds — mirrors the app's ClockPolicy (only write on real drift, so we
+    `args.clock_threshold` seconds — mirrors the app's StrapClock (only write on real drift, so we
     don't gratuitously reset). A strap left offline for months loses its clock, which would otherwise
     mis-date every captured/recorded frame.
 
