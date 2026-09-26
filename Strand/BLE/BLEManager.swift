@@ -7034,7 +7034,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// from the set (W06-071: counting it from the handshake gave a set sent after the 10 s timeout no gap at
     /// all), and without one, whatever remains of it since the handshake, never more than the full 1.5 s
     /// (W06-086: counted on the wall clock, a phone clock stepped back during the check postponed the offload by
-    /// the size of the step).
+    /// the size of the step). The gap holds for this request only (W06-099): the settle opens the sync gate in
+    /// the same turn, so a strap EVENT, the Sync Strap shortcut or Sync now can ask for history sooner, as they
+    /// could before W06-050, and offloads that began about 1 s after a set have served data.
     nonisolated static func firstOffloadDelay(sinceHandshake: TimeInterval?, setJustSent: Bool) -> TimeInterval {
         let settle: TimeInterval = 1.5
         return setJustSent ? settle : min(settle, max(0, settle - (sinceHandshake ?? 0)))

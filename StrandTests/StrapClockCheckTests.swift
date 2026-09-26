@@ -305,7 +305,8 @@ final class StrapClockCheckTests: XCTestCase {
     }
 }
 
-/// W06-071: the first 5/MG offload keeps the hardware-validated 1.5 s after a SET_CLOCK, however late the set.
+/// W06-071: the connect's own first-offload request keeps the hardware-validated 1.5 s after a SET_CLOCK, however
+/// late the set. Other triggers can ask for history sooner (W06-099).
 final class FirstOffloadDelayTests: XCTestCase {
     func testASetGetsTheFullSettleWhateverTheHandshakeAge() {
         XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 10.2, setJustSent: true), 1.5)

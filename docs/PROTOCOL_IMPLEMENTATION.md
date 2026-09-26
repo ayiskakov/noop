@@ -169,9 +169,10 @@ not protocol requirements.
   reading stands and nothing is set. The strap applies a set value when it
   processes the command, which on a busy link can be seconds after the phone
   stamped it, so an unconditional set left a correct clock seconds behind. The
-  handshake counts as done once that check settles: the first historical offload
-  (about 1.5 s after the handshake at the earliest) and the alarm re-arm wait for
-  it.
+  handshake counts as done once that check settles: the connect's own offload
+  request (1.5 s after a set, otherwise up to 1.5 s after the handshake) and the
+  alarm re-arm wait for it. A strap event or a manual sync can ask for history as
+  soon as it settles.
 - A 15-minute backfill timer (`backfillIntervalSeconds`, matching WHOOP) and a
   30-second keep-alive timer (`keepAliveIntervalSeconds`: re-arm realtime, poll
   battery, watchdog the link) are then started. With Low refresh enabled the
