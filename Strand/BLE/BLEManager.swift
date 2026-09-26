@@ -1111,8 +1111,9 @@ public final class BLEManager: NSObject, ObservableObject {
     private var clockRequested = false
     /// #700: retry count for GET_CLOCK when no correlation establishes before backfill. Capped at 3.
     private var clockRetries = 0
-    /// W06-050: this link's read-first strap clock check (5/MG). Reset on disconnect.
-    private var strapClockCheck = StrapClock.Check()
+    /// W06-050: this link's read-first strap clock check (5/MG). Reset on disconnect. Internal so
+    /// `StrapClockCheckTests` can put a read in flight without a strap.
+    var strapClockCheck = StrapClock.Check()
     /// Fences a previous link's clock-check timeout, so it can never settle the next link's handshake.
     private var strapClockCheckToken = 0
     /// When this link's 5/MG handshake ran, so the first offload keeps its ~1.5 s settle delay after it.
@@ -6839,7 +6840,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// check, and a SET_CLOCK follows only when the reading is invalid or provably more than
     /// `StrapClock.driftThresholdSeconds` off. A strap that never answers is set without a reading after
     /// `StrapClock.replyTimeoutSeconds`, as every connect did before, since an un-clocked strap banks nothing.
-    private func beginStrapClockCheck() {
+    ///
+    /// Returns the check's token, which its timeout carries. Internal for `StrapClockCheckTests`.
+    @discardableResult
+    func beginStrapClockCheck() -> Int {
         strapClockCheck = StrapClock.Check()
         strapClockCheckToken &+= 1
         let token = strapClockCheckToken
@@ -6854,25 +6858,32 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + StrapClock.replyTimeoutSeconds) { [weak self] in
-            guard let self, token == self.strapClockCheckToken, self.strapClockCheck.expire() else { return }
-            // W06-067: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the
-            // token can outlive it. Say so rather than claim a set nothing can send; the handshake flags still
-            // settle, as they did when the handshake set them directly.
-            if self.state.connected {
-                self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
-                         + "setting the clock without a reading")
-                self.setStrapClock()
-            } else {
-                self.log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s, "
-                         + "and the link is down — the clock is neither read nor set")
-            }
-            self.strapClockSettled()
+            self?.strapClockCheckTimedOut(token: token)
         }
+        return token
+    }
+
+    /// The clock check begun with `token` got no reply in `StrapClock.replyTimeoutSeconds`. A no-op when a
+    /// reply settled it or a later link replaced it. Internal for `StrapClockCheckTests`.
+    func strapClockCheckTimedOut(token: Int) {
+        guard token == strapClockCheckToken, strapClockCheck.expire() else { return }
+        // W06-067: a Bluetooth power-off does not end the link through `didDisconnectPeripheral`, so the
+        // token can outlive it. Say so rather than claim a set nothing can send; the handshake flags still
+        // settle, as they did when the handshake set them directly.
+        if state.connected {
+            log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s — "
+                + "setting the clock without a reading")
+            setStrapClock()
+        } else {
+            log("WHOOP 5/MG clock: no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s, "
+                + "and the link is down — the clock is neither read nor set")
+        }
+        strapClockSettled()
     }
 
     /// W06-050: fold one GET_CLOCK reply into this link's clock check and act on its verdict. Verified first,
-    /// since the verdict can send a SET_CLOCK.
-    private func handleStrapClockReply(_ frame: [UInt8]) {
+    /// since the verdict can send a SET_CLOCK. Internal for `StrapClockCheckTests`.
+    func handleStrapClockReply(_ frame: [UInt8]) {
         guard verifyFrame(frame, family: .whoop5).ok, let reading = StrapClock.decodeReply(frame) else { return }
         switch strapClockCheck.receive(reading, at: Date().timeIntervalSince1970) {
         case .notOurs:
