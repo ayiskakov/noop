@@ -178,22 +178,21 @@ public final class FrameRouter {
             // 1970/71 — two contradictory lines with nothing to separate them. Same accept/reject shape
             // REBOOT_STRAP already uses. LOG-ONLY; it never gates behaviour.
             if let cmd = parsed.cmdName, cmd.hasPrefix("SET_CLOCK") || cmd.hasPrefix("GET_CLOCK") {
-                // NO accept/reject verdict here, and that is deliberate: the result byte may not exist at
-                // all for this command. The captured-frame fixture builds a puffin COMMAND_RESPONSE as
-                // [36, seq, cmd] + payload at offset 8, so @11 is already PAYLOAD and the @12 that
-                // `commandResultByte` reads is a payload byte, not a result code. REBOOT_STRAP's use of it
-                // was validated against reboot's own frames; nothing establishes it for the clock.
-                //
-                // Inventing a verdict from that is precisely the fault this line was added to fix - the
-                // old "clock synced" log asserted an outcome nobody had checked. So quote the evidence
-                // and let a maintainer decode it: the byte at the result offset, and the WHOLE
-                // frame (#900's format), uncapped. A truncated clock frame answers nothing, and the full
-                // frame is what makes a wrong offset assumption visible instead of silently misleading.
-                let r = Self.commandResultByte(in: frame, family: family)
-                let rhex = r.map { String(format: "0x%02x", UInt8(truncatingIfNeeded: $0)) } ?? "none"
-                state.append(log: "clock: \(cmd) reply byte@resultOffset=\(rhex) "
-                                + "frame=\(Self.fullFrameHex(frame))",
-                             domain: .connection)
+                // W06-001: both replies carry the format-1 result at byte 12, and GET_CLOCK's carries the
+                // strap's seconds at 13 (`StrapClock.decodeReply`; 12 distinct replies from 50.39.1.0 agree). This
+                // line quotes the reply; BLEManager's "WHOOP 5/MG clock:" line judges it. The WHOLE frame
+                // (#900's format) stays, uncapped, so a moved offset on another firmware stays visible.
+                let result = parsed.parsed["result"]?.stringValue ?? "none"
+                let seconds = StrapClock.decodeReply(frame)?.seconds
+                let reading = seconds.map { " strap=\($0)" } ?? ""
+                // W06-100: a GET_CLOCK reply with a reading is every connect's routine readout, and BLEManager's
+                // verdict line says what it means, so it sits behind Test Centre like that line. A SET_CLOCK reply,
+                // which is how a default log shows every set (W06-079), and any reply without a reading stay on.
+                let routine = cmd.hasPrefix("GET_CLOCK") && seconds != nil
+                if !routine || TestCentre.active(.connection) {
+                    state.append(log: "clock: \(cmd) result=\(result)\(reading) frame=\(Self.fullFrameHex(frame))",
+                                 domain: .connection)
+                }
             }
             // #1303: the hunt for a stable per-strap id, which is what multi-strap identity waits on —
             // the pack serial from cmd 151 identifies a REMOVABLE PART rather than the strap wearing it.
@@ -203,14 +202,22 @@ public final class FrameRouter {
             // the serial is in there, it has been arriving all along.
             //
             // Reports STRUCTURE, not the block: the same response carries a session token the decoder
-            // deliberately never reads, so `HelloIdentityProbe` prints only serial-shaped runs and
-            // withholds the rest. Test Centre → Connection gated on top of that, so nothing here reaches a
-            // default (shareable) strap log. Log-only; decodes and persists nothing.
+            // deliberately never reads, so `HelloIdentityProbe` quotes only serial-shaped runs, and only their
+            // first three characters (W06-092), and withholds the rest. Test Centre → Connection gated on top
+            // of that, so none of it reaches a default strap log. Log-only; decodes and persists nothing.
+            //
+            // W06-066: only a SUCCESS reply carries the block; the PENDING acknowledgement that precedes it
+            // is all zeros and would report "none", which the probe reads as "no ASCII serial here". And this
+            // payload starts after the result byte (frame byte 13), two bytes later than the decoder's (frame
+            // byte 11), so the name offset comes from the decoder in this payload's coordinates (W06-076).
             if let cmd = parsed.cmdName,
                cmd.hasPrefix("GET_HELLO("),          // Schema appends the raw value, e.g. "(145)"
+               parsed.parsed["result"]?.stringValue?.hasPrefix("SUCCESS") == true,
                TestCentre.active(.connection),
                let pay = Self.commandResponsePayload(in: frame, family: family) {
-                state.append(log: HelloIdentityProbe.report(payload: pay) + " — locate the strap serial (#1303)")
+                let nameOffset = HelloIdentityProbe.whoop5NameOffsetAfterResult
+                state.append(log: HelloIdentityProbe.report(payload: pay, knownNameOffset: nameOffset)
+                                + " — offsets from frame byte 13; locate the strap serial (#1303)")
             }
             // The 5/MG battery pack (cmd 151). `BatteryPackInfo` has decoded this reply since its offsets
             // were captured, and until now nothing sent the command — so the decoder had no caller and the
@@ -388,16 +395,17 @@ public final class FrameRouter {
     }
 
     /// The payload of a COMMAND_RESPONSE: the bytes after [type,seq,cmd,origin_seq,result] (payload
-    /// starts at inner+5) up to the crc32 trailer at `length`. nil when the frame is too short to carry
-    /// any payload.
+    /// starts at inner+5) up to the crc32 trailer, zero padding included. The trailer starts 4 bytes past
+    /// the declared length, the u16 LE at bytes 2–3 (W06-065: reading bytes 1–2 put it past every real
+    /// frame). nil when the frame is too short to carry any payload.
     nonisolated static func commandResponsePayload(in frame: [UInt8],
                                                    family: DeviceFamily = .whoop5) -> [UInt8]? {
         _ = family
-        guard frame.count > 2 else { return nil }
-        let length = Int(frame[1]) | (Int(frame[2]) << 8)        // crc32 starts here
-        let start = innerOffset + 5                              // skip type,seq,cmd,origin_seq,result
-        guard length <= frame.count, start < length else { return nil }
-        return Array(frame[start..<length])
+        guard frame.count >= 4 else { return nil }
+        let bodyEnd = 4 + (Int(frame[2]) | (Int(frame[3]) << 8))   // crc32 starts here
+        let start = innerOffset + 5                                 // skip type,seq,cmd,origin_seq,result
+        guard bodyEnd <= frame.count, start < bodyEnd else { return nil }
+        return Array(frame[start..<bodyEnd])
     }
 
     /// Space-separated lowercase hex of a COMMAND_RESPONSE payload, for the raw-hex diagnostic fallback

@@ -476,9 +476,17 @@ real capture (firmware **50.38.1.0**), never ported on faith (`decodeWhoop5Comma
 | `GET_HELLO` (145) | `device_name`, `fw_version` | the user-facing strap name (ASCII at `pay[16]`) and firmware (4 bytes at `pay[93]`, e.g. `50.38.1.0`) |
 
 What does **not** transfer: `REPORT_VERSION_INFO` (7) and `GET_EXTENDED_BATTERY_INFO` (98) return short
-stub payloads on this firmware (so the firmware version lives in the `GET_HELLO` block instead), and
-`GET_CLOCK` (11) isn't served at all — WHOOP 5 doesn't need it, since realtime (type-40) and historical
-(type-47) both carry real unix rather than a device epoch.
+stub payloads on this firmware (so the firmware version lives in the `GET_HELLO` block instead). The same
+upstream capture also recorded `GET_CLOCK` (11), sent with an empty payload as NOOP sends it, as not served
+on 50.38.1.0; no log in this repository comes from a 50.38.1.0 strap, so that is unconfirmed here. If it
+holds, every connect on that firmware waits the clock check's 10 s timeout and then sets the clock without a
+reading. Record dating does not need `GET_CLOCK`, since realtime (type-40) and historical (type-47) both
+carry real unix rather than a device epoch. Firmware 50.39.1.0 does serve it:
+twelve distinct replies carry the format-1 result at `frame[12]` and the strap's unix seconds as a u32 LE
+at `frame[13]`. Seven more bytes follow, zero in all twelve; each of those reads ran in the same millisecond
+as a SET, so they may be sub-second ticks. NOOP reads the clock on connect and sets it only when the reply is
+refused or has no reading, when the reading is invalid or provably more than 2 s off once the request's round
+trip is allowed for, or when no reading comes within 10 s (`StrapClock`).
 
 > **Privacy.** The `GET_HELLO` response also contains a **session token**, which the decoder never
 > reads or exposes — only the device name and firmware version are surfaced. The `device_name`/

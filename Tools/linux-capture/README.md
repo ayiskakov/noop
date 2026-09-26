@@ -195,10 +195,12 @@ Exit codes: `0` accepted, `2` strap not found/reachable, `3` connected but no bu
 ## Strap clock (`whoop_setclock.py`)
 
 A strap left offline (no app) for a long time loses its clock — its RTC drifts or resets, so realtime
-and newly-recorded historical frames get **bogus timestamps** (e.g. dated 1971). The phone app fixes
-this with `SET_CLOCK` on every connect; this does the same from Linux. It **reads the clock first and
-only writes if it has drifted** past `--if-drift` seconds (mirrors the app's `ClockPolicy` — no
-gratuitous resets), then re-reads to verify the new time latched.
+and newly-recorded historical frames get **bogus timestamps** (e.g. dated 1971). The phone app checks
+a WHOOP 5/MG strap's clock on every connect and sets it only when the reading is off or missing (NOOP
+does not connect to a WHOOP 4); this sets either model from Linux. It **reads the clock first**, from
+stream-frame timestamps, and **only writes if it has drifted** more than `--if-drift` seconds (default 0,
+so it writes unless the reading equals this computer's whole second), then re-reads to verify the new
+time latched.
 
 ```bash
 # read-only: report the strap's current clock and how far it has drifted
@@ -207,7 +209,7 @@ python3 whoop_setclock.py --model whoop4 --address AA:BB:CC:DD:EE:FF --check
 # set to now only if it's off by more than 30 s (otherwise leave it alone)
 python3 whoop_setclock.py --model whoop4 --address AA:BB:CC:DD:EE:FF --if-drift 30
 
-# force-set to now
+# set to now, unless the strap already reads this computer's second
 python3 whoop_setclock.py --model whoop4 --address AA:BB:CC:DD:EE:FF
 ```
 

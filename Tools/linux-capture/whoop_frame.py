@@ -178,8 +178,8 @@ def buzz_frame(family: str, seq: int = 0) -> bytes:
 
 
 # --- Clock ----------------------------------------------------------------------------------------
-# SET_CLOCK (command 10) sets the strap RTC. The phone app sends this on every connect when the strap's
-# clock has drifted (ClockPolicy). Needed here because a strap left offline for months loses its clock.
+# SET_CLOCK (command 10) sets the strap RTC. The phone app sends it on connect only when GET_CLOCK shows
+# the strap's clock invalid or drifted (StrapClock in WhoopProtocol). Needed here because a strap left offline for months loses its clock.
 CMD_SET_CLOCK = 10
 
 

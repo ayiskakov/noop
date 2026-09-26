@@ -79,7 +79,6 @@ Strand/                         macOS SwiftUI app target (the reference implemen
 │   ├── Collector.swift         buffers live frames → decoded-first persistence
 │   ├── Backfiller.swift        historical-offload state machine (safe-trim)
 │   ├── ClockCorrelation.swift  device-epoch ↔ wall-clock correlation (pure)
-│   ├── ClockPolicy.swift       when to (re)issue SET_CLOCK
 │   ├── StorePaths.swift        on-disk SQLite location (App Support/OpenWhoop)
 │   ├── PrunePolicy.swift       raw-outbox retention (24h / 50MB)
 │   └── RawCaptureWindow.swift  bounded on-demand raw-capture window

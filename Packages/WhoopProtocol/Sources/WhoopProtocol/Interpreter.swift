@@ -928,13 +928,19 @@ public func whoop5HistoricalAckFrame(endData: [UInt8], seq: UInt8) -> [UInt8] {
     puffinCommandFrame(cmd: 23, seq: seq, payload: [0x01] + endData)
 }
 
+/// Where a WHOOP 5/MG GET_HELLO (145) reply carries the device name, in the COMMAND_RESPONSE payload as
+/// `decodeWhoop5CommandResponse` reads it: from frame byte 11, the origin sequence. Anchored to a 50.38.1.0
+/// capture. `HelloIdentityProbe.whoop5NameOffsetAfterResult` derives from it, so the #1303 probe labels the
+/// run this decoder reads.
+public let whoop5HelloNameOffset = 16
+
 /// Decode a WHOOP 5.0 COMMAND_RESPONSE (type 36) — battery %, history data-range, firmware version.
 ///
 /// The response command is at frame[10] (the 4.0 frame[6] + 4) and its payload at frame[11]. WHOOP 5
 /// reuses the 4.0 command NUMBERS, but the response PAYLOADS differ from 4.0 — so each field below is
 /// mapped from a real WHOOP 5 capture (firmware 50.38.1.0), not ported on faith. Commands that return
-/// a short stub on this firmware (REPORT_VERSION_INFO / GET_EXTENDED_BATTERY_INFO) or aren't served
-/// (GET_CLOCK — unneeded, since realtime + historical carry real unix) are intentionally left undecoded.
+/// a short stub on this firmware (REPORT_VERSION_INFO / GET_EXTENDED_BATTERY_INFO) are intentionally left
+/// undecoded. The GET_CLOCK reply is decoded by `StrapClock.decodeReply` rather than here.
 private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, schema: Schema,
                                          payloadEnd: Int?, limit: Int) {
     guard let payloadEnd = payloadEnd, 11 < payloadEnd, payloadEnd <= frame.count else { return }
@@ -967,15 +973,17 @@ private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, sch
             fb.parsed["history_oldest"] = .int(Int(oldest))
             fb.parsed["history_newest"] = .int(Int(newest))
         }
-    } else if respCmd == 145, pay.count >= 26 {
-        // GET_HELLO info block. We surface the two user-facing fields the app shows — the device NAME
+    } else if respCmd == 145, pay.count >= 26, pay[1] == 1 {
+        // GET_HELLO info block, carried only by a SUCCESS (1) reply. The PENDING acknowledgement before it is
+        // zeros after the revision (`docs/PROTOCOL_TRANSPORT.md` §Hello), and decoding it reported a
+        // firmware-gate failure on every connect (W06-087). We surface the two user-facing fields the app shows — the device NAME
         // (the model-style label the strap calls itself) and the firmware VERSION — and deliberately never
         // read the session token (also in this response). Both offsets are anchored to a real
         // 50.38.1.0 capture: the name is printable ASCII at pay[16]; the version is 4 bytes at pay[93],
         // after the (fixed-width on this firmware) name+token region. Re-verify the version offset
         // across firmwares; the guards (printable name / pay[93]==50 "5.0" generation) fail closed.
         var nameBytes: [UInt8] = []
-        var i = 16
+        var i = whoop5HelloNameOffset
         while i < pay.count, pay[i] != 0, (32...126).contains(pay[i]), nameBytes.count < 24 {
             nameBytes.append(pay[i]); i += 1
         }

@@ -1,0 +1,441 @@
+import XCTest
+@testable import WhoopProtocol
+
+/// W06-050 and W06-001: the GET_CLOCK reply decode and the read-first clock policy. The three GET_CLOCK
+/// frames and the SET_CLOCK frame are real replies from one WHOOP MG on firmware 50.39.1.0; the failure and
+/// pending replies are built with `puffinCommandFrame`, since no strap log holds one.
+final class StrapClockTests: XCTestCase {
+
+    private func bytes(_ s: String) -> [UInt8] {
+        stride(from: 0, to: s.count, by: 2).map { i in
+            let a = s.index(s.startIndex, offsetBy: i)
+            return UInt8(s[a...s.index(a, offsetBy: 1)], radix: 16)!
+        }
+    }
+
+    /// A format-1 COMMAND_RESPONSE with the envelope header bytes the strap sends (01 00).
+    private func reply(cmd: UInt8, origin: UInt8, result: UInt8, body: [UInt8] = []) -> [UInt8] {
+        puffinCommandFrame(cmd: cmd, seq: 0x40, payload: [origin, result] + body, type: 36, header: [0x01, 0x00])
+    }
+
+    private func u32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8((v >> (8 * $0)) & 0xFF) } }
+
+    // MARK: decodeReply
+
+    func testRealGetClockRepliesDecodeTheirSecondsAndOrigin() {
+        let cases: [(String, UInt8, UInt32)] = [
+            ("aa011400010021b124230be80146aaaf6a0000000000000014cbbb6c", 0xe8, 1_789_897_286),
+            ("aa011400010021b124700b020194b5b66a0000000000000005a36ce6", 0x02, 1_790_358_932),
+            ("aa011400010021b124800b0201bab6b66a00000000000000c0966a91", 0x02, 1_790_359_226),
+        ]
+        for (hex, origin, seconds) in cases {
+            let frame = bytes(hex)
+            XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok, hex)
+            XCTAssertEqual(StrapClock.decodeReply(frame),
+                           StrapClock.Reading(originSequence: origin, result: 1, seconds: seconds), hex)
+        }
+    }
+
+    func testOtherRepliesAreNotAClockReading() {
+        let setClockReply = bytes("aa010c000100271124220ae701000000bcc4efc3")
+        XCTAssertTrue(verifyFrame(setClockReply, family: .whoop5).ok)
+        XCTAssertNil(StrapClock.decodeReply(setClockReply))
+        // Command 11 in a COMMAND frame (type 35) is our own request, not a reply. The body passes both length
+        // guards, so only the type check can reject it (W06-097: a padded empty request never reached it).
+        XCTAssertNil(StrapClock.decodeReply(w5Frame([7, 1] + u32(1_790_000_000), type: 35, cmd: 11)))
+        XCTAssertNil(StrapClock.decodeReply([0xAA, 0x01]))
+    }
+
+    /// W06-097: the guards sit on bodies ending at 12/13 (the result) and 16/17 (the seconds). `puffinCommandFrame`
+    /// pads to 4 bytes, so its fixtures end at 12, 16, 20 or 24 and a guard could move between them unseen;
+    /// `w5Frame` builds the exact lengths.
+    func testTheGuardsSitOnTheResultAndTheSeconds() {
+        let seconds = u32(1_790_000_000)
+        XCTAssertNil(StrapClock.decodeReply(w5Frame([7], type: 36, cmd: 11)), "ends at 12: no result")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1], type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: nil), "ends at 13: result only")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1] + seconds.prefix(3), type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: nil), "ends at 16: three bytes of four")
+        XCTAssertEqual(StrapClock.decodeReply(w5Frame([7, 1] + seconds, type: 36, cmd: 11)),
+                       StrapClock.Reading(originSequence: 7, result: 1, seconds: 1_790_000_000), "ends at 17: a reading")
+    }
+
+    func testAFailureReplyWithNoBodyDecodesWithoutSeconds() {
+        let frame = reply(cmd: 11, origin: 7, result: 3)
+        XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok)
+        XCTAssertEqual(StrapClock.decodeReply(frame), StrapClock.Reading(originSequence: 7, result: 3, seconds: nil))
+    }
+
+    /// W06-095: only a SUCCESS reply carries a reading. A failure, pending or unsupported reply with a full-length
+    /// body decoded seconds 0, a 1970 clock, which the clock line printed beside a verdict of "no reading".
+    func testANonSuccessReplyWithAFullBodyDecodesNoSeconds() {
+        for result: UInt8 in [0, 2, 3] {
+            let frame = reply(cmd: 11, origin: 7, result: result, body: [UInt8](repeating: 0, count: 11))
+            XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok)
+            XCTAssertEqual(StrapClock.decodeReply(frame),
+                           StrapClock.Reading(originSequence: 7, result: result, seconds: nil), "\(result)")
+        }
+    }
+
+    func testTheBodyEndsAtTheDeclaredLengthNotTheBufferEnd() {
+        // Extra bytes after the frame (a reassembly overrun) must not be read as seconds.
+        let frame = reply(cmd: 11, origin: 7, result: 1) + u32(1_790_000_000)
+        XCTAssertEqual(StrapClock.decodeReply(frame)?.seconds, nil)
+    }
+
+    // MARK: judge
+
+    private let t0 = 1_790_000_000.25   // phone time the read was sent; each reply time is t0 + its round trip
+
+    func testAClockWithinTheThresholdIsNotSet() {
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
+        let v = StrapClock.judge(r, receivedAt: t0 + 0.5, roundTrip: 0.5)
+        XCTAssertEqual(v, .inSync(seconds: 1_790_000_000, low: -0.75, high: 0.75))
+        XCTAssertFalse(v.needsSet)
+    }
+
+    func testAClockProvablyBehindIsSet() {
+        // Four seconds behind, answered quickly: the whole range lies past −2 s.
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_996)
+        let v = StrapClock.judge(r, receivedAt: t0 + 0.5, roundTrip: 0.5)
+        XCTAssertEqual(v, .off(seconds: 1_789_999_996, low: -4.75, high: -3.25))
+        XCTAssertTrue(v.needsSet)
+    }
+
+    func testAClockProvablyAheadIsSet() {
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_005)
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: t0 + 1, roundTrip: 1),
+                       .off(seconds: 1_790_000_005, low: 3.75, high: 5.75))
+    }
+
+    func testALongRoundTripNeverSetsByItself() {
+        // The relaunch shape: the reply came four seconds after the request and reads the second it was
+        // sent. The strap may have read its clock at once (in sync) or four seconds later (four behind).
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
+        let v = StrapClock.judge(r, receivedAt: t0 + 4, roundTrip: 4)
+        XCTAssertEqual(v, .unresolved(seconds: 1_790_000_000, low: -4.25, high: 0.75))
+        XCTAssertFalse(v.needsSet)
+    }
+
+    /// W06-089: the offset lies in the open range (low, high), so a bound exactly on the threshold already puts
+    /// the whole range past it. This test used to pin high == −2 as not off.
+    func testARangeWhoseBoundSitsOnTheThresholdIsOff() {
+        let behind = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_997)
+        XCTAssertEqual(StrapClock.judge(behind, receivedAt: 1_790_000_000.5, roundTrip: 0.5),
+                       .off(seconds: 1_789_999_997, low: -3.5, high: -2.0))
+        let ahead = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_002)
+        XCTAssertEqual(StrapClock.judge(ahead, receivedAt: 1_790_000_000.0, roundTrip: 0.5),
+                       .off(seconds: 1_790_000_002, low: 2.0, high: 3.5))
+        // A second nearer, the range straddles the threshold again.
+        let nearer = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_998)
+        XCTAssertFalse(StrapClock.judge(nearer, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
+    }
+
+    func testNoWallClockIsSetWhateverTheResult() {
+        for s: UInt32 in [0, 86_400, StrapClock.validityFloor] {
+            let v = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: s), receivedAt: t0, roundTrip: 0)
+            XCTAssertEqual(v, .invalid(seconds: s))
+            XCTAssertTrue(v.needsSet)
+        }
+        // One second past the floor is a wall clock, and this one is decades off.
+        let past = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: StrapClock.validityFloor + 1),
+                                    receivedAt: t0, roundTrip: 0)
+        guard case .off = past else { return XCTFail("\(past)") }
+    }
+
+    func testAReplyWithoutAReadingIsSet() {
+        let refused = StrapClock.judge(.init(originSequence: 1, result: 3, seconds: 1_790_000_000),
+                                       receivedAt: t0, roundTrip: 0)
+        XCTAssertEqual(refused, .unread(result: 3))
+        XCTAssertEqual(StrapClock.judge(.init(originSequence: 1, result: 1, seconds: nil), receivedAt: t0, roundTrip: 0),
+                       .unread(result: 1))
+        XCTAssertTrue(refused.needsSet)
+    }
+
+    /// W06-074: the phone runs 4 s fast and is stepped back to the right time during a 0.25 s read of a strap
+    /// that is right. With the send time taken from the wall clock (T + 4) the range was −4…−3 s and the strap
+    /// was set; from the reply's wall time and the monotonic round trip it is in sync.
+    func testAPhoneClockSteppedBackDuringTheReadDoesNotSetACorrectStrap() {
+        let T = 1_790_000_000.0
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: T + 0.25, roundTrip: 0.25),
+                       .inSync(seconds: 1_790_000_000, low: -0.25, high: 1.0))
+    }
+
+    func testANegativeRoundTripCountsAsZero() {
+        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_000)
+        XCTAssertEqual(StrapClock.judge(r, receivedAt: t0, roundTrip: -3),
+                       StrapClock.judge(r, receivedAt: t0, roundTrip: 0))
+    }
+
+    // MARK: setSeconds
+
+    func testASetStampsTheNearestSecond() {
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.4), 1_790_000_000)
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.5), 1_790_000_001)
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.9), 1_790_000_001)
+    }
+
+    /// W06-075's oracle: a set applied 2.3 s late, read on the next connect over a 0.1 s round trip, across 1,000
+    /// stamp phases and 10 read phases. Truncating the stamp is judged off 7,543 times in 10,000; the nearest
+    /// second, 3,192. The rest is the late apply itself. (The read phase at a whole second gives ranges that end
+    /// exactly on −2 s; before W06-089 they did not count as off, and the counts were 6,792 and 2,443.)
+    func testARoundedStampIsReSetLessOftenAfterALateApply() {
+        func offCount(_ stamp: (Double) -> Double) -> Int {
+            var off = 0
+            for i in 0..<1000 {
+                let at = 1_790_000_000.0 + Double(i) / 1000
+                let offset = stamp(at) - (at + 2.3)
+                for j in 0..<10 {
+                    let sent = 1_790_000_100.0 + Double(j) / 10
+                    let s = UInt32((sent + 0.05 + offset).rounded(.down))
+                    let v = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: s),
+                                             receivedAt: sent + 0.1, roundTrip: 0.1)
+                    if case .off = v { off += 1 }
+                }
+            }
+            return off
+        }
+        XCTAssertEqual(offCount { $0.rounded(.down) }, 7_543)
+        XCTAssertEqual(offCount { Double(StrapClock.setSeconds(forPhoneTime: $0)) }, 3_192)
+    }
+
+    // MARK: Check
+
+    private let now = 1_790_000_000.0
+    private func reading(_ origin: UInt8, result: UInt8 = 1, seconds: UInt32? = 1_790_000_000) -> StrapClock.Reading {
+        .init(originSequence: origin, result: result, seconds: seconds)
+    }
+
+    func testAnInSyncReadSettlesWithoutASet() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: now)
+        guard case let .settle(v, rt) = check.receive(reading(9), at: now + 0.5, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        XCTAssertFalse(v.needsSet)
+        XCTAssertEqual(rt, 0.5)
+        XCTAssertTrue(check.settled)
+        XCTAssertFalse(check.expire(), "a settled check must not expire into a blind set")
+    }
+
+    func testAnOffReadAsksForASetAndItsReadbackIsReportedNotJudged() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: now)
+        guard case let .set(v, _) = check.receive(reading(9, seconds: 1_789_999_990), at: now + 0.2,
+                                                  wallClock: now + 0.2) else {
+            return XCTFail()
+        }
+        XCTAssertTrue(v.needsSet)
+        check.beginReadback(sequence: 11, at: now + 0.3)
+        XCTAssertEqual(check.receive(reading(11, seconds: 1_790_000_000), at: now + 1.3, wallClock: now + 1.3),
+                       .readback(reading(11, seconds: 1_790_000_000), roundTrip: 1.0))
+        // A second copy of the readback answers nothing in flight.
+        XCTAssertEqual(check.receive(reading(11), at: now + 2, wallClock: now + 2), .notOurs)
+    }
+
+    func testPendingWaitsForTheAnswer() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: now)
+        XCTAssertEqual(check.receive(reading(9, result: 2, seconds: nil), at: now + 0.1, wallClock: now + 0.1),
+                       .pending)
+        XCTAssertFalse(check.settled)
+        guard case .settle = check.receive(reading(9), at: now + 0.6, wallClock: now + 0.6) else { return XCTFail() }
+        check.beginReadback(sequence: 10, at: now + 1)
+        XCTAssertEqual(check.receive(reading(10, result: 2, seconds: nil), at: now + 1.1, wallClock: now + 1.1),
+                       .pending)
+    }
+
+    /// The round trip comes from the monotonic clock and the reading is judged against the wall clock at the
+    /// reply, so the two may sit on different bases (W06-074).
+    func testTheVerdictUsesTheWallClockAtTheReplyAndTheMonotonicRoundTrip() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 500)   // seconds since some monotonic origin
+        guard case let .settle(v, rt) = check.receive(reading(9), at: 500.25, wallClock: now + 0.25) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(rt, 0.25)
+        XCTAssertEqual(v, .inSync(seconds: 1_790_000_000, low: -0.25, high: 1.0))
+    }
+
+    func testAReplyToAnotherRequestIsNotOurs() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: now)
+        XCTAssertEqual(check.receive(reading(8), at: now + 0.2, wallClock: now + 0.2), .notOurs)
+        XCTAssertFalse(check.settled)
+    }
+
+    func testAnUnansweredReadExpiresOnceAndALateReplyChangesNothing() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: now)
+        XCTAssertTrue(check.expire())
+        XCTAssertFalse(check.expire())
+        XCTAssertEqual(check.receive(reading(9, seconds: 1_789_000_000), at: now + 12, wallClock: now + 12),
+                       .notOurs)
+        check.beginRead(sequence: 12, at: now + 13)
+        XCTAssertNil(check.read, "a settled check starts no second read")
+    }
+
+    func testAReadThatNeverWentOutStillExpires() {
+        var check = StrapClock.Check()
+        XCTAssertTrue(check.expire())
+    }
+
+    // MARK: Check, second read (W06-084)
+
+    /// A read answered over a restored link's round trip cannot be judged, so the check reads once more, and
+    /// the second read decides.
+    func testAnUnresolvedReadOverALongRoundTripIsReadOnceMore() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case let .readAgain(first, rt) = check.receive(reading(9), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(rt, 4)
+        XCTAssertEqual(first, .unresolved(seconds: 1_790_000_000, low: -0.5, high: 4.5))
+        XCTAssertFalse(check.settled)
+        XCTAssertEqual(check.standingVerdict, first)
+        check.beginRead(sequence: 10, at: 104.25)
+        guard case let .settle(second, _) = check.receive(reading(10), at: 104.5, wallClock: now + 0.75) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(second, .inSync(seconds: 1_790_000_000, low: -0.75, high: 0.5))
+        XCTAssertTrue(check.settled)
+        XCTAssertNil(check.standingVerdict)
+    }
+
+    func testAStrapFourSecondsBehindOverALongRoundTripIsSetAfterTheSecondRead() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case .readAgain = check.receive(reading(9, seconds: 1_789_999_996), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        check.beginRead(sequence: 10, at: 104.25)
+        XCTAssertEqual(check.receive(reading(10, seconds: 1_789_999_996), at: 104.5, wallClock: now + 0.75),
+                       .set(.off(seconds: 1_789_999_996, low: -4.75, high: -3.5), roundTrip: 0.25))
+    }
+
+    func testThereIsNoThirdRead() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case .readAgain = check.receive(reading(9), at: 104, wallClock: now + 0.5) else { return XCTFail() }
+        check.beginRead(sequence: 10, at: 104.25)
+        guard case let .settle(v, _) = check.receive(reading(10, seconds: 1_790_000_004), at: 108.25,
+                                                     wallClock: now + 4.75) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(v, .unresolved(seconds: 1_790_000_004, low: -0.75, high: 4.25))
+        XCTAssertTrue(check.settled)
+    }
+
+    /// Up to one second the range is at most two seconds wide, so an unresolved verdict there comes from the
+    /// clock, not the round trip, and a second read would not change it.
+    func testAnUnresolvedReadOverAShortRoundTripSettlesAtOnce() {
+        for (rt, readsAgain) in [(0.5, false), (1.0, false), (1.25, true)] {
+            var check = StrapClock.Check()
+            check.beginRead(sequence: 9, at: 100)
+            let step = check.receive(reading(9, seconds: 1_789_999_998), at: 100 + rt, wallClock: now + 0.5)
+            if case .readAgain = step {
+                XCTAssertTrue(readsAgain, "\(rt)")
+            } else if case .settle(.unresolved, _) = step {
+                XCTAssertFalse(readsAgain, "\(rt)")
+            } else {
+                XCTFail("\(rt): \(step)")
+            }
+        }
+    }
+
+    /// A second read that goes unanswered leaves the first reading standing, and the caller settles on it
+    /// rather than setting the clock without a reading.
+    func testAnUnansweredSecondReadLeavesTheFirstVerdictStanding() {
+        var check = StrapClock.Check()
+        check.beginRead(sequence: 9, at: 100)
+        guard case let .readAgain(first, _) = check.receive(reading(9), at: 104, wallClock: now + 0.5) else {
+            return XCTFail()
+        }
+        check.beginRead(sequence: 10, at: 104.25)
+        XCTAssertTrue(check.expire())
+        XCTAssertEqual(check.standingVerdict, first)
+        XCTAssertFalse(check.expire())
+    }
+
+    /// The review's oracle (W06-084), run through the check: first reads answered 0.9 s and 3.2–4.7 s after
+    /// they were sent (the strap reads its clock 50 ms before the reply lands), second reads 0.3 s, 100
+    /// sub-second phases each. With one read, every case at 3.2–4.7 s ended unresolved.
+    func testASecondReadResolvesWhatARestoredLinksRoundTripCannot() {
+        func tally(offset: Double, firstRoundTrip rt1: Double) -> [String: Int] {
+            let rt2 = 0.3
+            var out: [String: Int] = [:]
+            for i in 0..<100 {
+                let t0 = now + Double(i) / 100
+                var check = StrapClock.Check()
+                check.beginRead(sequence: 9, at: 1000)
+                let s1 = UInt32((t0 + rt1 - 0.05 + offset).rounded(.down))
+                var step = check.receive(reading(9, seconds: s1), at: 1000 + rt1, wallClock: t0 + rt1)
+                var reads = 1
+                if case .readAgain = step {
+                    reads = 2
+                    let t1 = t0 + rt1 + 0.01
+                    check.beginRead(sequence: 10, at: 1000 + rt1 + 0.01)
+                    let s2 = UInt32((t1 + rt2 - 0.05 + offset).rounded(.down))
+                    step = check.receive(reading(10, seconds: s2), at: 1000 + rt1 + 0.01 + rt2, wallClock: t1 + rt2)
+                }
+                let verdict: String
+                switch step {
+                case .settle(.inSync, _): verdict = "inSync"
+                case .settle(.unresolved, _): verdict = "unresolved"
+                case .set(.off, _): verdict = "off"
+                default: verdict = "\(step)"
+                }
+                out["\(verdict)/\(reads)", default: 0] += 1
+            }
+            return out
+        }
+        XCTAssertEqual(tally(offset: 0, firstRoundTrip: 0.9), ["inSync/1": 100])
+        XCTAssertEqual(tally(offset: -4, firstRoundTrip: 0.9), ["off/1": 100])
+        for rt1 in [3.2, 4.0, 4.7] {
+            XCTAssertEqual(tally(offset: 0, firstRoundTrip: rt1), ["inSync/2": 100], "\(rt1)")
+            // One phase lands exactly on −2 s, which an open range counts as off (W06-089; 74 and 26 before).
+            XCTAssertEqual(tally(offset: -3, firstRoundTrip: rt1), ["off/2": 75, "unresolved/2": 25], "\(rt1)")
+            XCTAssertEqual(tally(offset: -4, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
+            XCTAssertEqual(tally(offset: -5, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
+        }
+    }
+
+    // MARK: describe
+
+    /// W06-089: a printed range rounds outward, so it always holds the range it stands for, and a range printed
+    /// for `.off` cannot read as the same numbers as one printed for `.unresolved`. Rounded to nearest, a high
+    /// bound of −2.04 (off) and one of −1.96 (unresolved) both printed "-2.0".
+    func testPrintedRangesRoundOutward() {
+        XCTAssertEqual(StrapClock.describe(.off(seconds: 1, low: -3.54, high: -2.04), roundTrip: 0.5),
+                       "strap clock reads 1, -3.6…-2.0 s from the phone over a 0.5 s round trip — "
+                       + "more than 2 s off, setting it")
+        XCTAssertEqual(StrapClock.describe(.unresolved(seconds: 1, low: -3.46, high: -1.96), roundTrip: 0.5),
+                       "strap clock reads 1, -3.5…-1.9 s from the phone over a 0.5 s round trip — "
+                       + "that does not show it more than 2 s off, not set")
+        // Exact tenths stay put rather than creeping outward on floating-point noise, and zero prints unsigned.
+        XCTAssertEqual(StrapClock.describe(.inSync(seconds: 1, low: -0.3, high: -0.04), roundTrip: 0.1),
+                       "strap clock reads 1, -0.3…+0.0 s from the phone over a 0.1 s round trip — within 2 s, not set")
+    }
+
+    func testLogLinesStateTheReadingAndTheRange() {
+        XCTAssertEqual(StrapClock.describe(.inSync(seconds: 1_790_000_000, low: -0.65, high: 0.75), roundTrip: 0.4),
+                       "strap clock reads 1790000000, -0.7…+0.8 s from the phone over a 0.4 s round trip — "
+                       + "within 2 s, not set")
+        XCTAssertEqual(StrapClock.describe(.unresolved(seconds: 1_790_000_000, low: -4.25, high: 0.75), roundTrip: 4),
+                       "strap clock reads 1790000000, -4.3…+0.8 s from the phone over a 4.0 s round trip — "
+                       + "that does not show it more than 2 s off, not set")
+        XCTAssertEqual(StrapClock.describe(.off(seconds: 1_789_999_996, low: -4.75, high: -3.25), roundTrip: 0.5),
+                       "strap clock reads 1789999996, -4.8…-3.2 s from the phone over a 0.5 s round trip — "
+                       + "more than 2 s off, setting it")
+        XCTAssertEqual(StrapClock.describe(.invalid(seconds: 0), roundTrip: 0.1),
+                       "strap clock reads 0, not a wall clock (at or below 1293840001) — setting it")
+        XCTAssertEqual(StrapClock.describe(.unread(result: 3), roundTrip: 0.1),
+                       "GET_CLOCK answered result 3 with no reading — setting the clock")
+        XCTAssertEqual(StrapClock.describeReadAgain(.unresolved(seconds: 1_790_000_000, low: -0.5, high: 4.5),
+                                                    roundTrip: 4),
+                       "strap clock reads 1790000000, -0.5…+4.5 s from the phone over a 4.0 s round trip — "
+                       + "too long to judge, reading it again")
+    }
+}

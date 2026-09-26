@@ -444,8 +444,11 @@ load-bearing and was hardened against real failure modes that are documented in 
 realtime-raw flood that dominated flash). Treat it as stable infrastructure:
 
 - **Don't reorder the connect handshake.** Offload is deliberately gated on
-  `connectHandshakeDone`; `SET_CLOCK` (cmd 10) must precede arming the firmware alarm so the strap
-  RTC is UTC-correct.
+  `connectHandshakeDone`; the strap RTC must be UTC-correct before the firmware alarm is armed. On
+  WHOOP 5/MG the handshake reads the clock and sends `SET_CLOCK` (cmd 10) only when the reply is
+  refused or has no reading, the reading is invalid or provably more than 2 s off, or no reading comes
+  within 10 s, and `connectHandshakeDone`, which the alarm re-arm waits on, is set only after that
+  check, so any set still comes first.
 - **Don't `ENTER` high-frequency sync.** The app no longer enters it and sends `exitHighFreqSync`
   defensively on connect to release straps parked there by older builds.
 - **Prefer `.withoutResponse` writes** (the `send(_:payload:writeType:)` default); use

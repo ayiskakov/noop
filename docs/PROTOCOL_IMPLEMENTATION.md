@@ -47,7 +47,8 @@ supported connection.
 |---|---|---|
 | [Curated sender enum](PROTOCOL_COMMANDS.md#canonical-command-matrix) | [WhoopCommand](../Strand/BLE/Commands.swift) | Sender surface is intentionally smaller than the decode catalogue |
 | [WHOOP 5 command builder](PROTOCOL_TRANSPORT.md#format-1-framing) | [puffinCommandFrame(cmd:seq:payload:type:header:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Framing.swift) | Pads the inner record before checksums |
-| [Clock 8-byte form](PROTOCOL_COMMANDS.md#whoop-5mg) | [setClockPayload(now:)](../Strand/BLE/BLEManager.swift) | WHOOP 5/MG sends the eight-byte form once per connection and reads the clock back |
+| [Clock 8-byte form](PROTOCOL_COMMANDS.md#whoop-5mg) | [setClockPayload(now:)](../Strand/BLE/BLEManager.swift) | WHOOP 5/MG sends the eight-byte form only when the connect's clock reading calls for it, then reads the clock back |
+| [Clock reading](PROTOCOL_TRANSPORT.md#responses-and-correlation) | [StrapClock.decodeReply(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift), [StrapClock.judge(_:receivedAt:roundTrip:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift) | GET_CLOCK's u32 seconds follow the format-1 result; a set follows a refused or reading-less reply, an invalid reading, one more than 2 s off across the whole round trip, or no reading in 10 s |
 | [Alarm 9-byte body](PROTOCOL_ALARMS.md#whoop-5mg) | [WhoopCommand.setAlarmPayload(epochSec:)](../Strand/BLE/Commands.swift) | Two trailing bytes remain explicit |
 | [Haptic preset](PROTOCOL_ALARMS.md#whoop-5mg) | [MaverickHaptics.notificationBuzz(loops:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/HapticPayloads.swift) | The common request is remapped to the 5/MG family body |
 | [Wrist and ECG controls](PROTOCOL_ECG.md#commands-and-independent-output-gates) | [Whoop5Ecg.selectWristPayload(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift), [Whoop5Ecg.togglePayload(on:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift) | MG capability gate is separate from framing |
@@ -158,9 +159,20 @@ not protocol requirements.
   every later confirmed write, and re-blasting the handshake mid-offload was the
   historical root cause of the strap refusing to stream type-47.
 - The handshake re-arms the puffin notify subscriptions, arms realtime HR only if
-  a screen asked for it, sends `SET_CLOCK` in the eight-byte form followed by
-  `GET_CLOCK` for readback, and schedules the first historical offload about 1.5 s
-  later so the link settles first.
+  a screen asked for it, and reads the strap clock with `GET_CLOCK`. It sends
+  `SET_CLOCK` in the eight-byte form, followed by a `GET_CLOCK` readback, only
+  when the reading is invalid, refused, or more than 2 s from the phone's clock
+  over the whole request round trip, or when no reading comes within 10 s. A reply
+  that comes back more than 1 s after its request and cannot be judged, as on a
+  relaunch where the read waits behind the notify re-subscriptions, is followed by
+  one more `GET_CLOCK`, which decides; if that one goes unanswered, the first
+  reading stands and nothing is set. The strap applies a set value when it
+  processes the command, which on a busy link can be seconds after the phone
+  stamped it, so an unconditional set left a correct clock seconds behind. The
+  handshake counts as done once that check settles: the connect's own offload
+  request (1.5 s after a set, otherwise up to 1.5 s after the handshake) and the
+  alarm re-arm wait for it. A strap event or a manual sync can ask for history as
+  soon as it settles.
 - A 15-minute backfill timer (`backfillIntervalSeconds`, matching WHOOP) and a
   30-second keep-alive timer (`keepAliveIntervalSeconds`: re-arm realtime, poll
   battery, watchdog the link) are then started. With Low refresh enabled the
@@ -406,7 +418,8 @@ the two-byte selector `[0x01, 0x01]`. Stop uses `STOP_RAW_DATA` (82) `[0x01]`, t
   bytes are not evaluated. A seven-byte request was acknowledged in one run but did
   not produce the scheduled vibration; the subsecond field, not body length, is semantic.
 - `BLEManager.setClockPayload(now:)` → `[secs u32 LE][0,0,0,0]` (8 bytes). WHOOP 5/MG
-  sends this form once per connection and follows it with `GET_CLOCK` for readback.
+  sends this form only when the connect's `GET_CLOCK` reading calls for a set, and
+  follows it with `GET_CLOCK` for readback.
 - `BLEManager.setClockPayloadLegacy(now:)` → `[secs u32 LE][0,0,0,0,0]` (9 bytes) is the
   legacy WHOOP 4.0 firmware form; it remains in code for reference and is not part of the
   5/MG send sequence.

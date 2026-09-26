@@ -6,22 +6,26 @@ import Foundation
 /// serial decoded anywhere: `BatteryPackInfo.serial` is the BATTERY PACK's, read via cmd 151 and
 /// answered only by a 5/MG, so it identifies a removable part rather than the strap wearing it.
 ///
-/// The 4.0 hunt has a capture aid already (the `GET_HELLO_HARVARD` (35) branch, which now reports
-/// through this same probe — its payload carries a device key beside the serial). This is the 5/MG
-/// half, and it needs no new traffic: the GET_HELLO block is ALREADY decoded — for the device name at
-/// `pay[16]` and the firmware version at `pay[93]` — and everything else in it is simply discarded. If
-/// the serial is in there, it is arriving on every connect and being thrown away.
+/// The 4.0 hunt had a capture aid for the `GET_HELLO_HARVARD` (35) response until the fork narrowed to
+/// 5/MG; nothing calls this probe for it now, and `report`'s `block` label is what remains of it. This is
+/// the 5/MG half, and it needs no new traffic: the GET_HELLO block is ALREADY decoded — for the device name
+/// at `pay[16]` and the firmware version at `pay[93]`, in the decoder's payload, which starts at frame
+/// byte 11 — and everything else in it is simply discarded. If the serial is in there, it is arriving on
+/// every connect and being thrown away.
+///
+/// Offsets in a report count from the start of the payload the caller passes. FrameRouter passes the one
+/// after the result byte (frame byte 13), whose offsets match the response-body tables in
+/// `docs/PROTOCOL_TRANSPORT.md` and sit two below the decoder's `pay` (W06-103); its line says so.
 ///
 /// ## Why this reports structure instead of dumping the block
 ///
 /// The same response carries a SESSION TOKEN, which the decoder deliberately never reads. Dumping the
 /// payload wholesale would put that token in a log, so this reports every printable run as
-/// offset + length + class and prints the CONTENTS only of runs that could plausibly be the serial and
-/// are not the already-known name: fully alphanumeric, [serialLength] characters long.
-///
-/// That rule is a filter, not a guarantee — a token that happened to be alphanumeric and serial-length
-/// would print. Which is precisely why the caller gates this behind an opt-in diagnostic rather than
-/// the default, shareable strap log.
+/// offset + length + class and quotes only runs that could plausibly be the serial: fully alphanumeric,
+/// [serialLength] characters long. Even those print only their first three characters (W06-092), the way
+/// `WhoopSerialIdentity.logSafe` logs a serial everywhere else. With the length, that is enough to match a
+/// run against the serial on the strap's casing, and a serial, or a token that happened to look like one,
+/// stays out of a log a user may export. The caller still gates this behind an opt-in diagnostic.
 ///
 /// Pure and Foundation-only, so it unit-tests with no strap, no BLE and no app.
 public enum HelloIdentityProbe {
@@ -32,18 +36,24 @@ public enum HelloIdentityProbe {
         (48...57).contains(b) || (65...90).contains(b) || (97...122).contains(b)
     }
 
+    /// `whoop5HelloNameOffset` in a payload that starts after the COMMAND_RESPONSE origin sequence and result
+    /// (frame byte 13), the form `FrameRouter.commandResponsePayload` returns (W06-076).
+    public static let whoop5NameOffsetAfterResult = whoop5HelloNameOffset - 2
+
     /// Printable-ASCII runs in a GET_HELLO payload, one line each, for a diagnostic log.
     ///
     /// - Parameters:
     ///   - payload: the GET_HELLO (145) response payload, token region included — nothing is stripped
     ///     before this call; the withholding happens here so a caller cannot get it wrong.
-    ///   - knownNameOffset: where the decoder already reads the device name (16 on the pinned capture).
+    ///   - knownNameOffset: where the decoder already reads the device name, in this payload's coordinates.
+    ///     The default is the decoder's own (`whoop5HelloNameOffset`, payload from frame byte 11).
     ///     A run starting there is labelled rather than printed, since it is not a serial candidate and
     ///     is already surfaced elsewhere.
     ///   - minRun: shortest printable run worth reporting. Below this, a binary payload produces noise.
-    ///   - serialLength: run lengths that could be a serial. Outside it, contents are withheld.
+    ///   - serialLength: run lengths that could be a serial. Inside it, a run's first three characters print;
+    ///     outside it, none do.
     public static func candidateLines(payload: [UInt8],
-                                      knownNameOffset: Int = 16,
+                                      knownNameOffset: Int = whoop5HelloNameOffset,
                                       minRun: Int = 4,
                                       serialLength: ClosedRange<Int> = 6...20) -> [String] {
         var out: [String] = []
@@ -64,7 +74,7 @@ public enum HelloIdentityProbe {
             // not what the withholding rule exists to protect.
             if start == knownNameOffset { line += " (device name, already decoded)" }
             if alnum, serialLength.contains(run.count) {
-                line += " \"\(String(decoding: run, as: UTF8.self))\""
+                line += " \"\(String(decoding: run.prefix(3), as: UTF8.self))…\""
             } else if start != knownNameOffset {
                 line += " (withheld)"
             }
@@ -79,11 +89,11 @@ public enum HelloIdentityProbe {
     /// answer — it says the serial is not ASCII in this block and the search moves elsewhere.
     ///
     /// - Parameter block: which response this payload came from, for the line's prefix. Defaults to the
-    ///   5/MG `GET_HELLO` this probe was written for; the WHOOP 4.0 `GET_HELLO_HARVARD(35)` capture aid
-    ///   passes its own so one log can carry both without the two reading as the same frame.
+    ///   5/MG `GET_HELLO` this probe was written for; a caller reporting another block passes its own, so
+    ///   one log can carry both without the two reading as the same frame.
     public static func report(payload: [UInt8],
                               block: String = "HELLO(145)",
-                              knownNameOffset: Int = 16,
+                              knownNameOffset: Int = whoop5HelloNameOffset,
                               minRun: Int = 4,
                               serialLength: ClosedRange<Int> = 6...20) -> String {
         let lines = candidateLines(payload: payload, knownNameOffset: knownNameOffset,

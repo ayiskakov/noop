@@ -279,8 +279,9 @@ final class BackfillerSessionTallyTests: XCTestCase {
         let line = Backfiller.staleRecordLine(newestUnix: 1_785_692_420, wallNowUnix: 1_787_820_941)
         XCTAssertTrue(line.contains("about 24 day(s) old"), line)
         XCTAssertTrue(line.contains("stopped saving history"), line)
-        // The part the old advice omitted: charging alone has already been retried every connect.
-        XCTAssertTrue(line.contains("re-sends the clock on every connect"), line)
+        // The part the old advice omitted: charging alone has already been retried every connect. Since
+        // W06-050 a connect sets the clock only when its reading is wrong, and the copy says so.
+        XCTAssertTrue(line.contains("checks the strap clock on every connect and sets it when it is wrong"), line)
         // The test that tells the user whether NOOP is even involved.
         XCTAssertTrue(line.contains("official WHOOP app"), line)
         XCTAssertFalse(line.contains("\u{2014}"))
@@ -296,7 +297,7 @@ final class BackfillerSessionTallyTests: XCTestCase {
 
     /// The banner is what the user READS; the log line needs a capture export. The standing banner
     /// omitted the age entirely and PROMISED that charging "should" work - advice NOOP has effectively
-    /// retried on every connect for weeks, since it re-sends SET_CLOCK each time.
+    /// retried on every connect for weeks, since every connect checks the clock and sets a wrong one.
     func testStaleRecordBannerDatesTheSilenceAndPromisesNothing() {
         let line = Backfiller.staleRecordBanner(newestUnix: 1_785_692_420, wallNowUnix: 1_787_820_941)
         XCTAssertTrue(line.contains("about 24 day(s) old"), line)

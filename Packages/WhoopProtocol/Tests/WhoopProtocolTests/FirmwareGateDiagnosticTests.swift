@@ -46,4 +46,21 @@ final class FirmwareGateDiagnosticTests: XCTestCase {
         let line = firmwareGateDiagnostic(payload: Array(repeating: 0, count: 88), nameEndIndex: 20)
         XCTAssertTrue(line.hasSuffix("hex[88..<88]="), line)
     }
+    /// W06-087: the strap answers GET_HELLO first with PENDING and a zeroed body (`docs/PROTOCOL_TRANSPORT.md`
+    /// §Hello), which carries no block. Decoding it reported a firmware-gate failure on every connect.
+    func testThePendingHelloAcknowledgementDecodesNoBlock() {
+        let pending = puffinCommandFrame(cmd: 145, seq: 0x6d, payload: [0x01, 0x02] + [UInt8](repeating: 0, count: 107),
+                                         type: 36, header: [0x01, 0x00])
+        let parsed = parseFrame(pending, family: .whoop5).parsed
+        XCTAssertNil(parsed["fw_gate"])
+        XCTAssertNil(parsed["fw_version"])
+        XCTAssertNil(parsed["device_name"])
+    }
+
+    /// The control: a SUCCESS reply whose version byte fails the guard still reports the gate, the #1634 evidence.
+    func testASuccessHelloThatFailsTheVersionGuardStillReportsTheGate() {
+        let success = puffinCommandFrame(cmd: 145, seq: 0x6d, payload: [0x01, 0x01] + [UInt8](repeating: 0, count: 107),
+                                         type: 36, header: [0x01, 0x00])
+        XCTAssertNotNil(parseFrame(success, family: .whoop5).parsed["fw_gate"])
+    }
 }
