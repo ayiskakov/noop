@@ -940,8 +940,7 @@ public let whoop5HelloNameOffset = 16
 /// reuses the 4.0 command NUMBERS, but the response PAYLOADS differ from 4.0 — so each field below is
 /// mapped from a real WHOOP 5 capture (firmware 50.38.1.0), not ported on faith. Commands that return
 /// a short stub on this firmware (REPORT_VERSION_INFO / GET_EXTENDED_BATTERY_INFO) are intentionally left
-/// undecoded. GET_CLOCK, not served on 50.38.1.0, is served on 50.39.1.0 and decoded by
-/// `StrapClock.decodeReply` rather than here.
+/// undecoded. The GET_CLOCK reply is decoded by `StrapClock.decodeReply` rather than here.
 private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, schema: Schema,
                                          payloadEnd: Int?, limit: Int) {
     guard let payloadEnd = payloadEnd, 11 < payloadEnd, payloadEnd <= frame.count else { return }

@@ -2275,10 +2275,9 @@ public final class BLEManager: NSObject, ObservableObject {
     ///     sites are unaffected. Pass `.withResponse` for acked commands (e.g. historicalDataResult).
     public func send(_ command: WhoopCommand, payload: [UInt8] = [0x00],
                      writeType: CBCharacteristicWriteType = .withoutResponse) {
-        // #314 parity: CoreBluetooth already covers both Android defects here — this `p.state == .connected`
-        // guard makes a write a no-op once the radio powers off (no DeadObjectException to crash on), and
-        // centralManagerDidUpdateState publishes state.connected = false on .poweredOff, so the iOS/macOS UI
-        // can't show a stale-connected link. The Android fix re-creates both behaviours; no Swift change needed.
+        // #314 parity: this `p.state == .connected` guard makes a write a no-op once the radio powers off (no
+        // DeadObjectException to crash on). `state.connected` alone is not enough: a power-off reaches neither
+        // `didDisconnectPeripheral` nor any other write of it, so the flag outlives the link (W06-083).
         guard state.connected, let p = peripheral, p.state == .connected, let ch = cmdCharacteristic else {
             let reason = state.connected ? "command characteristic unavailable" : "not connected"
             log("send(\(command.label)) ignored — \(reason)")
@@ -2303,10 +2302,11 @@ public final class BLEManager: NSObject, ObservableObject {
             // bodies are built at the call sites and pad4 covers their 20-/2-byte bodies), the two
             // historical-offload commands, and the clock pair. SEND_HISTORICAL_DATA triggers the
             // offload; HISTORICAL_DATA_RESULT acks each HISTORY_END to walk the trim cursor.
-            // SET_CLOCK/GET_CLOCK are MANDATORY before history: an un-clocked WHOOP 5 doesn't save
+            // A valid strap clock is MANDATORY before history: an un-clocked WHOOP 5 doesn't save
             // sensor data to flash at all ("RTC timestamp … is invalid; not saving data to flash"),
             // so offloads complete with zero body frames — hardware-validated, same 8-byte WHOOP4
-            // payload over puffin framing. (#78 fork)
+            // payload over puffin framing (#78 fork). Each connect reads the clock with GET_CLOCK and
+            // sends SET_CLOCK only when the reading is invalid or more than 2 s off (W06-050).
             guard command == .toggleRealtimeHR || command == .runHapticsPattern
                 || command == .setAlarmTime || command == .getAlarmTime
                 || command == .runAlarm || command == .disableAlarm
@@ -5223,8 +5223,8 @@ public final class BLEManager: NSObject, ObservableObject {
     ///
     /// WHOOP 4.0 sequence: SET_CLOCK first to ensure the strap RTC is UTC-correct, then the
     /// rev-1 SET_ALARM_TIME. WHOOP 5/MG sends the REVISION_4 body alone — the strap maintains
-    /// its RTC (set during the connect handshake / history sync) and the official app's alarm
-    /// path doesn't re-set it (wire observation; mirrors Android WhoopBleClient.armStrapAlarm).
+    /// its RTC (the connect handshake reads it and sets it only when it is invalid or more than
+    /// 2 s off, W06-050) and the official app's alarm path doesn't re-set it (wire observation).
     /// Either way the strap will buzz at `date` even if the app is backgrounded or force-quit
     /// (event STRAP_DRIVEN_ALARM_EXECUTED=57). This is the only alarm path: the strap fires at
     /// the fixed time — NOOP has no light-sleep early-wake layer.
