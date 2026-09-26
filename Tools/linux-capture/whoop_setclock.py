@@ -2,9 +2,9 @@
 """whoop_setclock.py — set a WHOOP strap's RTC to the current wall-clock time, and verify it latched.
 
 A strap left offline (no app) for a long time loses its clock — realtime/historical frames then carry
-bogus timestamps. The phone app clocks the strap on every connect (a WHOOP 5/MG is read first and set
-only when it is off; a WHOOP 4 is set each time); this sets it from Linux. WRITE operation, but safe and
-reversible (the phone checks the clock again on its next connect).
+bogus timestamps. The phone app checks a WHOOP 5/MG strap's clock on every connect and sets it only when
+the reading is off or missing (NOOP does not connect to a WHOOP 4); this sets either model from Linux. WRITE
+operation, but safe and reversible (the phone checks the clock again on its next connect).
 
 Verification: after writing SET_CLOCK, the tool briefly subscribes and scans incoming frames (events
 carry the strap RTC in a u32 timestamp) for a value within a minute of wall time. If found, the clock
@@ -13,8 +13,8 @@ latched; if every timestamp is still far off, it warns (e.g. a wrong-length SET_
 Phone Bluetooth must be OFF and the strap bonded + advertising.
 
 It reads the strap clock first (from the timestamps of stream frames, not GET_CLOCK) and only writes when
-the drift is more than `--if-drift` seconds. The default is 0, so it writes unless the reading equals the
-phone's whole second; then it re-reads to verify the new clock latched. The app's own rule is `StrapClock`
+the drift is more than `--if-drift` seconds. The default is 0, so it writes unless the reading equals this
+computer's whole second; then it re-reads to verify the new clock latched. The app's own rule is `StrapClock`
 in WhoopProtocol.
 
 Usage:
@@ -160,7 +160,7 @@ def main():
     p.add_argument("--address", required=True, help="strap BLE MAC")
     p.add_argument("--if-drift", type=int, default=0, metavar="SECONDS",
                    help="only set the clock when |drift| exceeds this many seconds (default 0: set unless the "
-                        "reading equals the phone's whole second)")
+                        "reading equals this computer's whole second)")
     p.add_argument("--check", action="store_true", help="read and report the clock only; never write")
     p.add_argument("--dry-run", action="store_true", help="build and print the frame without connecting")
     args = p.parse_args()

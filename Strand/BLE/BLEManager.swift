@@ -916,7 +916,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// HR/R-R arrive, while `didUpdateNotificationStateFor` never fires (→ `cmdNotifyConfirmedActive` →
     /// `connectSettled` never latch). While this is true, `requestNotify` forces one real off→on
     /// re-subscribe so delivery — and the settle/alarm-re-arm chain — is re-established. Cleared once that
-    /// forced pass has run (the 5/MG handshake, or `connectSettled` bumping on WHOOP 4), and on disconnect.
+    /// forced pass has run (the 5/MG handshake; the clear in `maybeSignalConnectSettled` serves only the WHOOP 4
+    /// path, which NOOP no longer reaches), and on disconnect.
     private var restoreNeedsResubscribe = false
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
@@ -5208,7 +5209,7 @@ public final class BLEManager: NSObject, ObservableObject {
             // (no state change). Force one real off→on cycle so delivery is re-established AND
             // `didUpdateNotificationStateFor` fires — the only path that latches `cmdNotifyConfirmedActive`
             // → `connectSettled` → the alarm re-arm. One-shot: `restoreNeedsResubscribe` clears once the
-            // forced pass has run (the 5/MG handshake, or the settle on WHOOP 4).
+            // forced pass has run (the 5/MG handshake).
             if restoreNeedsResubscribe {
                 log("Notify re-arming after restore \(c.uuid) (\(reason))")
                 p.setNotifyValue(false, for: c)
@@ -6323,7 +6324,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             // #613: the inherited notify subscriptions come back reported-active but dead. Force one real
             // off→on re-subscribe this session (see `requestNotify`) so live HR/R-R resume AND
             // `didUpdateNotificationStateFor` fires → `cmdNotifyConfirmedActive` → `connectSettled` → the
-            // alarm re-arm. Cleared once the forced pass has run (the 5/MG handshake, or the settle on WHOOP 4).
+            // alarm re-arm. Cleared once the forced pass has run (the 5/MG handshake).
             restoreNeedsResubscribe = true
             log("Restored CONNECTED peripheral \(p.identifier) — re-discovering services")
             discoverPrimaryServices(on: p)
