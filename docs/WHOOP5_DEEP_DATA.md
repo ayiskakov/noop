@@ -93,19 +93,24 @@ The byte-82 candidate is decoded and persisted per strap-second on every v18 off
 (`v18AuxSample`, slot `auxByte82`), independently of any display preference. What the
 default-off Experimental display toggle controls is only whether the client SHOWS it.
 
-While that toggle is on, one scoring pass resolves each night’s in-band (70–100)
-readings once (`AnalyticsEngine.nightlySpo2CandidateNight`) and stores the mean
-unrounded, together with the night’s minimum, its below-threshold runs, their measured
-span and the reading count they rest on. A per-second track is available in the
-full-day viewer. Every figure is labelled as an unverified strap estimate.
+While that toggle is on, one scoring pass resolves each night’s readings once
+(`AnalyticsEngine.nightlySpo2CandidateNight`). The strap measures this byte in
+windows, 30 records about every 20 minutes of band SLEEP on the strap measured so far
+([byte 82 windows](PROTOCOL_SENSORS.md#byte-82-measurement-windows)), and inside a
+window its value is a rolling figure. So the window is the reading: its value is the
+median of its in-band (70–100) seconds, and the pass stores the unrounded mean of the
+window values, the lowest window value, the windows below the threshold, their
+measured span, and how many windows gave a value out of how many the strap attempted.
+A per-second track is available in the full-day viewer. Every figure is labelled as an
+unverified strap estimate.
 
-None of this changes the validation boundary above. The 90 % cut used to group runs is
-a display convention, not a clinical threshold, so a grouped run is not a desaturation
-event. Run spans are measured between readings rather than multiplied out of a sample
+None of this changes the validation boundary above. The 90 % cut is a display
+convention, not a clinical threshold, so a window below it is not a desaturation event.
+Spans are measured between in-band seconds rather than multiplied out of a sample
 count, because the R18 cadence of roughly one record per second is an observation and
-not a guarantee; a run of one reading therefore reports no duration. The stored figures
-never reach `spo2Pct` and never feed recovery, illness or any other score, and the
-cross-device contradiction recorded above remains unresolved.
+not a guarantee; a window with one in-band second therefore reports no duration. The
+stored figures never reach `spo2Pct` and never feed recovery, illness or any other
+score, and the cross-device contradiction recorded above remains unresolved.
 
 ### Comparison tool
 

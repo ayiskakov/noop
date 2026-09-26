@@ -80,7 +80,7 @@ struct Spo2EstimateCard: View {
                 if trace.count >= 2 {
                     traceCard
                 }
-                Text("Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.")
+                Text("On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,9 +90,10 @@ struct Spo2EstimateCard: View {
 
     // MARK: - Night trace
 
-    /// Every in-band reading of the night, plotted as the strap reported it. The dashed rule is the dip
-    /// threshold the Low and Dips tiles are cut at, so a dip on the chart and a dip in the count are the
-    /// same line. Out-of-band seconds were dropped by the reader, never zeroed.
+    /// Every in-band second of the night, plotted as the strap reported it. The dashed rule is the dip
+    /// threshold the Low and Dips tiles are cut at; a READING is a dip when its middle value is under it,
+    /// so a single second below the line is not one. Out-of-band seconds were dropped by the reader,
+    /// never zeroed.
     private var traceCard: some View {
         NoopCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space2) {
@@ -108,7 +109,7 @@ struct Spo2EstimateCard: View {
                            dateFormat: { Self.traceTimeFormatter.string(from: $0) },
                            accessibilityLabel: String(localized: "Blood oxygen strap estimate through the night"),
                            yDomain: traceDomain)
-                Text("Each point is one reading. The dashed line is \(thresholdLabel), where a dip starts.")
+                Text("Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at \(thresholdLabel).")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
