@@ -973,8 +973,10 @@ private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, sch
             fb.parsed["history_oldest"] = .int(Int(oldest))
             fb.parsed["history_newest"] = .int(Int(newest))
         }
-    } else if respCmd == 145, pay.count >= 26 {
-        // GET_HELLO info block. We surface the two user-facing fields the app shows — the device NAME
+    } else if respCmd == 145, pay.count >= 26, pay[1] == 1 {
+        // GET_HELLO info block, carried only by a SUCCESS (1) reply. The PENDING acknowledgement before it is
+        // zeros after the revision (`docs/PROTOCOL_TRANSPORT.md` §Hello), and decoding it reported a
+        // firmware-gate failure on every connect (W06-087). We surface the two user-facing fields the app shows — the device NAME
         // (the model-style label the strap calls itself) and the firmware VERSION — and deliberately never
         // read the session token (also in this response). Both offsets are anchored to a real
         // 50.38.1.0 capture: the name is printable ASCII at pay[16]; the version is 4 bytes at pay[93],
