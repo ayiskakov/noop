@@ -28,6 +28,26 @@ final class StrapClockCheckTests: XCTestCase {
     }
 
     private func lines(containing needle: String) -> [String] { live.log.filter { $0.contains(needle) } }
+
+    /// Runs `body` with a Sync Strap request parked, as the shortcut leaves one before the link is ready. The key
+    /// lives in the test host's defaults, so it is saved and restored rather than cleared.
+    private func withParkedManualSync(_ body: () -> Void) {
+        let key = BLEManager.pendingManualSyncKey
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        manager.armPendingManualSync()
+        body()
+    }
+    private var manualSyncParked: Bool { UserDefaults.standard.object(forKey: BLEManager.pendingManualSyncKey) != nil }
+
+    /// Lets the main queue run what the settle scheduled.
+    private func drainMainQueue(for seconds: Double = 0.3) {
+        let done = expectation(description: "main queue")
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { done.fulfill() }
+        wait(for: [done], timeout: seconds + 2)
+    }
     private var setClockAsks: Int { lines(containing: "send(Set Clock)").count }
     private var handshakeDoneLines: Int { lines(containing: "connect handshake done").count }
 
@@ -191,6 +211,44 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertTrue(live.historyReady)
         XCTAssertEqual(handshakeDoneLines, 1)
     }
+
+    /// W06-086: the first offload waits what remains of the 1.5 s since the handshake, counted on the monotonic
+    /// clock the handshake stamped.
+    func testTheFirstOffloadWaitsWhatRemainsOfTheSettleSinceTheHandshake() {
+        manager.whoop5HandshakeAt = BLEManager.monotonicSeconds() - 0.5
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+        XCTAssertEqual(lines(containing: "scheduling first historical offload (connect) in 1.0 s").count, 1,
+                       live.log.joined(separator: "\n"))
+    }
+
+    /// W06-086: the first offload request belongs to the link that settled. Here it runs there, and spends the
+    /// parked Sync Strap request as it should.
+    func testTheFirstOffloadRequestRunsOnTheLinkThatSettled() {
+        withParkedManualSync {
+            manager.whoop5HandshakeAt = BLEManager.monotonicSeconds() - 2   // the settle delay has run out
+            manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+            manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+            drainMainQueue()
+            XCTAssertFalse(manualSyncParked, live.log.joined(separator: "\n"))
+            XCTAssertEqual(lines(containing: "running the sync requested before the link was ready").count, 1)
+        }
+    }
+
+    /// W06-086: a later link's check moves the token before the request runs, so the request is dropped, and the
+    /// parked Sync Strap request waits for that link's own settle instead of being spent on a link not ready.
+    func testAFirstOffloadRequestFromAnEndedLinkIsDropped() {
+        withParkedManualSync {
+            manager.whoop5HandshakeAt = BLEManager.monotonicSeconds() - 2
+            manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+            manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+            manager.beginStrapClockCheck()   // the next link's handshake, before the request runs
+            drainMainQueue()
+            XCTAssertTrue(manualSyncParked, live.log.joined(separator: "\n"))
+            XCTAssertEqual(lines(containing: "running the sync requested before the link was ready").count, 0)
+            XCTAssertEqual(lines(containing: "first historical offload request dropped").count, 1)
+        }
+    }
 }
 
 /// W06-071: the first 5/MG offload keeps the hardware-validated 1.5 s after a SET_CLOCK, however late the set.
@@ -204,5 +262,12 @@ final class FirstOffloadDelayTests: XCTestCase {
         XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 0.5, setJustSent: false), 1.0, accuracy: 1e-9)
         XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: 4.0, setJustSent: false), 0)
         XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: nil, setJustSent: false), 1.5)
+    }
+
+    /// W06-086: the delay never exceeds the full settle. With the elapsed time on the wall clock, a phone clock
+    /// stepped back an hour during the check made it 3,601.5 s.
+    func testANegativeElapsedTimeCannotPostponeTheOffload() {
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: -3600, setJustSent: false), 1.5)
+        XCTAssertEqual(BLEManager.firstOffloadDelay(sinceHandshake: -0.5, setJustSent: false), 1.5)
     }
 }

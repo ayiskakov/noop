@@ -1121,8 +1121,10 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The `connectGeneration` of the link the clock check began on, so its timeout can tell that link from a
     /// later one that came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-069).
     private var strapClockCheckLink = 0
-    /// When this link's 5/MG handshake ran, so the first offload keeps its ~1.5 s settle delay after it.
-    private var whoop5HandshakeAt: Date?
+    /// When this link's 5/MG handshake ran, in `monotonicSeconds()`, so the first offload keeps its ~1.5 s settle
+    /// delay after it and no wall-clock step moves that (W06-086). Internal for `StrapClockCheckTests`, which
+    /// cannot run the handshake that sets it.
+    var whoop5HandshakeAt: Double?
     private var intentionalDisconnect = false
     /// Consecutive `didFailToConnect` count, for the auto-reconnect backoff (#414). Reset to 0 on a
     /// successful connect; grows the reschedule delay so a strap that's genuinely out of range doesn't
@@ -6695,7 +6697,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             // only this block is gated. `whoop5SessionStarted` resets on disconnect.
             if !whoop5SessionStarted {
                 whoop5SessionStarted = true
-                whoop5HandshakeAt = Date()
+                whoop5HandshakeAt = Self.monotonicSeconds()
                 noteRebootReconnectIfNeeded()
                 // Re-apply the Broadcast-HR device-config flag if the user opted in (#181).
                 if PuffinExperiment.broadcastHrEnabled { setBroadcastHr(true) }
@@ -7006,10 +7008,12 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// order is SET_CLOCK, ~1.5 s, then SEND_HISTORICAL_DATA, and the same 1.5 s lets the puffin notify
     /// subscriptions settle after the handshake, mirroring the WHOOP4 kick. So after a set the full 1.5 s runs
     /// from the set (W06-071: counting it from the handshake gave a set sent after the 10 s timeout no gap at
-    /// all), and without one, whatever remains of it since the handshake.
+    /// all), and without one, whatever remains of it since the handshake, never more than the full 1.5 s
+    /// (W06-086: counted on the wall clock, a phone clock stepped back during the check postponed the offload by
+    /// the size of the step).
     nonisolated static func firstOffloadDelay(sinceHandshake: TimeInterval?, setJustSent: Bool) -> TimeInterval {
         let settle: TimeInterval = 1.5
-        return setJustSent ? settle : max(0, settle - (sinceHandshake ?? 0))
+        return setJustSent ? settle : min(settle, max(0, settle - (sinceHandshake ?? 0)))
     }
 
     /// The 5/MG clock check has decided, so the connect handshake is done. The first offload, the sync
@@ -7019,13 +7023,23 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         connectHandshakeDone = true     // unblocks beginBackfill()'s guard
         state.historyReady = true       // and the sync controls, which must not offer what it declines
         log("WHOOP 5/MG: connect handshake done — backfill unblocked")
-        log("WHOOP 5/MG: scheduling first historical offload (connect)")
         // See `firstOffloadDelay`. requestSync → beginBackfill is itself gated on connectHandshakeDone, so a
         // racing foreground/restore trigger can't fire it early.
-        let sinceHandshake = whoop5HandshakeAt.map { Date().timeIntervalSince($0) }
+        let sinceHandshake = whoop5HandshakeAt.map { Self.monotonicSeconds() - $0 }
         let delay = Self.firstOffloadDelay(sinceHandshake: sinceHandshake, setJustSent: setJustSent)
+        log("WHOOP 5/MG: scheduling first historical offload (connect) in " + String(format: "%.1f", delay) + " s")
+        // W06-086: the request belongs to this link. After a settle only a disconnect or a later link's check moves
+        // the token, and a request that ran on that later link would spend a parked Sync Strap request before its
+        // handshake is done.
+        let token = strapClockCheckToken
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.requestConnectSync()
+            guard let self else { return }
+            guard self.strapClockCheckToken == token else {
+                self.log("WHOOP 5/MG: first historical offload request dropped — the link it was scheduled on has "
+                         + "ended")
+                return
+            }
+            self.requestConnectSync()
         }
         // #34: signal settled directly (skip the cmd-notify gate `maybeSignalConnectSettled()` uses) —
         // armStrapAlarm's 5/MG branch never sends GET_ALARM_TIME (log-only readback is WHOOP4-only, and the
