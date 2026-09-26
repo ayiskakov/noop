@@ -178,21 +178,13 @@ public final class FrameRouter {
             // 1970/71 — two contradictory lines with nothing to separate them. Same accept/reject shape
             // REBOOT_STRAP already uses. LOG-ONLY; it never gates behaviour.
             if let cmd = parsed.cmdName, cmd.hasPrefix("SET_CLOCK") || cmd.hasPrefix("GET_CLOCK") {
-                // NO accept/reject verdict here, and that is deliberate: the result byte may not exist at
-                // all for this command. The captured-frame fixture builds a puffin COMMAND_RESPONSE as
-                // [36, seq, cmd] + payload at offset 8, so @11 is already PAYLOAD and the @12 that
-                // `commandResultByte` reads is a payload byte, not a result code. REBOOT_STRAP's use of it
-                // was validated against reboot's own frames; nothing establishes it for the clock.
-                //
-                // Inventing a verdict from that is precisely the fault this line was added to fix - the
-                // old "clock synced" log asserted an outcome nobody had checked. So quote the evidence
-                // and let a maintainer decode it: the byte at the result offset, and the WHOLE
-                // frame (#900's format), uncapped. A truncated clock frame answers nothing, and the full
-                // frame is what makes a wrong offset assumption visible instead of silently misleading.
-                let r = Self.commandResultByte(in: frame, family: family)
-                let rhex = r.map { String(format: "0x%02x", UInt8(truncatingIfNeeded: $0)) } ?? "none"
-                state.append(log: "clock: \(cmd) reply byte@resultOffset=\(rhex) "
-                                + "frame=\(Self.fullFrameHex(frame))",
+                // W06-001: both replies carry the format-1 result at byte 12, and GET_CLOCK's carries the
+                // strap's seconds at 13 (`StrapClock.decodeReply`; 20 replies from 50.39.1.0 agree). This
+                // line quotes the reply; BLEManager's "WHOOP 5/MG clock:" line judges it. The WHOLE frame
+                // (#900's format) stays, uncapped, so a moved offset on another firmware stays visible.
+                let result = parsed.parsed["result"]?.stringValue ?? "none"
+                let reading = StrapClock.decodeReply(frame)?.seconds.map { " strap=\($0)" } ?? ""
+                state.append(log: "clock: \(cmd) result=\(result)\(reading) frame=\(Self.fullFrameHex(frame))",
                              domain: .connection)
             }
             // #1303: the hunt for a stable per-strap id, which is what multi-strap identity waits on —

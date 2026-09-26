@@ -933,8 +933,9 @@ public func whoop5HistoricalAckFrame(endData: [UInt8], seq: UInt8) -> [UInt8] {
 /// The response command is at frame[10] (the 4.0 frame[6] + 4) and its payload at frame[11]. WHOOP 5
 /// reuses the 4.0 command NUMBERS, but the response PAYLOADS differ from 4.0 — so each field below is
 /// mapped from a real WHOOP 5 capture (firmware 50.38.1.0), not ported on faith. Commands that return
-/// a short stub on this firmware (REPORT_VERSION_INFO / GET_EXTENDED_BATTERY_INFO) or aren't served
-/// (GET_CLOCK — unneeded, since realtime + historical carry real unix) are intentionally left undecoded.
+/// a short stub on this firmware (REPORT_VERSION_INFO / GET_EXTENDED_BATTERY_INFO) are intentionally left
+/// undecoded. GET_CLOCK, not served on 50.38.1.0, is served on 50.39.1.0 and decoded by
+/// `StrapClock.decodeReply` rather than here.
 private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, schema: Schema,
                                          payloadEnd: Int?, limit: Int) {
     guard let payloadEnd = payloadEnd, 11 < payloadEnd, payloadEnd <= frame.count else { return }

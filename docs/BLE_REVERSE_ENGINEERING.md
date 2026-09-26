@@ -477,8 +477,10 @@ real capture (firmware **50.38.1.0**), never ported on faith (`decodeWhoop5Comma
 
 What does **not** transfer: `REPORT_VERSION_INFO` (7) and `GET_EXTENDED_BATTERY_INFO` (98) return short
 stub payloads on this firmware (so the firmware version lives in the `GET_HELLO` block instead), and
-`GET_CLOCK` (11) isn't served at all — WHOOP 5 doesn't need it, since realtime (type-40) and historical
-(type-47) both carry real unix rather than a device epoch.
+`GET_CLOCK` (11) isn't served at all. Record dating does not need it, since realtime (type-40) and
+historical (type-47) both carry real unix rather than a device epoch. Firmware 50.39.1.0 does serve it:
+twenty replies carry the format-1 result at `frame[12]` and the strap's unix seconds as a u32 LE at
+`frame[13]`, then seven zero bytes (`StrapClock.decodeReply`).
 
 > **Privacy.** The `GET_HELLO` response also contains a **session token**, which the decoder never
 > reads or exposes — only the device name and firmware version are surfaced. The `device_name`/
