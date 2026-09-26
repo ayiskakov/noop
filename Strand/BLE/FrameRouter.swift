@@ -380,16 +380,17 @@ public final class FrameRouter {
     }
 
     /// The payload of a COMMAND_RESPONSE: the bytes after [type,seq,cmd,origin_seq,result] (payload
-    /// starts at inner+5) up to the crc32 trailer at `length`. nil when the frame is too short to carry
-    /// any payload.
+    /// starts at inner+5) up to the crc32 trailer, zero padding included. The trailer starts 4 bytes past
+    /// the declared length, the u16 LE at bytes 2–3 (W06-065: reading bytes 1–2 put it past every real
+    /// frame). nil when the frame is too short to carry any payload.
     nonisolated static func commandResponsePayload(in frame: [UInt8],
                                                    family: DeviceFamily = .whoop5) -> [UInt8]? {
         _ = family
-        guard frame.count > 2 else { return nil }
-        let length = Int(frame[1]) | (Int(frame[2]) << 8)        // crc32 starts here
-        let start = innerOffset + 5                              // skip type,seq,cmd,origin_seq,result
-        guard length <= frame.count, start < length else { return nil }
-        return Array(frame[start..<length])
+        guard frame.count >= 4 else { return nil }
+        let bodyEnd = 4 + (Int(frame[2]) | (Int(frame[3]) << 8))   // crc32 starts here
+        let start = innerOffset + 5                                 // skip type,seq,cmd,origin_seq,result
+        guard bodyEnd <= frame.count, start < bodyEnd else { return nil }
+        return Array(frame[start..<bodyEnd])
     }
 
     /// Space-separated lowercase hex of a COMMAND_RESPONSE payload, for the raw-hex diagnostic fallback
