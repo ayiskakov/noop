@@ -1330,14 +1330,15 @@ private struct VitalsSection: View {
     // the experimental toggle is ON. Empty when the toggle is OFF or no candidate data exists.
     @State private var spo2CandidateByDay: [String: Double] = [:]
     @State private var hrvOverCountByDay: [String: Double] = [:]   // #1118
-    // #103: the figures the candidate MEAN cannot carry — the night's low, its dips, the dip duration and
-    // the reading count behind all of it. Four separate metricSeries rows, loaded beside the mean above
+    // #103: the figures the candidate MEAN cannot carry — the night's low, its dips and the readings
+    // (windows) behind all of it. Separate metricSeries rows, loaded beside the mean above
     // and resolved into ONE night by `Spo2CandidateSeries.latest` so the card cannot show last night's
     // mean beside an older night's low. Empty whenever the mean is.
     @State private var spo2CandidateMinByDay: [String: Double] = [:]
     @State private var spo2CandidateDipsByDay: [String: Double] = [:]
-    @State private var spo2CandidateDipSecondsByDay: [String: Double] = [:]
-    @State private var spo2CandidateSamplesByDay: [String: Double] = [:]
+    // W03-003: the night's measurement windows, valued and attempted.
+    @State private var spo2CandidateWindowsByDay: [String: Double] = [:]
+    @State private var spo2CandidateWindowsAttemptedByDay: [String: Double] = [:]
     /// The resolved night's per-second in-band readings, for the card's chart. Keyed to that night's day.
     @State private var spo2NightTrace: [TrendPoint] = []
 
@@ -1402,14 +1403,15 @@ private struct VitalsSection: View {
             }
             let pts = await repo.exploreSeries(key: Spo2CandidateSeries.meanKey, source: "my-whoop", days: 14)
             spo2CandidateByDay = Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
-            // #103: the four companion series behind the strap-estimate card. Read with the SAME window
+            // #103: the companion series behind the strap-estimate card. Read with the SAME window
             // and source as the mean above so they describe the same span, and keyed off
             // `Spo2CandidateSeries` rather than literals — the writer spells them from that same enum,
             // which is the only thing stopping a rename from silently banking rows nothing reads.
             spo2CandidateMinByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.minimumKey)
             spo2CandidateDipsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.dipsKey)
-            spo2CandidateDipSecondsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.dipSecondsKey)
-            spo2CandidateSamplesByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.samplesKey)
+            spo2CandidateWindowsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.windowsKey)
+            spo2CandidateWindowsAttemptedByDay = await Self.loadCandidateSeries(
+                repo, Spo2CandidateSeries.windowsAttemptedKey)
         }
     }
 
@@ -1446,8 +1448,8 @@ private struct VitalsSection: View {
         Spo2CandidateSeries.latest(mean: spo2CandidateByDay,
                                    minimum: spo2CandidateMinByDay,
                                    dips: spo2CandidateDipsByDay,
-                                   dipSeconds: spo2CandidateDipSecondsByDay,
-                                   samples: spo2CandidateSamplesByDay)
+                                   windows: spo2CandidateWindowsByDay,
+                                   windowsAttempted: spo2CandidateWindowsAttemptedByDay)
     }
 
     /// The nightly means oldest → newest for the card's sparkline. Sorted by day KEY (`YYYY-MM-DD` sorts

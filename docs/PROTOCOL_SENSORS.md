@@ -256,7 +256,7 @@ sensor guarantees for every firmware version.
 | 73 | 2 / u16 | Skin-temperature convention, raw/100 °C; accept 5–45 °C |
 | 75, 77, 79 | 2 each / u16 | Raw status words; no sleep-stage meaning established |
 | 81 | 1 / bitfield | Four two-bit groups; detailed below |
-| 82 | 1 / u8 | Sleep-adjacent raw byte; 80/A0 hex are candidate sentinels, not established physiological labels |
+| 82 | 1 / u8 | Sleep-adjacent raw byte; 80/A0 hex are candidate sentinels, not established physiological labels. On the strap measured so far, nonzero only in 30-record measurement windows; see [byte 82 windows](#byte-82-measurement-windows) |
 | 106, 107 | 1 each / u8 | Optical baseline-like raw values; per-byte optical identity provisional |
 | 108, 109 | 1 each / u8 | Optical amplitude-like values; simultaneous 128 has been treated as a signal-quality sentinel |
 | 113 | 4 / f32 | Unknown finite float; zero may mean unset, no established quantity |
@@ -316,6 +316,51 @@ Nonzero state labels do not have complete runtime validation for this version.
 SLEEP is not a mapping to light, deep or REM sleep, and is unrelated to processor
 power-saving sleep. Byte 75 is not a deep-sleep indicator. The record supplies
 neither a validated hypnogram nor an established production SpO₂ value.
+
+#### Byte 82 measurement windows
+
+**Hardware observations, one MG (`WS50_r00`, firmware `50.39.1.0`), 588,883 records
+over seven nights.** They describe when the byte is written, not what its value
+means; the value remains an unvalidated candidate.
+
+- **Windows.** The byte is nonzero only in runs of exactly 30 consecutive records:
+  175 windows, no other length.
+- **Schedule.** The first window of a SLEEP bout (byte 81 bits 4–5 = 2) starts
+  1173–1175 s after the bout's first SLEEP record. Each later window starts 1200 s
+  after the previous one, with at most 2 s of drift in a night, while the state stays
+  SLEEP. Applied to every bout, this rule predicted all 175 windows, with no miss and
+  no extra window, over 15 bouts. The phase against unix time therefore differs from
+  night to night, and a phase measured on one capture does not carry to another.
+- **Completion.** A window that has started completes even if the state leaves SLEEP;
+  one ran three records into UP.
+- **Not observed.** No SLEEP bout was shorter than 1173 s, and every interruption was
+  UP lasting 900–2190 s. What a shorter bout or a brief interruption does is unknown;
+  a bout shorter than 1173 s is predicted to hold no window.
+- **Status words.** The byte is nonzero in exactly the records whose status words at
+  77 and 79 leave the pair `0x0c01`/`0x0c02`, with no exception in either direction
+  over the same records. Inside windows the pair read `0x0b51`/`0x04a2` or
+  `0x0701`/`0x07f2`, apart from two rare mixtures. Zero therefore means "no
+  measurement", and a nonzero value outside 70–100 marks a measurement that produced
+  no in-band value.
+- **Non-percentage values.** None of the observed codes (the nonzero values outside
+  70–100) sets bit 6, which every value in the 70–100 range has by arithmetic, so on
+  the values seen bit 6 alone separates a percentage candidate from a code. The codes
+  decompose as bit 7, a three-bit field at bits 3–5 and a small field at bits 0–2;
+  their meanings are unresolved.
+- **Within a window.** The in-band value changes about every five records and spans a
+  few points, with rare one-record excursions. The window, not the record, is the
+  independent sample; NOOP's nightly figures use the window's median, taking the
+  lower of the two middle values when the count is even.
+- **No app-side unlock.** This strap never paired with the official app: its event
+  history holds one BLE_BONDED event. It has no account, and it never received the R22
+  sequence: no layout-22 record is among 14,866 archived unmapped records. It
+  produced in-band values from its first scored night. On this strap and firmware the
+  byte therefore needs no app-side unlock. This does not establish whether the
+  official app can disable it.
+
+An official-app overnight capture of another strap, used by
+`Tools/linux-capture/validate_spo2_candidate.py`, shows the same 30-record, 1200 s
+structure within its one night.
 
 ### R18 quality-adjacent source-selection bits
 

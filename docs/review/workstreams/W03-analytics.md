@@ -69,7 +69,16 @@ every changed row explained; SleepBench / SleepPSG for any stager change.
 |---|---|---|---|---|---|---|
 | W03-001 | S3 | Reported | In-bed start from gravity counts evening lead-ins, which drags sleep efficiency down | `SleepStager.swift` (to confirm) | 5/MG sleep audit of 2026-09-24, left open after PR #20 | |
 | W03-002 | S3 | Reported | Staging misses early-cycle REM on some nights | Stager recipe (to confirm) | Same audit | |
+| W03-003 | S2 | Fixed | The 5/MG SpO₂ candidate night (low, dips, mean, evidence count) was resolved per second, but the strap measures byte 82 in 30-record windows whose rolling value blips for single seconds: a one-second blip became the night's low and a dip no window showed, and the evidence count was seconds of one measurement | `Spo2CandidateNight.swift` `nightlySpo2CandidateNight`; `Spo2EstimateCard.swift`; `validate_spo2_candidate.py` `night_mean_at_offset` | V0: `testASingleSecondBlipInsideAWindowIsNotADip` fails on the old resolver (1 dip, low 77, in a 95–96 window). V1: oracle re-pinned and matched line for line by an independent Python implementation (17 cases); on all 11 backups the resolver and that implementation agree on every night; package suite, `StrandTests`, both app builds, i18n and hygiene gates pass. V2 (independent reviewer and `/code-review high`): a continuous stream would collapse into one window (fixed: a 60 s window cap, twice the observed window so a clock step cannot split one); the Dips caption claimed seconds below the threshold (fixed: it counts readings, the dip properties are renamed `dipSamples`/`dipSpanSeconds`); nights scored before the window keys showed per-second Low and Dips under per-reading copy (fixed: dashes); the comparison tool valued a window by its mean (fixed: the app's lower median); stale comments and copy (fixed). Left as before: a night whose readings all failed still resolves to nil; the night chart plots raw seconds, labelled as such. V3: 7 stored nights replayed on `main` and on the fix: in-band seconds unchanged on all 7, displayed mean moves on 1 by one point, the low rises on 6, dips fall from 10 to 1 (the one left is a whole window below the threshold) | |
+| W03-005 | S4 | Reported | The strap-log SpO₂ candidate line resolves over the one stored session it describes, while the scoring pass resolves over all of the day's detected sessions, so on a day with more than one session its "(shown as …%)" can differ from the screen. Found in W03-003's V2; predates it | `DebugDataDiagnostics.swift` (`nightlySpo2CandidateNight([det], …)`) | Code reading; not yet reproduced | |
 
 ## Log
 
 - 2026-09-25 — File created from the plan. W03-001 and W03-002 carried over from the 5/MG sleep audit.
+- 2026-09-26 — Out-of-phase fix at the owner's request, from the BLE-dossier fact-check: W03-003 and W03-004 on
+  `review/w03-spo2-windows`. The byte 82 window facts behind them are in `docs/PROTOCOL_SENSORS.md`. W3's own
+  review passes are not started.
+- 2026-09-26 — V2 of W03-003/004 by an independent reviewer and `/code-review high`; every confirmed point fixed on
+  the same branch, then re-validated on all 11 backups (resolver = independent Python implementation on every
+  night). W03-005 added from that review. Next: the strap check (a night on the new build, the card showing
+  "N of M" readings, the strap log's window line).

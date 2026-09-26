@@ -656,6 +656,14 @@ def night_window_coverage(
     return (len(sampled & expected), len(expected))
 
 
+def window_value(samples: Sequence[int]) -> int:
+    """One measurement window's value: its median in-band sample, the lower of the two middle ones when
+    the count is even, so it is always a value the strap reported. Mirrors `Spo2CandidateWindow.value`
+    in `Packages/StrandAnalytics` (W03-003)."""
+    ordered = sorted(samples)
+    return ordered[(len(ordered) - 1) // 2]
+
+
 def night_mean_at_offset(
     records: Sequence[dict],
     t0: int,
@@ -668,9 +676,15 @@ def night_mean_at_offset(
     """Nightly aggregate of in-band u8 samples at `offset` inside [t0, t1). Returns (mean, n) or None.
 
     On a duty-cycled capture only in-window samples count, and the aggregate is the mean of the
-    per-window means — one number per firing of the window, not one per second. A 30-second burst is
+    per-window values — one number per firing of the window, not one per second. A 30-second burst is
     one measurement the strap took, not 30 independent ones; averaging per second silently weights
     the night towards whichever windows the capture happened to sample most densely.
+
+    A window's value is its MEDIAN in-band sample (the lower of the two middle ones for an even count),
+    the same rule the app's `nightlySpo2CandidateNight` applies (W03-003): inside a window the strap's
+    figure is a rolling value that can blip for one second, and a blip must not move the window. Using
+    the app's rule keeps this tool's nightly figure equal to the one the app shows for the same night,
+    which is the number a volunteer compares against the WHOOP app.
     """
     duty_cycled = is_duty_cycled(duty)
     per_window: Dict[int, List[int]] = {}
@@ -692,7 +706,7 @@ def night_mean_at_offset(
     if not vals:
         return None
     if duty_cycled:
-        return (statistics.fmean(statistics.fmean(w) for w in per_window.values()), len(vals))
+        return (statistics.fmean(window_value(w) for w in per_window.values()), len(vals))
     return (statistics.fmean(vals), len(vals))
 
 

@@ -11859,7 +11859,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld lub %2$lld"
+            "value": "%1$lld z %2$lld"
           }
         }
       }
@@ -159965,6 +159965,12 @@
             "value": "Leituras"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letture"
+          }
+        },
         "pl": {
           "stringUnit": {
             "state": "translated",
@@ -251635,66 +251641,66 @@
         }
       }
     },
-    "in-band, this night": {
+    "readings with a value": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "im Messbereich, diese Nacht"
+            "value": "Messungen mit Wert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "in-band, this night"
+            "value": "readings with a value"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "en rango, esta noche"
+            "value": "lecturas con valor"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "dans la plage, cette nuit"
+            "value": "mesures avec valeur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "nell’intervallo, questa notte"
+            "value": "letture con valore"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "w zakresie, tej nocy"
+            "value": "odczyty z wartością"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "no intervalo, esta noite"
+            "value": "leituras com valor"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "в диапазоне, за эту ночь"
+            "value": "измерения со значением"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本夜有效范围内"
+            "value": "有数值的读数"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "本夜有效範圍內"
+            "value": "有數值的讀數"
           }
         }
       }
@@ -251955,130 +251961,66 @@
         }
       }
     },
-    "momentary, below %@": {
+    "readings below %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "kurzzeitig, unter %@"
+            "value": "Messungen unter %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentary, below %@"
+            "value": "readings below %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentánea, por debajo de %@"
+            "value": "lecturas por debajo de %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentanée, sous %@"
+            "value": "mesures sous %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentanea, sotto %@"
+            "value": "letture sotto %@"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "chwilowo, poniżej %@"
+            "value": "odczyty poniżej %@"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentânea, abaixo de %@"
+            "value": "leituras abaixo de %@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "кратковременно, ниже %@"
+            "value": "измерения ниже %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "瞬时，低于 %@"
+            "value": "低于 %@ 的读数"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "瞬時，低於 %@"
-          }
-        }
-      }
-    },
-    "%llds below %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds unter %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds below %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds por debajo de %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds sous %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds sotto %@"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds poniżej %@"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds abaixo de %@"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld с ниже %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 秒低于 %@"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 秒低於 %@"
+            "value": "低於 %@ 的讀數"
           }
         }
       }
