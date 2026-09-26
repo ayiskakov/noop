@@ -106,7 +106,8 @@ public enum StrapClock {
     /// was sent. The strap read its clock at some moment in that window, and a whole-second reading `s` means
     /// its clock stood in [s, s + 1) then. So the offset strap − phone lies in
     /// (s − receivedAt, s + 1 − (receivedAt − roundTrip)), and the clock is judged off only when that whole
-    /// range lies past `driftThresholdSeconds`. A long round trip widens the range and so never produces a set
+    /// range lies past `driftThresholdSeconds`. The range is open, so a bound exactly on the threshold already
+    /// puts all of it past (W06-089). A long round trip widens the range and so never produces a set
     /// by itself. The threshold is fixed rather than a parameter, because `describe` states it and `Verdict`
     /// does not carry it (W06-082).
     ///
@@ -120,7 +121,7 @@ public enum StrapClock {
         let low = Double(s) - receivedAt
         let high = Double(s) + 1 - (receivedAt - max(0, roundTrip))
         let threshold = driftThresholdSeconds
-        if high < -threshold || low > threshold { return .off(seconds: s, low: low, high: high) }
+        if high <= -threshold || low >= threshold { return .off(seconds: s, low: low, high: high) }
         if low >= -threshold && high <= threshold { return .inSync(seconds: s, low: low, high: high) }
         return .unresolved(seconds: s, low: low, high: high)
     }
@@ -243,7 +244,13 @@ public enum StrapClock {
             + "too long to judge, reading it again"
     }
 
+    /// The range rounded outward to tenths, so the printed range always holds the true one and a range printed
+    /// for `.off` cannot read as the same numbers as one printed for `.unresolved` (W06-089). Floating-point noise
+    /// is snapped first, so an exact tenth stays put, and a zero prints unsigned.
     private static func range(_ low: Double, _ high: Double) -> String {
-        String(format: "%+.1f…%+.1f s", low, high)
+        func tenths(_ x: Double, _ rule: FloatingPointRoundingRule) -> Double {
+            ((x * 10 * 1_000_000).rounded() / 1_000_000).rounded(rule) / 10 + 0
+        }
+        return String(format: "%+.1f…%+.1f s", tenths(low, .down), tenths(high, .up))
     }
 }

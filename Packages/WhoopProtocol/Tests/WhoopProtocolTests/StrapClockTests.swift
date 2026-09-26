@@ -102,12 +102,18 @@ final class StrapClockTests: XCTestCase {
         XCTAssertFalse(v.needsSet)
     }
 
-    func testAnExactlyTwoSecondRangeEdgeIsNotOff() {
-        // high == −2 is not past the threshold.
-        let r = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_997)
-        XCTAssertFalse(StrapClock.judge(r, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
-        let r2 = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_996)
-        XCTAssertTrue(StrapClock.judge(r2, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
+    /// W06-089: the offset lies in the open range (low, high), so a bound exactly on the threshold already puts
+    /// the whole range past it. This test used to pin high == −2 as not off.
+    func testARangeWhoseBoundSitsOnTheThresholdIsOff() {
+        let behind = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_997)
+        XCTAssertEqual(StrapClock.judge(behind, receivedAt: 1_790_000_000.5, roundTrip: 0.5),
+                       .off(seconds: 1_789_999_997, low: -3.5, high: -2.0))
+        let ahead = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_790_000_002)
+        XCTAssertEqual(StrapClock.judge(ahead, receivedAt: 1_790_000_000.0, roundTrip: 0.5),
+                       .off(seconds: 1_790_000_002, low: 2.0, high: 3.5))
+        // A second nearer, the range straddles the threshold again.
+        let nearer = StrapClock.Reading(originSequence: 1, result: 1, seconds: 1_789_999_998)
+        XCTAssertFalse(StrapClock.judge(nearer, receivedAt: 1_790_000_000.5, roundTrip: 0.5).needsSet)
     }
 
     func testNoWallClockIsSetWhateverTheResult() {
@@ -156,8 +162,9 @@ final class StrapClockTests: XCTestCase {
     }
 
     /// W06-075's oracle: a set applied 2.3 s late, read on the next connect over a 0.1 s round trip, across 1,000
-    /// stamp phases and 10 read phases. Truncating the stamp is judged off 6,792 times in 10,000; the nearest
-    /// second, 2,443. The rest is the late apply itself.
+    /// stamp phases and 10 read phases. Truncating the stamp is judged off 7,543 times in 10,000; the nearest
+    /// second, 3,192. The rest is the late apply itself. (The read phase at a whole second gives ranges that end
+    /// exactly on −2 s; before W06-089 they did not count as off, and the counts were 6,792 and 2,443.)
     func testARoundedStampIsReSetLessOftenAfterALateApply() {
         func offCount(_ stamp: (Double) -> Double) -> Int {
             var off = 0
@@ -174,8 +181,8 @@ final class StrapClockTests: XCTestCase {
             }
             return off
         }
-        XCTAssertEqual(offCount { $0.rounded(.down) }, 6_792)
-        XCTAssertEqual(offCount { Double(StrapClock.setSeconds(forPhoneTime: $0)) }, 2_443)
+        XCTAssertEqual(offCount { $0.rounded(.down) }, 7_543)
+        XCTAssertEqual(offCount { Double(StrapClock.setSeconds(forPhoneTime: $0)) }, 3_192)
     }
 
     // MARK: Check
@@ -373,7 +380,8 @@ final class StrapClockTests: XCTestCase {
         XCTAssertEqual(tally(offset: -4, firstRoundTrip: 0.9), ["off/1": 100])
         for rt1 in [3.2, 4.0, 4.7] {
             XCTAssertEqual(tally(offset: 0, firstRoundTrip: rt1), ["inSync/2": 100], "\(rt1)")
-            XCTAssertEqual(tally(offset: -3, firstRoundTrip: rt1), ["off/2": 74, "unresolved/2": 26], "\(rt1)")
+            // One phase lands exactly on −2 s, which an open range counts as off (W06-089; 74 and 26 before).
+            XCTAssertEqual(tally(offset: -3, firstRoundTrip: rt1), ["off/2": 75, "unresolved/2": 25], "\(rt1)")
             XCTAssertEqual(tally(offset: -4, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
             XCTAssertEqual(tally(offset: -5, firstRoundTrip: rt1), ["off/2": 100], "\(rt1)")
         }
@@ -381,12 +389,27 @@ final class StrapClockTests: XCTestCase {
 
     // MARK: describe
 
+    /// W06-089: a printed range rounds outward, so it always holds the range it stands for, and a range printed
+    /// for `.off` cannot read as the same numbers as one printed for `.unresolved`. Rounded to nearest, a high
+    /// bound of −2.04 (off) and one of −1.96 (unresolved) both printed "-2.0".
+    func testPrintedRangesRoundOutward() {
+        XCTAssertEqual(StrapClock.describe(.off(seconds: 1, low: -3.54, high: -2.04), roundTrip: 0.5),
+                       "strap clock reads 1, -3.6…-2.0 s from the phone over a 0.5 s round trip — "
+                       + "more than 2 s off, setting it")
+        XCTAssertEqual(StrapClock.describe(.unresolved(seconds: 1, low: -3.46, high: -1.96), roundTrip: 0.5),
+                       "strap clock reads 1, -3.5…-1.9 s from the phone over a 0.5 s round trip — "
+                       + "that does not show it more than 2 s off, not set")
+        // Exact tenths stay put rather than creeping outward on floating-point noise, and zero prints unsigned.
+        XCTAssertEqual(StrapClock.describe(.inSync(seconds: 1, low: -0.3, high: -0.04), roundTrip: 0.1),
+                       "strap clock reads 1, -0.3…+0.0 s from the phone over a 0.1 s round trip — within 2 s, not set")
+    }
+
     func testLogLinesStateTheReadingAndTheRange() {
         XCTAssertEqual(StrapClock.describe(.inSync(seconds: 1_790_000_000, low: -0.65, high: 0.75), roundTrip: 0.4),
                        "strap clock reads 1790000000, -0.7…+0.8 s from the phone over a 0.4 s round trip — "
                        + "within 2 s, not set")
         XCTAssertEqual(StrapClock.describe(.unresolved(seconds: 1_790_000_000, low: -4.25, high: 0.75), roundTrip: 4),
-                       "strap clock reads 1790000000, -4.2…+0.8 s from the phone over a 4.0 s round trip — "
+                       "strap clock reads 1790000000, -4.3…+0.8 s from the phone over a 4.0 s round trip — "
                        + "that does not show it more than 2 s off, not set")
         XCTAssertEqual(StrapClock.describe(.off(seconds: 1_789_999_996, low: -4.75, high: -3.25), roundTrip: 0.5),
                        "strap clock reads 1789999996, -4.8…-3.2 s from the phone over a 0.5 s round trip — "
