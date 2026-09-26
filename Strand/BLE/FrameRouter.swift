@@ -179,7 +179,7 @@ public final class FrameRouter {
             // REBOOT_STRAP already uses. LOG-ONLY; it never gates behaviour.
             if let cmd = parsed.cmdName, cmd.hasPrefix("SET_CLOCK") || cmd.hasPrefix("GET_CLOCK") {
                 // W06-001: both replies carry the format-1 result at byte 12, and GET_CLOCK's carries the
-                // strap's seconds at 13 (`StrapClock.decodeReply`; 20 replies from 50.39.1.0 agree). This
+                // strap's seconds at 13 (`StrapClock.decodeReply`; 12 distinct replies from 50.39.1.0 agree). This
                 // line quotes the reply; BLEManager's "WHOOP 5/MG clock:" line judges it. The WHOLE frame
                 // (#900's format) stays, uncapped, so a moved offset on another firmware stays visible.
                 let result = parsed.parsed["result"]?.stringValue ?? "none"

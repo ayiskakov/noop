@@ -5198,7 +5198,8 @@ public final class BLEManager: NSObject, ObservableObject {
             // no longer delivers, and `setNotifyValue(true)` on an already-notifying char yields NO callback
             // (no state change). Force one real off→on cycle so delivery is re-established AND
             // `didUpdateNotificationStateFor` fires — the only path that latches `cmdNotifyConfirmedActive`
-            // → `connectSettled` → the alarm re-arm. One-shot: `restoreNeedsResubscribe` clears at settle.
+            // → `connectSettled` → the alarm re-arm. One-shot: `restoreNeedsResubscribe` clears once the
+            // forced pass has run (the 5/MG handshake, or the settle on WHOOP 4).
             if restoreNeedsResubscribe {
                 log("Notify re-arming after restore \(c.uuid) (\(reason))")
                 p.setNotifyValue(false, for: c)
@@ -6312,7 +6313,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             // #613: the inherited notify subscriptions come back reported-active but dead. Force one real
             // off→on re-subscribe this session (see `requestNotify`) so live HR/R-R resume AND
             // `didUpdateNotificationStateFor` fires → `cmdNotifyConfirmedActive` → `connectSettled` → the
-            // alarm re-arm. Cleared when `connectSettled` bumps.
+            // alarm re-arm. Cleared once the forced pass has run (the 5/MG handshake, or the settle on WHOOP 4).
             restoreNeedsResubscribe = true
             log("Restored CONNECTED peripheral \(p.identifier) — re-discovering services")
             discoverPrimaryServices(on: p)

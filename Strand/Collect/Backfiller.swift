@@ -533,7 +533,7 @@ final class Backfiller {
     /// sets it when it is invalid or off (W06-050), so "charge it" alone has already been retried every
     /// session.
     ///
-    /// Byte-identical to the Android twin. No em-dash (project rule).
+    /// No em-dash (project rule). The upstream Android twin still says NOOP re-sends the clock every connect.
     nonisolated static func staleRecordLine(newestUnix: Int, wallNowUnix: Int) -> String {
         let ageDays = max(0, wallNowUnix - newestUnix) / 86_400
         return "Backfill: this sync banked nothing and the strap's newest stored record is about \(ageDays) day(s) old. If you have worn it since then, it has stopped saving history to its flash. NOOP already checks the strap clock on every connect and sets it when it is wrong, so charging alone may not be enough: charge to 100% and reconnect, then use Restart strap in Devices, and if that does not help forget and re-pair. If the official WHOOP app is also missing these days, the strap is the cause and not NOOP."
@@ -549,8 +549,8 @@ final class Backfiller {
     /// along. A banner that keeps promising something that keeps not happening teaches people to distrust
     /// the app rather than their strap.
     ///
-    /// Byte-identical to the Android twin. Not localized, matching the sibling `lastSyncError` copy on
-    /// both platforms; localizing that surface is its own change. No em-dash (project rule).
+    /// Not localized, matching the sibling `lastSyncError` copy; localizing that surface is its own change.
+    /// No em-dash (project rule). The upstream Android twin still says NOOP re-sets the clock every connect.
     nonisolated static func staleRecordBanner(newestUnix: Int, wallNowUnix: Int) -> String {
         let ageDays = max(0, wallNowUnix - newestUnix) / 86_400
         return "Synced, but your strap handed over no stored history, and its newest saved record is about \(ageDays) day(s) old. If you have been wearing it since then, it has stopped saving to flash. Charge it to 100% and reconnect; NOOP already checks its clock every connect and sets it when it is wrong, so if that does not help, try Restart strap in Devices, then forget and re-pair. If the official WHOOP app is missing these days too, the strap is the cause and not NOOP."

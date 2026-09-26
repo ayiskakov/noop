@@ -297,7 +297,7 @@ final class BackfillerSessionTallyTests: XCTestCase {
 
     /// The banner is what the user READS; the log line needs a capture export. The standing banner
     /// omitted the age entirely and PROMISED that charging "should" work - advice NOOP has effectively
-    /// retried on every connect for weeks, since it re-sends SET_CLOCK each time.
+    /// retried on every connect for weeks, since every connect checks the clock and sets a wrong one.
     func testStaleRecordBannerDatesTheSilenceAndPromisesNothing() {
         let line = Backfiller.staleRecordBanner(newestUnix: 1_785_692_420, wallNowUnix: 1_787_820_941)
         XCTAssertTrue(line.contains("about 24 day(s) old"), line)

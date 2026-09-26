@@ -196,9 +196,10 @@ Exit codes: `0` accepted, `2` strap not found/reachable, `3` connected but no bu
 
 A strap left offline (no app) for a long time loses its clock — its RTC drifts or resets, so realtime
 and newly-recorded historical frames get **bogus timestamps** (e.g. dated 1971). The phone app fixes
-this with `SET_CLOCK` on every connect; this does the same from Linux. It **reads the clock first and
-only writes if it has drifted** past `--if-drift` seconds (mirrors the app's `StrapClock` — no
-gratuitous resets), then re-reads to verify the new time latched.
+this by reading the clock on every connect and sending `SET_CLOCK` when it is off; this sets it from
+Linux. It **reads the clock first**, from stream-frame timestamps, and **only writes if it has drifted**
+past `--if-drift` seconds (default 0, so it always writes unless you pass one), then re-reads to verify
+the new time latched.
 
 ```bash
 # read-only: report the strap's current clock and how far it has drifted

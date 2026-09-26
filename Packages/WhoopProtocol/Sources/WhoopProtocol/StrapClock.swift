@@ -10,9 +10,11 @@ import Foundation
 /// provably more than `driftThresholdSeconds` off removes both steps for a strap whose clock is fine.
 public enum StrapClock {
 
-    /// Seconds at or below this are not a wall clock. The strap applies a stored time only above it
-    /// (`docs/PROTOCOL_TRANSPORT.md` §Clock and identity contracts), and a failed read can report zero with
-    /// a success result, so a reading here needs a set whatever the result byte says.
+    /// Seconds at or below this are not a wall clock. The 146/147 clock contract applies a stored time only
+    /// above it (`docs/PROTOCOL_TRANSPORT.md` §Clock and identity contracts) and warns that a failed read can
+    /// return zero with a success result. That contract is for the other command pair; here the floor is
+    /// only a validity bound for the command-11 reply, so a reading at or below it needs a set whatever the
+    /// result byte says.
     public static let validityFloor: UInt32 = 1_293_840_001
 
     /// How far the strap clock may sit from the phone's before a connect sets it.
@@ -42,8 +44,10 @@ public enum StrapClock {
     }
 
     /// Decode a format-1 COMMAND_RESPONSE to GET_CLOCK: type 36 at byte 8, command 11 at byte 10, the
-    /// request's sequence at 11, the result at 12 and the strap's Unix seconds as a u32 LE at 13. Twenty
-    /// replies from firmware 50.39.1.0 have this layout, each followed by seven zero bytes that are not read.
+    /// request's sequence at 11, the result at 12 and the strap's Unix seconds as a u32 LE at 13. Twelve
+    /// distinct replies from firmware 50.39.1.0 have this layout. Seven more bytes follow, zero in every one
+    /// of them; each of those GETs ran in the same millisecond as the SET before it, so the bytes may be
+    /// sub-second ticks that read zero there. They are not read.
     ///
     /// Structure only: the caller passes a frame that passed `verifyFrame`. The body ends where the declared
     /// length (bytes 2–3) puts the CRC32 trailer. Returns nil for any other frame or a body that stops before
