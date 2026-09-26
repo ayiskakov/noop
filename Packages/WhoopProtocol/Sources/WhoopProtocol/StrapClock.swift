@@ -25,6 +25,14 @@ public enum StrapClock {
     /// never answers, and its strap must still be clocked, because an un-clocked WHOOP 5 banks no sensor data.
     public static let replyTimeoutSeconds: Double = 10
 
+    /// The whole second a 5/MG SET_CLOCK stamps for phone Unix time `unix`: the nearest one. The set carries
+    /// whole seconds with zero subseconds, so truncating left the strap up to 1 s behind before any processing
+    /// delay, and a set the strap then applied late was judged off and set again on the next connect
+    /// (W06-075). Rounding bounds the stamp at half a second either way.
+    public static func setSeconds(forPhoneTime unix: Double) -> UInt32 {
+        UInt32(min(max(unix.rounded(), 0), Double(UInt32.max)))
+    }
+
     /// The COMMAND_RESPONSE result that carries a reading. Pending (2) promises a later answer.
     public static let resultSuccess: UInt8 = 1
     public static let resultPending: UInt8 = 2

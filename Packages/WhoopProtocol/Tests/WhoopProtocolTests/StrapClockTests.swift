@@ -136,6 +136,37 @@ final class StrapClockTests: XCTestCase {
                        StrapClock.judge(r, receivedAt: t0, roundTrip: 0))
     }
 
+    // MARK: setSeconds
+
+    func testASetStampsTheNearestSecond() {
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.4), 1_790_000_000)
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.5), 1_790_000_001)
+        XCTAssertEqual(StrapClock.setSeconds(forPhoneTime: 1_790_000_000.9), 1_790_000_001)
+    }
+
+    /// W06-075's oracle: a set applied 2.3 s late, read on the next connect over a 0.1 s round trip, across 1,000
+    /// stamp phases and 10 read phases. Truncating the stamp is judged off 6,792 times in 10,000; the nearest
+    /// second, 2,443. The rest is the late apply itself.
+    func testARoundedStampIsReSetLessOftenAfterALateApply() {
+        func offCount(_ stamp: (Double) -> Double) -> Int {
+            var off = 0
+            for i in 0..<1000 {
+                let at = 1_790_000_000.0 + Double(i) / 1000
+                let offset = stamp(at) - (at + 2.3)
+                for j in 0..<10 {
+                    let sent = 1_790_000_100.0 + Double(j) / 10
+                    let s = UInt32((sent + 0.05 + offset).rounded(.down))
+                    let v = StrapClock.judge(.init(originSequence: 1, result: 1, seconds: s),
+                                             receivedAt: sent + 0.1, roundTrip: 0.1)
+                    if case .off = v { off += 1 }
+                }
+            }
+            return off
+        }
+        XCTAssertEqual(offCount { $0.rounded(.down) }, 6_792)
+        XCTAssertEqual(offCount { Double(StrapClock.setSeconds(forPhoneTime: $0)) }, 2_443)
+    }
+
     // MARK: Check
 
     private let now = 1_790_000_000.0

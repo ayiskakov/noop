@@ -6924,7 +6924,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
 
     /// Set the 5/MG strap clock to the phone's and read it back, so the log shows what latched.
     private func setStrapClock() {
-        send(.setClock, payload: BLEManager.setClockPayload())
+        let seconds = StrapClock.setSeconds(forPhoneTime: Date().timeIntervalSince1970)
+        send(.setClock, payload: BLEManager.setClockPayload(now: seconds))
         if let sequence = sendReturningSequence(.getClock, payload: []) {
             strapClockCheck.beginReadback(sequence: sequence, at: Self.monotonicSeconds())
         }
