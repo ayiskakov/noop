@@ -150,6 +150,24 @@ final class Whoop5PpgWaveformTests: XCTestCase {
         XCTAssertFalse(s.isEmpty)
     }
 
+    /// W01-006: the row keeps the whole intact frame, because the strap frees the record at the trim ack
+    /// and the row's columns do not map the record index or the footer after byte 75. Without the frames,
+    /// or with a count that does not line up with the parse, the row carries none.
+    func testAPpgRowKeepsItsWholeFrameWhenGivenTheFrames() throws {
+        let raw = bytes(v26Hex)
+        let f = parseFrame(raw, family: .whoop5)
+        let kept = extractHistoricalStreams([f], rawFrames: [raw],
+                                            deviceClockRef: 1_780_917_232, wallClockRef: 1_780_917_232)
+        XCTAssertEqual(kept.ppgWaveform.map(\.rawRecord), [raw])
+        let none = extractHistoricalStreams([f], deviceClockRef: 1_780_917_232, wallClockRef: 1_780_917_232)
+        XCTAssertEqual(none.ppgWaveform.map(\.rawRecord), [nil])
+        let misaligned = extractHistoricalStreams([f], rawFrames: [raw, raw],
+                                                  deviceClockRef: 1_780_917_232, wallClockRef: 1_780_917_232)
+        XCTAssertEqual(misaligned.ppgWaveform.map(\.rawRecord), [nil])
+        let round = try JSONDecoder().decode(Streams.self, from: JSONEncoder().encode(kept))
+        XCTAssertEqual(round.ppgWaveform, kept.ppgWaveform, "the raw record survives the Codable round trip")
+    }
+
     /// Streams decode tolerance: a JSON missing `ppg_waveform` still decodes (defaults to empty), and a
     /// present `ppg_waveform` round-trips, including negative (AC-coupled) sample values. Mirrors the
     /// decodeIfPresent guard for the other biometric keys (see PpgHrTests' ppg_hr analogue).

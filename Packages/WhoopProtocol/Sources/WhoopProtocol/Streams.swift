@@ -293,11 +293,17 @@ public struct PpgWaveformSample: Equatable, Codable, Sendable {
     /// written before it was read, and that nil is TRUE rather than merely missing: a delta series
     /// cannot be inverted without its starting point, so those windows have no recoverable level.
     public let baseCode: Int?
-    public init(ts: Int, samples: [Int], burstIndex: Int? = nil, baseCode: Int? = nil) {
+    /// W01-006: the whole intact frame this row was decoded from, envelope and CRC32 included, exactly as
+    /// the offload received it. The strap frees the record at the trim ack, and the bytes no field maps (the
+    /// record index, the footer after byte 75) survive only here. nil on a row banked before it was kept.
+    public let rawRecord: [UInt8]?
+    public init(ts: Int, samples: [Int], burstIndex: Int? = nil, baseCode: Int? = nil,
+                rawRecord: [UInt8]? = nil) {
         self.ts = ts
         self.samples = samples
         self.burstIndex = burstIndex
         self.baseCode = baseCode
+        self.rawRecord = rawRecord
     }
 }
 
@@ -351,11 +357,16 @@ public struct EcgCandidateSample: Equatable, Codable, Sendable {
     public let leadOffCount: Int
     public let leadOffI: [Int]
     public let leadOffQ: [Int]
+    /// W01-006: the whole intact frame this row was decoded from, envelope and CRC32 included, exactly as
+    /// the offload received it. The strap frees the record at the trim ack, and the bytes no field maps
+    /// (26, 28–31, the per-slot reserved bits) survive only here. nil on a row banked before it was kept.
+    public let rawRecord: [UInt8]?
 
     public init(ts: Int, samples: [Int], recordIndex: Int? = nil, declaredCount: Int? = nil,
                 sampleFlags: [Bool] = [], contactFlags: [Bool] = [], quality: Int = 0,
                 stateBits: Int = 0, classifierResult: Int = 0, classifierState: Int = 0,
-                progress: Int = 0, leadOffCount: Int = 0, leadOffI: [Int] = [], leadOffQ: [Int] = []) {
+                progress: Int = 0, leadOffCount: Int = 0, leadOffI: [Int] = [], leadOffQ: [Int] = [],
+                rawRecord: [UInt8]? = nil) {
         self.ts = ts
         self.samples = samples
         self.recordIndex = recordIndex
@@ -370,6 +381,7 @@ public struct EcgCandidateSample: Equatable, Codable, Sendable {
         self.leadOffCount = leadOffCount
         self.leadOffI = leadOffI
         self.leadOffQ = leadOffQ
+        self.rawRecord = rawRecord
     }
 
     enum CodingKeys: String, CodingKey {
@@ -379,6 +391,7 @@ public struct EcgCandidateSample: Equatable, Codable, Sendable {
         case classifierResult = "classifier_result", classifierState = "classifier_state"
         case progress, leadOffCount = "lead_off_count"
         case leadOffI = "lead_off_i", leadOffQ = "lead_off_q"
+        case rawRecord = "raw_record"
     }
 
     /// Every field past `samples` is decoded with `decodeIfPresent`, so JSON written before those fields
@@ -399,6 +412,7 @@ public struct EcgCandidateSample: Equatable, Codable, Sendable {
         leadOffCount = try c.decodeIfPresent(Int.self, forKey: .leadOffCount) ?? 0
         leadOffI = try c.decodeIfPresent([Int].self, forKey: .leadOffI) ?? []
         leadOffQ = try c.decodeIfPresent([Int].self, forKey: .leadOffQ) ?? []
+        rawRecord = try c.decodeIfPresent([UInt8].self, forKey: .rawRecord)
     }
 }
 

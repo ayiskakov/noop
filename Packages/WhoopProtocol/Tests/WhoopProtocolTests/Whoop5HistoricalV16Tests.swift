@@ -207,6 +207,31 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
         XCTAssertTrue(streams.hr.isEmpty && streams.gravity.isEmpty && streams.ppgWaveform.isEmpty)
     }
 
+    /// W01-006: the row keeps the whole intact frame, because the strap frees the record at the trim ack
+    /// and the row's columns map only some of its bytes (26 and 28–31 have no column). Given the frames
+    /// index-aligned with `parsed`, each row carries its own; without them, or misaligned, none.
+    func testAnEcgRowKeepsItsWholeFrameWhenGivenTheFrames() {
+        let fullBytes = bytes(fullHex), emptyBytes = bytes(emptyHex)
+        let parsed = [parseFrame(emptyBytes, family: .whoop5), parseFrame(fullBytes, family: .whoop5)]
+        let streams = extractHistoricalStreams(parsed, rawFrames: [emptyBytes, fullBytes],
+                                               deviceClockRef: 1_789_990_296, wallClockRef: 1_789_990_296)
+        XCTAssertEqual(streams.ecgCandidate.map(\.rawRecord), [fullBytes],
+                       "the row is the full record's, so it carries the full record's frame, not its neighbour's")
+        XCTAssertEqual(fullBytes.count, 1584)
+        let none = extractHistoricalStreams(parsed, deviceClockRef: 1_789_990_296, wallClockRef: 1_789_990_296)
+        XCTAssertEqual(none.ecgCandidate.map(\.rawRecord), [nil])
+        let misaligned = extractHistoricalStreams(parsed, rawFrames: [fullBytes],
+                                                  deviceClockRef: 1_789_990_296, wallClockRef: 1_789_990_296)
+        XCTAssertEqual(misaligned.ecgCandidate.map(\.rawRecord), [nil],
+                       "frames that do not line up with the parse must bank nothing rather than a wrong record")
+    }
+
+    func testTheRawRecordSurvivesTheStreamsCodableRoundTrip() throws {
+        let s = Streams(ecgCandidate: [EcgCandidateSample(ts: 1, samples: [1, 2], rawRecord: [0xAA, 0x01, 0x10])])
+        let round = try JSONDecoder().decode(Streams.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(round.ecgCandidate, s.ecgCandidate)
+    }
+
     func testStreamsIsEmptyConsidersEcgCandidate() {
         var s = Streams()
         XCTAssertTrue(s.isEmpty)
