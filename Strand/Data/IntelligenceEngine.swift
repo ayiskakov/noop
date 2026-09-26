@@ -1646,12 +1646,13 @@ final class IntelligenceEngine: ObservableObject {
                                                             beatAccurate: respGateAcc,
                                                             rrIntegrity: respGateIntegrity)
                 // #103/queue-11a: the night's SpO₂ candidate result — the in-band (70–100)
-                // `spo2_candidate_82` V18Aux readings resolved into a mean, a range and the night's
-                // below-threshold runs. Only computed when the display toggle is ON; nil when there is no
-                // v18 aux stream, no in-band reading, or the toggle is OFF.
+                // `spo2_candidate_82` V18Aux readings resolved per measurement window (W03-003) into a
+                // mean, a range, the night's dip readings and its window counts. Only computed when the
+                // display toggle is ON; nil when there is no v18 aux stream, no in-band reading, or the
+                // toggle is OFF.
                 //
                 // Resolved ONCE, here, for everything pass 2 writes: the mean, the minimum, the dip count,
-                // the dip span and the reading count are all read off this single value rather than
+                // the dip span and the window counts are all read off this single value rather than
                 // recomputed per key, so no two of them can describe a different set of readings.
                 //
                 // Persisted to metricSeries in pass 2 under the `Spo2CandidateSeries` keys, never to
@@ -2235,17 +2236,18 @@ final class IntelligenceEngine: ObservableObject {
             // (`intText`, `MetricDescriptor.format` with `decimals: 0`), so the number ON SCREEN is
             // unchanged — only the stored precision improves, and a re-score refills prior nights.
             //
-            // The four keys beside it are FACTS THE MEAN CANNOT CARRY, not restatements of it: a night
-            // averaging 96 % with a run down to 77 % and a night flat at 96 % are the same mean and
-            // different nights. They are separate keys rather than fields on `dailyMetric` because
-            // metricSeries takes any key with no migration, and because none of them may ever look like a
-            // calibrated column. All four come off the ONE `Spo2CandidateNight` resolved in pass 1, so
-            // they cannot disagree with the mean they sit next to.
+            // The keys beside it are FACTS THE MEAN CANNOT CARRY, not restatements of it: a night with a
+            // reading below the threshold and a night flat at the same mean are different nights. They are
+            // separate keys rather than fields on `dailyMetric` because metricSeries takes any key with no
+            // migration, and because none of them may ever look like a calibrated column. All of them come
+            // off the ONE `Spo2CandidateNight` resolved in pass 1, so they cannot disagree with the mean
+            // they sit next to. Since W03-003 every figure is per measurement window (the strap's
+            // 30-second reading), and the window keys mark a night resolved that way.
             //
-            // `spo2_candidate_dip_seconds` is time measured BETWEEN readings, never `samples × 1 s` — see
-            // `Spo2DesatEvent.spanSeconds`. It is therefore legitimately 0 on a night whose only dips were
-            // single readings, which is why the dip COUNT is stored separately instead of being inferred
-            // from a duration.
+            // `spo2_candidate_dip_seconds` is the observed span of the dip readings, measured BETWEEN
+            // in-band seconds, never `samples × 1 s` — see `Spo2DesatEvent.spanSeconds`. It is therefore
+            // legitimately 0 on a night whose only dip readings held one in-band second, which is why the
+            // dip COUNT is stored separately instead of being inferred from a duration.
             //
             // Every key comes from `Spo2CandidateSeries`, never a literal spelled here — the reader looks
             // these up optionally, so a key spelled twice could drift on one side and bank nothing for a
@@ -2257,12 +2259,18 @@ final class IntelligenceEngine: ObservableObject {
                                               value: Double(cand.minimum)))
                 restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.samplesKey,
                                               value: Double(cand.samples)))
+                // W03-003: the window counts. Their presence is also what tells a reader that this
+                // night's minimum and dips were resolved per window, not per second.
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.windowsKey,
+                                              value: Double(cand.windows)))
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.windowsAttemptedKey,
+                                              value: Double(cand.windowsAttempted)))
                 // 0 written, not omitted, for both dip keys: a night that dipped and then re-scores clean
                 // must CLEAR its prior figure rather than keep showing a stale one.
                 restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.dipsKey,
                                               value: Double(cand.events.count)))
                 restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.dipSecondsKey,
-                                              value: Double(cand.secondsBelowThreshold)))
+                                              value: Double(cand.dipSpanSeconds)))
             }
             // #1118: persist the HRV over-count flag (1/0) so the HRV card can mark an over-counted 4.0
             // night's reading "unverified" until the two-channel de-dup lands. 0 written on a clean night

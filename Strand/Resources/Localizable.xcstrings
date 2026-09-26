@@ -11859,7 +11859,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld lub %2$lld"
+            "value": "%1$lld z %2$lld"
           }
         }
       }
@@ -159965,6 +159965,12 @@
             "value": "Leituras"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letture"
+          }
+        },
         "pl": {
           "stringUnit": {
             "state": "translated",
@@ -229294,60 +229300,66 @@
         }
       }
     },
-    "Your WHOOP 5.0/MG sends a strap-computed SpO₂ percentage (the @82 candidate byte) every second — an 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. Turning this on surfaces it as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring.": {
+    "Your WHOOP 5.0/MG reports a strap-computed SpO₂ percentage (the @82 candidate byte) in short readings while it scores you as asleep — one 30-second reading about every 20 minutes on the straps measured so far. An 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. Turning this on surfaces it as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein WHOOP 5.0/MG sendet jede Sekunde einen vom Band berechneten SpO₂-Wert (das Kandidaten-Byte @82). Eine unabhängige Validierung über 8 Nächte ergab eine Korrelation von +0,99 zur WHOOP-App, doch zwei Nächte auf dem ursprünglichen Testgerät liefen in die ENTGEGENGESETZTE Richtung, sodass die Geräte-/Firmware-Varianz ungeklärt ist. Wenn du dies aktivierst, erscheint der Wert als „Schätzung des Bands (unbestätigt)“ in der Blutsauerstoff-Kachel, sofern kein kalibrierter Import vorliegt. Er fließt nie in Erholungs- oder Krankheitswerte ein."
+            "value": "Dein WHOOP 5.0/MG meldet einen vom Band berechneten SpO₂-Wert (das Kandidaten-Byte @82) in kurzen Messungen, während es dich als schlafend einstuft – bei den bisher gemessenen Bändern etwa eine 30-Sekunden-Messung alle 20 Minuten. Eine unabhängige Validierung über 8 Nächte ergab eine Korrelation von +0,99 zur WHOOP-App, doch zwei Nächte auf dem ursprünglichen Testgerät liefen in die ENTGEGENGESETZTE Richtung, sodass die Geräte-/Firmware-Varianz ungeklärt ist. Wenn du dies aktivierst, erscheint der Wert als „Schätzung des Bands (unbestätigt)“ in der Blutsauerstoff-Kachel, sofern kein kalibrierter Import vorliegt. Er fließt nie in Erholungs- oder Krankheitswerte ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your WHOOP 5.0/MG reports a strap-computed SpO₂ percentage (the @82 candidate byte) in short readings while it scores you as asleep — one 30-second reading about every 20 minutes on the straps measured so far. An 8-night independent validation tracked it at corr +0.99 against the WHOOP app, but two nights on the original test device moved the OPPOSITE direction, so device/firmware variance is unresolved. Turning this on surfaces it as \"strap estimate (unverified)\" in the Blood Oxygen tile when no calibrated import exists. It never feeds recovery or illness scoring."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu WHOOP 5.0/MG envía cada segundo un porcentaje de SpO₂ calculado por la banda (el byte candidato @82). Una validación independiente de 8 noches lo situó en una correlación de +0,99 frente a la app de WHOOP, pero dos noches en el dispositivo de prueba original fueron en dirección OPUESTA, así que la variación entre dispositivos y firmware sigue sin resolverse. Al activarlo, aparece como «estimación de la banda (sin verificar)» en el recuadro de Oxígeno en sangre cuando no hay una importación calibrada. Nunca alimenta la recuperación ni la detección de enfermedad."
+            "value": "Tu WHOOP 5.0/MG informa de un porcentaje de SpO₂ calculado por la banda (el byte candidato @82) en lecturas breves mientras te considera dormido: una lectura de 30 segundos aproximadamente cada 20 minutos en las bandas medidas hasta ahora. Una validación independiente de 8 noches lo situó en una correlación de +0,99 frente a la app de WHOOP, pero dos noches en el dispositivo de prueba original fueron en dirección OPUESTA, así que la variación entre dispositivos y firmware sigue sin resolverse. Al activarlo, aparece como «estimación de la banda (sin verificar)» en el recuadro de Oxígeno en sangre cuando no hay una importación calibrada. Nunca alimenta la recuperación ni la detección de enfermedad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre WHOOP 5.0/MG envoie chaque seconde un pourcentage de SpO₂ calculé par le bracelet (l'octet candidat @82). Une validation indépendante sur 8 nuits a relevé une corrélation de +0,99 avec l'app WHOOP, mais deux nuits sur l'appareil de test initial ont évolué en sens INVERSE : la variation selon l'appareil et le micrologiciel reste non résolue. En l'activant, la valeur apparaît comme « estimation du bracelet (non vérifiée) » dans la tuile Oxygène sanguin lorsqu'aucun import calibré n'existe. Elle n'alimente jamais la récupération ni la détection de maladie."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O teu WHOOP 5.0/MG envia a cada segundo uma percentagem de SpO₂ calculada pela banda (o byte candidato @82). Uma validação independente de 8 noites registou uma correlação de +0,99 face à app da WHOOP, mas duas noites no dispositivo de teste original seguiram a direção OPOSTA, pelo que a variação entre dispositivos e firmware continua por resolver. Ao ativar, o valor surge como «estimativa da banda (não verificada)» no cartão de Oxigénio no sangue quando não existe uma importação calibrada. Nunca alimenta a recuperação nem a deteção de doença."
+            "value": "Votre WHOOP 5.0/MG transmet un pourcentage de SpO₂ calculé par le bracelet (l'octet candidat @82) par courtes mesures pendant qu'il vous considère endormi : une mesure de 30 secondes environ toutes les 20 minutes sur les bracelets mesurés jusqu'ici. Une validation indépendante sur 8 nuits a relevé une corrélation de +0,99 avec l'app WHOOP, mais deux nuits sur l'appareil de test initial ont évolué en sens INVERSE : la variation selon l'appareil et le micrologiciel reste non résolue. En l'activant, la valeur apparaît comme « estimation du bracelet (non vérifiée) » dans la tuile Oxygène sanguin lorsqu'aucun import calibré n'existe. Elle n'alimente jamais la récupération ni la détection de maladie."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo WHOOP 5.0/MG invia ogni secondo una percentuale di SpO₂ calcolata dalla fascia (il byte candidato @82). Una validazione indipendente su 8 notti ha rilevato una correlazione di +0,99 con l'app WHOOP, ma due notti sul dispositivo di test originale sono andate nella direzione OPPOSTA, quindi la varianza tra dispositivi e firmware resta irrisolta. Attivandolo, il valore compare come «stima della fascia (non verificata)» nel riquadro Ossigeno nel sangue quando non esiste un import calibrato. Non alimenta mai il recupero né il rilevamento di malattia."
+            "value": "Il tuo WHOOP 5.0/MG riporta una percentuale di SpO₂ calcolata dalla fascia (il byte candidato @82) in brevi letture mentre ti considera addormentato: una lettura di 30 secondi circa ogni 20 minuti sulle fasce misurate finora. Una validazione indipendente su 8 notti ha rilevato una correlazione di +0,99 con l'app WHOOP, ma due notti sul dispositivo di test originale sono andate nella direzione OPPOSTA, quindi la varianza tra dispositivi e firmware resta irrisolta. Attivandolo, il valore compare come «stima della fascia (non verificata)» nel riquadro Ossigeno nel sangue quando non esiste un import calibrato. Non alimenta mai il recupero né il rilevamento di malattia."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Twój WHOOP 5.0/MG co sekundę wysyła wyliczony przez opaskę odsetek SpO₂ (bajt kandydujący @82). Niezależna walidacja przez 8 nocy wykazała korelację +0,99 z aplikacją WHOOP, ale dwie noce na pierwotnym urządzeniu testowym poszły w PRZECIWNYM kierunku, więc zmienność między urządzeniami i wersjami firmware pozostaje nierozstrzygnięta. Po włączeniu wartość pojawia się jako „szacunek opaski (niezweryfikowany)” w kafelku Tlen we krwi, gdy nie ma skalibrowanego importu. Nigdy nie zasila regeneracji ani wykrywania choroby."
+            "value": "Twój WHOOP 5.0/MG podaje wyliczony przez opaskę odsetek SpO₂ (bajt kandydujący @82) w krótkich odczytach, gdy uznaje, że śpisz — na zmierzonych dotąd opaskach jeden 30-sekundowy odczyt mniej więcej co 20 minut. Niezależna walidacja przez 8 nocy wykazała korelację +0,99 z aplikacją WHOOP, ale dwie noce na pierwotnym urządzeniu testowym poszły w PRZECIWNYM kierunku, więc zmienność między urządzeniami i wersjami firmware pozostaje nierozstrzygnięta. Po włączeniu wartość pojawia się jako „szacunek opaski (niezweryfikowany)” w kafelku Tlen we krwi, gdy nie ma skalibrowanego importu. Nigdy nie zasila regeneracji ani wykrywania choroby."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O teu WHOOP 5.0/MG comunica uma percentagem de SpO₂ calculada pela banda (o byte candidato @82) em leituras curtas enquanto te considera a dormir — uma leitura de 30 segundos cerca de 20 em 20 minutos nas bandas medidas até agora. Uma validação independente de 8 noites registou uma correlação de +0,99 face à app da WHOOP, mas duas noites no dispositivo de teste original seguiram a direção OPOSTA, pelo que a variação entre dispositivos e firmware continua por resolver. Ao ativar, o valor surge como «estimativa da banda (não verificada)» no cartão de Oxigénio no sangue quando não existe uma importação calibrada. Nunca alimenta a recuperação nem a deteção de doença."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ваш WHOOP 5.0/MG каждую секунду отправляет рассчитанный браслетом процент SpO₂ (байт-кандидат @82). Независимая проверка за 8 ночей показала корреляцию +0,99 с приложением WHOOP, но две ночи на исходном тестовом устройстве дали ПРОТИВОПОЛОЖНОЕ направление, поэтому разброс между устройствами и прошивками не выяснен. При включении значение отображается как «оценка браслета (не подтверждено)» в плитке «Кислород в крови», если нет калиброванного импорта. Оно никогда не влияет на восстановление и на выявление болезни."
+            "value": "Ваш WHOOP 5.0/MG сообщает рассчитанный браслетом процент SpO₂ (байт-кандидат @82) короткими измерениями, пока считает, что вы спите, — на изученных пока браслетах одно 30-секундное измерение примерно каждые 20 минут. Независимая проверка за 8 ночей показала корреляцию +0,99 с приложением WHOOP, но две ночи на исходном тестовом устройстве дали ПРОТИВОПОЛОЖНОЕ направление, поэтому разброс между устройствами и прошивками не выяснен. При включении значение отображается как «оценка браслета (не подтверждено)» в плитке «Кислород в крови», если нет калиброванного импорта. Оно никогда не влияет на восстановление и на выявление болезни."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "你的 WHOOP 5.0/MG 每秒发送一个由手环计算的 SpO₂ 百分比（@82 候选字节）。一项为期 8 晚的独立验证显示其与 WHOOP 应用的相关性为 +0.99，但原始测试设备上有两晚走向相反，因此设备与固件差异尚未厘清。开启后，在没有校准导入时，血氧卡片会将其显示为「手环估算值（未验证）」。它从不参与恢复或疾病评分。"
+            "value": "你的 WHOOP 5.0/MG 会在判定你入睡期间，以简短读数上报由手环计算的 SpO₂ 百分比（@82 候选字节）——在目前测过的手环上，大约每 20 分钟一次 30 秒读数。一项为期 8 晚的独立验证显示其与 WHOOP 应用的相关性为 +0.99，但原始测试设备上有两晚走向相反，因此设备与固件差异尚未厘清。开启后，在没有校准导入时，血氧卡片会将其显示为「手环估算值（未验证）」。它从不参与恢复或疾病评分。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "你的 WHOOP 5.0/MG 每秒傳送一個由手環計算的 SpO₂ 百分比（@82 候選位元組）。一項為期 8 晚的獨立驗證顯示其與 WHOOP App 的相關性為 +0.99，但原始測試裝置上有兩晚走向相反，因此裝置與韌體差異尚未釐清。開啟後，在沒有校準匯入時，血氧卡片會將其顯示為「手環估算值（未驗證）」。它從不參與恢復或疾病評分。"
+            "value": "你的 WHOOP 5.0/MG 會在判定你入睡期間，以簡短讀數回報由手環計算的 SpO₂ 百分比（@82 候選位元組）——在目前測過的手環上，大約每 20 分鐘一次 30 秒讀數。一項為期 8 晚的獨立驗證顯示其與 WHOOP App 的相關性為 +0.99，但原始測試裝置上有兩晚走向相反，因此裝置與韌體差異尚未釐清。開啟後，在沒有校準匯入時，血氧卡片會將其顯示為「手環估算值（未驗證）」。它從不參與恢復或疾病評分。"
           }
         }
       }
@@ -251635,130 +251647,130 @@
         }
       }
     },
-    "in-band, this night": {
+    "readings with a value": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "im Messbereich, diese Nacht"
+            "value": "Messungen mit Wert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "in-band, this night"
+            "value": "readings with a value"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "en rango, esta noche"
+            "value": "lecturas con valor"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "dans la plage, cette nuit"
+            "value": "mesures avec valeur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "nell’intervallo, questa notte"
+            "value": "letture con valore"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "w zakresie, tej nocy"
+            "value": "odczyty z wartością"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "no intervalo, esta noite"
+            "value": "leituras com valor"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "в диапазоне, за эту ночь"
+            "value": "измерения со значением"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本夜有效范围内"
+            "value": "有数值的读数"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "本夜有效範圍內"
+            "value": "有數值的讀數"
           }
         }
       }
     },
-    "Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.": {
+    "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Strap meldet diesen Wert jede Sekunde, während es eine Nacht auswertet. Es ist die eigene, nicht verifizierte Zahl des Armbands, keine kalibrierte Blutsauerstoffmessung — NOOP verwendet sie nie für Erholung oder einen anderen Score."
+            "value": "Bei den bisher gemessenen Straps nimmt das Armband etwa alle 20 Minuten eine 30-Sekunden-Messung vor, sobald es dich als schlafend einstuft – ein kurzes Nickerchen hat also womöglich keine, und manche Messungen scheitern ohne Wert. Jede Messung zählt einmal, mit ihrem mittleren Wert, daher ist ein einsekündiger Ausreißer darin kein Einbruch. Es ist die eigene, nicht verifizierte Zahl des Armbands, keine kalibrierte Blutsauerstoffmessung — NOOP verwendet sie nie für Erholung oder einen anderen Score."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your strap reports this every second while it scores a night. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score."
+            "value": "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu banda informa este valor cada segundo mientras evalúa una noche. Es la cifra propia y sin verificar de la banda, no una medición calibrada de oxígeno en sangre, y NOOP nunca la usa para la recuperación ni para ninguna otra puntuación."
+            "value": "En las bandas medidas hasta ahora, la banda toma una lectura de 30 segundos aproximadamente cada 20 minutos una vez que te considera dormido, así que una siesta corta puede no tener ninguna, y algunas lecturas fallan sin valor. Cada lectura cuenta una vez, por su valor central, así que un pico de un segundo dentro de ella no es una caída. Es la cifra propia y sin verificar de la banda, no una medición calibrada de oxígeno en sangre, y NOOP nunca la usa para la recuperación ni para ninguna otra puntuación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre bracelet transmet cette valeur chaque seconde pendant l’analyse d’une nuit. C’est le chiffre propre au bracelet, non vérifié, et non une mesure calibrée d’oxygène sanguin : NOOP ne l’utilise jamais pour la récupération ni pour aucun autre score."
+            "value": "Sur les bracelets mesurés jusqu’ici, le bracelet prend une mesure de 30 secondes environ toutes les 20 minutes dès qu’il vous considère endormi : une courte sieste peut donc n’en avoir aucune, et certaines mesures échouent sans valeur. Chaque mesure compte une fois, par sa valeur médiane, donc un pic d’une seconde à l’intérieur n’est pas une baisse. C’est le chiffre propre au bracelet, non vérifié, et non une mesure calibrée d’oxygène sanguin : NOOP ne l’utilise jamais pour la récupération ni pour aucun autre score."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua fascia riporta questo valore ogni secondo mentre valuta una notte. È il dato della fascia stessa, non verificato, non una misurazione calibrata dell’ossigeno nel sangue, e NOOP non lo usa mai per il recupero né per alcun altro punteggio."
+            "value": "Sulle fasce misurate finora, la fascia esegue una lettura di 30 secondi circa ogni 20 minuti quando ti considera addormentato, quindi un breve pisolino può non averne, e alcune letture falliscono senza un valore. Ogni lettura conta una volta, con il suo valore centrale, quindi un picco di un secondo al suo interno non è un calo. È il dato della fascia stessa, non verificato, non una misurazione calibrata dell’ossigeno nel sangue, e NOOP non lo usa mai per il recupero né per alcun altro punteggio."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Twoja opaska podaje tę wartość co sekundę podczas oceniania nocy. To własna, niezweryfikowana liczba opaski, a nie skalibrowany pomiar tlenu we krwi — NOOP nigdy nie używa jej do regeneracji ani żadnego innego wyniku."
+            "value": "Na zmierzonych dotąd opaskach opaska wykonuje 30-sekundowy odczyt mniej więcej co 20 minut, gdy uzna, że śpisz, więc krótka drzemka może nie mieć żadnego, a niektóre odczyty kończą się bez wartości. Każdy odczyt liczy się raz, według środkowej wartości, więc jednosekundowy skok w jego trakcie nie jest spadkiem. To własna, niezweryfikowana liczba opaski, a nie skalibrowany pomiar tlenu we krwi — NOOP nigdy nie używa jej do regeneracji ani żadnego innego wyniku."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "A sua pulseira comunica este valor a cada segundo enquanto avalia uma noite. É o número próprio da pulseira, não verificado, e não uma medição calibrada de oxigénio no sangue — o NOOP nunca o usa na recuperação nem em qualquer outra pontuação."
+            "value": "Nas pulseiras medidas até agora, a pulseira faz uma leitura de 30 segundos cerca de 20 em 20 minutos quando o considera a dormir, por isso uma sesta curta pode não ter nenhuma, e algumas leituras falham sem valor. Cada leitura conta uma vez, pelo seu valor central, por isso um pico de um segundo dentro dela não é uma descida. É o número próprio da pulseira, não verificado, e não uma medição calibrada de oxigénio no sangue — o NOOP nunca o usa na recuperação nem em qualquer outra pontuação."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ремешок сообщает это значение каждую секунду, пока оценивает ночь. Это собственная непроверенная цифра ремешка, а не калиброванное измерение кислорода в крови, и NOOP никогда не использует её для восстановления или любой другой оценки."
+            "value": "На изученных пока ремешках ремешок делает 30-секундное измерение примерно каждые 20 минут, когда считает, что вы спите, поэтому у короткого дневного сна их может не быть, а некоторые измерения не дают значения. Каждое измерение учитывается один раз, по медианному значению, поэтому односекундный всплеск внутри него — не провал. Это собственная непроверенная цифра ремешка, а не калиброванное измерение кислорода в крови, и NOOP никогда не использует её для восстановления или любой другой оценки."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "手环在评估夜间睡眠时每秒上报一次该值。这是手环自己的未验证数值，不是校准的血氧测量结果，NOOP 从不将其用于恢复度或任何其他评分。"
+            "value": "在目前测过的手环上，手环判定你入睡后，大约每 20 分钟进行一次 30 秒读数，因此短暂的小睡可能没有读数，部分读数也会失败而没有数值。每次读数按其中间值只计一次，因此其中一秒的跳变不算下降。这是手环自己的未验证数值，不是校准的血氧测量结果，NOOP 从不将其用于恢复度或任何其他评分。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "手環在評估夜間睡眠時每秒回報一次該值。這是手環自己的未驗證數值，不是校準的血氧測量結果，NOOP 從不將其用於恢復度或任何其他評分。"
+            "value": "在目前測過的手環上，手環判定你入睡後，大約每 20 分鐘進行一次 30 秒讀數，因此短暫的小睡可能沒有讀數，部分讀數也會失敗而沒有數值。每次讀數按其中間值只計一次，因此其中一秒的跳變不算下降。這是手環自己的未驗證數值，不是校準的血氧測量結果，NOOP 從不將其用於恢復度或任何其他評分。"
           }
         }
       }
@@ -251955,130 +251967,66 @@
         }
       }
     },
-    "momentary, below %@": {
+    "readings below %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "kurzzeitig, unter %@"
+            "value": "Messungen unter %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentary, below %@"
+            "value": "readings below %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentánea, por debajo de %@"
+            "value": "lecturas por debajo de %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentanée, sous %@"
+            "value": "mesures sous %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentanea, sotto %@"
+            "value": "letture sotto %@"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "chwilowo, poniżej %@"
+            "value": "odczyty poniżej %@"
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "momentânea, abaixo de %@"
+            "value": "leituras abaixo de %@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "кратковременно, ниже %@"
+            "value": "измерения ниже %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "瞬时，低于 %@"
+            "value": "低于 %@ 的读数"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "瞬時，低於 %@"
-          }
-        }
-      }
-    },
-    "%llds below %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds unter %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds below %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds por debajo de %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds sous %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds sotto %@"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds poniżej %@"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llds abaixo de %@"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld с ниже %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 秒低于 %@"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 秒低於 %@"
+            "value": "低於 %@ 的讀數"
           }
         }
       }
@@ -252385,66 +252333,66 @@
         }
       }
     },
-    "Each point is one reading. The dashed line is %@, where a dip starts.": {
+    "Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at %@.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Each point is one reading. The dashed line is %@, where a dip starts."
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder Punkt ist ein Messwert. Die gestrichelte Linie liegt bei %@, wo ein Abfall beginnt."
+            "value": "Jeder Punkt ist eine vom Strap gemeldete Sekunde. Eine Messung zählt als Einbruch, wenn ihr mittlerer Wert unter der gestrichelten Linie bei %@ liegt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada punto es una lectura. La línea discontinua está en %@, donde empieza una caída."
+            "value": "Cada punto es un segundo informado por la banda. Una lectura cuenta como caída cuando su valor central queda por debajo de la línea discontinua en %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque point est une mesure. La ligne pointillée est à %@, là où commence une baisse."
+            "value": "Chaque point est une seconde transmise par le bracelet. Une mesure compte comme une baisse quand sa valeur médiane passe sous la ligne pointillée à %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni punto è una lettura. La linea tratteggiata è a %@, dove inizia un calo."
+            "value": "Ogni punto è un secondo riportato dalla fascia. Una lettura conta come calo quando il suo valore centrale è sotto la linea tratteggiata a %@."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Każdy punkt to jeden odczyt. Linia przerywana to %@, od której zaczyna się spadek."
+            "value": "Każdy punkt to jedna sekunda podana przez opaskę. Odczyt liczy się jako spadek, gdy jego środkowa wartość leży poniżej linii przerywanej na %@."
           }
         },
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada ponto é uma leitura. A linha tracejada está em %@, onde começa uma descida."
+            "value": "Cada ponto é um segundo comunicado pela pulseira. Uma leitura conta como descida quando o seu valor central fica abaixo da linha tracejada em %@."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Каждая точка — одно измерение. Пунктирная линия — %@, с неё начинается провал."
+            "value": "Каждая точка — одна секунда, переданная ремешком. Измерение считается провалом, если его медианное значение ниже пунктирной линии на %@."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每个点是一次读数。虚线为 %@，低于它即为一次下降。"
+            "value": "每个点是手环上报的一秒。当一次读数的中间值低于 %@ 处的虚线时，计为一次下降。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每個點是一次讀數。虛線為 %@，低於它即為一次下降。"
+            "value": "每個點是手環回報的一秒。當一次讀數的中間值低於 %@ 處的虛線時，計為一次下降。"
           }
         }
       }

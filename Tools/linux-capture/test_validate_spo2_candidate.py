@@ -558,6 +558,30 @@ class WindowCoverageTests(unittest.TestCase):
         self.assertAlmostEqual(per_window[0], (90 + 100 + 100) / 3)       # 96.67, window-weighted
         self.assertEqual(per_window[1], 36)      # sample count still reported honestly
 
+    def test_a_window_is_valued_by_its_median_like_the_app(self):
+        """W03-003: a one-second blip inside a window must not move it, and the tool must give the same
+        nightly figure as the app's `nightlySpo2CandidateNight` (lower median per window)."""
+        frames = []
+        for u in range(0, 3600):                           # three windows: the duty detector's minimum
+            if (u - 337) % 1200 >= 30:
+                v = 0
+            elif u == 337 + 5:
+                v = 77                                     # a one-second blip in the first window
+            elif u < 1200:
+                v = 96
+            elif u < 2400:
+                v = 95 if u % 2 else 97                    # even count per value: lower median 95
+            else:
+                v = 94
+            frames.append({"hex": make_v18(unix=u, sleep_state=2, aux_byte_82=v).hex()})
+        recs = list(vs.iter_v18_records(frames))
+        duty = vs.detect_duty_cycle(recs)
+        self.assertEqual(duty["mode"], "duty_cycled")
+        night = vs.night_mean_at_offset(recs, 0, 3600, 82, duty=duty)
+        self.assertAlmostEqual(night[0], (96 + 95 + 94) / 3)  # medians; the 77 blip moves nothing
+        self.assertEqual(vs.window_value([95, 97]), 95)
+        self.assertEqual(vs.window_value([96, 77, 96]), 96)
+
 
 class VarianceFloorTests(unittest.TestCase):
     """`value in 70..100` is not a specific screen. On a real subscription-free strap six offsets pass

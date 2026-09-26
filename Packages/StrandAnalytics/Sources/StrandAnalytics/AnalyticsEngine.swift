@@ -1219,9 +1219,10 @@ public enum AnalyticsEngine {
     /// it, which is a poor instrument to ask a volunteer to use and produces a number nobody can check.
     ///
     /// This makes the comparison one number against one number: the wearer reads this and the figure the
-    /// WHOOP app reports for the same night. `samples` travels with the mean on purpose — a mean over 11
-    /// readings and a mean over 1100 are not the same evidence, and a correlation built from the first
-    /// would be worthless.
+    /// WHOOP app reports for the same night. `samples` (in-band seconds) travels with the mean on purpose,
+    /// but the independent readings behind it are the night's measurement windows: 30 seconds of one
+    /// window are one rolling reading, not 30. The full `nightlySpo2CandidateNight` result carries that
+    /// count as `windows`, and a correlation should be judged by it.
     ///
     /// Gated to `70...100`, the SAME in-band window the decoder applies when it emits
     /// `spo2_candidate_82`: sub-70 nonzero values are diagnostic codes and bit-7 values are saturation
@@ -1240,8 +1241,9 @@ public enum AnalyticsEngine {
     /// DELEGATES to `nightlySpo2CandidateNight` (`Spo2CandidateNight.swift`) rather than counting the
     /// readings a second time. The night's minimum and its below-threshold runs are now shown beside this
     /// mean, and a mean resolved by its own loop could disagree with the stats printed next to it — which
-    /// is the failure AGENTS.md's "two readouts of one fact" rule is about. The returned pair is
-    /// unchanged: the same in-band gate, the same inclusive session bounds, the same rounding.
+    /// is the failure AGENTS.md's "two readouts of one fact" rule is about. The same in-band gate, the
+    /// same inclusive session bounds and the same rounding; since W03-003 the mean averages measurement
+    /// WINDOWS rather than seconds (see `Spo2CandidateNight`), and `samples` is still in-band seconds.
     public static func nightlySpo2CandidateMean(_ sessions: [SleepSession],
                                          aux: [V18AuxSample]) -> (mean: Int, samples: Int)? {
         guard let night = nightlySpo2CandidateNight(sessions, aux: aux) else { return nil }

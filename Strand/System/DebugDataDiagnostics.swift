@@ -343,23 +343,27 @@ enum DebugDataDiagnostics {
             lines.append("SpO₂ candidate @82: could not read the aux stream for this night — "
                          + "a read failure, NOT an absence of readings.")
         } else if let cand = AnalyticsEngine.nightlySpo2CandidateNight([det], aux: auxRead ?? []) {
-            // The MEAN alone sent a reader the wrong way: a night averaging 96 % with a run down to 77 %
-            // and a night flat at 96 % printed the same line. The range and the dips are what separate
+            // The MEAN alone sent a reader the wrong way: a night with a reading below the threshold and a
+            // night flat at the same mean printed the same line. The range and the dips are what separate
             // them, and they cost nothing here — the readings are already in hand. One decimal on the
             // mean because the stored series keeps the unrounded value now, and the rounded figure a
             // screen shows is derived from it; printing only the rounded one would make this line
             // unable to explain a screen that disagreed with it.
             //
-            // Dip SECONDS are measured between readings, never samples × 1 s, so they are legitimately 0
-            // when every dip was a single reading — the count is therefore printed beside them rather
-            // than inferred from them (see `Spo2DesatEvent.spanSeconds`).
+            // The dip span is measured between in-band seconds, never samples × 1 s, so it is legitimately
+            // 0 when every dip reading held one in-band second — the count is therefore printed beside it
+            // rather than inferred from it (see `Spo2DesatEvent.spanSeconds`).
+            //
+            // W03-003: every figure is per measurement WINDOW (the strap's 30-second readings), so the
+            // line names the windows it rests on — valued of attempted — beside the in-band seconds.
             let dips = cand.events.isEmpty
-                ? "no dips below \(cand.threshold)%"
-                : "\(cand.events.count) dip(s) below \(cand.threshold)% "
-                    + "(lowest \(cand.nadir.map(String.init) ?? "?")%, \(cand.secondsBelowThreshold)s measured)"
+                ? "no dip windows below \(cand.threshold)%"
+                : "\(cand.events.count) dip window(s) below \(cand.threshold)% "
+                    + "(lowest \(cand.nadir.map(String.init) ?? "?")%, \(cand.dipSpanSeconds)s measured)"
             lines.append("SpO₂ candidate @82 (5/MG): mean \(String(format: "%.1f", cand.mean))% "
-                         + "(shown as \(cand.meanRounded)%), range \(cand.minimum)-\(cand.maximum)%, "
-                         + "\(dips), over \(cand.samples) in-band readings "
+                         + "(shown as \(cand.meanRounded)%) over \(cand.windows) of \(cand.windowsAttempted) "
+                         + "windows (\(cand.samples) in-band seconds), window range "
+                         + "\(cand.minimum)-\(cand.maximum)%, \(dips) "
                          + "— UNVERIFIED, compare against the WHOOP app's figure for this night (#103).")
         } else {
             lines.append("SpO₂ candidate @82 (5/MG): no in-band readings inside this night's span.")
