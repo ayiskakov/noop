@@ -217,7 +217,7 @@ public final class FrameRouter {
                let pay = Self.commandResponsePayload(in: frame, family: family) {
                 let nameOffset = HelloIdentityProbe.whoop5NameOffsetAfterResult
                 state.append(log: HelloIdentityProbe.report(payload: pay, knownNameOffset: nameOffset)
-                                + " — locate the strap serial (#1303)")
+                                + " — offsets from frame byte 13; locate the strap serial (#1303)")
             }
             // The 5/MG battery pack (cmd 151). `BatteryPackInfo` has decoded this reply since its offsets
             // were captured, and until now nothing sent the command — so the decoder had no caller and the

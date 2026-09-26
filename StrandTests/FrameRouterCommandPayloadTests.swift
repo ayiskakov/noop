@@ -62,6 +62,8 @@ final class FrameRouterCommandPayloadTests: XCTestCase {
         // W06-092: the serial-shaped run is quoted by its first three characters only.
         XCTAssertTrue(lines.first?.contains(#"off=40 len=14 alnum "3A1…""#) == true, lines.first ?? "nil")
         XCTAssertFalse(lines.first?.contains("3A1B2405003655") == true, lines.first ?? "nil")
+        // W06-103: the line says where its offsets count from, two bytes after the decoder's `pay`.
+        XCTAssertTrue(lines.first?.contains("offsets from frame byte 13") == true, lines.first ?? "nil")
     }
 
     func testTheHelloProbeIgnoresThePendingAcknowledgement() {

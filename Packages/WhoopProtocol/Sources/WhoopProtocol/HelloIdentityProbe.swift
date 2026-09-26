@@ -6,11 +6,16 @@ import Foundation
 /// serial decoded anywhere: `BatteryPackInfo.serial` is the BATTERY PACK's, read via cmd 151 and
 /// answered only by a 5/MG, so it identifies a removable part rather than the strap wearing it.
 ///
-/// The 4.0 hunt has a capture aid already (the `GET_HELLO_HARVARD` (35) branch, which now reports
-/// through this same probe — its payload carries a device key beside the serial). This is the 5/MG
-/// half, and it needs no new traffic: the GET_HELLO block is ALREADY decoded — for the device name at
-/// `pay[16]` and the firmware version at `pay[93]` — and everything else in it is simply discarded. If
-/// the serial is in there, it is arriving on every connect and being thrown away.
+/// The 4.0 hunt had a capture aid for the `GET_HELLO_HARVARD` (35) response until the fork narrowed to
+/// 5/MG; nothing calls this probe for it now, and `report`'s `block` label is what remains of it. This is
+/// the 5/MG half, and it needs no new traffic: the GET_HELLO block is ALREADY decoded — for the device name
+/// at `pay[16]` and the firmware version at `pay[93]`, in the decoder's payload, which starts at frame
+/// byte 11 — and everything else in it is simply discarded. If the serial is in there, it is arriving on
+/// every connect and being thrown away.
+///
+/// Offsets in a report count from the start of the payload the caller passes. FrameRouter passes the one
+/// after the result byte (frame byte 13), whose offsets match the response-body tables in
+/// `docs/PROTOCOL_TRANSPORT.md` and sit two below the decoder's `pay` (W06-103); its line says so.
 ///
 /// ## Why this reports structure instead of dumping the block
 ///
@@ -84,8 +89,8 @@ public enum HelloIdentityProbe {
     /// answer — it says the serial is not ASCII in this block and the search moves elsewhere.
     ///
     /// - Parameter block: which response this payload came from, for the line's prefix. Defaults to the
-    ///   5/MG `GET_HELLO` this probe was written for; the WHOOP 4.0 `GET_HELLO_HARVARD(35)` capture aid
-    ///   passes its own so one log can carry both without the two reading as the same frame.
+    ///   5/MG `GET_HELLO` this probe was written for; a caller reporting another block passes its own, so
+    ///   one log can carry both without the two reading as the same frame.
     public static func report(payload: [UInt8],
                               block: String = "HELLO(145)",
                               knownNameOffset: Int = whoop5HelloNameOffset,
