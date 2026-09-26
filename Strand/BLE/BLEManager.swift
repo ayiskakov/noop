@@ -6863,8 +6863,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // and only when it was sent.
         if let sequence = sendReturningSequence(.getClock, payload: []) {
             strapClockCheck.beginRead(sequence: sequence, at: Self.monotonicSeconds())
-            log("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or provably "
-                + "more than \(Int(StrapClock.driftThresholdSeconds)) s off")
+            clockReadout("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or "
+                         + "provably more than \(Int(StrapClock.driftThresholdSeconds)) s off")
         } else {
             log("WHOOP 5/MG: GET_CLOCK was not sent, so the clock check waits out its "
                 + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
@@ -6909,7 +6909,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         case .pending:
             log("WHOOP 5/MG clock: GET_CLOCK answered PENDING — waiting for the reading")
         case let .settle(verdict, roundTrip):
-            log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
+            let line = "WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip)
+            // W06-079: a clock in sync is what every connect expects; one the round trip could not resolve is
+            // rare evidence and stays always-on, like every verdict that sets.
+            if case .inSync = verdict { clockReadout(line) } else { log(line) }
             strapClockSettled(setJustSent: false)
         case let .set(verdict, roundTrip):
             log("WHOOP 5/MG clock: " + StrapClock.describe(verdict, roundTrip: roundTrip))
@@ -6920,6 +6923,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("WHOOP 5/MG clock: after the set the strap \(reads) (result \(r.result)), answered "
                 + String(format: "%.1f", roundTrip) + " s after the set was sent")
         }
+    }
+
+    /// A per-connect clock readout, logged only under Test Centre → Connection (W06-079): AGENTS.md keeps
+    /// routine per-connect lines out of a default log and leaves rare events, here any set, timeout or unusual
+    /// reply, always-on.
+    private func clockReadout(_ s: String) {
+        guard TestCentre.active(.connection) else { return }
+        state.append(log: "[\(timestamp())] \(s)", domain: .connection)
     }
 
     /// Set the 5/MG strap clock to the phone's and read it back, so the log shows what latched.

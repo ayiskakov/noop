@@ -59,6 +59,29 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertFalse(live.historyReady)
     }
 
+    /// W06-079: the in-sync verdict and the "sent" line are per-connect readouts, so a default log leaves them
+    /// out; a verdict that sets is rare evidence and is logged either way.
+    func testRoutineClockLinesNeedTestCentreAndASetIsAlwaysLogged() {
+        TestCentre.deactivate(.connection)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+        XCTAssertEqual(lines(containing: "not set").count, 0, live.log.joined(separator: "\n"))
+
+        TestCentre.activate(.connection)
+        defer { TestCentre.deactivate(.connection) }
+        let second = BLEManager(state: live, deviceId: "rig-\(UUID().uuidString)", collector: nil)
+        second.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        second.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now)))
+        XCTAssertEqual(lines(containing: "within 2 s, not set").count, 1, live.log.joined(separator: "\n"))
+    }
+
+    func testAVerdictThatSetsIsLoggedWithoutTestCentre() {
+        TestCentre.deactivate(.connection)
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(clockReply(origin: 7, seconds: UInt32(now) - 100))
+        XCTAssertEqual(lines(containing: "more than 2 s off, setting it").count, 1, live.log.joined(separator: "\n"))
+    }
+
     func testTheHandshakeWaitsForTheCheck() {
         manager.beginStrapClockCheck()
         XCTAssertFalse(live.historyReady, live.log.joined(separator: "\n"))
