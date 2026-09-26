@@ -74,4 +74,16 @@ final class FrameRouterCommandPayloadTests: XCTestCase {
         XCTAssertNil(FrameRouter.commandResponsePayload(in: Array(frame.dropLast(5))))
         XCTAssertNil(FrameRouter.commandResponsePayload(in: [0xAA, 0x01, 0x14]))
     }
+
+    // MARK: - W06-095: a clock reply states a reading only when it carries one
+
+    func testAFailedClockReplyPrintsNoReading() {
+        let frame = puffinCommandFrame(cmd: 11, seq: 0x40, payload: [0x07, 0x00] + [UInt8](repeating: 0, count: 11),
+                                       type: 36, header: [0x01, 0x00])
+        let live = LiveState()
+        FrameRouter(state: live).handle(frame: frame)
+        let clock = live.log.filter { $0.contains("clock: GET_CLOCK") }
+        XCTAssertEqual(clock.count, 1, live.log.joined(separator: "\n"))
+        XCTAssertFalse(clock.first?.contains("strap=") == true, clock.first ?? "nil")
+    }
 }

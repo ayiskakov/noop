@@ -51,6 +51,17 @@ final class StrapClockTests: XCTestCase {
         XCTAssertEqual(StrapClock.decodeReply(frame), StrapClock.Reading(originSequence: 7, result: 3, seconds: nil))
     }
 
+    /// W06-095: only a SUCCESS reply carries a reading. A failure, pending or unsupported reply with a full-length
+    /// body decoded seconds 0, a 1970 clock, which the clock line printed beside a verdict of "no reading".
+    func testANonSuccessReplyWithAFullBodyDecodesNoSeconds() {
+        for result: UInt8 in [0, 2, 3] {
+            let frame = reply(cmd: 11, origin: 7, result: result, body: [UInt8](repeating: 0, count: 11))
+            XCTAssertTrue(verifyFrame(frame, family: .whoop5).ok)
+            XCTAssertEqual(StrapClock.decodeReply(frame),
+                           StrapClock.Reading(originSequence: 7, result: result, seconds: nil), "\(result)")
+        }
+    }
+
     func testTheBodyEndsAtTheDeclaredLengthNotTheBufferEnd() {
         // Extra bytes after the frame (a reassembly overrun) must not be read as seconds.
         let frame = reply(cmd: 11, origin: 7, result: 1) + u32(1_790_000_000)

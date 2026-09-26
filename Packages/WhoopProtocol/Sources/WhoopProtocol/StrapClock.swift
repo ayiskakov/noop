@@ -66,13 +66,15 @@ public enum StrapClock {
     ///
     /// Structure only: the caller passes a frame that passed `verifyFrame`. The body ends where the declared
     /// length (bytes 2–3) puts the CRC32 trailer. Returns nil for any other frame or a body that stops before
-    /// the result.
+    /// the result. Only a SUCCESS reply carries seconds (W06-095): the bytes after any other result are not a
+    /// reading, and every line that prints one takes it from here, so none can print a clock the strap did not
+    /// report.
     public static func decodeReply(_ frame: [UInt8]) -> Reading? {
         guard frame.count >= 4 else { return nil }
         let bodyEnd = 4 + (Int(frame[2]) | Int(frame[3]) << 8)
         guard bodyEnd <= frame.count, bodyEnd > 12, frame[8] == 36, frame[10] == 11 else { return nil }
         var seconds: UInt32?
-        if bodyEnd >= 17 {
+        if bodyEnd >= 17, frame[12] == resultSuccess {
             seconds = UInt32(frame[13]) | UInt32(frame[14]) << 8 | UInt32(frame[15]) << 16 | UInt32(frame[16]) << 24
         }
         return Reading(originSequence: frame[11], result: frame[12], seconds: seconds)
