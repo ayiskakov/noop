@@ -28,6 +28,45 @@ final class FrameRouterCommandPayloadTests: XCTestCase {
         XCTAssertEqual(FrameRouter.commandResponsePayload(in: frame), [0, 0, 0])
     }
 
+    // MARK: - W06-066: the #1303 hello probe W06-065 revived
+
+    /// A GET_HELLO reply shaped like the real 5/MG block: origin sequence and result, then a body in which
+    /// the decoder's offset 16 (frame byte 27) holds the device name and a serial-shaped run sits later.
+    /// Synthetic, so no real name, serial or session token enters the repository.
+    private func helloReply(result: UInt8) -> [UInt8] {
+        var body = [UInt8](repeating: 0, count: 110)
+        if result == 1 {
+            for (i, c) in "WHOOP-FAKE01".utf8.enumerated() { body[14 + i] = c }
+            for (i, c) in "3A1B2405003655".utf8.enumerated() { body[40 + i] = c }
+        }
+        return puffinCommandFrame(cmd: 145, seq: 0x6d, payload: [0x01, result] + body, type: 36,
+                                  header: [0x01, 0x00])
+    }
+
+    private func probeLines(after frame: [UInt8]) -> [String] {
+        TestCentre.activate(.connection)
+        defer { TestCentre.deactivate(.connection) }
+        let live = LiveState()
+        FrameRouter(state: live).handle(frame: frame)
+        return live.log.filter { $0.contains("#1303") }
+    }
+
+    func testTheHelloProbeLabelsTheNameWhereTheDecoderReadsIt() {
+        let frame = helloReply(result: 1)
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).parsed["device_name"]?.stringValue, "WHOOP-FAKE01",
+                       "the fixture puts the name where the decoder reads it")
+        let lines = probeLines(after: frame)
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertTrue(lines.first?.contains("off=14 len=12 mixed (device name, already decoded)") == true,
+                      lines.first ?? "nil")
+        XCTAssertTrue(lines.first?.contains(#""3A1B2405003655""#) == true, lines.first ?? "nil")
+    }
+
+    func testTheHelloProbeIgnoresThePendingAcknowledgement() {
+        XCTAssertEqual(probeLines(after: helloReply(result: 2)), [],
+                       "a PENDING reply carries no block, so it must not report one without a serial")
+    }
+
     func testAFrameShorterThanItsDeclaredLengthHasNoPayload() {
         let frame = bytes("aa011400010021b124230be80146aaaf6a0000000000000014cbbb6c")
         XCTAssertNil(FrameRouter.commandResponsePayload(in: Array(frame.dropLast(5))))

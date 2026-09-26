@@ -198,11 +198,18 @@ public final class FrameRouter {
             // deliberately never reads, so `HelloIdentityProbe` prints only serial-shaped runs and
             // withholds the rest. Test Centre → Connection gated on top of that, so nothing here reaches a
             // default (shareable) strap log. Log-only; decodes and persists nothing.
+            //
+            // W06-066: only a SUCCESS reply carries the block; the PENDING acknowledgement that precedes it
+            // is all zeros and would report "none", which the probe reads as "no ASCII serial here". And this
+            // payload starts after the result byte (frame byte 13), two bytes later than the decoder's (frame
+            // byte 11), so the name the decoder reads at its offset 16 sits at 14 here.
             if let cmd = parsed.cmdName,
                cmd.hasPrefix("GET_HELLO("),          // Schema appends the raw value, e.g. "(145)"
+               parsed.parsed["result"]?.stringValue?.hasPrefix("SUCCESS") == true,
                TestCentre.active(.connection),
                let pay = Self.commandResponsePayload(in: frame, family: family) {
-                state.append(log: HelloIdentityProbe.report(payload: pay) + " — locate the strap serial (#1303)")
+                state.append(log: HelloIdentityProbe.report(payload: pay, knownNameOffset: 14)
+                                + " — locate the strap serial (#1303)")
             }
             // The 5/MG battery pack (cmd 151). `BatteryPackInfo` has decoded this reply since its offsets
             // were captured, and until now nothing sent the command — so the decoder had no caller and the
