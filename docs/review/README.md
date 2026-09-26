@@ -84,8 +84,10 @@ item as it lands.
       and an MG ECG session that brings a type-43 stream logs one line naming it.
 - [ ] W06-050 with W06-001, `review/w06-clock-read-first`: the 5/MG handshake reads the strap clock and sets it
       only when the reading is refused, invalid or more than 2 s off (the owner's 2026-09-25 decision); W06-022 and
-      W06-065 ride along. Then a strap run: a plain connect sends no SET_CLOCK, a relaunch during a Raw Data
-      Collector session skips no IMU label, and a Test Centre connect logs the #1303 line.
+      W06-065 ride along. A code review of the batch added W06-069 … W06-083: ten are fixed on the same branch, two
+      are not bugs, W06-077 and W06-078 are proposed for Phase 5, and W06-083 is Phase 3. Then a strap run: a plain
+      connect sends no SET_CLOCK, a relaunch during a Raw Data Collector session skips no IMU label, a Test Centre
+      connect logs the #1303 line, and Bluetooth off and on inside a connect's first 10 s sets no clock.
 - [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
       and night on the strap with 11.9.8 is due before their findings move to `Verified`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;

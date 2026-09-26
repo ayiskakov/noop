@@ -230,3 +230,12 @@ exactly what was tested on hardware.
   the branch; W06-065's V1 was corrected. Two open questions go to the V3 strap run: a lost read reply, and drift.
   Its note that the Health pill reads "Pairing…" during the check is left as is: the pill shows only before a strap's
   first sync, the window was already there before the handshake, and the handshake is genuinely not done.
+- 2026-09-26 — A /code-review of the clock batch reported fourteen findings, recorded as W06-069 … W06-082, and checking
+  W06-069 found W06-083 (a Bluetooth power-off runs none of the per-link teardown; Phase 3). Each was checked first (V0).
+  Fixed on `review/w06-clock-read-first`: W06-073 (app-layer tests, with a mutation run), W06-069 (the timeout sets only
+  the link it was sent on), W06-071 (1.5 s from the set to the offload), W06-074 (monotonic round trip), W06-075
+  (nearest-second stamp), W06-082, W06-076, W06-079 (routine clock lines behind Test Centre), W06-080 and W06-081.
+  Not a bug: W06-070 (its premise came from this batch's misreading of an upstream comment) and W06-072 (settling on a
+  gone link is the safe choice until W06-083). Proposed for Phase 5, waiting on the owner: W06-077 and W06-078.
+  `WhoopProtocol` (772), `StrandTests` (2,028) and both app builds pass. Next: V2 of these fixes, then the strap run,
+  now with a Bluetooth off and on inside the first 10 s of a connect.
