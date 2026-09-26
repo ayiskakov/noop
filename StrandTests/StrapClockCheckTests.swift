@@ -13,9 +13,27 @@ final class StrapClockCheckTests: XCTestCase {
     private var live: LiveState!
     private var manager: BLEManager!
 
+    /// Test Centre's keys live in the test host's defaults, where the master flag, which turns on every domain,
+    /// may be set. Each test runs with it off, and both keys are restored afterwards (W06-101).
+    private static let testCentreKeys = ["testcentre.active.connection", "testcentre.active.master"]
+    private var savedTestCentre: [Any?] = []
+
     override func setUp() async throws {
+        savedTestCentre = Self.testCentreKeys.map { UserDefaults.standard.object(forKey: $0) }
+        UserDefaults.standard.removeObject(forKey: "testcentre.active.master")
         live = LiveState()
         manager = BLEManager(state: live, deviceId: "rig-\(UUID().uuidString)", collector: nil)
+    }
+
+    override func tearDown() async throws {
+        for (key, value) in zip(Self.testCentreKeys, savedTestCentre) {
+            if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        // W06-107: XCTest keeps every test case, and so its manager, alive until the run ends, and a settle schedules
+        // the first offload request 1.5 s out. Released here, a manager's pending request finds no manager and does
+        // nothing, rather than spending the next test's parked Sync Strap request, which lives in the host's defaults.
+        manager = nil
+        live = nil
     }
 
     private var now: Double { Date().timeIntervalSince1970 }
