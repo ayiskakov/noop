@@ -35,13 +35,23 @@ final class HelloIdentityProbeTests: XCTestCase {
                        ["off=14 len=12 mixed (device name, already decoded)"])
     }
 
-    /// The point of the whole probe: a serial-shaped run away from the name is printed, so it can be
-    /// matched against the serial on the strap's own casing.
+    /// The point of the whole probe: a serial-shaped run away from the name is quoted, by its first three
+    /// characters (W06-092), so it can be matched against the serial on the strap's own casing.
     func testASerialShapedRunIsPrinted() {
         let p = payload(length: 120, runs: [(40, "3A1B2405003655")])
         let lines = HelloIdentityProbe.candidateLines(payload: p)
         XCTAssertEqual(lines.count, 1)
-        XCTAssertEqual(lines.first, #"off=40 len=14 alnum "3A1B2405003655""#)
+        XCTAssertEqual(lines.first, #"off=40 len=14 alnum "3A1…""#)
+    }
+
+    /// W06-092: a serial-shaped run prints only its first three characters, the way `WhoopSerialIdentity.logSafe`
+    /// logs a serial everywhere else. With its length that is enough to match it against the serial on the
+    /// strap's casing, and the id itself stays out of a log a user may export.
+    func testASerialShapedRunPrintsOnlyItsFirstThreeCharacters() {
+        let p = payload(length: 120, runs: [(40, "3A1B2405003655")])
+        let line = HelloIdentityProbe.report(payload: p)
+        XCTAssertFalse(line.contains("3A1B2405003655"), line)
+        XCTAssertEqual(line, #"HELLO(145) block len=120 runs: off=40 len=14 alnum "3A1…""#)
     }
 
     /// The privacy contract. A NON-alphanumeric run is described but never quoted — that is the shape a
@@ -78,7 +88,7 @@ final class HelloIdentityProbeTests: XCTestCase {
     func testASerialShapedRunAtTheNameOffsetIsStillPrinted() {
         let p = payload(length: 120, runs: [(16, "3A1B2405003655")])
         XCTAssertEqual(HelloIdentityProbe.candidateLines(payload: p).first,
-                       #"off=16 len=14 alnum (device name, already decoded) "3A1B2405003655""#)
+                       #"off=16 len=14 alnum (device name, already decoded) "3A1…""#)
     }
 
     /// Short runs are dropped. Binary payloads throw off two- and three-byte printable sequences by
@@ -94,7 +104,7 @@ final class HelloIdentityProbeTests: XCTestCase {
         let lines = HelloIdentityProbe.candidateLines(payload: p)
         XCTAssertEqual(lines, [
             "off=16 len=12 mixed (device name, already decoded)",
-            #"off=40 len=10 alnum "SER1234567""#,
+            #"off=40 len=10 alnum "SER…""#,
             "off=80 len=8 mixed (withheld)",
         ])
     }
@@ -104,7 +114,7 @@ final class HelloIdentityProbeTests: XCTestCase {
         var p = [UInt8](repeating: 0, count: 20)
         for (k, b) in Array("SERIAL99".utf8).enumerated() { p[12 + k] = b }
         XCTAssertEqual(HelloIdentityProbe.candidateLines(payload: p).first,
-                       #"off=12 len=8 alnum "SERIAL99""#)
+                       #"off=12 len=8 alnum "SER…""#)
     }
 
     /// "No printable runs" is a real answer, not a failure: it says the serial is not ASCII here and the
@@ -121,7 +131,7 @@ final class HelloIdentityProbeTests: XCTestCase {
     /// the default range prints — which is only observable if the value actually reaches the scan.
     func testReportThreadsItsTuningThrough() {
         let p = payload(length: 120, runs: [(40, "3A1B2405003655")])   // 14 chars: inside the default 6...20
-        XCTAssertTrue(HelloIdentityProbe.report(payload: p).contains(#""3A1B2405003655""#))
+        XCTAssertTrue(HelloIdentityProbe.report(payload: p).contains(#""3A1…""#))
         XCTAssertEqual(HelloIdentityProbe.report(payload: p, serialLength: 6...10),
                        "HELLO(145) block len=120 runs: off=40 len=14 alnum (withheld)")
     }
@@ -144,8 +154,9 @@ final class HelloIdentityProbeTests: XCTestCase {
         let line = HelloIdentityProbe.report(payload: p, block: "HELLO_HARVARD(35)", knownNameOffset: -1)
         XCTAssertEqual(line,
                        "HELLO_HARVARD(35) block len=131 runs: "
-                       + #"off=14 len=9 alnum "4C1246632"; off=24 len=54 alnum (withheld)"#)
+                       + #"off=14 len=9 alnum "4C1…"; off=24 len=54 alnum (withheld)"#)
         XCTAssertFalse(line.contains(key), "the device key must never reach the log")
+        XCTAssertFalse(line.contains(serial), "nor the serial, beyond its first three characters (W06-092)")
     }
 
     /// The `block` label must reach the prefix — a default-only implementation would still pass every

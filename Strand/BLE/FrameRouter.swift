@@ -195,9 +195,9 @@ public final class FrameRouter {
             // the serial is in there, it has been arriving all along.
             //
             // Reports STRUCTURE, not the block: the same response carries a session token the decoder
-            // deliberately never reads, so `HelloIdentityProbe` prints only serial-shaped runs and
-            // withholds the rest. Test Centre → Connection gated on top of that, so nothing here reaches a
-            // default (shareable) strap log. Log-only; decodes and persists nothing.
+            // deliberately never reads, so `HelloIdentityProbe` quotes only serial-shaped runs, and only their
+            // first three characters (W06-092), and withholds the rest. Test Centre → Connection gated on top
+            // of that, so none of it reaches a default strap log. Log-only; decodes and persists nothing.
             //
             // W06-066: only a SUCCESS reply carries the block; the PENDING acknowledgement that precedes it
             // is all zeros and would report "none", which the probe reads as "no ASCII serial here". And this

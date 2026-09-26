@@ -59,7 +59,9 @@ final class FrameRouterCommandPayloadTests: XCTestCase {
         XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines.first?.contains("off=14 len=12 mixed (device name, already decoded)") == true,
                       lines.first ?? "nil")
-        XCTAssertTrue(lines.first?.contains(#""3A1B2405003655""#) == true, lines.first ?? "nil")
+        // W06-092: the serial-shaped run is quoted by its first three characters only.
+        XCTAssertTrue(lines.first?.contains(#"off=40 len=14 alnum "3A1…""#) == true, lines.first ?? "nil")
+        XCTAssertFalse(lines.first?.contains("3A1B2405003655") == true, lines.first ?? "nil")
     }
 
     func testTheHelloProbeIgnoresThePendingAcknowledgement() {

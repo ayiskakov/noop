@@ -16,12 +16,11 @@ import Foundation
 ///
 /// The same response carries a SESSION TOKEN, which the decoder deliberately never reads. Dumping the
 /// payload wholesale would put that token in a log, so this reports every printable run as
-/// offset + length + class and prints the CONTENTS only of runs that could plausibly be the serial and
-/// are not the already-known name: fully alphanumeric, [serialLength] characters long.
-///
-/// That rule is a filter, not a guarantee — a token that happened to be alphanumeric and serial-length
-/// would print. Which is precisely why the caller gates this behind an opt-in diagnostic rather than
-/// the default, shareable strap log.
+/// offset + length + class and quotes only runs that could plausibly be the serial: fully alphanumeric,
+/// [serialLength] characters long. Even those print only their first three characters (W06-092), the way
+/// `WhoopSerialIdentity.logSafe` logs a serial everywhere else. With the length, that is enough to match a
+/// run against the serial on the strap's casing, and a serial, or a token that happened to look like one,
+/// stays out of a log a user may export. The caller still gates this behind an opt-in diagnostic.
 ///
 /// Pure and Foundation-only, so it unit-tests with no strap, no BLE and no app.
 public enum HelloIdentityProbe {
@@ -46,7 +45,8 @@ public enum HelloIdentityProbe {
     ///     A run starting there is labelled rather than printed, since it is not a serial candidate and
     ///     is already surfaced elsewhere.
     ///   - minRun: shortest printable run worth reporting. Below this, a binary payload produces noise.
-    ///   - serialLength: run lengths that could be a serial. Outside it, contents are withheld.
+    ///   - serialLength: run lengths that could be a serial. Inside it, a run's first three characters print;
+    ///     outside it, none do.
     public static func candidateLines(payload: [UInt8],
                                       knownNameOffset: Int = whoop5HelloNameOffset,
                                       minRun: Int = 4,
@@ -69,7 +69,7 @@ public enum HelloIdentityProbe {
             // not what the withholding rule exists to protect.
             if start == knownNameOffset { line += " (device name, already decoded)" }
             if alnum, serialLength.contains(run.count) {
-                line += " \"\(String(decoding: run, as: UTF8.self))\""
+                line += " \"\(String(decoding: run.prefix(3), as: UTF8.self))…\""
             } else if start != knownNameOffset {
                 line += " (withheld)"
             }
