@@ -20,6 +20,21 @@ final class HelloIdentityProbeTests: XCTestCase {
         return p
     }
 
+    /// W06-076: the offset a caller passes for a payload that starts after the result byte (frame byte 13) is
+    /// the decoder's own name offset in those coordinates, so the run it labels is the name the decoder reads.
+    func testTheAfterResultNameOffsetIsWhereTheDecoderReadsTheName() {
+        var body = [UInt8](repeating: 0, count: 110)
+        let nameAt = whoop5HelloNameOffset - 2   // the payload below starts with the origin sequence and result
+        for (k, b) in Array("WHOOP-FAKE01".utf8).enumerated() { body[nameAt + k] = b }
+        let frame = puffinCommandFrame(cmd: 145, seq: 0x6d, payload: [0x01, 0x01] + body, type: 36,
+                                       header: [0x01, 0x00])
+        XCTAssertEqual(parseFrame(frame, family: .whoop5).parsed["device_name"]?.stringValue, "WHOOP-FAKE01")
+        let afterResult = Array(frame[13..<(4 + (Int(frame[2]) | Int(frame[3]) << 8))])
+        let offset = HelloIdentityProbe.whoop5NameOffsetAfterResult
+        XCTAssertEqual(HelloIdentityProbe.candidateLines(payload: afterResult, knownNameOffset: offset),
+                       ["off=14 len=12 mixed (device name, already decoded)"])
+    }
+
     /// The point of the whole probe: a serial-shaped run away from the name is printed, so it can be
     /// matched against the serial on the strap's own casing.
     func testASerialShapedRunIsPrinted() {

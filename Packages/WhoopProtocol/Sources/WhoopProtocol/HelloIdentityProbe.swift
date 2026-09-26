@@ -32,18 +32,23 @@ public enum HelloIdentityProbe {
         (48...57).contains(b) || (65...90).contains(b) || (97...122).contains(b)
     }
 
+    /// `whoop5HelloNameOffset` in a payload that starts after the COMMAND_RESPONSE origin sequence and result
+    /// (frame byte 13), the form `FrameRouter.commandResponsePayload` returns (W06-076).
+    public static let whoop5NameOffsetAfterResult = whoop5HelloNameOffset - 2
+
     /// Printable-ASCII runs in a GET_HELLO payload, one line each, for a diagnostic log.
     ///
     /// - Parameters:
     ///   - payload: the GET_HELLO (145) response payload, token region included — nothing is stripped
     ///     before this call; the withholding happens here so a caller cannot get it wrong.
-    ///   - knownNameOffset: where the decoder already reads the device name (16 on the pinned capture).
+    ///   - knownNameOffset: where the decoder already reads the device name, in this payload's coordinates.
+    ///     The default is the decoder's own (`whoop5HelloNameOffset`, payload from frame byte 11).
     ///     A run starting there is labelled rather than printed, since it is not a serial candidate and
     ///     is already surfaced elsewhere.
     ///   - minRun: shortest printable run worth reporting. Below this, a binary payload produces noise.
     ///   - serialLength: run lengths that could be a serial. Outside it, contents are withheld.
     public static func candidateLines(payload: [UInt8],
-                                      knownNameOffset: Int = 16,
+                                      knownNameOffset: Int = whoop5HelloNameOffset,
                                       minRun: Int = 4,
                                       serialLength: ClosedRange<Int> = 6...20) -> [String] {
         var out: [String] = []
@@ -83,7 +88,7 @@ public enum HelloIdentityProbe {
     ///   passes its own so one log can carry both without the two reading as the same frame.
     public static func report(payload: [UInt8],
                               block: String = "HELLO(145)",
-                              knownNameOffset: Int = 16,
+                              knownNameOffset: Int = whoop5HelloNameOffset,
                               minRun: Int = 4,
                               serialLength: ClosedRange<Int> = 6...20) -> String {
         let lines = candidateLines(payload: payload, knownNameOffset: knownNameOffset,

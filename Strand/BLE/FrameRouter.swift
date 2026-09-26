@@ -202,13 +202,14 @@ public final class FrameRouter {
             // W06-066: only a SUCCESS reply carries the block; the PENDING acknowledgement that precedes it
             // is all zeros and would report "none", which the probe reads as "no ASCII serial here". And this
             // payload starts after the result byte (frame byte 13), two bytes later than the decoder's (frame
-            // byte 11), so the name the decoder reads at its offset 16 sits at 14 here.
+            // byte 11), so the name offset comes from the decoder in this payload's coordinates (W06-076).
             if let cmd = parsed.cmdName,
                cmd.hasPrefix("GET_HELLO("),          // Schema appends the raw value, e.g. "(145)"
                parsed.parsed["result"]?.stringValue?.hasPrefix("SUCCESS") == true,
                TestCentre.active(.connection),
                let pay = Self.commandResponsePayload(in: frame, family: family) {
-                state.append(log: HelloIdentityProbe.report(payload: pay, knownNameOffset: 14)
+                let nameOffset = HelloIdentityProbe.whoop5NameOffsetAfterResult
+                state.append(log: HelloIdentityProbe.report(payload: pay, knownNameOffset: nameOffset)
                                 + " — locate the strap serial (#1303)")
             }
             // The 5/MG battery pack (cmd 151). `BatteryPackInfo` has decoded this reply since its offsets

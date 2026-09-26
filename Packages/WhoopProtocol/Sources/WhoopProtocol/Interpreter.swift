@@ -928,6 +928,12 @@ public func whoop5HistoricalAckFrame(endData: [UInt8], seq: UInt8) -> [UInt8] {
     puffinCommandFrame(cmd: 23, seq: seq, payload: [0x01] + endData)
 }
 
+/// Where a WHOOP 5/MG GET_HELLO (145) reply carries the device name, in the COMMAND_RESPONSE payload as
+/// `decodeWhoop5CommandResponse` reads it: from frame byte 11, the origin sequence. Anchored to a 50.38.1.0
+/// capture. `HelloIdentityProbe.whoop5NameOffsetAfterResult` derives from it, so the #1303 probe labels the
+/// run this decoder reads.
+public let whoop5HelloNameOffset = 16
+
 /// Decode a WHOOP 5.0 COMMAND_RESPONSE (type 36) — battery %, history data-range, firmware version.
 ///
 /// The response command is at frame[10] (the 4.0 frame[6] + 4) and its payload at frame[11]. WHOOP 5
@@ -976,7 +982,7 @@ private func decodeWhoop5CommandResponse(_ frame: [UInt8], fb: FieldBuilder, sch
         // after the (fixed-width on this firmware) name+token region. Re-verify the version offset
         // across firmwares; the guards (printable name / pay[93]==50 "5.0" generation) fail closed.
         var nameBytes: [UInt8] = []
-        var i = 16
+        var i = whoop5HelloNameOffset
         while i < pay.count, pay[i] != 0, (32...126).contains(pay[i]), nameBytes.count < 24 {
             nameBytes.append(pay[i]); i += 1
         }
