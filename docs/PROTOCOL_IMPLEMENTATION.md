@@ -48,7 +48,7 @@ supported connection.
 | [Curated sender enum](PROTOCOL_COMMANDS.md#canonical-command-matrix) | [WhoopCommand](../Strand/BLE/Commands.swift) | Sender surface is intentionally smaller than the decode catalogue |
 | [WHOOP 5 command builder](PROTOCOL_TRANSPORT.md#format-1-framing) | [puffinCommandFrame(cmd:seq:payload:type:header:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Framing.swift) | Pads the inner record before checksums |
 | [Clock 8-byte form](PROTOCOL_COMMANDS.md#whoop-5mg) | [setClockPayload(now:)](../Strand/BLE/BLEManager.swift) | WHOOP 5/MG sends the eight-byte form only when the connect's clock reading calls for it, then reads the clock back |
-| [Clock reading](PROTOCOL_TRANSPORT.md#responses-and-correlation) | [StrapClock.decodeReply(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift), [StrapClock.judge(_:receivedAt:roundTrip:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift) | GET_CLOCK's u32 seconds follow the format-1 result; a set follows only an invalid reading or one more than 2 s off across the whole round trip |
+| [Clock reading](PROTOCOL_TRANSPORT.md#responses-and-correlation) | [StrapClock.decodeReply(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift), [StrapClock.judge(_:receivedAt:roundTrip:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/StrapClock.swift) | GET_CLOCK's u32 seconds follow the format-1 result; a set follows a refused or reading-less reply, an invalid reading, one more than 2 s off across the whole round trip, or no reading in 10 s |
 | [Alarm 9-byte body](PROTOCOL_ALARMS.md#whoop-5mg) | [WhoopCommand.setAlarmPayload(epochSec:)](../Strand/BLE/Commands.swift) | Two trailing bytes remain explicit |
 | [Haptic preset](PROTOCOL_ALARMS.md#whoop-5mg) | [MaverickHaptics.notificationBuzz(loops:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/HapticPayloads.swift) | The common request is remapped to the 5/MG family body |
 | [Wrist and ECG controls](PROTOCOL_ECG.md#commands-and-independent-output-gates) | [Whoop5Ecg.selectWristPayload(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift), [Whoop5Ecg.togglePayload(on:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift) | MG capability gate is separate from framing |
@@ -162,7 +162,7 @@ not protocol requirements.
   a screen asked for it, and reads the strap clock with `GET_CLOCK`. It sends
   `SET_CLOCK` in the eight-byte form, followed by a `GET_CLOCK` readback, only
   when the reading is invalid, refused, or more than 2 s from the phone's clock
-  over the whole request round trip, or when no reply comes within 10 s. A reply
+  over the whole request round trip, or when no reading comes within 10 s. A reply
   that comes back more than 1 s after its request and cannot be judged, as on a
   relaunch where the read waits behind the notify re-subscriptions, is followed by
   one more `GET_CLOCK`, which decides; if that one goes unanswered, the first

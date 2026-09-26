@@ -6,8 +6,9 @@ import Foundation
 /// processes the command, and on a busy link (a state-restoration relaunch) that came about four seconds
 /// after the phone stamped the value, so the strap then ran that far behind. The next prompt set stepped it
 /// forward again, and when that set came from a relaunch during a Raw Data Collector session the IMU
-/// timeline skipped the seconds of the step. Reading first and setting only a clock that is invalid or
-/// provably more than `driftThresholdSeconds` off removes both steps for a strap whose clock is fine.
+/// timeline skipped the seconds of the step. Reading first, and setting only a clock that is invalid, provably
+/// more than `driftThresholdSeconds` off, or unread (a refused reply, or no reading in `replyTimeoutSeconds`),
+/// removes both steps for a strap whose clock is fine.
 public enum StrapClock {
 
     /// Seconds at or below this are not a wall clock. The 146/147 clock contract applies a stored time only

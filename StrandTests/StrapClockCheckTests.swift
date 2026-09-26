@@ -173,6 +173,18 @@ final class StrapClockCheckTests: XCTestCase {
         XCTAssertEqual(handshakeDoneLines, 1)
     }
 
+    /// W06-090: a strap that answered PENDING did reply, so the timeout that follows says no reading came.
+    func testATimeoutAfterAPendingAnswerSaysNoReadingCame() {
+        let pending = puffinCommandFrame(cmd: 11, seq: 0x40, payload: [7, StrapClock.resultPending, 0, 0, 0, 0, 0, 0, 0],
+                                         type: 36, header: [0x01, 0x00])
+        manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())
+        manager.handleStrapClockReply(pending)
+        manager.strapClockCheckTimedOut(token: manager.strapClockCheckToken, link: .same)
+        XCTAssertEqual(lines(containing: "answered PENDING").count, 1, live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "no GET_CLOCK reading within").count, 1)
+        XCTAssertEqual(lines(containing: "no GET_CLOCK reply").count, 0)
+    }
+
     /// W06-096: a GET_CLOCK reply reaches the check through the 5/MG frame loop, the path every connect takes.
     func testAClockReplyThroughTheFrameLoopSettlesTheCheck() {
         manager.strapClockCheck.beginRead(sequence: 7, at: BLEManager.monotonicSeconds())

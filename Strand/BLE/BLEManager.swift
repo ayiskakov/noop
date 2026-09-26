@@ -2310,7 +2310,8 @@ public final class BLEManager: NSObject, ObservableObject {
             // sensor data to flash at all ("RTC timestamp … is invalid; not saving data to flash"),
             // so offloads complete with zero body frames — hardware-validated, same 8-byte WHOOP4
             // payload over puffin framing (#78 fork). Each connect reads the clock with GET_CLOCK and
-            // sends SET_CLOCK only when the reading is invalid or more than 2 s off (W06-050).
+            // sends SET_CLOCK only when the reply is refused or has no reading, the reading is invalid or
+            // more than 2 s off, or no reading comes in 10 s (W06-050).
             guard command == .toggleRealtimeHR || command == .runHapticsPattern
                 || command == .setAlarmTime || command == .getAlarmTime
                 || command == .runAlarm || command == .disableAlarm
@@ -5227,8 +5228,9 @@ public final class BLEManager: NSObject, ObservableObject {
     ///
     /// WHOOP 4.0 sequence: SET_CLOCK first to ensure the strap RTC is UTC-correct, then the
     /// rev-1 SET_ALARM_TIME. WHOOP 5/MG sends the REVISION_4 body alone — the strap maintains
-    /// its RTC (the connect handshake reads it and sets it only when it is invalid or more than
-    /// 2 s off, W06-050) and the official app's alarm path doesn't re-set it (wire observation).
+    /// its RTC (the connect handshake reads it and sets it only when the reply is refused or has no
+    /// reading, the reading is invalid or more than 2 s off, or no reading comes in 10 s, W06-050) and
+    /// the official app's alarm path doesn't re-set it (wire observation).
     /// Either way the strap will buzz at `date` even if the app is backgrounded or force-quit
     /// (event STRAP_DRIVEN_ALARM_EXECUTED=57). This is the only alarm path: the strap fires at
     /// the fixed time — NOOP has no light-sleep early-wake layer.
@@ -6837,8 +6839,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     }
 
     /// W06-050: read the 5/MG strap clock. Its reply (`handleStrapClockReply`) or the timeout settles the
-    /// check, and a SET_CLOCK follows only when the reading is invalid or provably more than
-    /// `StrapClock.driftThresholdSeconds` off. A first reply over a round trip too long to judge it is read once
+    /// check, and a SET_CLOCK follows only when the reply is refused or has no reading, or the reading is invalid
+    /// or provably more than `StrapClock.driftThresholdSeconds` off. A first reply over a round trip too long to
+    /// judge it is read once
     /// more (W06-084). A strap that never answers is set without a reading after
     /// `StrapClock.replyTimeoutSeconds`, as every connect did before, since an un-clocked strap banks nothing.
     ///
@@ -6851,8 +6854,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // and only when it was sent.
         if let sequence = sendReturningSequence(.getClock, payload: []) {
             strapClockCheck.beginRead(sequence: sequence, at: Self.monotonicSeconds())
-            clockReadout("WHOOP 5/MG: GET_CLOCK sent — SET_CLOCK follows only if the strap clock is invalid or "
-                         + "provably more than \(Int(StrapClock.driftThresholdSeconds)) s off")
+            // W06-090: the line says what was sent; the verdict line says whether a set follows and why.
+            clockReadout("WHOOP 5/MG: GET_CLOCK sent — its reply decides whether SET_CLOCK follows")
         } else {
             log("WHOOP 5/MG: GET_CLOCK was not sent, so the clock check waits out its "
                 + "\(Int(StrapClock.replyTimeoutSeconds)) s timeout")
@@ -6939,13 +6942,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     /// `StrapClockCheckTests`, which cannot connect a peripheral. Internal for those tests.
     func strapClockCheckTimedOut(token: Int, link: ClockCheckLink? = nil) {
         guard token == strapClockCheckToken, strapClockCheck.expire() else { return }
-        let waited = "no GET_CLOCK reply within \(Int(StrapClock.replyTimeoutSeconds)) s"
+        // W06-090: "reading", not "reply": a strap that answered PENDING did reply.
+        let waited = "no GET_CLOCK reading within \(Int(StrapClock.replyTimeoutSeconds)) s"
         switch link ?? clockCheckLink {
         case .same:
             if strapClockCheck.standingVerdict != nil {
                 // W06-084: the first read was answered and did not show the clock off, and a set without a
                 // reading could only undo that; its verdict stands.
-                log("WHOOP 5/MG clock: no reply to the second GET_CLOCK within "
+                log("WHOOP 5/MG clock: no reading from the second GET_CLOCK within "
                     + "\(Int(StrapClock.replyTimeoutSeconds)) s — the first reading stands, and it does not show the "
                     + "clock more than \(Int(StrapClock.driftThresholdSeconds)) s off; not set")
                 strapClockSettled(setJustSent: false)
