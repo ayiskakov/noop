@@ -7454,7 +7454,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                                   verdictOK: parseFrame(frame, family: .whoop5).ok) {
             // feedsSync: false — #695 diagnostic-only on 5/MG: log the dump/backlog/newest/oldest so
             // a strap log validates the decode, but DON'T feed strapNewestTs/backfill/state yet.
-            // Flip to true once a real 5.0/MG strap confirms the newest/oldest are correct.
+            // Flip to true once a real 5.0/MG strap confirms the newest/oldest are correct. W06-102: the flip also
+            // arms the stuck-strap watchdog (`checkStrapLiveness`), whose recovery sends a SET_CLOCK with no read,
+            // past W06-050's read-first check, so route that set through the check before flipping.
             handleDataRangeResponse(frame, cmdOff: 10, feedsSync: false)
         }
         // NOTE: we deliberately do NOT ingest live 5/MG REALTIME_DATA into the Collector
