@@ -949,12 +949,17 @@ public final class BLEManager: NSObject, ObservableObject {
     private var realtimeRawNote = RealtimeRawNote()
     /// Set when this link has noted a live buffer the banking gate refused for its layout (W06-059).
     private var imuLayoutRefusalNotedThisLink = false
-    /// Ordered queue of frames awaiting drain through the serial Backfiller task.
-    private var backfillFrameQueue: [[UInt8]] = []
-    /// True while the drain task is running (prevents a second drain task from launching).
-    private var backfillDraining = false
     /// Keep each main-actor drain slice small enough that SwiftUI can process input/paint between slices.
     private static let backfillDrainBatchSize = 12
+    /// Ordered queue of offload frames and the serial task that drains it into the Backfiller.
+    private lazy var backfillDrain = BackfillDrain(
+        batchSize: Self.backfillDrainBatchSize,
+        ingest: { [weak self] frame in await self?.backfiller?.ingest(frame) },
+        afterIngest: { [weak self] in
+            guard let self else { return false }
+            self.afterBackfillIngest()
+            return self.backfilling
+        })
 
     /// Records WHOOP 5/MG puffin frames to a JSON file for protocol mapping. Passive (read-only on the
     /// strap) and gated by the Settings → Experimental "Record puffin frames" toggle; a no-op for
@@ -2593,36 +2598,9 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
-    /// Feed a frame to the Backfiller preserving exact arrival order. Frames are appended
-    /// synchronously (delegate order) and drained sequentially in small slices, so START /
-    /// data / END chunk assembly is never reordered while the UI still gets time to paint.
+    /// Feed a frame to the Backfiller preserving exact arrival order (see `BackfillDrain`).
     private func routeBackfillFrame(_ frame: [UInt8]) {
-        backfillFrameQueue.append(frame)
-        guard !backfillDraining else { return }
-        backfillDraining = true
-        Task { @MainActor in await drainBackfillFrames() }
-    }
-
-    private func drainBackfillFrames() async {
-        while !backfillFrameQueue.isEmpty {
-            let count = min(Self.backfillDrainBatchSize, backfillFrameQueue.count)
-            let batch = Array(backfillFrameQueue.prefix(count))
-            backfillFrameQueue.removeFirst(count)
-
-            for f in batch {
-                await backfiller?.ingest(f)
-                afterBackfillIngest()
-                if !backfilling {
-                    backfillFrameQueue.removeAll(keepingCapacity: true)
-                    break
-                }
-            }
-
-            if !backfillFrameQueue.isEmpty {
-                await Task.yield()
-            }
-        }
-        backfillDraining = false
+        backfillDrain.route(frame)
     }
 
     /// Called after every Backfiller.ingest completes. If the Backfiller has consumed all
@@ -2724,7 +2702,7 @@ public final class BLEManager: NSObject, ObservableObject {
         lastOffloadFrameAt = Date()
         backfillTimeout?.cancel()
         backfillTimeout = nil
-        backfillFrameQueue.removeAll()
+        backfillDrain.dropQueued()
         log("Backfill: session ended — reason=\(reason)")
         // Inactivity reminder (#419): read-only hook on the natural offload completion (no cadence
         // change). Only on a true HISTORY_COMPLETE — a timeout/disconnect didn't bring a fresh window.
@@ -6201,8 +6179,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         state.sustainedEmptyOffload = false
         backfillTimeout?.cancel()
         backfillTimeout = nil
-        backfillFrameQueue.removeAll()
-        backfillDraining = false
+        backfillDrain.linkEnded()
         uploadTimer?.cancel()
         uploadTimer = nil
         backfillTimer?.cancel()
