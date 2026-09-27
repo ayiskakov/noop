@@ -77,3 +77,4 @@ the two biggest hot spots).
 - 2026-09-27 — W07-005 recorded from the sixth W6 batch's V2 review.
 - 2026-09-27 — W07-005 fixed on `review/w07-day-line-repeats` (stacked on `review/w06-fixes-6`): change-only per-day lines with an hourly refresh and a per-pass summary. V3 rides the W06-108 strap run.
 - 2026-09-27 — V2 of W07-005 (independent subagent): holds with caveats; its findings are W07-006 … W07-009. W07-006 … W07-008 fixed on the same branch; W07-009 (the `analyzeRecent` lock, predates the fix) recorded.
+- 2026-09-27 — W07-009 claimed for the seventh W6 batch (`review/w06-fixes-7`), in its own commit so it can be lifted out.

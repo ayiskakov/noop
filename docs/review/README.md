@@ -107,6 +107,11 @@ item as it lands.
       passes, 840 per-day lines become 171 and 11 summaries. V2 (independent subagent) held with caveats and added
       W07-006 … W07-009: W07-006 … W07-008 are fixed on the same branch, W07-009 (the `analyzeRecent` lock is not
       single-flight, S3, predates the fix) is recorded. V3 rides the sixth batch's strap run.
+- [ ] Seventh W6 batch, `review/w06-fixes-7` (stacked on `review/w07-day-line-repeats`), strap-free: W06-014 (a
+      relaunch can bootstrap the store twice), W07-009 (two re-scores can hold the lock at once), W06-008 (a
+      drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
+      and v21 records as undecodable). Then a strap run: an iPhone relaunch by state restoration, and a
+      reconnect in the middle of an offload.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a

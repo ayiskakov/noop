@@ -322,3 +322,4 @@ exactly what was tested on hardware.
 - 2026-09-27 — W06-119 fixed.
 - 2026-09-27 — W06-120 fixed.
 - 2026-09-27 — W06-121 and W06-122 recorded from the V2 review (pre-existing). The sixth batch now holds W06-108, W06-109, W06-113, W06-116 … W06-120; next is its strap run.
+- 2026-09-27 — Seventh batch claimed on `review/w06-fixes-7` (strap-free): W06-014, W06-008 and W06-005, with W07-009 from W7 in its own commit.
