@@ -125,6 +125,12 @@ item as it lands.
       #36: StrandTests 2,097, WhoopProtocol 794, WhoopStore 554, both builds (NOOPiOS without the watch app). Then a strap
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
       status no longer names v20/v21 records as undecodable.
+- [ ] Eighth W6 batch, `review/w06-fixes-8` (stacked on `review/strap-run-2026-09-27b`, which is stacked on the
+      seventh batch), from the owner's 2026-09-27 evening export: W06-140 (the owner-name redaction rule was
+      quadratic on a long hex run) and W06-110 (the reject hex dump is logged after the ack, since the strap drops a
+      transfer acked 7 s or more after its chunk). StrandTests 2,100, both builds. Then a strap run: a sync with
+      undecodable records whose ack follows its chunk within about 2 s. W06-083 (a Bluetooth power-off skips the
+      next link's handshake) is proposed to the owner for the next batch.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a

@@ -95,6 +95,37 @@ final class BackfillerHexDumpBudgetTests: XCTestCase {
                         + "the process, not to one offload session")
     }
 
+    // MARK: - W06-110: the dump waits for the ack
+
+    /// The strap drops a transfer whose ack comes 7 s or more after the chunk, and eight dump lines ahead of
+    /// the ack took 7 to 9 s on the owner's phone. So the chunk's summary line still comes before the ack,
+    /// and its dump lines and the #1007 note after it; the archive write stays before it.
+    @MainActor func testTheDumpIsLoggedAfterTheAckAndTheArchiveBeforeIt() async {
+        var steps: [String] = []
+        let backfiller = Backfiller(
+            store: NoopStore(), deviceId: "w06-110",
+            ackTrim: { trim, _ in steps.append("ack \(trim)") },
+            log: { line in
+                if line.contains("undecodable sensor record(s)") { steps.append("summary") }
+                if line.contains("rejected frame[") { steps.append("dump") }
+                if line.contains("#1007") { steps.append("empty note") }
+            },
+            rejectedSink: { _, _, _, _ in steps.append("archive"); return true })
+        backfiller.begin(family: .whoop5)
+        var corrupted = CollectorImuBankingTests.fixture
+        corrupted[corrupted.count - 1] ^= 0xff   // fails the integrity check: undecodable, so dumped
+        var empty = corrupted
+        for i in 20 ..< (empty.count - 4) { empty[i] = 0 }   // an all-zero record: counted, not dumped
+        for record in [empty, corrupted, corrupted] { await backfiller.ingest(record) }
+        await backfiller.ingest(historyEnd(trim: 100))
+        XCTAssertEqual(steps, ["summary", "archive", "ack 100", "dump", "dump", "empty note"])
+    }
+
+    private func historyEnd(trim: UInt32) -> [UInt8] {
+        func le32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: v >> (8 * UInt32($0))) } }
+        return w5Frame(le32(1_700_000_000) + [0, 0] + le32(0) + le32(trim), type: 49, cmd: 2)
+    }
+
     // MARK: - #891: the unmapped-type dump line
 
     /// The census names a type; this has to find the bytes that earned the name, and the byte count is
