@@ -9,17 +9,20 @@ import XCTest
 final class LiveStateLogGenerationsTests: XCTestCase {
     private let tailKey = "strapLog.tail"
     private let gensKey = "strapLog.generations"
+    private let tailSessionLinesKey = "strapLog.tailSessionLines"
 
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: tailKey)
         UserDefaults.standard.removeObject(forKey: gensKey)
+        UserDefaults.standard.removeObject(forKey: tailSessionLinesKey)
         LiveState.resetGenerationRollLatchForTesting()
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: tailKey)
         UserDefaults.standard.removeObject(forKey: gensKey)
+        UserDefaults.standard.removeObject(forKey: tailSessionLinesKey)
         LiveState.resetGenerationRollLatchForTesting()
         super.tearDown()
     }
@@ -139,5 +142,32 @@ final class LiveStateLogGenerationsTests: XCTestCase {
                       "export before the first append must roll + include the previous session")
         XCTAssertTrue(text.contains("previous app session"), "the previous session keeps its header")
         XCTAssertEqual(LiveState.persistedLogTail(), [], "the roll clears the live slot")
+    }
+
+    // MARK: - W06-108: a clipped current session says so
+
+    /// One line past the ring's trim point evicts the head. Both exports must say how much is gone, and must
+    /// print the header with no previous generation ahead of it: the live one from the ring, the scheduled one
+    /// from the durable tail, over the same session's line count.
+    func testAClippedCurrentSessionSaysSoInBothExports() {
+        let live = LiveState()
+        let total = LiveState.maxLogLines + 257
+        for i in 0..<total { live.append(log: "line \(i)") }
+        live.clearBiometrics()   // the disconnect flush, so the durable tail is current
+
+        XCTAssertEqual(live.droppedLogLines, 257)
+        XCTAssertTrue(live.exportableLogText().contains(
+            "===== current app session, \(LiveState.maxLogLines) of \(total) line(s), head clipped ====="))
+        XCTAssertTrue(LiveState.scheduledExportText().contains(
+            "===== current app session, \(LiveState.tailLimit) of \(total) line(s), head clipped ====="))
+    }
+
+    /// ...and a session that kept every line claims no loss.
+    func testAnUnclippedCurrentSessionClaimsNoLoss() {
+        let live = LiveState()
+        for i in 0..<10 { live.append(log: "line \(i)") }
+        live.clearBiometrics()
+        XCTAssertFalse(live.exportableLogText().contains("clipped"))
+        XCTAssertFalse(LiveState.scheduledExportText().contains("clipped"))
     }
 }

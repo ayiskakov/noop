@@ -296,11 +296,18 @@ final class Collector {
                 fromHR: hr, rr: [], contact: contact, at: ts
             ).events)
         }
-        log?(LivePersistTrace.standardHRHostReceivedLine(
-            hostUnixSeconds: ts,
-            acceptedHRRows: acceptedHR, acceptedRRRows: acceptedRR.count,
-            rejectedHRRows: 1 - acceptedHR, rejectedRRRows: rr.count - acceptedRR.count,
-            pendingHRRows: stdHR.count, pendingRRRows: stdRR.count))
+        // W06-108: one line per reading is a per-second readout, and ungated it was half of every strap log and
+        // limited the 5,000-line ring to about an hour. The flush lines below still say what landed every ~30
+        // readings, so the per-reading line sits behind Test Centre → Connection. A reading with a rejected
+        // value is rare (0 to 10 per log across the owner's exports) and stays always-on.
+        let rejectedHR = 1 - acceptedHR, rejectedRR = rr.count - acceptedRR.count
+        if rejectedHR > 0 || rejectedRR > 0 || TestCentre.active(.connection) {
+            log?(LivePersistTrace.standardHRHostReceivedLine(
+                hostUnixSeconds: ts,
+                acceptedHRRows: acceptedHR, acceptedRRRows: acceptedRR.count,
+                rejectedHRRows: rejectedHR, rejectedRRRows: rejectedRR,
+                pendingHRRows: stdHR.count, pendingRRRows: stdRR.count))
+        }
         if stdHR.count + stdRR.count + stdContact.count >= 30 {
             Task { @MainActor in await self.flushStandardHR(reason: .cadence) }
         }
