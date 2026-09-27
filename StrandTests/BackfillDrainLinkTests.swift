@@ -75,3 +75,55 @@ final class BackfillDrainLinkTests: XCTestCase {
         XCTAssertEqual(lines, [])
     }
 }
+
+/// W06-125: the ack a chunk's END asks for is not sent when that END began ingesting on a link that has since
+/// ended (W06-008's decision), and is sent otherwise.
+@MainActor
+final class StaleChunkAckTests: XCTestCase {
+    private var live: LiveState!
+    private var manager: BLEManager!
+
+    override func setUp() async throws {
+        live = LiveState()
+        manager = BLEManager(state: live, deviceId: "rig-\(UUID().uuidString)", collector: nil)
+    }
+
+    override func tearDown() async throws {
+        manager = nil
+        live = nil
+    }
+
+    /// Runs one END through a drain whose ingest suspends before it acks, optionally ending the link meanwhile.
+    private func ackAcross(linkEnds: Bool) async {
+        var held: CheckedContinuation<Void, Never>?
+        var acked = false
+        let endData: [UInt8] = [7, 0, 0, 0, 8, 0, 0, 0]
+        manager.backfillDrain = BackfillDrain(
+            batchSize: 12,
+            ingest: { [unowned self] _ in
+                await withCheckedContinuation { held = $0 }
+                self.manager.ackHistoricalChunk(trim: 7, endData: endData)
+                acked = true
+            },
+            afterIngest: { true })
+        manager.backfillDrain.route([0x2f])
+        for _ in 0..<2_000 where held == nil { try? await Task.sleep(nanoseconds: 1_000_000) }
+        if linkEnds { manager.backfillDrain.linkEnded() }
+        held?.resume()
+        for _ in 0..<2_000 where !acked { try? await Task.sleep(nanoseconds: 1_000_000) }
+        XCTAssertTrue(acked)
+    }
+
+    func testAnEndThatOutlivedItsLinkIsNotAcked() async {
+        await ackAcross(linkEnds: true)
+        XCTAssertEqual(live.syncChunksThisSession, 0, "no ack may go out for a chunk of a link that ended")
+        XCTAssertEqual(live.log.filter { $0.contains("chunk ack (trim=7) not sent") }.count, 1,
+                       live.log.joined(separator: "\n"))
+    }
+
+    func testAnEndOnTheCurrentLinkIsAcked() async {
+        await ackAcross(linkEnds: false)
+        XCTAssertEqual(live.syncChunksThisSession, 1)
+        XCTAssertFalse(live.log.contains { $0.contains("not sent") })
+    }
+}

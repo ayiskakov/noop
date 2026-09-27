@@ -951,8 +951,9 @@ public final class BLEManager: NSObject, ObservableObject {
     private var imuLayoutRefusalNotedThisLink = false
     /// Keep each main-actor drain slice small enough that SwiftUI can process input/paint between slices.
     private static let backfillDrainBatchSize = 12
-    /// Ordered queue of offload frames and the serial task that drains it into the Backfiller.
-    private lazy var backfillDrain = BackfillDrain(
+    /// Ordered queue of offload frames and the serial task that drains it into the Backfiller. Settable so a
+    /// test can drive an ingest across a link change (W06-125).
+    lazy var backfillDrain = BackfillDrain(
         batchSize: Self.backfillDrainBatchSize,
         ingest: { [weak self] frame in await self?.backfiller?.ingest(frame) },
         afterIngest: { [weak self] in
