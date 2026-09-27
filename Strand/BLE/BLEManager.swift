@@ -6225,6 +6225,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         backfillTimeout?.cancel()
         backfillTimeout = nil
         backfillDrain.linkEnded()
+        backfiller?.linkEnded()   // W06-135: an END still writing on this link acks nothing on the next
         uploadTimer?.cancel()
         uploadTimer = nil
         backfillTimer?.cancel()
