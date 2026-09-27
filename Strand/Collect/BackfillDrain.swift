@@ -21,6 +21,9 @@ final class BackfillDrain {
     private var ingestLink: Int?
     /// Drain tasks started and not yet finished, across links.
     private var runningDrains = 0
+    /// Moves when an offload session ends (`dropQueued`). A slice a drain took before that holds the ended
+    /// session's frames, so the rest of it is dropped rather than fed to the next session (W06-137).
+    private var session = 0
     private let batchSize: Int
     private let ingest: ([UInt8]) async -> Void
     /// Called after every ingest; false ends the drain and drops what is still queued (the session ended).
@@ -58,9 +61,10 @@ final class BackfillDrain {
         }
     }
 
-    /// The offload session ended: drop what is queued.
+    /// The offload session ended: drop what is queued, and what is left of a slice a drain already took.
     func dropQueued() {
         queue.removeAll()
+        session &+= 1
     }
 
     /// The link ended. Its queued frames go; a drain still suspended in an ingest stops when that returns.
@@ -80,6 +84,7 @@ final class BackfillDrain {
             let count = min(batchSize, queue.count)
             let batch = Array(queue.prefix(count))
             queue.removeFirst(count)
+            let batchSession = session
 
             for (i, f) in batch.enumerated() {
                 ingestLink = started
@@ -95,6 +100,16 @@ final class BackfillDrain {
                 }
                 if !afterIngest() {
                     queue.removeAll(keepingCapacity: true)
+                    break
+                }
+                if session != batchSession {
+                    // The session ended during that ingest (an idle timeout) and the next one has begun on this
+                    // link: the rest of the slice is the ended session's. Rare-event evidence, always-on.
+                    let dropped = batch.count - i - 1
+                    if dropped > 0 {
+                        log("Backfill: the offload session ended during an ingest; \(dropped) frame(s) of it "
+                            + "are not ingested into the next session (W06-137)")
+                    }
                     break
                 }
             }

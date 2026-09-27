@@ -61,6 +61,34 @@ final class BackfillDrainLinkTests: XCTestCase {
         XCTAssertTrue(lines.contains { $0.contains("1 frame(s) of that link are not ingested") }, "\(lines)")
     }
 
+    /// W06-137: on the same link, a session that ends during an ingest (the idle timeout) and restarts before it
+    /// returns gets none of the rest of the slice the drain had already taken; the next session's frames follow.
+    func testASessionThatEndsDuringAnIngestFeedsNoneOfItsSliceToTheNext() async {
+        var ingested: [String] = []
+        var held: CheckedContinuation<Void, Never>?
+        var lines: [String] = []
+        let drain = BackfillDrain(
+            batchSize: 12,
+            ingest: { [unowned self] f in
+                let n = self.name(f)
+                ingested.append(n)
+                if n == "S1-END" { await withCheckedContinuation { held = $0 } }
+            },
+            afterIngest: { true },   // the next session has begun by the time the END returns
+            log: { lines.append($0) })
+        for n in ["S1-1", "S1-END", "S1-2", "S1-3"] { drain.route(frame(n)) }
+        await until { held != nil }
+
+        drain.dropQueued()           // exitBackfilling("timeout")
+        drain.route(frame("S2-START"))
+        held?.resume()
+        await until { ingested.contains("S2-START") }
+
+        XCTAssertEqual(ingested, ["S1-1", "S1-END", "S2-START"])
+        XCTAssertEqual(lines.filter { $0.contains("2 frame(s) of it are not ingested into the next session") }.count, 1,
+                       "\(lines)")
+    }
+
     /// W06-123: a drain that starts with no earlier one still running says nothing.
     func testAnOrdinaryDrainLogsNoWait() async {
         var lines: [String] = []
