@@ -71,6 +71,40 @@ public func isPlausibleHistoricalUnix(_ ts: Int, wallNow: Int,
     return ts >= oldest - SESSION_RANGE_MARGIN && ts <= newest + SESSION_RANGE_MARGIN
 }
 
+/// Why `classifyRejectedHistoricalRecords` gives a record's bytes to the archive: the screen's own reason,
+/// read from the parse it already does, so a reader never re-derives it from the version byte (W06-130).
+/// Only the first three are records NOOP could not decode; the rest are intact records of a mapped layout
+/// that bank no row, which the sync status must not call undecodable (W06-005, W06-129, W06-131).
+public enum HistoricalRecordRejection: Equatable, Sendable {
+    /// The envelope, header CRC-16 or payload CRC-32 failed.
+    case notIntact
+    /// A WHOOP 5/MG `hist_version` outside `mappedWhoop5HistoricalVersions`.
+    case unmappedLayout
+    /// A WHOOP 4.0 record that parsed but decoded no timestamp, or neither heart rate nor motion.
+    case noBiometrics
+    /// Intact, but the #547 gate refuses its own timestamp: the strap clock, not the layout (W01-004).
+    case timestampRefused
+    /// An intact WHOOP 5/MG record of a mapped layout that decodes no heart rate or motion: v20 and v21,
+    /// which have no storage lane yet (W06-003).
+    case noStorageLane
+    /// An intact v16 record whose FIFO decodes no sample, so no `ecg_candidate` row is banked.
+    case noSamples
+
+    /// True for a record NOOP could not decode, the only kind the sync status reports.
+    public var isUndecodable: Bool {
+        switch self {
+        case .notIntact, .unmappedLayout, .noBiometrics: return true
+        case .timestampRefused, .noStorageLane, .noSamples: return false
+        }
+    }
+}
+
+/// One frame `classifyRejectedHistoricalRecords` returns, with its reason.
+public struct RejectedHistoricalRecord: Equatable, Sendable {
+    public let frame: [UInt8]
+    public let rejection: HistoricalRecordRejection
+}
+
 /// The HISTORICAL_DATA record frames in `rawFrames` that NOOP cannot turn into rows — a genuine CRC
 /// failure, an unmapped firmware layout (5/MG: any `hist_version` outside
 /// `mappedWhoop5HistoricalVersions`), or a mapped layout whose envelope parsed but yielded no usable
@@ -113,6 +147,17 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
                                       wallNow: Int? = nil,
                                       sessionOldestUnix: Int? = nil,
                                       sessionNewestUnix: Int? = nil) -> [[UInt8]] {
+    classifyRejectedHistoricalRecords(rawFrames, family: family, wallNow: wallNow,
+                                      sessionOldestUnix: sessionOldestUnix,
+                                      sessionNewestUnix: sessionNewestUnix).map(\.frame)
+}
+
+/// `rejectedHistoricalRecords` with the reason for each frame, in one pass and one parse per frame. The
+/// frames are exactly the ones that function returns, in the same order.
+public func classifyRejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFamily,
+                                              wallNow: Int? = nil,
+                                              sessionOldestUnix: Int? = nil,
+                                              sessionNewestUnix: Int? = nil) -> [RejectedHistoricalRecord] {
     // The type byte sits at the inner-record start: frame[4] on WHOOP 4.0, frame[8] on WHOOP 5/MG
     // (the puffin envelope is 4 bytes longer). hist_version sits one byte past the type+seq+cmd
     // header — frame[5] (4.0) / frame[9] (5/MG) — same shift.
@@ -124,10 +169,10 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         return !isPlausibleHistoricalUnix(unix, wallNow: now, sessionOldestUnix: sessionOldestUnix,
                                           sessionNewestUnix: sessionNewestUnix)
     }
-    return rawFrames.filter { f in
+    func rejection(_ f: [UInt8]) -> HistoricalRecordRejection? {
         // Only genuine HISTORICAL_DATA records (47). Console (50) and METADATA frames have a
         // different type byte, so they never pass this gate — they are excluded by construction.
-        guard f.count > typeIndex, Int(f[typeIndex]) == 47 else { return false }
+        guard f.count > typeIndex, Int(f[typeIndex]) == 47 else { return nil }
         // v26 PPG: skipped BECAUSE `extractHistoricalStreams` stores it durably in its own waveform
         // stream (ppgWaveform), whose row keeps the whole intact frame when the caller passes the frames
         // (W01-006) — so the skip holds only while that premise does. A REJECTED v26 record
@@ -135,7 +180,8 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         // is acked anyway. Bind the skip to the verdict, not to the version byte alone.
         if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 26 {
             let p = parseFrame(f, family: family)
-            return !(p.ok && p.crcOK != false) || refusedByTimestampGate(p)
+            if !(p.ok && p.crcOK != false) { return .notIntact }
+            return refusedByTimestampGate(p) ? .timestampRefused : nil
         }
         // v16 MAX86176 FIFO (#891): skipped for the same reason as v26 above — `extractHistoricalStreams`
         // stores the FIFO durably in its own stream (`Streams.ecgCandidate` / WhoopStore's
@@ -153,7 +199,11 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 16 {
             let p = parseFrame(f, family: family)
             let banksARow = p.parsed["ecg_candidate"]?.intArrayValue?.isEmpty == false
-            return !(p.ok && p.crcOK != false && banksARow) || refusedByTimestampGate(p)
+            // Precedence: a broken record is not intact whatever else holds; an intact one the gate refuses
+            // is the clock's; only an intact, accepted record with no sample is `noSamples` (W06-129).
+            if !(p.ok && p.crcOK != false) { return .notIntact }
+            if refusedByTimestampGate(p) { return .timestampRefused }
+            return banksARow ? nil : .noSamples
         }
         // UNMAPPED LAYOUT (5/MG) — archive UNCONDITIONALLY, whatever it decoded.
         //
@@ -168,22 +218,27 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         // `mappedWhoop5HistoricalVersions` and never reach here. Retention for the records that DO
         // (`RawHistoryArchive.evictLines`) evicts entirely-zero-payload frames first, so a firmware that
         // banks empty placeholder records at 1 Hz cannot push out the one informative frame either.
-        if family == .whoop5, isUnmappedWhoop5HistoricalRecord(f) { return true }
+        if family == .whoop5, isUnmappedWhoop5HistoricalRecord(f) { return .unmappedLayout }
         let p = parseFrame(f, family: family)
         // NOT INTACT → ARCHIVE. Reading the verdict this way round is the whole point of this reader
         // (D8): the frame cannot be turned into rows, so its bytes are the only thing left to keep.
         // With the verdict widened to cover the header checksum and the structural length, this branch
         // catches strictly MORE frames than it did before — which is the intended direction. The
         // `crcOK` half stays for exactly that reason: every condition here can only add to the archive.
-        if !p.ok || p.crcOK == false { return true }
-        if refusedByTimestampGate(p) { return true }
+        if !p.ok || p.crcOK == false { return .notIntact }
+        if refusedByTimestampGate(p) { return .timestampRefused }
         // Unmapped layout: the envelope parsed but no usable biometrics decoded. A record is genuinely
         // undecodable only if it has no timestamp, or NEITHER heart rate NOR motion. v25 (issue #30)
         // carries gravity but no per-second HR (PPG-derived), so a gravity-bearing record is real data
         // the sleep stager uses — keep it. Only HR-less AND gravity-less type-47 records are rejected.
-        return p.parsed["unix"]?.intValue == nil
+        let noBiometrics = p.parsed["unix"]?.intValue == nil
             || (p.parsed["heart_rate"]?.intValue == nil && p.parsed["gravity_x"]?.doubleValue == nil)
+        guard noBiometrics else { return nil }
+        // On 5/MG an unmapped layout returned above, so a record here is intact and of a mapped layout that
+        // decodes no named signal: v20 and v21 today (W06-005). Not a decode failure.
+        return family == .whoop5 ? .noStorageLane : .noBiometrics
     }
+    return rawFrames.compactMap { f in rejection(f).map { RejectedHistoricalRecord(frame: f, rejection: $0) } }
 }
 
 /// A rejected history frame whose entire record PAYLOAD is zero — a valid header + trailing CRC wrapping

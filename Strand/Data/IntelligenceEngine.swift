@@ -46,6 +46,15 @@ final class IntelligenceEngine: ObservableObject {
     /// `defer` re-invokes `analyzeRecent(force: true)` ONCE when it clears. A single re-arm (the flag is
     /// cleared BEFORE the re-invoke) bounds it to one extra pass , no recompute storm.
     private var pendingForcedRescore = false
+    /// The widest window a forced call queued behind the running pass asked for. The re-pass covers the wider
+    /// of it and the running pass's, so a 4,000-day heal that loses the race to a 21-day tick is not narrowed
+    /// to 21 days (W07-011).
+    private var pendingForcedRescoreDays = 0
+    /// Launches the one re-pass the `defer` in `analyzeRecent` owes, over `maxDays`. A test replaces it to read
+    /// the window instead of running a second pass.
+    lazy var launchForcedRePass: (Int) -> Void = { [weak self] days in
+        Task { await self?.analyzeRecent(maxDays: days, force: true) }
+    }
     /// Uptime the pass holding `computing` started at, and how many days it covers; nil when none is running.
     private var runningPassStart: UInt64?
     private var runningPassDays = 0
@@ -706,27 +715,34 @@ final class IntelligenceEngine: ObservableObject {
         UserDefaults.standard.set(false, forKey: Self.timestampHealPendingKey)
     }
 
+    /// The one check of the `computing` lock, made on entry to `analyzeRecent` and again after its last await
+    /// before the lock is taken (W07-009). True when the caller must return.
+    ///
+    /// #899-A: a concurrent pass already holds the lock. A NON-forced idle tick is safe to drop (the
+    /// in-flight pass already covers the same window). But a FORCED call is a real update path (a
+    /// post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
+    /// until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
+    private func queueBehindRunningPass(force: Bool, maxDays: Int) -> Bool {
+        guard computing else { return false }
+        if force {
+            // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
+            // turns every post-offload re-score into a silent no-op, and the log shows syncs but no scores.
+            if !pendingForcedRescore, let started = runningPassStart {
+                let heldFor = Int(Double(DispatchTime.now().uptimeNanoseconds &- started) / 1_000_000_000)
+                diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
+            }
+            pendingForcedRescore = true
+            pendingForcedRescoreDays = max(pendingForcedRescoreDays, maxDays)
+        }
+        return true
+    }
+
     /// Compute on-device scores for each of the last `maxDays` that actually has raw HR data.
     /// Personal baselines (HRV / resting HR) are folded from the imported history, so even the first
     /// live night can be scored against your norm.
     func analyzeRecent(maxDays: Int = 21, force: Bool = true, skipIfUnchanged: Bool = false,
                        triggerLabel: String? = nil) async {
-        // #899-A: a concurrent pass already holds the lock. A NON-forced idle tick is safe to drop (the
-        // in-flight pass already covers the same window). But a FORCED call is a real update path (a
-        // post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
-        // until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
-        guard !computing else {
-            if force {
-                // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
-                // turns every post-offload re-score into a silent no-op, and the log shows syncs but no scores.
-                if !pendingForcedRescore, let started = runningPassStart {
-                    let heldFor = Int(Double(DispatchTime.now().uptimeNanoseconds &- started) / 1_000_000_000)
-                    diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
-                }
-                pendingForcedRescore = true
-            }
-            return
-        }
+        if queueBehindRunningPass(force: force, maxDays: maxDays) { return }
         guard let store = await repo.storeHandle() else { note = String(localized: "No on-device store yet."); return }
         guard let hrvCfg = Baselines.metricCfg["hrv"],
               let rhrCfg = Baselines.metricCfg["resting_hr"],
@@ -749,6 +765,10 @@ final class IntelligenceEngine: ObservableObject {
         // fired and a night finishing after launch stayed unscored until relaunch. Scoring below still reads
         // the registry's ACTIVE device (`owner`); only this change-detector needed to be cross-device.
         let wmKey = (try? await store.analysisFingerprint()) ?? ""
+        // W07-009: checked again past the entry's last await. A call arriving while another was between the
+        // check above and here passed that check too, and without this both ran the pass. Nothing below
+        // suspends before `computing = true`, so this check and that write cannot be split.
+        if queueBehindRunningPass(force: force, maxDays: maxDays) { return }
         // #1538: read the stored watermark ONCE for both gates and the attribution line below. There is no
         // suspension point between them, so the three reads this replaces could not disagree — but the log
         // line asserting `newData` and the gate deciding whether to run must be the SAME comparison by
@@ -840,8 +860,10 @@ final class IntelligenceEngine: ObservableObject {
                 pendingForcedRescore = false
                 // Carry THIS pass's window into the re-pass: a heal firing during a wide one-shot pass
                 // must re-score the same width, not the default 21 days (Kotlin re-passes with the same
-                // maxDays; keep the platforms in lockstep).
-                Task { await self.analyzeRecent(maxDays: maxDays, force: true) }
+                // maxDays; keep the platforms in lockstep). And a queued caller's own, when wider (W07-011).
+                let days = max(maxDays, pendingForcedRescoreDays)
+                pendingForcedRescoreDays = 0
+                launchForcedRePass(days)
             }
         }
 
@@ -1778,7 +1800,7 @@ final class IntelligenceEngine: ObservableObject {
         // #714: replay each skipped day's diagnostic now that we're back on the main actor (diagnosticSink
         // is MainActor-bound). Always-on , not gated behind a test mode, mirroring the Kotlin `diag` sink.
         for line in skippedDayLines { diagnosticSink?(line, nil) }
-        dayLineFilter.beginPass(now: Date())
+        dayLineFilter.beginPass()
 
         // CAPTURE-B (#814/#799): per-day resolved READ owner + that owner's HR-row count, keyed by day, so
         // the second pass (which has the provenance sets) can emit the universal `dayOwner …` line. The

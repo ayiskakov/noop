@@ -44,7 +44,7 @@ final class BackfillerRawRecordTests: XCTestCase {
     func testAnOffloadedPpgRowCarriesItsWholeFrame() async {
         let store = CapturingStore()
         let backfiller = Backfiller(store: store, deviceId: "raw-record", ackTrim: { _, _ in },
-                                    enableRawCapture: false, rejectedSink: { _, _, _ in true })
+                                    enableRawCapture: false, rejectedSink: { _, _, _, _ in true })
         backfiller.begin(family: .whoop5)
         let record = bytes(v26Hex)
         XCTAssertTrue(verifyFrame(record, family: .whoop5).ok)

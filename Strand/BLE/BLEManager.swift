@@ -949,12 +949,19 @@ public final class BLEManager: NSObject, ObservableObject {
     private var realtimeRawNote = RealtimeRawNote()
     /// Set when this link has noted a live buffer the banking gate refused for its layout (W06-059).
     private var imuLayoutRefusalNotedThisLink = false
-    /// Ordered queue of frames awaiting drain through the serial Backfiller task.
-    private var backfillFrameQueue: [[UInt8]] = []
-    /// True while the drain task is running (prevents a second drain task from launching).
-    private var backfillDraining = false
     /// Keep each main-actor drain slice small enough that SwiftUI can process input/paint between slices.
     private static let backfillDrainBatchSize = 12
+    /// Ordered queue of offload frames and the serial task that drains it into the Backfiller. Settable so a
+    /// test can drive an ingest across a link change (W06-125).
+    lazy var backfillDrain = BackfillDrain(
+        batchSize: Self.backfillDrainBatchSize,
+        ingest: { [weak self] frame in await self?.backfiller?.ingest(frame) },
+        afterIngest: { [weak self] in
+            guard let self else { return false }
+            self.afterBackfillIngest()
+            return self.backfilling
+        },
+        log: { [weak self] line in self?.log(line) })
 
     /// Records WHOOP 5/MG puffin frames to a JSON file for protocol mapping. Passive (read-only on the
     /// strap) and gated by the Settings → Experimental "Record puffin frames" toggle; a no-op for
@@ -1438,8 +1445,38 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// Where the bootstrap opens the store, and how. Properties so a test can run the bootstrap against a
+    /// temporary file (W06-014).
+    var bootstrapStorePath: () throws -> String = { try StorePaths.defaultDatabasePath() }
+    var bootstrapOpenStore: (String) async throws -> WhoopStore = { try await WhoopStore(path: $0) }
+    /// True once the bootstrap has built the pipeline that persists strap data.
+    var storeBootstrapped: Bool { collector != nil && backfiller != nil && registryStore != nil }
+
+    /// The bootstrap in flight, if any (W06-014). Cleared by the task itself as it ends, on the main actor.
+    private var bootstrapInFlight: Task<Void, Never>?
+
+    /// Build the store and the pipeline that persists strap data, once. Callers that arrive while a bootstrap
+    /// is in flight wait for it instead of starting another (W06-014): an iOS state-restoration relaunch runs
+    /// this from `willRestoreState` and `poweredOn` together, and the old `collector == nil` check was read
+    /// before the store-open await and acted on after it, so both opened a store and the second pipeline
+    /// replaced the first. A bootstrap that fails leaves `collector` nil, so the next caller retries (#222).
     func bootstrapStore() async {
         guard collector == nil else { return }
+        if let running = bootstrapInFlight {
+            // Rare-event evidence: the only trace on a strap log that the relaunch race fired.
+            log("Backfill: bootstrap already in flight — waiting for it rather than opening a second store")
+            await running.value
+            return
+        }
+        let run = Task { @MainActor in
+            await self.runBootstrapStore()
+            self.bootstrapInFlight = nil
+        }
+        bootstrapInFlight = run
+        await run.value
+    }
+
+    private func runBootstrapStore() async {
         // Surface store-open failures instead of swallowing them with `try?` (#222): a silent failure
         // here left `backfiller` nil forever and the only visible symptom was the downstream
         // "store not ready" tick, with no clue why. On iOS a background reconnect that opens the
@@ -1447,14 +1484,14 @@ public final class BLEManager: NSObject, ObservableObject {
         // code proves it; the periodic tick (see beginBackfill) re-attempts so it self-heals on unlock.
         let path: String
         do {
-            path = try StorePaths.defaultDatabasePath()
+            path = try bootstrapStorePath()
         } catch {
             log("Backfill: bootstrap FAILED resolving DB path — \(error)")
             return
         }
         let store: WhoopStore
         do {
-            store = try await WhoopStore(path: path)
+            store = try await bootstrapOpenStore(path)
         } catch {
             let ns = error as NSError
             log("Backfill: bootstrap FAILED opening store — \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
@@ -1520,8 +1557,9 @@ public final class BLEManager: NSObject, ObservableObject {
                                 },
                                 enableRawCapture: enableRawCapture,
                                 log: { [weak self] s in self?.log(s) },
-                                rejectedSink: { [weak self] frames, trim, family in
-                                    self?.archiveRejectedFrames(frames, trim: trim, family: family) ?? true
+                                rejectedSink: { [weak self] frames, trim, family, intact in
+                                    self?.archiveRejectedFrames(frames, trim: trim, family: family,
+                                                                intact: intact) ?? true
                                 },
                                 onChunk: { [weak self] decoded, console in
                                     if decoded { self?.state.decodedChunksThisSession += 1 }
@@ -2502,6 +2540,16 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The `trim` argument (= end_data first u32) is already persisted as the strap_trim cursor by
     /// the Backfiller; it is passed here only for logging.
     func ackHistoricalChunk(trim: UInt32, endData: [UInt8]) {
+        // W06-008: a chunk whose END began ingesting on a link that has since ended is not acked on the one now
+        // up. Its rows are persisted, so the ack would be honest, but it would reach the strap out of sequence
+        // on a link that never delivered that chunk, and an ack frees flash. Not sending it costs one re-sent
+        // chunk, which dedupes by timestamp. Always-on: rare, and the only trace of the case. Since W06-135 the
+        // Backfiller stops such an END before it asks for an ack (every link boundary that moves the drain's
+        // counter moves its session too), so this is a second guard that cannot disagree with the first.
+        if backfillDrain.ingestOutlivedItsLink {
+            log("Backfill: chunk ack (trim=\(trim)) not sent — its END began on a link that has since ended, so the chunk stays on the strap to be re-sent (W06-008)")
+            return
+        }
         send(.historicalDataResult, payload: [0x01] + endData, writeType: .withResponse)
         // Progress signal for the "Syncing strap history…" UI (#77). Same main-queue delegate path as
         // the other state mutations (e.g. lastSyncedAt in exitBackfilling). NOT historicalAckLogCounter
@@ -2548,6 +2596,8 @@ public final class BLEManager: NSObject, ObservableObject {
         state.syncChunksThisSession = 0
         state.rejectedFramesThisSession = 0
         state.rejectedFramesUnarchived = 0
+        state.rejectedFramesIntact = 0
+        state.rejectedFramesIntactUnarchived = 0
         state.decodedChunksThisSession = 0
         state.consoleChunksThisSession = 0
         state.r22FlagsAccepted = 0
@@ -2563,36 +2613,17 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
-    /// Feed a frame to the Backfiller preserving exact arrival order. Frames are appended
-    /// synchronously (delegate order) and drained sequentially in small slices, so START /
-    /// data / END chunk assembly is never reordered while the UI still gets time to paint.
-    private func routeBackfillFrame(_ frame: [UInt8]) {
-        backfillFrameQueue.append(frame)
-        guard !backfillDraining else { return }
-        backfillDraining = true
-        Task { @MainActor in await drainBackfillFrames() }
+    /// A link ended or began: the drain's queue and draining flag belong to the next link, and an END still
+    /// writing from the previous one stops at its next resume and acks nothing (W06-008, W06-135). Called from
+    /// the disconnect teardown and from `didConnect` (W06-138); a second call for one boundary is harmless.
+    func offloadLinkBoundary() {
+        backfillDrain.linkEnded()
+        backfiller?.linkEnded()
     }
 
-    private func drainBackfillFrames() async {
-        while !backfillFrameQueue.isEmpty {
-            let count = min(Self.backfillDrainBatchSize, backfillFrameQueue.count)
-            let batch = Array(backfillFrameQueue.prefix(count))
-            backfillFrameQueue.removeFirst(count)
-
-            for f in batch {
-                await backfiller?.ingest(f)
-                afterBackfillIngest()
-                if !backfilling {
-                    backfillFrameQueue.removeAll(keepingCapacity: true)
-                    break
-                }
-            }
-
-            if !backfillFrameQueue.isEmpty {
-                await Task.yield()
-            }
-        }
-        backfillDraining = false
+    /// Feed a frame to the Backfiller preserving exact arrival order (see `BackfillDrain`).
+    private func routeBackfillFrame(_ frame: [UInt8]) {
+        backfillDrain.route(frame)
     }
 
     /// Called after every Backfiller.ingest completes. If the Backfiller has consumed all
@@ -2694,7 +2725,7 @@ public final class BLEManager: NSObject, ObservableObject {
         lastOffloadFrameAt = Date()
         backfillTimeout?.cancel()
         backfillTimeout = nil
-        backfillFrameQueue.removeAll()
+        backfillDrain.dropQueued()
         log("Backfill: session ended — reason=\(reason)")
         // Inactivity reminder (#419): read-only hook on the natural offload completion (no cadence
         // change). Only on a true HISTORY_COMPLETE — a timeout/disconnect didn't bring a fresh window.
@@ -2853,10 +2884,16 @@ public final class BLEManager: NSObject, ObservableObject {
                 du.set(Date().timeIntervalSince1970, forKey: "sync.lastWriteStalledAt")
                 if let k = whoStalled { du.set(Date().timeIntervalSince1970, forKey: k) }
             }
-            if unarchived > 0 {
-                state.lastSyncError = "Synced, but \(archived + unarchived) record(s) couldn't be decoded (unrecognised strap firmware layout), and the on-device archive is full - the \(unarchived) newest weren't preserved. Please share a strap log so the layout can be mapped."
-            } else if archived > 0 {
-                state.lastSyncError = "Synced, but \(archived) record(s) couldn't be decoded (unrecognised strap firmware layout). The raw bytes were saved on this Mac - please share a strap log so the layout can be mapped."
+            // W06-005: what the full archive could not keep of the intact records that bank no row is a loss, and
+            // this line, not a sync error, says so: keeping them is W06-003's decision.
+            if state.rejectedFramesIntactUnarchived > 0 {
+                log("Backfill: \(state.rejectedFramesIntactUnarchived) intact record(s) that bank no row were not preserved this sync — the reject archive is full (W06-003).")
+            }
+            if let undecodable = BLEManager.undecodableRecordsSyncError(
+                archived: archived, unarchived: unarchived,
+                intact: state.rejectedFramesIntact,
+                intactUnarchived: state.rejectedFramesIntactUnarchived) {
+                state.lastSyncError = undecodable
             } else if bankedNothing {
                 // #77 / #214 family: the offload COMPLETED but the strap handed over no sensor records
                 // at all — either console/diagnostic output across many chunks, OR a near-empty
@@ -3091,6 +3128,25 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// The sync status a completed offload's archived records call for, or nil (W06-005). It names only
+    /// records that failed to decode: the intact records of a mapped layout that bank no row (v20 and v21
+    /// with no storage lane, a v16 with no FIFO sample, a record the timestamp gate refused), which the
+    /// archive keeps because nothing else does, are not an error (W06-129). It names no cause: the
+    /// undecodable remainder holds checksum failures as well as unmapped layouts, and the strap log's
+    /// per-chunk line says which (W06-131).
+    static func undecodableRecordsSyncError(archived: Int, unarchived: Int,
+                                            intact: Int, intactUnarchived: Int) -> String? {
+        let saved = archived - intact
+        let lost = unarchived - intactUnarchived
+        if lost > 0 {
+            return "Synced, but \(saved + lost) record(s) couldn't be decoded, and the on-device archive is full - the \(lost) newest weren't preserved. Please share a strap log."
+        }
+        if saved > 0 {
+            return "Synced, but \(saved) record(s) couldn't be decoded. The raw bytes were saved on this device - please share a strap log."
+        }
+        return nil
+    }
+
     /// On-device archive for HISTORICAL_DATA record frames that failed decode (#77 / #91).
     private let rejectedHistoryArchive = RawHistoryArchive()
 
@@ -3100,16 +3156,21 @@ public final class BLEManager: NSObject, ObservableObject {
     /// counters that drive the honest sync status. Returns false ONLY on a genuine write failure,
     /// which makes the Backfiller hold the cursor/ack so the strap re-sends the chunk (no data loss
     /// either way). Frames carry sensor payloads, not identifiers — no serials/MACs are archived.
-    private func archiveRejectedFrames(_ frames: [[UInt8]], trim: UInt32, family: DeviceFamily) -> Bool {
+    /// `intact` is how many of `frames` are intact records of a mapped layout that bank no row, from the
+    /// reasons the Backfiller's off-main decode read (W06-005, W06-126, W06-129).
+    private func archiveRejectedFrames(_ frames: [[UInt8]], trim: UInt32, family: DeviceFamily,
+                                       intact: Int) -> Bool {
         switch rejectedHistoryArchive.archive(frames, trim: trim, family: family) {
         case .written(let count):
             state.rejectedFramesThisSession += count
+            state.rejectedFramesIntact += intact
             return true
         case .capReached(let count):
             // Cap reached: succeed WITHOUT writing (wedging the offload over a full archive would be
             // worse; ample sample bytes exist by now), counted separately so the sync status never
             // claims "saved" for bytes that were not.
             state.rejectedFramesUnarchived += count
+            state.rejectedFramesIntactUnarchived += intact
             log("Backfill: rejected-frame archive is FULL — \(count) frame(s) NOT preserved (acking anyway so the offload can finish)")
             return true
         case .failed:
@@ -5755,6 +5816,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         offloadGravity = 0; offloadResp = 0; offloadSkinTemp = 0; offloadSpo2 = 0; offloadChunks = 0
         offloadV18Aux = 0
         linkUpSince = DispatchTime.now()
+        // W06-138: also at the start of a link, not only in the disconnect teardown. A link can begin without
+        // that teardown (see the banked-tally clear above), and an END still writing from the previous one
+        // must then be judged stale all the same.
+        offloadLinkBoundary()
         standingConnectAt = nil     // #1413: a live link means no standing connect is outstanding
         restoredPeripheral = nil
         preparePeripheral(peripheral)
@@ -6151,6 +6216,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // otherwise a stale non-zero count survives until the next beginBackfill. (#77/#91)
         state.rejectedFramesThisSession = 0
         state.rejectedFramesUnarchived = 0
+        state.rejectedFramesIntact = 0
+        state.rejectedFramesIntactUnarchived = 0
         state.decodedChunksThisSession = 0
         state.consoleChunksThisSession = 0
         state.r22FlagsAccepted = 0
@@ -6171,8 +6238,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         state.sustainedEmptyOffload = false
         backfillTimeout?.cancel()
         backfillTimeout = nil
-        backfillFrameQueue.removeAll()
-        backfillDraining = false
+        offloadLinkBoundary()
         uploadTimer?.cancel()
         uploadTimer = nil
         backfillTimer?.cancel()

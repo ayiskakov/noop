@@ -192,6 +192,14 @@ final class Backfiller {
     /// an offload — a still-fraction only means something over a whole night's worth of records.
     private(set) var sessionDynAccel = Streams.DynAccelDiag()
 
+    /// Moves when the next session begins or the link ends (`begin()`, `linkEnded()`). A chunk's END reads it on
+    /// entry and again after each await, and stops when it moved: an END that outlived its session writes
+    /// nothing into the next one's state, archives nothing, and acks nothing (W06-124, W06-135, W06-136). Rows
+    /// it already stored stay, and dedupe when the strap re-sends the chunk. The idle timeout alone does not
+    /// move it: an END still writing when it fires is on the same link with no session after it, and its ack is
+    /// honest; stranding it would re-send the chunk into the same slow write every session.
+    private var session = 0
+
     /// The trim cursor of the LAST chunk this Backfiller acked (durably persisted + confirmed to the
     /// strap). Survives across sessions on the same connection so the auto-continue gate (#364) can ask
     /// "did the offload actually advance the strap's trim this session?" — the spin-detector signal that
@@ -260,7 +268,7 @@ final class Backfiller {
     /// the bytes are safe (written OR cap-reached — either way the chunk may be acked) and false on a
     /// genuine write failure, in which case `finishChunk` holds the cursor/ack so the strap re-sends.
     /// nil in non-production inits (tests/preview) → archiving is skipped and acks proceed as before.
-    private let rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily) -> Bool)?
+    private let rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ intact: Int) -> Bool)?
     /// Per-chunk outcome hook (#77 family): (didDecodeSensorRows, wasConsoleOnly). Lets BLEManager
     /// tally a session so a COMPLETED-but-empty offload (all console, no sensor records) can tell the
     /// user their strap isn't banking, without false-positiving a normal caught-up sync.
@@ -287,7 +295,7 @@ final class Backfiller {
                                                 gravity: Int, v18Aux: Int)) -> Void = { _ in },
          enableRawCapture: Bool = false,
          log: ((String) -> Void)? = nil,
-         rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily) -> Bool)? = nil,
+         rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ intact: Int) -> Bool)? = nil,
          onChunk: ((_ decoded: Bool, _ console: Bool) -> Void)? = nil,
          connectionActive: @escaping () -> Bool = { false },
          connectionLog: ((String) -> Void)? = nil,
@@ -329,6 +337,7 @@ final class Backfiller {
         self.continuedAfterRows = continuedAfterRows
         self.strapOffWrist = strapOffWrist
         isBackfilling = true
+        session &+= 1
         persistStalled = false   // #57: fresh session starts un-stalled
         chunk.removeAll(keepingCapacity: true)
         chunkOpen = true
@@ -599,11 +608,14 @@ final class Backfiller {
     private struct DecodedChunk {
         let parsed: [ParsedFrame]
         let decoded: Streams
-        let rejected: [[UInt8]]
+        /// The records the screen gives to the archive, each with its reason, from the parse it already does
+        /// (W06-130), off the main actor (W06-126).
+        let rejected: [RejectedHistoricalRecord]
     }
 
     private func finishChunk(unix: UInt32, trim: UInt32, endFrame: [UInt8]) async {
         guard let endData = Backfiller.endData(from: endFrame, family: family) else { return }
+        let token = session
 
         // #773: corrupt future-RTC detection. A HISTORY_END carries the strap's own clock; a genuine offload
         // is always PAST-dated (it's banked history), so an end dated days into the future can only be a
@@ -650,11 +662,12 @@ final class Backfiller {
                 let parsed = frames.map { parseFrame($0, family: fam) }
                 let decoded = extractFn(parsed, frames, dev, wall, oldest, newest)
                 // The same gate inputs the extraction used, so a record it refuses is archived (W01-004).
-                let rejected = rejectedHistoricalRecords(frames, family: fam,
-                                                         wallNow: max(wall, Int(Date().timeIntervalSince1970)),
-                                                         sessionOldestUnix: oldest, sessionNewestUnix: newest)
+                let rejected = classifyRejectedHistoricalRecords(frames, family: fam,
+                                                                 wallNow: max(wall, Int(Date().timeIntervalSince1970)),
+                                                                 sessionOldestUnix: oldest, sessionNewestUnix: newest)
                 return DecodedChunk(parsed: parsed, decoded: decoded, rejected: rejected)
             }.value
+            if outlived(token, trim: trim, stored: false) { return }
             let parsed = d.parsed
             // #1008: per-chunk clock basis + R-R packing. The session summary logs only the FIRST chunk's
             // correlation, which cannot show the offset moving across a long offload nor separate "the same
@@ -827,7 +840,7 @@ final class Backfiller {
             // type-50 console/diagnostic frames, which decode to 0 rows by design and are NOT a loss
             // (the "rejected frames" red herring users kept reporting — #77/#120). Drives both the
             // log wording below and the archive guard further down.
-            let rejected = d.rejected
+            let rejected = d.rejected.map(\.frame)
             // Tally this chunk's outcome so a completed-but-empty session is distinguishable from a
             // caught-up one (#77 family): did it decode sensor rows, and was it console-only?
             onChunk?(!decoded.isEmpty, decoded.isEmpty && rejected.isEmpty)
@@ -839,16 +852,31 @@ final class Backfiller {
             // Log + hex-sample the GENUINE rejects whenever there are any — INCLUDING a partially-decoded
             // chunk (some good rows alongside CRC-failed / unmapped records), which used to archive those
             // raw bytes with no log line at all (only the all-empty case was observable). (ryanbr, PR #123)
-            if !rejected.isEmpty {
-                log?("Backfill: \(rejected.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) — archiving raw bytes before ack (CRC/unmapped layout).")
+            // W06-005 / W06-129: an intact record of a mapped layout that banks no row reaches the archive because
+            // nothing stores it, not because it failed to decode. Only the screen's undecodable reasons are said
+            // as such and hex-dumped, since the dump exists to map layouts that are not mapped yet. Each line
+            // says what the chunk held, not what the archive will do with it (W06-132); the sink logs a full or
+            // failed archive. An intact record the timestamp gate refused is the #547 line's, above.
+            let undecodable = d.rejected.filter { $0.rejection.isUndecodable }.map(\.frame)
+            let intact = rejected.count - undecodable.count
+            let noLane = d.rejected.filter { $0.rejection == .noStorageLane }.map(\.frame)
+            if !noLane.isEmpty {
+                log?("Backfill: \(noLane.count) intact record(s) (\(Backfiller.versionCounts(noLane))) of \(frames.count) frame(s) (trim=\(trim)) — no storage lane for these layouts yet (W06-003).")
+            }
+            let noSamples = d.rejected.filter { $0.rejection == .noSamples }.count
+            if noSamples > 0 {
+                log?("Backfill: \(noSamples) intact v16 record(s) of \(frames.count) frame(s) (trim=\(trim)) hold no FIFO sample — no row to bank.")
+            }
+            if !undecodable.isEmpty {
+                log?("Backfill: \(undecodable.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) (\(Backfiller.undecodableCauses(d.rejected))).")
                 // #91 / #30: dump a hex sample of the genuine rejects so an unmapped firmware's record
                 // layout can be mapped from a user's strap log. Dump the FULL frame (not a 64-byte
                 // prefix — v25/v26 records run ~84 B and the truncated tail is exactly where the
                 // unmapped motion/HR fields sit), and sample a few more so one log carries enough
-                // records to triangulate offsets. These only ever fire for unmapped firmware.
-                rejectFramesSeen += rejected.count
+                // records to triangulate offsets.
+                rejectFramesSeen += undecodable.count
                 // #1992: spend from a SESSION budget, not a fresh 8 per chunk. See `hexDumpAllowance`.
-                let sample = Array(rejected.prefix(Backfiller.hexDumpAllowance(rejected.count, rejectHexBudget)))
+                let sample = Array(undecodable.prefix(Backfiller.hexDumpAllowance(undecodable.count, rejectHexBudget)))
                 var emptySkipped = 0
                 for (i, f) in sample.enumerated() {
                     // #1007: an all-zero frame has no record layout to map, so its hex dump is pure log
@@ -866,7 +894,7 @@ final class Backfiller {
                 if rejectHexBudget <= 0, !rejectHexSuppressedNoted {
                     rejectHexSuppressedNoted = true
                     log?("Backfill: hex dumps capped at \(Backfiller.rejectHexDumpBudget) frame(s) while this connection lasts "
-                         + "(\(rejectFramesSeen) reject frame(s) seen so far); the complete records are in the "
+                         + "(\(rejectFramesSeen) undecodable frame(s) seen so far); the complete records are in the "
                          + "reject archive. Sample is enough to map a layout (#1992)")
                 }
             }
@@ -880,8 +908,8 @@ final class Backfiller {
             let rrCensus = RrEmissionStats.compute(decoded.rr.map { (ts: $0.ts, rrMs: $0.rrMs) })
             do {
                 counts = try await store.insert(decoded, deviceId: deviceId)
-                onBankedOffload(counts)
             } catch {
+                if outlived(token, trim: trim, stored: false) { return }   // W06-124: not this session's stall
                 // Diag (#601): the decoded rows couldn't be written — this is the "history stalls but live HR
                 // works" class. We return WITHOUT acking so the strap keeps this chunk and re-sends it next
                 // session (no data loss), but a silent return left a strap log with no trace of the stall.
@@ -889,6 +917,10 @@ final class Backfiller {
                 persistStalled = true   // #57: stall ALL further acks so an empty END can't advance past this
                 return
             }
+            // W06-135 / W06-136: past this point everything belongs to the session: its tallies, the archive (a
+            // re-sent chunk would archive its rejects again) and the cursor and ack.
+            if outlived(token, trim: trim, stored: true) { return }
+            onBankedOffload(counts)
             // Success-side observability (#150): tally what actually persisted so the session can emit
             // "persisted N rows (M with motion) across K night(s)" — the win-rate signal a log never had.
             let tally = Backfiller.chunkTally(counts: counts, timestamps: decoded.gravity.map(\.ts) + decoded.hr.map(\.ts))
@@ -921,7 +953,7 @@ final class Backfiller {
             // chunk (no setCursor, no ack) so the strap re-sends it next session — no data loss
             // either way. (A full archive is reported as success by the sink; we still ack.)
             if !rejected.isEmpty, let rejectedSink {
-                guard rejectedSink(rejected, trim, family) else {
+                guard rejectedSink(rejected, trim, family, intact) else {
                     log?("Backfill: rejected-frame archive failed (trim=\(trim)) — holding ack so the strap re-sends.")
                     persistStalled = true   // #57
                     return
@@ -941,6 +973,7 @@ final class Backfiller {
                     frameCount: frames.count,
                     byteSize: frames.reduce(0) { $0 + $1.count })
                 do { try await store.enqueueRawBatch(meta, frames: frames) } catch {
+                    if outlived(token, trim: trim, stored: true) { return }
                     // Diag (#601): raw-capture is ON and the raw batch couldn't be enqueued. Hold the ack
                     // (return) so the strap re-sends — the research toggle's contract is that raw is durable
                     // before the trim advances. Surface it so a stalled offload with raw-capture on is visible.
@@ -948,6 +981,7 @@ final class Backfiller {
                     persistStalled = true   // #57
                     return
                 }
+                if outlived(token, trim: trim, stored: true) { return }
             }
         }
 
@@ -982,6 +1016,7 @@ final class Backfiller {
         }
 
         do { try await store.setCursor("strap_trim", Int(trim)) } catch {
+            if outlived(token, trim: trim, stored: !frames.isEmpty) { return }
             // Diag (#601): decoded (and raw, if on) are durable but the strap_trim cursor write failed. We
             // return WITHOUT acking — acking now would let the strap trim past records the cursor hasn't
             // recorded, so on reconnect the offload could replay or skip. Holding the ack keeps it safe; the
@@ -992,8 +1027,47 @@ final class Backfiller {
             return
         }
 
+        // The cursor write is the last await; `strap_trim` is written and never read back, so a stale one is
+        // harmless, but the ack and `lastAckedTrim` must not follow it (W06-135).
+        if outlived(token, trim: trim, stored: !frames.isEmpty) { return }
         ackTrim(trim, endData)
         lastAckedTrim = trim   // #364: record the advanced cursor for the auto-continue spin-detector
+    }
+
+    /// True when the session `token` was read in has ended, with the one line that says so (always-on: rare,
+    /// and the only trace). `stored` says whether the chunk's rows were written before it was noticed.
+    private func outlived(_ token: Int, trim: UInt32, stored: Bool) -> Bool {
+        guard token != session else { return false }
+        log?("Backfill: the offload session ended while chunk trim=\(trim) was in progress; "
+             + (stored ? "its rows are stored, " : "")
+             + "nothing more of it is written and it is not acked, so the strap keeps it to re-send (W06-135)")
+        return true
+    }
+
+    /// The link ended. An END still in its writes stops at its next resume (W06-135); the chunk being
+    /// assembled belongs to the link and is left for `begin()` to clear, as before.
+    func linkEnded() {
+        session &+= 1
+    }
+
+    /// `v20: 12, v21: 18`: how many of `frames` carry each WHOOP 5/MG layout version, read from the frames
+    /// themselves, so a line names only the layouts its chunk held (W06-133).
+    static func versionCounts(_ frames: [[UInt8]]) -> String {
+        var byVersion: [Int: Int] = [:]
+        for f in frames where f.count > 9 { byVersion[Int(f[9]), default: 0] += 1 }
+        return byVersion.keys.sorted().map { "v\($0): \(byVersion[$0]!)" }.joined(separator: ", ")
+    }
+
+    /// The causes of a chunk's undecodable records, from the screen's reasons: `2 failed the integrity check,
+    /// 1 of an unmapped layout`. Only the causes present are named.
+    static func undecodableCauses(_ rejected: [RejectedHistoricalRecord]) -> String {
+        let causes: [(HistoricalRecordRejection, String)] = [(.notIntact, "failed the integrity check"),
+                                                             (.unmappedLayout, "of an unmapped layout"),
+                                                             (.noBiometrics, "decoded no timestamp or biometrics")]
+        return causes.compactMap { reason, text in
+            let n = rejected.filter { $0.rejection == reason }.count
+            return n > 0 ? "\(n) \(text)" : nil
+        }.joined(separator: ", ")
     }
 
     /// Called when a backfill watchdog timer fires (strap went silent mid-offload).

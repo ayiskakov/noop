@@ -12,32 +12,6 @@ import StrandAnalytics
 final class RepeatedDayLineTests: XCTestCase {
     private let canonical = "my-whoop"
 
-    private func withPreferences(_ body: () async throws -> Void) async throws {
-        let defaults = UserDefaults.standard
-        let keys = [
-            "profile.dateOfBirth", "profile.age", "profile.sex", "profile.weightKg",
-            "profile.heightCm", "profile.waistCm", "profile.hrMaxOverride",
-            "noop.analyzeWatermark", "analyzeRecent.stepsMotionCache.v1",
-            "noop.hrvBaselineEpoch", "noop.recoveryBaselineEpoch", UnitPrefs.hrvWindowKey,
-            RescoreBackgroundScheduler.owedKey, RescoreBackgroundScheduler.owedTokenKey,
-            RescoreBackgroundScheduler.lastPassSecondsKey, DayCycleMode.storageKey,
-            PuffinExperiment.experimentalSleepV2Key, PuffinExperiment.sleepStagerKey,
-            PuffinExperiment.motionAwareWakeKey,
-        ]
-        let saved = keys.map { ($0, defaults.object(forKey: $0)) }
-        defer {
-            for (key, value) in saved {
-                if let value { defaults.set(value, forKey: key) }
-                else { defaults.removeObject(forKey: key) }
-            }
-        }
-        for key in keys { defaults.removeObject(forKey: key) }
-        defaults.set(DayCycleMode.midnight.rawValue, forKey: DayCycleMode.storageKey)
-        defaults.set(SleepStagerVersion.v2.rawValue, forKey: PuffinExperiment.sleepStagerKey)
-        defaults.set(false, forKey: PuffinExperiment.motionAwareWakeKey)
-        try await body()
-    }
-
     /// Synthetic HR and R-R for the day before today, with a sleep block in its last hours.
     private func night() -> (hr: [HRSample], rr: [RRInterval]) {
         let start = Int(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970) - 86_400
@@ -62,7 +36,7 @@ final class RepeatedDayLineTests: XCTestCase {
     }
 
     func testAnUnchangedPassWithholdsItsDayLinesAndCountsThem() async throws {
-        try await withPreferences {
+        try await withEngineTestPreferences {
             let store = try await WhoopStore.inMemory()
             let input = night()
             _ = try await store.insert(Streams(hr: input.hr, rr: input.rr), deviceId: canonical)
@@ -95,7 +69,7 @@ final class RepeatedDayLineTests: XCTestCase {
     }
 
     func testADayWhoseInputsChangedPrintsAgain() async throws {
-        try await withPreferences {
+        try await withEngineTestPreferences {
             let store = try await WhoopStore.inMemory()
             let input = night()
             _ = try await store.insert(Streams(hr: input.hr, rr: input.rr), deviceId: canonical)
@@ -133,7 +107,7 @@ final class RepeatedDayLineTests: XCTestCase {
 
     /// One pass over `lines` at `now`: the lines it prints, and its summary.
     private func pass(_ filter: inout RepeatedDayLineFilter, _ lines: [String], at now: Date) -> ([String], String?) {
-        filter.beginPass(now: now)
+        filter.beginPass()
         let printed = lines.filter { filter.admit($0, now: now) }
         return (printed, filter.endPass())
     }
@@ -173,7 +147,7 @@ final class RepeatedDayLineTests: XCTestCase {
         XCTAssertNil(first.1, "a pass that withheld nothing prints no summary")
         let second = pass(&filter, shapes, at: t0 + 600)
         XCTAssertEqual(second.0, [])
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0)
+        let stamp = AppModel.logTimeFormatter.string(from: t0)
         XCTAssertEqual(second.1, "re-score: 13 per-day line(s) unchanged since their last print, not repeated "
                                  + "(oldest print \(stamp))")
     }
@@ -209,14 +183,14 @@ final class RepeatedDayLineTests: XCTestCase {
         // The refresh restarts the clock: the next pass withholds against the reprint, not the first print.
         let after = pass(&filter, shapes, at: t0 + RepeatedDayLineFilter.refreshAfter + 600)
         XCTAssertEqual(after.0, [])
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0 + RepeatedDayLineFilter.refreshAfter)
+        let stamp = AppModel.logTimeFormatter.string(from: t0 + RepeatedDayLineFilter.refreshAfter)
         XCTAssertTrue(after.1?.hasSuffix("(oldest print \(stamp))") == true, "\(String(describing: after.1))")
     }
 
     func testALineWhoseHourEndsDuringAPassPrints() {
         var filter = RepeatedDayLineFilter()
         _ = pass(&filter, [shapes[0]], at: t0)
-        filter.beginPass(now: t0 + RepeatedDayLineFilter.refreshAfter - 30)
+        filter.beginPass()
         XCTAssertTrue(filter.admit(shapes[0], now: t0 + RepeatedDayLineFilter.refreshAfter))
         XCTAssertNil(filter.endPass())
     }
@@ -226,7 +200,7 @@ final class RepeatedDayLineTests: XCTestCase {
         _ = pass(&filter, [shapes[0]], at: t0)
         _ = pass(&filter, [shapes[0], shapes[2]], at: t0 + 600)
         let third = pass(&filter, [shapes[0], shapes[2]], at: t0 + 1_200)
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0)
+        let stamp = AppModel.logTimeFormatter.string(from: t0)
         XCTAssertEqual(third.1, "re-score: 2 per-day line(s) unchanged since their last print, not repeated "
                                 + "(oldest print \(stamp))")
     }
@@ -266,13 +240,24 @@ final class RepeatedDayLineTests: XCTestCase {
         let second = pass(&filter, [bouts[0]], at: t0 + 600)
         XCTAssertEqual(second.0, [])
         XCTAssertEqual(second.1, "re-score: 1 per-day line(s) unchanged since their last print, not repeated "
-                                 + "(oldest print \(RepeatedDayLineFilter.timeFormatter.string(from: t0))); "
+                                 + "(oldest print \(AppModel.logTimeFormatter.string(from: t0))); "
                                  + "1 printed before no longer produced: effort bout day=2026-01-02")
         XCTAssertEqual(pass(&filter, bouts, at: t0 + 1_200).0, [bouts[1]])
         // A day this pass did not score at all (aged out, or skipped) is not named: its absence is the
         // pass's own `sleep SKIPPED` / window lines to explain.
         _ = pass(&filter, [bouts[0], "resp day=2026-01-01 rpm=14.0"], at: t0 + 1_800)
         XCTAssertNil(pass(&filter, [], at: t0 + 2_400).1)
+    }
+
+    /// W07-010: a line that vanishes on the first pass after its last print turned an hour old is still named.
+    /// Its copy is in the ~3 h live ring and reads as current until something says it is gone.
+    func testALineThatVanishesAfterItsHourIsStillNamed() {
+        var filter = RepeatedDayLineFilter()
+        let bouts = Array(shapes.suffix(2))
+        _ = pass(&filter, bouts, at: t0)
+        let later = pass(&filter, [bouts[0]], at: t0 + RepeatedDayLineFilter.refreshAfter + 60)
+        XCTAssertEqual(later.0, [bouts[0]], "the surviving line's print is an hour old, so it prints again")
+        XCTAssertEqual(later.1, "re-score: 1 per-day line(s) printed before no longer produced: effort bout day=2026-01-02")
     }
 
     /// W07-008: a wall clock stepped backwards must not make a print look fresh, nor the summary name a
