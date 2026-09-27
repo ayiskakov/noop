@@ -1788,7 +1788,7 @@ final class IntelligenceEngine: ObservableObject {
         // #714: replay each skipped day's diagnostic now that we're back on the main actor (diagnosticSink
         // is MainActor-bound). Always-on , not gated behind a test mode, mirroring the Kotlin `diag` sink.
         for line in skippedDayLines { diagnosticSink?(line, nil) }
-        dayLineFilter.beginPass(now: Date())
+        dayLineFilter.beginPass()
 
         // CAPTURE-B (#814/#799): per-day resolved READ owner + that owner's HR-row count, keyed by day, so
         // the second pass (which has the provenance sets) can emit the universal `dayOwner …` line. The

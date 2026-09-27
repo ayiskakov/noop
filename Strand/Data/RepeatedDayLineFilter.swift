@@ -28,16 +28,16 @@ struct RepeatedDayLineFilter {
     private(set) var withheld = 0
     private var oldestWithheldPrint: Date?
 
-    /// Start a pass: occurrence indices restart, and prints older than `refreshAfter` are dropped, since
-    /// they can no longer withhold anything; that keeps the table to about an hour of keys. `admit` still
-    /// judges the age itself, because a pass runs for minutes and can cross the hour after it began.
-    mutating func beginPass(now: Date) {
+    /// Start a pass: occurrence indices restart. Prints of any age are kept until `endPass`, which forgets
+    /// every key the pass did not produce, so the table holds one pass's keys. An old print cannot withhold
+    /// (`admit` judges the age), but `endPass` must still see it to name a line that vanished on the first
+    /// pass after its last print turned an hour old (W07-010).
+    mutating func beginPass() {
         occurrences = [:]
         keysThisPass = []
         daysThisPass = []
         withheld = 0
         oldestWithheldPrint = nil
-        lastPrint = lastPrint.filter { Self.isFresh($0.value.at, now: now) }
     }
 
     /// Whether to print `line` now; records the print when it says yes.

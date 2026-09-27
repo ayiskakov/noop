@@ -107,7 +107,7 @@ final class RepeatedDayLineTests: XCTestCase {
 
     /// One pass over `lines` at `now`: the lines it prints, and its summary.
     private func pass(_ filter: inout RepeatedDayLineFilter, _ lines: [String], at now: Date) -> ([String], String?) {
-        filter.beginPass(now: now)
+        filter.beginPass()
         let printed = lines.filter { filter.admit($0, now: now) }
         return (printed, filter.endPass())
     }
@@ -190,7 +190,7 @@ final class RepeatedDayLineTests: XCTestCase {
     func testALineWhoseHourEndsDuringAPassPrints() {
         var filter = RepeatedDayLineFilter()
         _ = pass(&filter, [shapes[0]], at: t0)
-        filter.beginPass(now: t0 + RepeatedDayLineFilter.refreshAfter - 30)
+        filter.beginPass()
         XCTAssertTrue(filter.admit(shapes[0], now: t0 + RepeatedDayLineFilter.refreshAfter))
         XCTAssertNil(filter.endPass())
     }
@@ -247,6 +247,17 @@ final class RepeatedDayLineTests: XCTestCase {
         // pass's own `sleep SKIPPED` / window lines to explain.
         _ = pass(&filter, [bouts[0], "resp day=2026-01-01 rpm=14.0"], at: t0 + 1_800)
         XCTAssertNil(pass(&filter, [], at: t0 + 2_400).1)
+    }
+
+    /// W07-010: a line that vanishes on the first pass after its last print turned an hour old is still named.
+    /// Its copy is in the ~3 h live ring and reads as current until something says it is gone.
+    func testALineThatVanishesAfterItsHourIsStillNamed() {
+        var filter = RepeatedDayLineFilter()
+        let bouts = Array(shapes.suffix(2))
+        _ = pass(&filter, bouts, at: t0)
+        let later = pass(&filter, [bouts[0]], at: t0 + RepeatedDayLineFilter.refreshAfter + 60)
+        XCTAssertEqual(later.0, [bouts[0]], "the surviving line's print is an hour old, so it prints again")
+        XCTAssertEqual(later.1, "re-score: 1 per-day line(s) printed before no longer produced: effort bout day=2026-01-02")
     }
 
     /// W07-008: a wall clock stepped backwards must not make a print look fresh, nor the summary name a
