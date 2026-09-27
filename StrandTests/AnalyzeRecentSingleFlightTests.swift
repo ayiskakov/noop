@@ -30,4 +30,25 @@ final class AnalyzeRecentSingleFlightTests: XCTestCase {
             XCTAssertFalse(engine.computing)
         }
     }
+
+    /// W07-011: a forced call that finds a narrower pass holding the lock is re-run over its own window, not the
+    /// running pass's.
+    func testAForcedCallQueuedBehindANarrowerPassKeepsItsWindow() async throws {
+        try await withEngineTestPreferences {
+            let store = try await WhoopStore.inMemory()
+            let repo = Repository(deviceId: canonical)
+            repo.setStoreForTesting(store)
+            let engine = IntelligenceEngine(repo: repo, profile: ProfileStore(), deviceId: canonical)
+            var rePasses: [Int] = []
+            engine.launchForcedRePass = { rePasses.append($0) }
+
+            let narrow = Task { await engine.analyzeRecent(maxDays: 2, force: false) }
+            for _ in 0..<10_000 where !engine.computing { await Task.yield() }
+            XCTAssertTrue(engine.computing, "the narrow pass holds the lock")
+            await engine.analyzeRecent(maxDays: 40, force: true)
+            await narrow.value
+
+            XCTAssertEqual(rePasses, [40])
+        }
+    }
 }

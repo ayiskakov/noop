@@ -46,6 +46,15 @@ final class IntelligenceEngine: ObservableObject {
     /// `defer` re-invokes `analyzeRecent(force: true)` ONCE when it clears. A single re-arm (the flag is
     /// cleared BEFORE the re-invoke) bounds it to one extra pass , no recompute storm.
     private var pendingForcedRescore = false
+    /// The widest window a forced call queued behind the running pass asked for. The re-pass covers the wider
+    /// of it and the running pass's, so a 4,000-day heal that loses the race to a 21-day tick is not narrowed
+    /// to 21 days (W07-011).
+    private var pendingForcedRescoreDays = 0
+    /// Launches the one re-pass the `defer` in `analyzeRecent` owes, over `maxDays`. A test replaces it to read
+    /// the window instead of running a second pass.
+    lazy var launchForcedRePass: (Int) -> Void = { [weak self] days in
+        Task { await self?.analyzeRecent(maxDays: days, force: true) }
+    }
     /// Uptime the pass holding `computing` started at, and how many days it covers; nil when none is running.
     private var runningPassStart: UInt64?
     private var runningPassDays = 0
@@ -713,7 +722,7 @@ final class IntelligenceEngine: ObservableObject {
     /// in-flight pass already covers the same window). But a FORCED call is a real update path (a
     /// post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
     /// until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
-    private func queueBehindRunningPass(force: Bool) -> Bool {
+    private func queueBehindRunningPass(force: Bool, maxDays: Int) -> Bool {
         guard computing else { return false }
         if force {
             // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
@@ -723,6 +732,7 @@ final class IntelligenceEngine: ObservableObject {
                 diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
             }
             pendingForcedRescore = true
+            pendingForcedRescoreDays = max(pendingForcedRescoreDays, maxDays)
         }
         return true
     }
@@ -732,7 +742,7 @@ final class IntelligenceEngine: ObservableObject {
     /// live night can be scored against your norm.
     func analyzeRecent(maxDays: Int = 21, force: Bool = true, skipIfUnchanged: Bool = false,
                        triggerLabel: String? = nil) async {
-        if queueBehindRunningPass(force: force) { return }
+        if queueBehindRunningPass(force: force, maxDays: maxDays) { return }
         guard let store = await repo.storeHandle() else { note = String(localized: "No on-device store yet."); return }
         guard let hrvCfg = Baselines.metricCfg["hrv"],
               let rhrCfg = Baselines.metricCfg["resting_hr"],
@@ -758,7 +768,7 @@ final class IntelligenceEngine: ObservableObject {
         // W07-009: checked again past the entry's last await. A call arriving while another was between the
         // check above and here passed that check too, and without this both ran the pass. Nothing below
         // suspends before `computing = true`, so this check and that write cannot be split.
-        if queueBehindRunningPass(force: force) { return }
+        if queueBehindRunningPass(force: force, maxDays: maxDays) { return }
         // #1538: read the stored watermark ONCE for both gates and the attribution line below. There is no
         // suspension point between them, so the three reads this replaces could not disagree — but the log
         // line asserting `newData` and the gate deciding whether to run must be the SAME comparison by
@@ -850,8 +860,10 @@ final class IntelligenceEngine: ObservableObject {
                 pendingForcedRescore = false
                 // Carry THIS pass's window into the re-pass: a heal firing during a wide one-shot pass
                 // must re-score the same width, not the default 21 days (Kotlin re-passes with the same
-                // maxDays; keep the platforms in lockstep).
-                Task { await self.analyzeRecent(maxDays: maxDays, force: true) }
+                // maxDays; keep the platforms in lockstep). And a queued caller's own, when wider (W07-011).
+                let days = max(maxDays, pendingForcedRescoreDays)
+                pendingForcedRescoreDays = 0
+                launchForcedRePass(days)
             }
         }
 
