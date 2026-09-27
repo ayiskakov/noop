@@ -107,15 +107,15 @@ item as it lands.
       passes, 840 per-day lines become 171 and 11 summaries. V2 (independent subagent) held with caveats and added
       W07-006 … W07-009: W07-006 … W07-008 are fixed on the same branch, W07-009 (the `analyzeRecent` lock is not
       single-flight, S3, predates the fix) is recorded. V3 rides the sixth batch's strap run.
-- [ ] Seventh W6 batch, `review/w06-fixes-7` (stacked on `review/w07-day-line-repeats`), strap-free: W06-014 (a
+- [ ] Seventh W6 batch, `review/w06-fixes-7` (rebased onto `main` after #35 and #36 merged), strap-free: W06-014 (a
       relaunch can bootstrap the store twice), W07-009 (two re-scores can hold the lock at once), W06-008 (a
       drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
       and v21 records as undecodable). V2 (independent subagent) held W06-014 and W07-009 and held W06-008 and
       W06-005 with caveats; it added W06-123 … W06-128: W06-123, W06-125 and W06-126 are fixed on the same branch,
       W06-124, W06-127 and W06-128 are recorded. StrandTests 2,084, WhoopProtocol 788, both builds. An xhigh code
       review of the batch added W06-129 … W06-139 and W07-010 … W07-013: all are fixed on the same branch, with
-      W06-124, except W07-013 (deferred: the fix would rewrite PR #35's pushed history); W07-014 recorded. StrandTests 2,096,
-      WhoopProtocol 791, both builds (NOOPiOS without the watch app). Then a strap
+      W06-124, except W07-013 (deferred: the fix would rewrite PR #35's pushed history); W07-014 recorded. On `main` with
+      #36: StrandTests 2,097, WhoopProtocol 794, WhoopStore 554, both builds (NOOPiOS without the watch app). Then a strap
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
       status no longer names v20/v21 records as undecodable.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
