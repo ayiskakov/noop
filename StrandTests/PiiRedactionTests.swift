@@ -37,6 +37,23 @@ final class PiiRedactionTests: XCTestCase {
         XCTAssertEqual(LiveState.redactPii("Ryan B's Whoop"), "Ryan <name>'s Whoop")
     }
 
+    /// W06-140: the rule starts a match where a run starts or where the previous match ended, so a name
+    /// written straight after an earlier match is still masked, as it was when the rule tried every position.
+    func testNameRightAfterAnEarlierMatchIsRedacted() {
+        XCTAssertEqual(LiveState.redactPii("Ryan's WhoopAnna's Whoop"), "<name>'s Whoop<name>'s Whoop")
+    }
+
+    /// W06-140: a long hex dump is one run of the name rule's class. Tried from every position the rule
+    /// backtracked quadratically over it (6.4 s for 20,000 characters on a Mac, about 3 ms now), on the main
+    /// actor ahead of the offload's ack. The bound is far above the new cost and far below the old one.
+    func testALongHexRunPassesTheNameRuleQuickly() {
+        let run = String(repeating: "aa01d40401005c702f15", count: 1_000)
+        let line = "Backfill: rejected frame[0] 10000B: " + run
+        let start = Date()
+        XCTAssertEqual(LiveState.redactPii(line), line)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0)
+    }
+
     /// The rule must not touch ids or ordinary text that merely contain "whoop".
     func testNameRuleLeavesIdsAndPlainTextAlone() {
         XCTAssertEqual(LiveState.redactPii("my-whoop and my-whoop-noop"), "my-whoop and my-whoop-noop")

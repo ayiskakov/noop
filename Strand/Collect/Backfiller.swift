@@ -616,6 +616,13 @@ final class Backfiller {
     private func finishChunk(unix: UInt32, trim: UInt32, endFrame: [UInt8]) async {
         guard let endData = Backfiller.endData(from: endFrame, family: family) else { return }
         let token = session
+        // W06-110: the reject hex dump is logged when this END is done with, after its ack. The strap drops a
+        // transfer whose ack comes 7 s or more after the chunk (it sends neither the next chunk nor
+        // HISTORY_COMPLETE, and the next request replays the chunk), and eight dump lines ahead of the ack took
+        // 7 to 9 s on the owner's phone. The archive write, the only copy of those records, stays before it.
+        // The lines are built there too, since formatting a frame's hex is part of the cost.
+        var dumpLines: [() -> String] = []
+        defer { for line in dumpLines { log?(line()) } }
 
         // #773: corrupt future-RTC detection. A HISTORY_END carries the strap's own clock; a genuine offload
         // is always PAST-dated (it's banked history), so an end dated days into the future can only be a
@@ -882,20 +889,25 @@ final class Backfiller {
                     // #1007: an all-zero frame has no record layout to map, so its hex dump is pure log
                     // bloat (a strap emitting these produced ~4 MB of all-00). Keep the WARNING count above.
                     if isEmptyRecordFrame(f) { emptySkipped += 1; continue }
-                    let hex = f.map { String(format: "%02x", $0) }.joined()
-                    log?("Backfill: rejected frame[\(i)] \(f.count)B: \(hex)")
+                    dumpLines.append {
+                        "Backfill: rejected frame[\(i)] \(f.count)B: \(f.map { String(format: "%02x", $0) }.joined())"
+                    }
                     rejectHexBudget -= 1
                 }
                 if emptySkipped > 0 {
-                    log?("Backfill: #1007 \(emptySkipped)/\(sample.count) sampled frame(s) all-zero (empty payload) - hex dump skipped")
+                    let skipped = emptySkipped, sampled = sample.count
+                    dumpLines.append { "Backfill: #1007 \(skipped)/\(sampled) sampled frame(s) all-zero (empty payload) - hex dump skipped" }
                 }
                 // Say ONCE that the sample is capped, so a reader knows the dump is a sample rather than
                 // everything the strap sent, and where the rest lives.
                 if rejectHexBudget <= 0, !rejectHexSuppressedNoted {
                     rejectHexSuppressedNoted = true
-                    log?("Backfill: hex dumps capped at \(Backfiller.rejectHexDumpBudget) frame(s) while this connection lasts "
-                         + "(\(rejectFramesSeen) undecodable frame(s) seen so far); the complete records are in the "
-                         + "reject archive. Sample is enough to map a layout (#1992)")
+                    let seen = rejectFramesSeen
+                    dumpLines.append {
+                        "Backfill: hex dumps capped at \(Backfiller.rejectHexDumpBudget) frame(s) while this connection lasts "
+                            + "(\(seen) undecodable frame(s) seen so far); the complete records are in the "
+                            + "reject archive. Sample is enough to map a layout (#1992)"
+                    }
                 }
             }
             // Commit the decoded rows FIRST (durable). Doing this before the reject archive means a
