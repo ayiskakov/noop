@@ -178,7 +178,7 @@ final class LiveStateLogGenerationsTests: XCTestCase {
     func testAGenerationHeaderCountsTheWholeSessionNotTheTailCap() {
         let tail = (0..<LiveState.tailLimit).map { "line \($0)" }
         UserDefaults.standard.set(tail, forKey: tailKey)
-        UserDefaults.standard.set(5_185, forKey: tailSessionLinesKey)
+        UserDefaults.standard.set(["lines": 5_185, "lastLine": tail.last!], forKey: tailSessionLinesKey)
 
         LiveState.rollLogGenerationsIfNeeded()
 
@@ -189,11 +189,27 @@ final class LiveStateLogGenerationsTests: XCTestCase {
     /// A tail the ring and the cap both kept whole is unclipped even when its count was persisted.
     func testAWholeSessionWithACountClaimsNoLoss() {
         UserDefaults.standard.set(["a", "b"], forKey: tailKey)
-        UserDefaults.standard.set(2, forKey: tailSessionLinesKey)
+        UserDefaults.standard.set(["lines": 2, "lastLine": "b"], forKey: tailSessionLinesKey)
 
         LiveState.rollLogGenerationsIfNeeded()
 
         let header = LiveState.persistedLogGenerations()[0][0]
+        XCTAssertTrue(header.contains("2 line(s)"), header)
+        XCTAssertFalse(header.contains("clipped"), header)
+    }
+
+    /// W06-119: a build without the count key writes a tail and never the count, so a count left by a newer
+    /// build must not be read against that tail and invent a clip.
+    func testACountLeftByAnotherBuildIsNotPairedWithItsTail() {
+        let live = LiveState()
+        for i in 0..<40 { live.append(log: "new build line \(i)") }   // persists the tail and its count at 32
+        LiveState.resetGenerationRollLatchForTesting()
+        // An older build runs: it rolls nothing we check here and writes a short tail of its own.
+        UserDefaults.standard.set(["old build a", "old build b"], forKey: tailKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations().last?[0] ?? ""
         XCTAssertTrue(header.contains("2 line(s)"), header)
         XCTAssertFalse(header.contains("clipped"), header)
     }

@@ -782,16 +782,23 @@ public final class LiveState: ObservableObject {
     nonisolated private static func persistTail(_ lines: [String], sessionLines: Int) {
         let tail = lines.count > tailLimit ? Array(lines.suffix(tailLimit)) : lines
         UserDefaults.standard.set(tail, forKey: tailKey)
-        UserDefaults.standard.set(sessionLines, forKey: tailSessionLinesKey)
+        UserDefaults.standard.set(["lines": sessionLines, "lastLine": tail.last ?? ""], forKey: tailSessionLinesKey)
     }
 
     /// How many lines the process behind the durable tail had logged when it was last mirrored (W06-108), so
     /// an export read from the tail can say how much of that session's head is missing. Written with the
-    /// tail and cleared with it; 0 when unknown (a tail from a build before this key).
+    /// tail and cleared with it; 0 when unknown.
+    ///
+    /// W06-119: stored with the tail's last line and read only when that still ends the tail. A build without
+    /// this key writes a tail and never the count, and a count left by a newer build would otherwise be read
+    /// against that tail and invent a clip.
     private static let tailSessionLinesKey = "strapLog.tailSessionLines"
 
     nonisolated static func persistedTailSessionLines() -> Int {
-        UserDefaults.standard.integer(forKey: tailSessionLinesKey)
+        guard let stored = UserDefaults.standard.dictionary(forKey: tailSessionLinesKey),
+              let lines = stored["lines"] as? Int, let lastLine = stored["lastLine"] as? String,
+              lastLine == (persistedLogTail().last ?? "") else { return 0 }
+        return lines
     }
 
     /// The persisted log tail, newest-last — what a scheduled export reads when no live session is open.
