@@ -114,7 +114,7 @@ item as it lands.
       W06-005 with caveats; it added W06-123 … W06-128: W06-123, W06-125 and W06-126 are fixed on the same branch,
       W06-124, W06-127 and W06-128 are recorded. StrandTests 2,084, WhoopProtocol 788, both builds. An xhigh code
       review of the batch added W06-129 … W06-139 and W07-010 … W07-013: all are fixed on the same branch, with
-      W06-124, except W07-013 (deferred: the fix would rewrite PR #35's pushed history). StrandTests 2,095,
+      W06-124, except W07-013 (deferred: the fix would rewrite PR #35's pushed history); W07-014 recorded. StrandTests 2,096,
       WhoopProtocol 791, both builds (NOOPiOS without the watch app). Then a strap
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
       status no longer names v20/v21 records as undecodable.

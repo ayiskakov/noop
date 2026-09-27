@@ -355,5 +355,5 @@ exactly what was tested on hardware.
 - 2026-09-27 — W06-137 fixed (a session counter in `BackfillDrain`).
 - 2026-09-27 — W06-138 fixed (the offload link boundary also runs at `didConnect`).
 - 2026-09-27 — W06-139 fixed (the wait line keys on an ingest in flight).
-- 2026-09-27 — The xhigh review's W6 rows are fixed; batch gate: StrandTests 2,095, WhoopProtocol 791, Strand and NOOPiOS (no watch) build, hygiene gates pass. V3 for W06-124, W06-135 … W06-138 needs the batch's reconnect-mid-offload strap run; W06-129 needs a sync whose status names no v16 record.
+- 2026-09-27 — The xhigh review's W6 rows are fixed; batch gate: StrandTests 2,095 (2,096 after the timeout correction), WhoopProtocol 791, Strand and NOOPiOS (no watch) build, hygiene gates pass. V3 for W06-124, W06-135 … W06-138 needs the batch's reconnect-mid-offload strap run; W06-129 needs a sync whose status names no v16 record.
 - 2026-09-27 — W06-124/135: the idle timeout no longer moves the Backfiller's session token (it stranded a slow write's ack).
