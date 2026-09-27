@@ -93,20 +93,27 @@ item as it lands.
       connect's first 10 s leaves the next link with a clock verdict of its own. Merged as PR #33 and shipped in
       11.9.12. First strap check done on the owner's 2026-09-27 export: a plain connect sent no SET_CLOCK and moved
       the strap clock 0 s (the strap's own `SET_RTC` events; W06-050's row). The log ring had evicted that
-      connect's handshake (W06-108), so the other four checks are still due; export the log within an hour of
-      each.
+      connect's handshake (W06-108). Second strap check on the owner's 2026-09-27 evening export (11.9.13): checks
+      3 (the #1303 line) and 4 (a relaunch's second read and in-sync verdict) pass; checks 2 and 5 are still due.
+      The same export showed W06-083 on hardware: a Bluetooth power-off later in a link leaves the next link with
+      no handshake and no clock check, so check 5 covers only the first 10 s until W06-083 is fixed.
 - [ ] Sixth W6 batch, `review/w06-fixes-6` (stacked on `review/strap-run-2026-09-27`), from the 2026-09-27 export:
       W06-108 (the strap log keeps hours, and a clipped session says so), W06-113, W06-109; W06-114 and W06-115
       recorded. V2 (independent subagent) held all three with caveats and added W06-116 … W06-122 and W07-005:
       W06-116 … W06-120 are fixed on the same branch, W06-121, W06-122 and W07-005 are recorded. Then a strap run: a
       current session spanning about 2 h or more with Test Centre → Connection on, and an off-wrist offload that logs
       `Wrist: WRIST_OFF on this link` and no clock/charge line. Once this batch ships, the clock batch's
-      remaining checks no longer need the log exported within an hour.
+      remaining checks no longer need the log exported within an hour. Merged as PR #34 and shipped in 11.9.13. Its
+      strap run, on the owner's 2026-09-27 evening export, is partial: an 82-minute session with Connection on came
+      out whole (about 2.2 h of ring at its density, and W06-118's per-reading flood is gone), and the off-wrist
+      offload logged the wrist line and no clock or charge line but stalled before the no-cursor branch (W06-110).
+      Still due: the 2 h session, and an off-wrist offload that ends on trim=0xFFFFFFFF.
 - [ ] W07-005 on `review/w07-day-line-repeats` (stacked on `review/w06-fixes-6`): a re-score prints a day's line
       only when it changed or its last print is an hour old, and counts what it withheld. On the 2026-09-27 log's 12
       passes, 840 per-day lines become 171 and 11 summaries. V2 (independent subagent) held with caveats and added
       W07-006 … W07-009: W07-006 … W07-008 are fixed on the same branch, W07-009 (the `analyzeRecent` lock is not
-      single-flight, S3, predates the fix) is recorded. V3 rides the sixth batch's strap run.
+      single-flight, S3, predates the fix) is recorded. Merged as PR #35 and shipped in 11.9.13; V3 passes on the
+      owner's 2026-09-27 evening export (18 passes: 1,422 per-day lines become 366 and 16 summaries).
 - [ ] Seventh W6 batch, `review/w06-fixes-7` (rebased onto `main` after #35 and #36 merged), strap-free: W06-014 (a
       relaunch can bootstrap the store twice), W07-009 (two re-scores can hold the lock at once), W06-008 (a
       drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
@@ -125,6 +132,8 @@ item as it lands.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
       W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows. W01-006 fixed on
       `review/w01-raw-record` (migration v50); a strap sync then shows new v26 rows carrying their record.
+      Merged as PR #36 and shipped in 11.9.13: on the owner's 2026-09-27 evening export all 154 new v26 rows carry
+      their record; the v16 half waits for an ECG session.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one
