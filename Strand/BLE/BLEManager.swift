@@ -959,7 +959,8 @@ public final class BLEManager: NSObject, ObservableObject {
             guard let self else { return false }
             self.afterBackfillIngest()
             return self.backfilling
-        })
+        },
+        log: { [weak self] line in self?.log(line) })
 
     /// Records WHOOP 5/MG puffin frames to a JSON file for protocol mapping. Passive (read-only on the
     /// strap) and gated by the Settings → Experimental "Record puffin frames" toggle; a no-op for
@@ -2537,6 +2538,14 @@ public final class BLEManager: NSObject, ObservableObject {
     /// The `trim` argument (= end_data first u32) is already persisted as the strap_trim cursor by
     /// the Backfiller; it is passed here only for logging.
     func ackHistoricalChunk(trim: UInt32, endData: [UInt8]) {
+        // W06-008: a chunk whose END began ingesting on a link that has since ended is not acked on the one now
+        // up. Its rows are persisted, so the ack would be honest, but it would reach the strap out of sequence
+        // on a link that never delivered that chunk, and an ack frees flash. Not sending it costs one re-sent
+        // chunk, which dedupes by timestamp. Always-on: rare, and the only trace of the case.
+        if backfillDrain.ingestOutlivedItsLink {
+            log("Backfill: chunk ack (trim=\(trim)) not sent — its END began on a link that has since ended, so the chunk stays on the strap to be re-sent (W06-008)")
+            return
+        }
         send(.historicalDataResult, payload: [0x01] + endData, writeType: .withResponse)
         // Progress signal for the "Syncing strap history…" UI (#77). Same main-queue delegate path as
         // the other state mutations (e.g. lastSyncedAt in exitBackfilling). NOT historicalAckLogCounter
