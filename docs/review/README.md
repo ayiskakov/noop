@@ -96,8 +96,10 @@ item as it lands.
       connect's handshake (W06-108), so the other four checks are still due; export the log within an hour of
       each.
 - [ ] Sixth W6 batch, `review/w06-fixes-6` (stacked on `review/strap-run-2026-09-27`), from the 2026-09-27 export:
-      W06-108 (the strap log keeps hours, and a clipped session says so), W06-113, W06-109. Then a strap run: a
-      default log whose current session spans several hours, and an off-wrist offload.
+      W06-108 (the strap log keeps hours, and a clipped session says so), W06-113, W06-109; W06-114 and W06-115
+      recorded. Then a strap run: a default log whose current session spans several hours, and an off-wrist offload
+      that logs `Wrist: WRIST_OFF on this link` and no clock/charge line. Once this batch ships, the clock batch's
+      remaining checks no longer need the log exported within an hour.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
