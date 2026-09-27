@@ -102,6 +102,9 @@ item as it lands.
       current session spanning about 2 h or more with Test Centre → Connection on, and an off-wrist offload that logs
       `Wrist: WRIST_OFF on this link` and no clock/charge line. Once this batch ships, the clock batch's
       remaining checks no longer need the log exported within an hour.
+- [ ] W07-005 on `review/w07-day-line-repeats` (stacked on `review/w06-fixes-6`): a re-score prints a day's line
+      only when it changed or its last print is an hour old, and counts what it withheld. On the 2026-09-27 log's 12
+      passes, 840 per-day lines become 171 and 11 summaries. V2 due; V3 rides the sixth batch's strap run.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
