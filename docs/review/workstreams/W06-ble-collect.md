@@ -334,3 +334,4 @@ exactly what was tested on hardware.
 - 2026-09-27 — W06-008 fixed (the drain moved into `BackfillDrain`, a1fe3bfa, then made single-flight across links; the stale END's ack is not sent).
 - 2026-09-27 — W06-005 fixed (intact v20/v21 records are no longer reported as undecodable; oracle over the owner's reject archives).
 - 2026-09-27 — V2 of the seventh batch (independent subagent): W06-014 and W07-009 hold; W06-008 and W06-005 hold with caveats. Its findings are W06-123 … W06-128; W06-008's caveat and V0 wording corrected.
+- 2026-09-27 — W06-123 fixed.

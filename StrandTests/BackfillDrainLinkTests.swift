@@ -55,7 +55,23 @@ final class BackfillDrainLinkTests: XCTestCase {
             "begin A-START", "end A-START", "begin A-1", "end A-1", "begin A-END", "ack stale=true", "end A-END",
             "begin B-START", "end B-START", "begin B-1", "end B-1", "begin B-END", "ack stale=false", "end B-END",
         ], "the next link's frames wait for the old END, and the old link's remaining frame is not ingested")
+        // W06-123: the wait is said, once, when the next link's drain starts behind the old one.
+        XCTAssertEqual(lines.filter { $0.contains("waits for the previous link's drain") }.count, 1, "\(lines)")
         XCTAssertEqual(lines.filter { $0.contains("the link ended during an ingest") }.count, 1, "\(lines)")
-        XCTAssertTrue(lines.first?.contains("1 frame(s) of that link are not ingested") == true, "\(lines)")
+        XCTAssertTrue(lines.contains { $0.contains("1 frame(s) of that link are not ingested") }, "\(lines)")
+    }
+
+    /// W06-123: a drain that starts with no earlier one still running says nothing.
+    func testAnOrdinaryDrainLogsNoWait() async {
+        var lines: [String] = []
+        var ingested = 0
+        let drain = BackfillDrain(batchSize: 12, ingest: { _ in ingested += 1 }, afterIngest: { true },
+                                  log: { lines.append($0) })
+        drain.route([1]); drain.route([2])
+        await until { ingested == 2 }
+        drain.linkEnded()
+        drain.route([3])
+        await until { ingested == 3 }
+        XCTAssertEqual(lines, [])
     }
 }

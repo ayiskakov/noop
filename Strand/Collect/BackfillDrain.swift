@@ -19,6 +19,8 @@ final class BackfillDrain {
     private var lastDrain: Task<Void, Never>?
     /// The link the ingest in flight began on; nil between ingests.
     private var ingestLink: Int?
+    /// Drain tasks started and not yet finished, across links.
+    private var runningDrains = 0
     private let batchSize: Int
     private let ingest: ([UInt8]) async -> Void
     /// Called after every ingest; false ends the drain and drops what is still queued (the session ended).
@@ -43,9 +45,17 @@ final class BackfillDrain {
         draining = true
         let previous = lastDrain
         let started = link
+        if runningDrains > 0 {
+            // W06-123: an earlier link's drain is still in an ingest, and this link's frames wait for it. Said
+            // always (rare), since an ingest that never returns would otherwise stall every later offload until
+            // its idle timeout, which blames a quiet strap.
+            log("Backfill: this link's offload waits for the previous link's drain, still in an ingest (W06-008)")
+        }
+        runningDrains += 1
         lastDrain = Task { @MainActor in
             await previous?.value
             await self.drain(link: started)
+            self.runningDrains -= 1
         }
     }
 
