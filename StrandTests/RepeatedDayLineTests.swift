@@ -128,7 +128,8 @@ final class RepeatedDayLineTests: XCTestCase {
     /// One pass over `lines` at `now`: the lines it prints, and its summary.
     private func pass(_ filter: inout RepeatedDayLineFilter, _ lines: [String], at now: Date) -> ([String], String?) {
         filter.beginPass(now: now)
-        return (lines.filter { filter.admit($0, now: now) }, filter.summaryLine())
+        let printed = lines.filter { filter.admit($0, now: now) }
+        return (printed, filter.endPass())
     }
 
     /// Every per-day shape the engine routes through the filter, with synthetic values.
@@ -211,7 +212,7 @@ final class RepeatedDayLineTests: XCTestCase {
         _ = pass(&filter, [shapes[0]], at: t0)
         filter.beginPass(now: t0 + RepeatedDayLineFilter.refreshAfter - 30)
         XCTAssertTrue(filter.admit(shapes[0], now: t0 + RepeatedDayLineFilter.refreshAfter))
-        XCTAssertNil(filter.summaryLine())
+        XCTAssertNil(filter.endPass())
     }
 
     func testTheSummaryNamesTheOldestPrintItReliesOn() {
@@ -232,4 +233,22 @@ final class RepeatedDayLineTests: XCTestCase {
         XCTAssertEqual(second.0, [line])
         XCTAssertNil(second.1)
     }
+
+    // MARK: - V2 findings
+
+    /// W07-006: a line whose value comes before its `day=` token must still key on its label and day, or a
+    /// value that returns to an earlier one within the hour compares against that stale print.
+    func testAValueThatReturnsWithinTheHourPrintsAgain() {
+        var filter = RepeatedDayLineFilter()
+        let a = "rr dupPairs n=5 same=1 tick=0 day=2026-01-02"
+        let b = "rr dupPairs n=6 same=1 tick=0 day=2026-01-02"
+        XCTAssertEqual(pass(&filter, [a], at: t0).0, [a])
+        XCTAssertEqual(pass(&filter, [b], at: t0 + 600).0, [b])
+        XCTAssertEqual(pass(&filter, [a], at: t0 + 1_200).0, [a], "the log's latest copy says n=6")
+        XCTAssertEqual(RepeatedDayLineFilter.dayKey(of: "rr deliveries secs[1/2/3/4+]=1/2/3/4 day=2026-01-02"),
+                       "rr deliveries day=2026-01-02")
+        XCTAssertEqual(RepeatedDayLineFilter.dayKey(of: a), "rr dupPairs day=2026-01-02")
+        XCTAssertEqual(RepeatedDayLineFilter.dayKey(of: "hrv dedup day=2026-01-02 exactN=1/2"), "hrv dedup day=2026-01-02")
+    }
+
 }

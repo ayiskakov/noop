@@ -8,13 +8,13 @@ import Foundation
 /// most of them are byte-identical to the last pass: on the owner's 2026-09-27 log, 733 of 840 over 12
 /// passes. They were the largest share of the log ring and limited how far back an export reached.
 ///
-/// A line is keyed by its text through its `day=YYYY-MM-DD` token plus its occurrence within the pass
+/// A line is keyed by its label and its `day=YYYY-MM-DD` token plus its occurrence within the pass
 /// (a day can carry two `effort bout` lines), so a changed value on the same key prints. A line with no
 /// day token always prints. An unchanged line prints again once its last print is `refreshAfter` old,
 /// so every scored day keeps a recent copy in the exports: the durable tail keeps 2,000 lines, which is
 /// about 75 min at that log's density once the repeats are gone, and the live ring about 3 h.
 ///
-/// The pass's `summaryLine` counts what it withheld and names the oldest print it relies on, so a reader
+/// The pass's `endPass` line counts what it withheld and names the oldest print it relies on, so a reader
 /// whose export starts after that time knows the copy is not in it. Lines are compared before
 /// `LiveState.redactPii`: route only counts-and-day-key lines through here, never one carrying an
 /// identifier, or two lines the scrub would make identical could compare as different (and the reverse).
@@ -53,7 +53,7 @@ struct RepeatedDayLineFilter {
 
     /// One line accounting for this pass's withheld lines; nil when it withheld none. The time is local
     /// `HH:mm:ss`, the stamp the Collector's lines around it carry.
-    func summaryLine() -> String? {
+    mutating func endPass() -> String? {
         guard withheld > 0, let oldest = oldestWithheldPrint else { return nil }
         return "re-score: \(withheld) per-day line(s) unchanged since their last print, not repeated "
             + "(oldest print \(Self.timeFormatter.string(from: oldest)))"
@@ -63,9 +63,14 @@ struct RepeatedDayLineFilter {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
     }()
 
-    /// The line's text through its first `day=YYYY-MM-DD` token, or nil when it has none.
+    /// The line's label (its leading words, up to the first `key=value` token) and its first
+    /// `day=YYYY-MM-DD`, as `label day=D`; nil when it has no day. Not the text through the day token: two
+    /// lines print their values before it (`rr deliveries …=… day=D`, `rr dupPairs n=… day=D`), and a key
+    /// holding a value lets a value that returns to an earlier one compare against that stale print
+    /// (W07-006).
     static func dayKey(of line: String) -> String? {
         guard let range = line.range(of: #"day=\d{4}-\d{2}-\d{2}"#, options: .regularExpression) else { return nil }
-        return String(line[..<range.upperBound])
+        let label = line.split(separator: " ").prefix { !$0.contains("=") }.joined(separator: " ")
+        return label.isEmpty ? String(line[range]) : "\(label) \(line[range])"
     }
 }

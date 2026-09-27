@@ -2951,7 +2951,7 @@ final class IntelligenceEngine: ObservableObject {
         // by more than an order of magnitude with history size.
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds &- reScoreStart) / 1_000_000_000
         let settled = RescoreBackgroundScheduler.markRescoreCompleted(seconds: elapsed, owedToken: owedToken)
-        if let line = dayLineFilter.summaryLine() { diagnosticSink?(line, nil) }
+        if let line = dayLineFilter.endPass() { diagnosticSink?(line, nil) }
         diagnosticSink?("re-score: done — scored \(scoredNights.count) night(s) in \(Int(elapsed * 1000)) ms (#1005)", nil)
         diagnosticSink?(RescoreBackgroundScheduler.passCostLogLine(
             cpuSeconds: RescoreBackgroundScheduler.processCPUSeconds().flatMap { end in reScoreCPUStart.map { end - $0 } },
