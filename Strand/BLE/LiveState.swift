@@ -842,9 +842,13 @@ public final class LiveState: ObservableObject {
         // announced "2,000 line(s)" and read as a complete session — a reader (or a log tool) then
         // measures the missing head as silence. Both numbers are printed: the pre-clip total is what
         // tells anyone how much is gone.
-        let count = clipped.count == tail.count
-            ? "\(tail.count) line(s)"
-            : "\(clipped.count) of \(tail.count) line(s), head clipped"
+        // W06-113: the pre-clip total is the SESSION's line count, persisted beside the tail, not the tail's
+        // length: the tail holds at most `tailLimit`, so every longer session read as one of exactly 2,000.
+        // A tail from a build before that key has no count, and its length is the best there is.
+        let total = max(tail.count, persistedTailSessionLines())
+        let count = clipped.count == total
+            ? "\(total) line(s)"
+            : "\(clipped.count) of \(total) line(s), head clipped"
         let header = "===== previous app session, \(count), rolled at "
             + iso.string(from: now) + " (this launch) ====="
         var gens = persistedLogGenerations()

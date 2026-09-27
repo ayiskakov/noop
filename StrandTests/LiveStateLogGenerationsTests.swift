@@ -170,4 +170,31 @@ final class LiveStateLogGenerationsTests: XCTestCase {
         XCTAssertFalse(live.exportableLogText().contains("clipped"))
         XCTAssertFalse(LiveState.scheduledExportText().contains("clipped"))
     }
+
+    // MARK: - W06-113: a previous session's header counts the session, not the tail's cap
+
+    /// The durable tail holds the newest `tailLimit` lines of a session that logged more. The generation's
+    /// header must report the session's own count, which the tail's length cannot tell.
+    func testAGenerationHeaderCountsTheWholeSessionNotTheTailCap() {
+        let tail = (0..<LiveState.tailLimit).map { "line \($0)" }
+        UserDefaults.standard.set(tail, forKey: tailKey)
+        UserDefaults.standard.set(5_185, forKey: tailSessionLinesKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations()[0][0]
+        XCTAssertTrue(header.contains("\(LiveState.generationTailLimit) of 5185 line(s), head clipped"), header)
+    }
+
+    /// A tail the ring and the cap both kept whole is unclipped even when its count was persisted.
+    func testAWholeSessionWithACountClaimsNoLoss() {
+        UserDefaults.standard.set(["a", "b"], forKey: tailKey)
+        UserDefaults.standard.set(2, forKey: tailSessionLinesKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations()[0][0]
+        XCTAssertTrue(header.contains("2 line(s)"), header)
+        XCTAssertFalse(header.contains("clipped"), header)
+    }
 }
