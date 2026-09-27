@@ -121,6 +121,10 @@ final class Backfiller {
     /// Without it the fresh session's `sessionRowsPersisted` is 0 and the scary "charge to 100%" line
     /// false-fires on the empty tail of a sync that just offloaded real records.
     private(set) var continuedAfterRows = false
+    /// W06-109: the strap's last wrist event on this link was WRIST_OFF when this session began
+    /// (`LiveState.wristEventThisLink`). Taken
+    /// once per session so the no-cursor line and BLEManager's empty-sync verdict read the same wrist state.
+    private(set) var strapOffWrist = false
     /// #57: set true the moment ANY chunk's persist (decoded rows / reject archive / raw enqueue / trim
     /// cursor) fails this session. While set, `finishChunk` must NOT ack — not even a subsequent EMPTY END,
     /// which skips the insert and would otherwise advance the strap's trim PAST the held records-carrying
@@ -317,9 +321,10 @@ final class Backfiller {
     /// Called by BLEManager when the strap signals a historical offload is beginning.
     /// chunkOpen starts TRUE: the high-freq-sync biometric replay streams records immediately and
     /// sends one HISTORY_START then repeated HISTORY_ENDs, so we must accumulate from the outset.
-    func begin(family: DeviceFamily, continuedAfterRows: Bool = false) {
+    func begin(family: DeviceFamily, continuedAfterRows: Bool = false, strapOffWrist: Bool = false) {
         self.family = family
         self.continuedAfterRows = continuedAfterRows
+        self.strapOffWrist = strapOffWrist
         isBackfilling = true
         persistStalled = false   // #57: fresh session starts un-stalled
         chunk.removeAll(keepingCapacity: true)
@@ -474,7 +479,11 @@ final class Backfiller {
     /// "caught up, nothing left past the last trim", NOT "no history". Emitting the alarming "fully charge
     /// it" line there falsely scared users whose strap had just synced fine. So pick by `rowsPersisted`:
     /// > 0 gives a neutral caught-up line; 0 gives the genuine no-history guidance. Pure so a fixture pins both.
-    nonisolated static func noCursorLine(rowsPersisted: Int, continuedAfterRows: Bool = false) -> String {
+    ///
+    /// W06-109: with no rows and a strap whose last wrist event was WRIST_OFF, the empty offload is not
+    /// read as a clock/charge state: the line states the wrist fact, and the charge advice is left out.
+    nonisolated static func noCursorLine(rowsPersisted: Int, continuedAfterRows: Bool = false,
+                                         strapOffWrist: Bool = false) -> String {
         if rowsPersisted > 0 {
             return "Backfill: reached the end of available history (trim=0xFFFFFFFF) - caught up after persisting \(rowsPersisted) row(s) this run. Nothing more to offload."
         }
@@ -483,6 +492,9 @@ final class Backfiller {
         // history / charge to 100%".
         if continuedAfterRows {
             return "Backfill: reached the end of available history (trim=0xFFFFFFFF) - caught up; the strap handed over its banked history earlier this sync. Nothing more to offload."
+        }
+        if strapOffWrist {
+            return "Backfill: no history to offload (trim=0xFFFFFFFF) and the strap's last wrist event was WRIST_OFF - an off-wrist strap may have nothing new to bank, so this is not read as a clock or charge state."
         }
         return "Backfill: strap reported no flash cursor (trim=0xFFFFFFFF) - it has no banked history to offload. This is a clock/charge state on the strap, not a decode problem; fully charge it and reconnect so it starts banking."
     }
@@ -950,7 +962,8 @@ final class Backfiller {
         // session (loggedNoCursor) and the ack still proceeds below.
         if trim == 0xFFFFFFFF, !loggedNoCursor {
             loggedNoCursor = true
-            log?(Backfiller.noCursorLine(rowsPersisted: sessionRowsPersisted, continuedAfterRows: continuedAfterRows))
+            log?(Backfiller.noCursorLine(rowsPersisted: sessionRowsPersisted, continuedAfterRows: continuedAfterRows,
+                                         strapOffWrist: strapOffWrist))
             // Connection test mode: the no-cursor sentinel as a compact tagged line (gated zero-cost).
             emitConnection(ConnectionTrace.noCursorLine())
         }

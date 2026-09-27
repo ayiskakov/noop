@@ -357,9 +357,9 @@ public final class FrameRouter {
                 if ev.hasPrefix("DOUBLE_TAP") {
                     dispatchDoubleTapOnce(eventTimestamp: parsed.parsed["event_timestamp"]?.intValue)
                 } else if ev.hasPrefix("WRIST_ON") {
-                    if !state.worn { state.worn = true; state.onWristChange?(true) }
+                    noteWristEvent(on: true)
                 } else if ev.hasPrefix("WRIST_OFF") {
-                    if state.worn { state.worn = false; state.onWristChange?(false) }
+                    noteWristEvent(on: false)
                 } else if ev.hasPrefix("STRAP_DRIVEN_ALARM_EXECUTED") {
                     // Fire observability (#401 close-out): Android has always logged this line
                     // (WhoopBleClient.handleFrame); iOS/macOS silently ran the callback, which is why a
@@ -562,10 +562,21 @@ public final class FrameRouter {
         if ev.hasPrefix("DOUBLE_TAP") {
             dispatchDoubleTapOnce(eventTimestamp: ts)
         } else if ev.hasPrefix("WRIST_ON") {
-            if !state.worn { state.worn = true; state.onWristChange?(true) }
+            noteWristEvent(on: true)
         } else if ev.hasPrefix("WRIST_OFF") {
-            if state.worn { state.worn = false; state.onWristChange?(false) }
+            noteWristEvent(on: false)
         }
+    }
+
+    /// One live wrist event: the wear state, its callback, and the per-link record an empty offload is
+    /// judged by (W06-109). A change of the per-link record is logged, always-on: it is rare, and it is the
+    /// only trace of why an empty offload was or was not excused as off-wrist.
+    private func noteWristEvent(on: Bool) {
+        if state.wristEventThisLink != on {
+            state.wristEventThisLink = on
+            state.append(log: "Wrist: \(on ? "WRIST_ON" : "WRIST_OFF") on this link")
+        }
+        if state.worn != on { state.worn = on; state.onWristChange?(on) }
     }
 
     // MARK: - Double-tap de-duplication
