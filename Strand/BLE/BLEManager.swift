@@ -272,13 +272,16 @@ struct EmptySyncTracker {
     /// began (`LiveState.wristEventThisLink`). An off-wrist strap handing over nothing says nothing about its
     /// clock (the 2026-09-27 export: WRIST_OFF, then two empty offloads 10 min apart and no banked record), so
     /// such a cycle neither counts toward the streak nor clears it. Back on the wrist, an empty one counts again.
+    /// W06-116: "nor clears" includes the verdict. An excused cycle returns the streak it leaves standing, so a
+    /// banner that on-wrist cycles already raised stays up while the strap sits off the wrist (on a charger,
+    /// say) rather than vanishing with the streak still at the threshold.
     mutating func recordCompletedSync(bankedSensorRecords: Bool, consoleOnly: Bool,
                                       strapOffWrist: Bool = false) -> Bool {
         guard consoleOnly, !bankedSensorRecords else {
             consecutiveEmptySyncs = 0
             return false
         }
-        if strapOffWrist { return false }
+        if strapOffWrist { return consecutiveEmptySyncs >= threshold }
         consecutiveEmptySyncs += 1
         return consecutiveEmptySyncs >= threshold
     }
@@ -2810,10 +2813,12 @@ public final class BLEManager: NSObject, ObservableObject {
             // charge state. Read from the Backfiller's snapshot, the one its no-cursor line used, so the line
             // and the banner cannot disagree about the wrist.
             let strapOffWrist = backfiller?.strapOffWrist == true
-            let bankedNothing = banking.bankedNothing && !productiveBurstTail && !strapOffWrist
             let sustainedEmpty = productiveBurstTail ? false : emptySyncTracker.recordCompletedSync(
                 bankedSensorRecords: bankedSensorRecords, consoleOnly: banking.bankedNothing,
                 strapOffWrist: strapOffWrist)
+            // W06-116: an off-wrist cycle is excused only from raising the banner. One the streak already holds
+            // keeps its branch below, so `lastSyncError` and `sustainedEmptyOffload` agree with the streak.
+            let bankedNothing = banking.bankedNothing && !productiveBurstTail && (!strapOffWrist || sustainedEmpty)
             if banking.bankedNothing, strapOffWrist, !productiveBurstTail {
                 log("Backfill: completed with no sensor history while the strap's last wrist event was WRIST_OFF; not counted as an empty sync (consecutive empty syncs stay \(emptySyncTracker.consecutiveEmptySyncs)).")
             }

@@ -47,6 +47,17 @@ final class EmptyOffloadWristTests: XCTestCase {
         XCTAssertTrue(t.recordCompletedSync(bankedSensorRecords: false, consoleOnly: true))
     }
 
+    /// W06-116: a banner the on-wrist cycles raised stays up through an off-wrist cycle: the excused cycle
+    /// reports the sustained streak it leaves standing, and the call site keeps the banner branch for it.
+    func testAnOffWristCycleKeepsABannerAlreadyRaised() {
+        var t = EmptySyncTracker()
+        _ = t.recordCompletedSync(bankedSensorRecords: false, consoleOnly: true)
+        _ = t.recordCompletedSync(bankedSensorRecords: false, consoleOnly: true)
+        XCTAssertTrue(t.recordCompletedSync(bankedSensorRecords: false, consoleOnly: true))
+        XCTAssertTrue(t.recordCompletedSync(bankedSensorRecords: false, consoleOnly: true, strapOffWrist: true))
+        XCTAssertEqual(t.consecutiveEmptySyncs, 3)
+    }
+
     // MARK: - The per-link wrist record
 
     /// Real WHOOP 5 EVENT frames: the captured DOUBLE_TAP(14) frame of `FrameRouterDoubleTapDedupTests`
