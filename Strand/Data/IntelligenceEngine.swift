@@ -299,6 +299,15 @@ final class IntelligenceEngine: ObservableObject {
     /// optionally tagged with the TestDomain so the Sleep/Battery emitters land under their profile tag.
     var diagnosticSink: ((String, TestDomain?) -> Void)?
 
+    /// W07-005: the untagged per-day lines each pass replays, withheld when the last pass printed them
+    /// unchanged. See `RepeatedDayLineFilter`.
+    private var dayLineFilter = RepeatedDayLineFilter()
+
+    /// Print one untagged per-day line through `dayLineFilter` (W07-005).
+    private func emitDayLine(_ line: String) {
+        if dayLineFilter.admit(line, now: Date()) { diagnosticSink?(line, nil) }
+    }
+
     init(repo: Repository, profile: ProfileStore, deviceId: String) {
         self.repo = repo; self.profile = profile; self.deviceId = deviceId
     }
@@ -1769,6 +1778,7 @@ final class IntelligenceEngine: ObservableObject {
         // #714: replay each skipped day's diagnostic now that we're back on the main actor (diagnosticSink
         // is MainActor-bound). Always-on , not gated behind a test mode, mirroring the Kotlin `diag` sink.
         for line in skippedDayLines { diagnosticSink?(line, nil) }
+        dayLineFilter.beginPass(now: Date())
 
         // CAPTURE-B (#814/#799): per-day resolved READ owner + that owner's HR-row count, keyed by day, so
         // the second pass (which has the provenance sets) can emit the universal `dayOwner …` line. The
@@ -1825,9 +1835,9 @@ final class IntelligenceEngine: ObservableObject {
             if !scan.zoneMinutesHRR.isEmpty {
                 zoneMinutesHRRByDay[res.daily.day] = scan.zoneMinutesHRR
             }
-            if let line = scan.rhrLine { diagnosticSink?(line, nil) }
-            if let line = scan.rhrBinLine { diagnosticSink?(line, nil) }
-            if let line = scan.respLine { diagnosticSink?(line, nil) }
+            if let line = scan.rhrLine { emitDayLine(line) }
+            if let line = scan.rhrBinLine { emitDayLine(line) }
+            if let line = scan.respLine { emitDayLine(line) }
             // Sleep & Rest test mode (E5): replay this day's gate-trace + Rest lines tagged `.sleep` so they
             // land under the profile tag in the export. Empty unless the mode is active.
             for line in scan.sleepTrace { diagnosticSink?(line, .sleep) }
@@ -2154,6 +2164,8 @@ final class IntelligenceEngine: ObservableObject {
             // minute only , no HR/HRV/timestamps , so the next report ships PROOF of what was computed per
             // day (the project's log-failures-not-successes blind spot) and lets us settle the "Rest repeats
             // across days" question with data rather than a guess. Gated by the existing strap-log export.
+            // W07-005: this and the other untagged per-day lines go through `emitDayLine`, so a pass
+            // reprints one only when it changed or its last print is an hour old, and says what it withheld.
             let tsmLog = daily.totalSleepMin.map { String(Int($0.rounded())) } ?? "nil"
             // #386: the banked stage split + efficiency ride beside the rollup, so a "homepage disagrees
             // with the Sleep tab" report is self-diagnosing from the export alone — totalSleepMin vs the
@@ -2161,19 +2173,19 @@ final class IntelligenceEngine: ObservableObject {
             // day, without screenshots. Rounded minutes only (same privacy class as the rest of the line);
             // stages=nil when the day has no banked stage split (an unstaged or imported-total-only day).
             let effLog = daily.efficiency.map { String(format: "%.2f", $0) } ?? "nil"
-            diagnosticSink?("sleep day=\(daily.day) totalSleepMin=\(tsmLog) "
-                            + "stages=\(Self.sleepStagesLogToken(deep: daily.deepMin, rem: daily.remMin, light: daily.lightMin)) "
-                            + "eff=\(effLog) "
-                            + "matched=\(night.cachedSleep.count) source=\(source.logToken)", nil)
+            emitDayLine("sleep day=\(daily.day) totalSleepMin=\(tsmLog) "
+                        + "stages=\(Self.sleepStagesLogToken(deep: daily.deepMin, rem: daily.remMin, light: daily.lightMin)) "
+                        + "eff=\(effLog) "
+                        + "matched=\(night.cachedSleep.count) source=\(source.logToken)")
             // #674/#1244: flag a COMPUTED day carrying a sleep total with NO matched session — the folded
             // edited/hand-logged block on a day the detector staged nothing (see sleepDivergenceLogLine).
             // Scoped to computed days: an imported-total-only day legitimately has a total without our
             // sessions, so it is NOT a divergence.
             let dayImported = importedWhoopDays.contains(daily.day) || appleHealthDays.contains(daily.day)
             if !dayImported, let tsm = daily.totalSleepMin, night.cachedSleep.isEmpty {
-                diagnosticSink?(Self.sleepDivergenceLogLine(day: daily.day,
-                                                            totalSleepMin: Int(tsm.rounded()),
-                                                            editFold: dayEditedRows.count), nil)
+                emitDayLine(Self.sleepDivergenceLogLine(day: daily.day,
+                                                        totalSleepMin: Int(tsm.rounded()),
+                                                        editFold: dayEditedRows.count))
             }
             // #195: one always-on line per scored night with the computed HRV value + the window it used,
             // so an "HRV reads high / deep-sleep window not changing" report is self-diagnosing straight
@@ -2181,13 +2193,13 @@ final class IntelligenceEngine: ObservableObject {
             // deep-window night has no detected deep sleep — without needing the HRV & Autonomic test mode.
             // Counts-only (a rounded ms + the window), PII-free; byte-identical to the Kotlin line.
             let hrvLog = daily.avgHrv.map { String(format: "%.1f", $0) } ?? "nil"
-            diagnosticSink?("hrv day=\(daily.day) window=\(deepHrvWindow ? "deep" : "whole") avgHrv=\(hrvLog)", nil)
+            emitDayLine("hrv day=\(daily.day) window=\(deepHrvWindow ? "deep" : "whole") avgHrv=\(hrvLog)")
             // #195: the whole-night HRV cleaning summary built in loop 1 (rmssd vs sdnn / cleaning counts).
             // #1008: on an over-count night this carries a second `hrv rrsample …` line, \n-joined at the
             // build site; split it back into one diagnosticSink call per line so each is its own log line.
             if let hrvDiagLine = night.hrvDiag {
                 for line in hrvDiagLine.split(separator: "\n", omittingEmptySubsequences: true) {
-                    diagnosticSink?(String(line), nil)
+                    emitDayLine(String(line))
                 }
             }
             // ── CAPTURE-B: universal dayOwner self-diagnostic (#814/#799) ────────────────────────────────
@@ -2333,7 +2345,7 @@ final class IntelligenceEngine: ObservableObject {
             // report it exists for. The `effort bout` line below explains a bout that exists; a strap log
             // showing 37 days and no workouts at all previously carried nothing to explain the absence.
             if let f = night.detectionFunnel {
-                diagnosticSink?(WorkoutDetector.detectionFunnelLine(day: daily.day, funnel: f), nil)
+                emitDayLine(WorkoutDetector.detectionFunnelLine(day: daily.day, funnel: f))
             }
             for s in night.workouts {
                 let durMin = max(0, (s.end - s.start) / 60)
@@ -2345,9 +2357,9 @@ final class IntelligenceEngine: ObservableObject {
                 // "your HRmax is wrong", "the sensor dropped out"). Reversing the arithmetic out of the
                 // displayed score is what diagnosing #1545 actually took. Same privacy class as the sibling
                 // `sleep day=` line: a day key, a duration, bpm and percentages.
-                diagnosticSink?(WorkoutDetector.boutCalibrationLine(
+                emitDayLine(WorkoutDetector.boutCalibrationLine(
                     day: daily.day, durMin: durMin, hrmax: s.hrmax, hrmaxSource: s.hrmaxSource,
-                    avgHRRPct: s.avgHRRPct, hrCoveragePct: s.hrCoveragePct, strain: s.strain), nil)
+                    avgHRRPct: s.avgHRRPct, hrCoveragePct: s.hrCoveragePct, strain: s.strain))
                 // The overlap test is bare time overlap (any source), so a detected bout collapses against a
                 // manual session even though their SPORTS differ ("detected" vs the user's sport) , the
                 // #975 "two workouts, one vanished" seam. Find the collider so the trace can name its source.
@@ -2385,6 +2397,9 @@ final class IntelligenceEngine: ObservableObject {
             }
         }
 
+        // W07-005/W07-007: account for the per-day lines withheld or no longer produced right after the
+        // last of them, not after the post-loop persistence, which can run for minutes.
+        if let line = dayLineFilter.endPass() { diagnosticSink?(line, nil) }
         markPostLoopPhase("score2")
         // ── Apple-Watch recovery fold (M1 "Watch as a device") ──────────────────────────────────────
         // A watch-only user has apple-health DAILY aggregates (SDNN HRV + resting HR) but no raw stream, so

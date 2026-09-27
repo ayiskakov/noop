@@ -1,0 +1,108 @@
+import Foundation
+
+/// Withholds a re-score's per-day diagnostic line when the previous pass already printed the same text
+/// for the same day (W07-005).
+///
+/// Every re-score replays each scored day's lines (`rhr`, `resp`, `sleep`, `hrv`, `hrv diag`, `effort`,
+/// `workout detect`, `sleep-detect`, …) into the strap log, and on a strap that offloads every few minutes
+/// most of them are byte-identical to the last pass: on the owner's 2026-09-27 log, 733 of 840 over 12
+/// passes. They were the largest share of the log ring and limited how far back an export reached.
+///
+/// A line is keyed by its label and its `day=YYYY-MM-DD` token plus its occurrence within the pass
+/// (a day can carry two `effort bout` lines), so a changed value on the same key prints. A line with no
+/// day token always prints. An unchanged line prints again once its last print is `refreshAfter` old,
+/// so every scored day keeps a recent copy in the exports: the durable tail keeps 2,000 lines, which is
+/// about 75 min at that log's density once the repeats are gone, and the live ring about 3 h.
+///
+/// The pass's `endPass` line counts what it withheld and names the oldest print it relies on, so a reader
+/// whose export starts after that time knows the copy is not in it. Lines are compared before
+/// `LiveState.redactPii`: route only counts-and-day-key lines through here, never one carrying an
+/// identifier, or two lines the scrub would make identical could compare as different (and the reverse).
+struct RepeatedDayLineFilter {
+    static let refreshAfter: TimeInterval = 3_600
+
+    private var lastPrint: [String: (line: String, at: Date, day: String)] = [:]
+    private var occurrences: [String: Int] = [:]
+    private var keysThisPass: Set<String> = []
+    private var daysThisPass: Set<String> = []
+    private(set) var withheld = 0
+    private var oldestWithheldPrint: Date?
+
+    /// Start a pass: occurrence indices restart, and prints older than `refreshAfter` are dropped, since
+    /// they can no longer withhold anything; that keeps the table to about an hour of keys. `admit` still
+    /// judges the age itself, because a pass runs for minutes and can cross the hour after it began.
+    mutating func beginPass(now: Date) {
+        occurrences = [:]
+        keysThisPass = []
+        daysThisPass = []
+        withheld = 0
+        oldestWithheldPrint = nil
+        lastPrint = lastPrint.filter { Self.isFresh($0.value.at, now: now) }
+    }
+
+    /// Whether to print `line` now; records the print when it says yes.
+    mutating func admit(_ line: String, now: Date) -> Bool {
+        guard let base = Self.dayKey(of: line) else { return true }
+        let n = occurrences[base, default: 0]
+        occurrences[base] = n + 1
+        let key = "\(base)#\(n)"
+        let day = String(base.suffix(10))
+        keysThisPass.insert(key)
+        daysThisPass.insert(day)
+        if let last = lastPrint[key], last.line == line, Self.isFresh(last.at, now: now) {
+            withheld += 1
+            oldestWithheldPrint = min(oldestWithheldPrint ?? last.at, last.at)
+            return false
+        }
+        lastPrint[key] = (line, now, day)
+        return true
+    }
+
+    /// End a pass: forget every key it did not produce, and return one line accounting for what it
+    /// withheld and for lines the last pass printed on a day this pass scored but no longer produces; nil
+    /// when there is neither (W07-007). Without the second part a vanished line (a bout that merged away)
+    /// read as still true, and its stale slot could withhold a later line on the same key. A day the pass
+    /// did not score at all is forgotten unnamed: its absence is the pass's own window and skip lines to
+    /// explain. The time is local `HH:mm:ss`, the stamp the Collector's lines around it carry.
+    mutating func endPass() -> String? {
+        let gone = lastPrint.filter { !keysThisPass.contains($0.key) }
+        let named = Set(gone.filter { daysThisPass.contains($0.value.day) }.keys.map { key in
+            String(key[..<(key.lastIndex(of: "#") ?? key.endIndex)])
+        }).sorted()
+        for key in gone.keys { lastPrint[key] = nil }
+        var parts: [String] = []
+        if withheld > 0, let oldest = oldestWithheldPrint {
+            parts.append("\(withheld) per-day line(s) unchanged since their last print, not repeated "
+                         + "(oldest print \(Self.timeFormatter.string(from: oldest)))")
+        }
+        let goneCount = gone.filter { daysThisPass.contains($0.value.day) }.count
+        if goneCount > 0 {
+            parts.append((parts.isEmpty ? "\(goneCount) per-day line(s)" : "\(goneCount)")
+                         + " printed before no longer produced: " + named.joined(separator: ", "))
+        }
+        return parts.isEmpty ? nil : "re-score: " + parts.joined(separator: "; ")
+    }
+
+    /// Whether a print at `at` can still withhold a line at `now`. A print dated after `now` means the wall
+    /// clock stepped back: it is not fresh, or it would withhold for as long as the step and the summary
+    /// would name a time in the future (W07-008).
+    static func isFresh(_ at: Date, now: Date) -> Bool {
+        let age = now.timeIntervalSince(at)
+        return age >= 0 && age < refreshAfter
+    }
+
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
+    }()
+
+    /// The line's label (its leading words, up to the first `key=value` token) and its first
+    /// `day=YYYY-MM-DD`, as `label day=D`; nil when it has no day. Not the text through the day token: two
+    /// lines print their values before it (`rr deliveries …=… day=D`, `rr dupPairs n=… day=D`), and a key
+    /// holding a value lets a value that returns to an earlier one compare against that stale print
+    /// (W07-006).
+    static func dayKey(of line: String) -> String? {
+        guard let range = line.range(of: #"day=\d{4}-\d{2}-\d{2}"#, options: .regularExpression) else { return nil }
+        let label = line.split(separator: " ").prefix { !$0.contains("=") }.joined(separator: " ")
+        return label.isEmpty ? String(line[range]) : "\(label) \(line[range])"
+    }
+}
