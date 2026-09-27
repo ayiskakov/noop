@@ -122,7 +122,7 @@ final class StaleChunkAckTests: XCTestCase {
     }
 
     /// Runs one END through a drain whose ingest suspends before it acks, optionally ending the link meanwhile.
-    private func ackAcross(linkEnds: Bool) async {
+    private func ackAcross(linkEnds: Bool, atBoundary: Bool = false) async {
         var held: CheckedContinuation<Void, Never>?
         var acked = false
         let endData: [UInt8] = [7, 0, 0, 0, 8, 0, 0, 0]
@@ -136,7 +136,9 @@ final class StaleChunkAckTests: XCTestCase {
             afterIngest: { true })
         manager.backfillDrain.route([0x2f])
         for _ in 0..<2_000 where held == nil { try? await Task.sleep(nanoseconds: 1_000_000) }
-        if linkEnds { manager.backfillDrain.linkEnded() }
+        if linkEnds {
+            if atBoundary { manager.offloadLinkBoundary() } else { manager.backfillDrain.linkEnded() }
+        }
         held?.resume()
         for _ in 0..<2_000 where !acked { try? await Task.sleep(nanoseconds: 1_000_000) }
         XCTAssertTrue(acked)
@@ -145,6 +147,16 @@ final class StaleChunkAckTests: XCTestCase {
     func testAnEndThatOutlivedItsLinkIsNotAcked() async {
         await ackAcross(linkEnds: true)
         XCTAssertEqual(live.syncChunksThisSession, 0, "no ack may go out for a chunk of a link that ended")
+        XCTAssertEqual(live.log.filter { $0.contains("chunk ack (trim=7) not sent") }.count, 1,
+                       live.log.joined(separator: "\n"))
+    }
+
+    /// W06-138: the boundary `didConnect` marks as well as the teardown, so a link that begins without a
+    /// teardown still leaves the previous link's END unacked. (`didConnect` itself needs a `CBPeripheral`, which
+    /// a test cannot make, so its call is not pinned here.)
+    func testTheLinkBoundaryMakesAnEndInFlightStale() async {
+        await ackAcross(linkEnds: true, atBoundary: true)
+        XCTAssertEqual(live.syncChunksThisSession, 0)
         XCTAssertEqual(live.log.filter { $0.contains("chunk ack (trim=7) not sent") }.count, 1,
                        live.log.joined(separator: "\n"))
     }

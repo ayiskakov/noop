@@ -2611,6 +2611,14 @@ public final class BLEManager: NSObject, ObservableObject {
         return true
     }
 
+    /// A link ended or began: the drain's queue and draining flag belong to the next link, and an END still
+    /// writing from the previous one stops at its next resume and acks nothing (W06-008, W06-135). Called from
+    /// the disconnect teardown and from `didConnect` (W06-138); a second call for one boundary is harmless.
+    func offloadLinkBoundary() {
+        backfillDrain.linkEnded()
+        backfiller?.linkEnded()
+    }
+
     /// Feed a frame to the Backfiller preserving exact arrival order (see `BackfillDrain`).
     private func routeBackfillFrame(_ frame: [UInt8]) {
         backfillDrain.route(frame)
@@ -5806,6 +5814,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         offloadGravity = 0; offloadResp = 0; offloadSkinTemp = 0; offloadSpo2 = 0; offloadChunks = 0
         offloadV18Aux = 0
         linkUpSince = DispatchTime.now()
+        // W06-138: also at the start of a link, not only in the disconnect teardown. A link can begin without
+        // that teardown (see the banked-tally clear above), and an END still writing from the previous one
+        // must then be judged stale all the same.
+        offloadLinkBoundary()
         standingConnectAt = nil     // #1413: a live link means no standing connect is outstanding
         restoredPeripheral = nil
         preparePeripheral(peripheral)
@@ -6224,8 +6236,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         state.sustainedEmptyOffload = false
         backfillTimeout?.cancel()
         backfillTimeout = nil
-        backfillDrain.linkEnded()
-        backfiller?.linkEnded()   // W06-135: an END still writing on this link acks nothing on the next
+        offloadLinkBoundary()
         uploadTimer?.cancel()
         uploadTimer = nil
         backfillTimer?.cancel()
