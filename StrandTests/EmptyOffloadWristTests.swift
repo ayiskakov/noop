@@ -12,6 +12,8 @@ final class EmptyOffloadWristTests: XCTestCase {
     func testAnOffWristNoCursorLineStatesTheWristAndGivesNoChargeAdvice() {
         let line = Backfiller.noCursorLine(rowsPersisted: 0, strapOffWrist: true)
         XCTAssertTrue(line.contains("WRIST_OFF"), line)
+        // W06-117: what the code can attribute is the last event it SAW on this link, not the strap's last.
+        XCTAssertTrue(line.contains("last wrist event seen on this link"), line)
         XCTAssertFalse(line.contains("clock/charge state"), line)
         XCTAssertFalse(line.contains("fully charge"), line)
         XCTAssertFalse(line.contains("\u{2014}"), line)
