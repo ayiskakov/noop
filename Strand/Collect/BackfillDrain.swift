@@ -19,8 +19,6 @@ final class BackfillDrain {
     private var lastDrain: Task<Void, Never>?
     /// The link the ingest in flight began on; nil between ingests.
     private var ingestLink: Int?
-    /// Drain tasks started and not yet finished, across links.
-    private var runningDrains = 0
     /// Moves when an offload session ends (`dropQueued`). A slice a drain took before that holds the ended
     /// session's frames, so the rest of it is dropped rather than fed to the next session (W06-137).
     private var session = 0
@@ -48,13 +46,14 @@ final class BackfillDrain {
         draining = true
         let previous = lastDrain
         let started = link
-        if runningDrains > 0 {
+        if ingestLink != nil {
             // W06-123: an earlier link's drain is still in an ingest, and this link's frames wait for it. Said
             // always (rare), since an ingest that never returns would otherwise stall every later offload until
-            // its idle timeout, which blames a quiet strap.
+            // its idle timeout, which blames a quiet strap. Keyed on the ingest itself, not on a count of running
+            // drains, which also held one parked between slices or not yet started: that one returns at its link
+            // check and holds nothing up (W06-139).
             log("Backfill: this link's offload waits for the previous link's drain, still in an ingest (W06-008)")
         }
-        runningDrains += 1
         lastDrain = Task { @MainActor in
             await previous?.value
             await self.drain(link: started)
@@ -75,9 +74,6 @@ final class BackfillDrain {
     }
 
     private func drain(link started: Int) async {
-        // Counted down in the same synchronous frame that clears `draining`, so a re-route cannot see one
-        // without the other and log a wait that is not happening.
-        defer { runningDrains -= 1 }
         while !queue.isEmpty {
             // The link ended while this drain waited for the previous one: the queue is the next link's.
             guard link == started else { return }

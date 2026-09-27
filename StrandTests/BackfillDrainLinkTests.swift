@@ -89,6 +89,21 @@ final class BackfillDrainLinkTests: XCTestCase {
                        "\(lines)")
     }
 
+    /// W06-139: a previous link's drain that is running but not in an ingest (created and not yet started, here)
+    /// holds nothing up, so the next link's drain claims no wait.
+    func testADrainNotInAnIngestIsNotCalledAWait() async {
+        var lines: [String] = []
+        var ingested: [String] = []
+        let drain = BackfillDrain(batchSize: 12, ingest: { [unowned self] f in ingested.append(self.name(f)) },
+                                  afterIngest: { true }, log: { lines.append($0) })
+        drain.route(frame("A-1"))    // its drain task is created, and has not run yet
+        drain.linkEnded()
+        drain.route(frame("B-1"))
+        await until { ingested.contains("B-1") }
+        XCTAssertEqual(ingested, ["B-1"])
+        XCTAssertEqual(lines, [])
+    }
+
     /// W06-123: a drain that starts with no earlier one still running says nothing.
     func testAnOrdinaryDrainLogsNoWait() async {
         var lines: [String] = []
