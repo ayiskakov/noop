@@ -274,4 +274,14 @@ final class RepeatedDayLineTests: XCTestCase {
         _ = pass(&filter, [bouts[0], "resp day=2026-01-01 rpm=14.0"], at: t0 + 1_800)
         XCTAssertNil(pass(&filter, [], at: t0 + 2_400).1)
     }
+
+    /// W07-008: a wall clock stepped backwards must not make a print look fresh, nor the summary name a
+    /// time in the future.
+    func testABackwardClockStepPrintsAgain() {
+        var filter = RepeatedDayLineFilter()
+        _ = pass(&filter, [shapes[0]], at: t0)
+        let back = pass(&filter, [shapes[0]], at: t0 - 3 * 3_600)
+        XCTAssertEqual(back.0, [shapes[0]])
+        XCTAssertNil(back.1)
+    }
 }

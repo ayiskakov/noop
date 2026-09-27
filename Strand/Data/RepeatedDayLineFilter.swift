@@ -37,7 +37,7 @@ struct RepeatedDayLineFilter {
         daysThisPass = []
         withheld = 0
         oldestWithheldPrint = nil
-        lastPrint = lastPrint.filter { now.timeIntervalSince($0.value.at) < Self.refreshAfter }
+        lastPrint = lastPrint.filter { Self.isFresh($0.value.at, now: now) }
     }
 
     /// Whether to print `line` now; records the print when it says yes.
@@ -49,7 +49,7 @@ struct RepeatedDayLineFilter {
         let day = String(base.suffix(10))
         keysThisPass.insert(key)
         daysThisPass.insert(day)
-        if let last = lastPrint[key], last.line == line, now.timeIntervalSince(last.at) < Self.refreshAfter {
+        if let last = lastPrint[key], last.line == line, Self.isFresh(last.at, now: now) {
             withheld += 1
             oldestWithheldPrint = min(oldestWithheldPrint ?? last.at, last.at)
             return false
@@ -81,6 +81,14 @@ struct RepeatedDayLineFilter {
                          + " printed before no longer produced: " + named.joined(separator: ", "))
         }
         return parts.isEmpty ? nil : "re-score: " + parts.joined(separator: "; ")
+    }
+
+    /// Whether a print at `at` can still withhold a line at `now`. A print dated after `now` means the wall
+    /// clock stepped back: it is not fresh, or it would withhold for as long as the step and the summary
+    /// would name a time in the future (W07-008).
+    static func isFresh(_ at: Date, now: Date) -> Bool {
+        let age = now.timeIntervalSince(at)
+        return age >= 0 && age < refreshAfter
     }
 
     static let timeFormatter: DateFormatter = {
