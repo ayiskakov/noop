@@ -110,8 +110,11 @@ item as it lands.
 - [ ] Seventh W6 batch, `review/w06-fixes-7` (stacked on `review/w07-day-line-repeats`), strap-free: W06-014 (a
       relaunch can bootstrap the store twice), W07-009 (two re-scores can hold the lock at once), W06-008 (a
       drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
-      and v21 records as undecodable). Then a strap run: an iPhone relaunch by state restoration, and a
-      reconnect in the middle of an offload.
+      and v21 records as undecodable). V2 (independent subagent) held W06-014 and W07-009 and held W06-008 and
+      W06-005 with caveats; it added W06-123 … W06-128: W06-123, W06-125 and W06-126 are fixed on the same branch,
+      W06-124, W06-127 and W06-128 are recorded. StrandTests 2,084, WhoopProtocol 788, both builds. Then a strap
+      run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
+      status no longer names v20/v21 records as undecodable.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
