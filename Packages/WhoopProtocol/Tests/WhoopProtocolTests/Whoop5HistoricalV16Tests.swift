@@ -267,6 +267,15 @@ final class Whoop5HistoricalV16Tests: XCTestCase {
                        "so its bytes must survive in the raw archive — otherwise it is stored NOWHERE")
     }
 
+    /// W06-129: the archived empty record is intact and of a mapped layout, so its reason is `noSamples`, which
+    /// the sync status does not report as undecodable. It was the only record in the owner's reject archives
+    /// that the status still named after W06-005.
+    func testEmptyV16IsArchivedAsNoSamplesNotUndecodable() {
+        let got = classifyRejectedHistoricalRecords([bytes(fullHex), bytes(emptyHex)], family: .whoop5)
+        XCTAssertEqual(got.map(\.rejection), [.noSamples])
+        XCTAssertFalse(HistoricalRecordRejection.noSamples.isUndecodable)
+    }
+
     /// The two fixtures together: the one that banks a row is skipped, the one that does not is archived.
     func testV16ArchiveSplitsOnWhetherARowWillExist() {
         let full = bytes(fullHex)

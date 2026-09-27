@@ -559,11 +559,12 @@ public final class LiveState: ObservableObject {
     /// Undecodable record frames the archive could NOT preserve this session (the ~5 MB cap was
     /// reached). Kept separate so the sync status never claims "saved" for bytes that were not.
     @Published public var rejectedFramesUnarchived: Int = 0
-    /// The part of the two counts above that is intact records of a mapped layout with no storage lane (v20,
-    /// v21): archived because nothing stores them, not because they failed to decode (W06-005). The sync
-    /// status names only the rest as undecodable.
-    @Published public var rejectedFramesWithoutLane: Int = 0
-    @Published public var rejectedFramesWithoutLaneUnarchived: Int = 0
+    /// The part of the two counts above that is intact records of a mapped layout that bank no row (v20 and
+    /// v21 with no storage lane, a v16 with no FIFO sample, a record the timestamp gate refused): archived
+    /// because nothing else keeps them, not because they failed to decode (W06-005, W06-129). The sync status
+    /// names only the rest as undecodable.
+    @Published public var rejectedFramesIntact: Int = 0
+    @Published public var rejectedFramesIntactUnarchived: Int = 0
     /// Per-session chunk tallies that separate an EMPTY completed sync (the strap handed over only
     /// console/diagnostic frames — it isn't banking to flash, #77 family) from a clean one. Reset at
     /// session start. `decodedChunks == 0` with `consoleChunks` high ⇒ the strap's clock has lost sync.

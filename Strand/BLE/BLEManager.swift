@@ -1557,9 +1557,9 @@ public final class BLEManager: NSObject, ObservableObject {
                                 },
                                 enableRawCapture: enableRawCapture,
                                 log: { [weak self] s in self?.log(s) },
-                                rejectedSink: { [weak self] frames, trim, family, withoutLane in
+                                rejectedSink: { [weak self] frames, trim, family, intact in
                                     self?.archiveRejectedFrames(frames, trim: trim, family: family,
-                                                                withoutLane: withoutLane) ?? true
+                                                                intact: intact) ?? true
                                 },
                                 onChunk: { [weak self] decoded, console in
                                     if decoded { self?.state.decodedChunksThisSession += 1 }
@@ -2594,8 +2594,8 @@ public final class BLEManager: NSObject, ObservableObject {
         state.syncChunksThisSession = 0
         state.rejectedFramesThisSession = 0
         state.rejectedFramesUnarchived = 0
-        state.rejectedFramesWithoutLane = 0
-        state.rejectedFramesWithoutLaneUnarchived = 0
+        state.rejectedFramesIntact = 0
+        state.rejectedFramesIntactUnarchived = 0
         state.decodedChunksThisSession = 0
         state.consoleChunksThisSession = 0
         state.r22FlagsAccepted = 0
@@ -2874,15 +2874,15 @@ public final class BLEManager: NSObject, ObservableObject {
                 du.set(Date().timeIntervalSince1970, forKey: "sync.lastWriteStalledAt")
                 if let k = whoStalled { du.set(Date().timeIntervalSince1970, forKey: k) }
             }
-            // W06-005: what the full archive could not keep of the intact records of a layout with no storage
-            // lane is a loss, and this line, not a sync error, says so: keeping them is W06-003's decision.
-            if state.rejectedFramesWithoutLaneUnarchived > 0 {
-                log("Backfill: \(state.rejectedFramesWithoutLaneUnarchived) intact record(s) of a layout with no storage lane were not preserved this sync — the reject archive is full (W06-003).")
+            // W06-005: what the full archive could not keep of the intact records that bank no row is a loss, and
+            // this line, not a sync error, says so: keeping them is W06-003's decision.
+            if state.rejectedFramesIntactUnarchived > 0 {
+                log("Backfill: \(state.rejectedFramesIntactUnarchived) intact record(s) that bank no row were not preserved this sync — the reject archive is full (W06-003).")
             }
             if let undecodable = BLEManager.undecodableRecordsSyncError(
                 archived: archived, unarchived: unarchived,
-                withoutLane: state.rejectedFramesWithoutLane,
-                withoutLaneUnarchived: state.rejectedFramesWithoutLaneUnarchived) {
+                intact: state.rejectedFramesIntact,
+                intactUnarchived: state.rejectedFramesIntactUnarchived) {
                 state.lastSyncError = undecodable
             } else if bankedNothing {
                 // #77 / #214 family: the offload COMPLETED but the strap handed over no sensor records
@@ -3119,18 +3119,20 @@ public final class BLEManager: NSObject, ObservableObject {
     }
 
     /// The sync status a completed offload's archived records call for, or nil (W06-005). It names only
-    /// records that failed to decode: the intact records of a layout with no storage lane (v20, v21), which
-    /// every sync archives because nothing stores them, are not an error, and before this every sync said
-    /// they "couldn't be decoded" and Sleep's freshness note read the sync as failed.
+    /// records that failed to decode: the intact records of a mapped layout that bank no row (v20 and v21
+    /// with no storage lane, a v16 with no FIFO sample, a record the timestamp gate refused), which the
+    /// archive keeps because nothing else does, are not an error (W06-129). It names no cause: the
+    /// undecodable remainder holds checksum failures as well as unmapped layouts, and the strap log's
+    /// per-chunk line says which (W06-131).
     static func undecodableRecordsSyncError(archived: Int, unarchived: Int,
-                                            withoutLane: Int, withoutLaneUnarchived: Int) -> String? {
-        let saved = archived - withoutLane
-        let lost = unarchived - withoutLaneUnarchived
+                                            intact: Int, intactUnarchived: Int) -> String? {
+        let saved = archived - intact
+        let lost = unarchived - intactUnarchived
         if lost > 0 {
-            return "Synced, but \(saved + lost) record(s) couldn't be decoded (unrecognised strap firmware layout), and the on-device archive is full - the \(lost) newest weren't preserved. Please share a strap log so the layout can be mapped."
+            return "Synced, but \(saved + lost) record(s) couldn't be decoded, and the on-device archive is full - the \(lost) newest weren't preserved. Please share a strap log."
         }
         if saved > 0 {
-            return "Synced, but \(saved) record(s) couldn't be decoded (unrecognised strap firmware layout). The raw bytes were saved on this device - please share a strap log so the layout can be mapped."
+            return "Synced, but \(saved) record(s) couldn't be decoded. The raw bytes were saved on this device - please share a strap log."
         }
         return nil
     }
@@ -3144,21 +3146,21 @@ public final class BLEManager: NSObject, ObservableObject {
     /// counters that drive the honest sync status. Returns false ONLY on a genuine write failure,
     /// which makes the Backfiller hold the cursor/ack so the strap re-sends the chunk (no data loss
     /// either way). Frames carry sensor payloads, not identifiers — no serials/MACs are archived.
-    /// `withoutLane` is how many of `frames` are intact records of a layout with no storage lane, as the
-    /// Backfiller's off-main decode counted them (W06-005, W06-126).
+    /// `intact` is how many of `frames` are intact records of a mapped layout that bank no row, from the
+    /// reasons the Backfiller's off-main decode read (W06-005, W06-126, W06-129).
     private func archiveRejectedFrames(_ frames: [[UInt8]], trim: UInt32, family: DeviceFamily,
-                                       withoutLane: Int) -> Bool {
+                                       intact: Int) -> Bool {
         switch rejectedHistoryArchive.archive(frames, trim: trim, family: family) {
         case .written(let count):
             state.rejectedFramesThisSession += count
-            state.rejectedFramesWithoutLane += withoutLane
+            state.rejectedFramesIntact += intact
             return true
         case .capReached(let count):
             // Cap reached: succeed WITHOUT writing (wedging the offload over a full archive would be
             // worse; ample sample bytes exist by now), counted separately so the sync status never
             // claims "saved" for bytes that were not.
             state.rejectedFramesUnarchived += count
-            state.rejectedFramesWithoutLaneUnarchived += withoutLane
+            state.rejectedFramesIntactUnarchived += intact
             log("Backfill: rejected-frame archive is FULL — \(count) frame(s) NOT preserved (acking anyway so the offload can finish)")
             return true
         case .failed:
@@ -6200,8 +6202,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // otherwise a stale non-zero count survives until the next beginBackfill. (#77/#91)
         state.rejectedFramesThisSession = 0
         state.rejectedFramesUnarchived = 0
-        state.rejectedFramesWithoutLane = 0
-        state.rejectedFramesWithoutLaneUnarchived = 0
+        state.rejectedFramesIntact = 0
+        state.rejectedFramesIntactUnarchived = 0
         state.decodedChunksThisSession = 0
         state.consoleChunksThisSession = 0
         state.r22FlagsAccepted = 0

@@ -354,25 +354,6 @@ public func isUnmappedWhoop5HistoricalRecord(_ frame: [UInt8]) -> Bool {
     return !mappedWhoop5HistoricalVersions.contains(Int(frame[9]))
 }
 
-/// The mapped WHOOP 5/MG historical layouts that have a storage lane: `extractHistoricalStreams` banks an
-/// intact record of these into rows. v20 (optical) and v21 (IMU) are mapped but have no lane yet, so every
-/// record of theirs reaches the reject archive intact (W06-003). Giving them a lane flips this set and
-/// nothing else.
-public let whoop5HistoricalVersionsWithStorageLane: Set<Int> = [16, 18, 26]
-
-/// True when `frame` is an intact WHOOP 5/MG type-47 record of a mapped layout that has no storage lane
-/// (v20 and v21 today): it decodes, and it reaches the reject archive only because nothing stores it, so
-/// it is not an undecodable record (W06-005). A record of a layout with a lane that is rejected anyway (bad
-/// CRC, a timestamp the gate refuses) is false, as are unmapped layouts and non-type-47 frames.
-public func isIntactRecordWithoutStorageLane(_ frame: [UInt8]) -> Bool {
-    guard frame.count > 9, Int(frame[8]) == 47 else { return false }
-    let version = Int(frame[9])
-    guard mappedWhoop5HistoricalVersions.contains(version),
-          !whoop5HistoricalVersionsWithStorageLane.contains(version) else { return false }
-    let parsed = parseFrame(frame, family: .whoop5)
-    return parsed.ok && parsed.crcOK != false
-}
-
 /// Decode a WHOOP 5.0 HISTORICAL_DATA (type 47) DSP biometric record.
 ///
 /// The layout version is carried in the byte at frame[9] — the inner record's seq slot, which the

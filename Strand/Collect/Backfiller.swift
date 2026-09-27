@@ -260,7 +260,7 @@ final class Backfiller {
     /// the bytes are safe (written OR cap-reached — either way the chunk may be acked) and false on a
     /// genuine write failure, in which case `finishChunk` holds the cursor/ack so the strap re-sends.
     /// nil in non-production inits (tests/preview) → archiving is skipped and acks proceed as before.
-    private let rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ withoutLane: Int) -> Bool)?
+    private let rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ intact: Int) -> Bool)?
     /// Per-chunk outcome hook (#77 family): (didDecodeSensorRows, wasConsoleOnly). Lets BLEManager
     /// tally a session so a COMPLETED-but-empty offload (all console, no sensor records) can tell the
     /// user their strap isn't banking, without false-positiving a normal caught-up sync.
@@ -287,7 +287,7 @@ final class Backfiller {
                                                 gravity: Int, v18Aux: Int)) -> Void = { _ in },
          enableRawCapture: Bool = false,
          log: ((String) -> Void)? = nil,
-         rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ withoutLane: Int) -> Bool)? = nil,
+         rejectedSink: ((_ frames: [[UInt8]], _ trim: UInt32, _ family: DeviceFamily, _ intact: Int) -> Bool)? = nil,
          onChunk: ((_ decoded: Bool, _ console: Bool) -> Void)? = nil,
          connectionActive: @escaping () -> Bool = { false },
          connectionLog: ((String) -> Void)? = nil,
@@ -599,10 +599,9 @@ final class Backfiller {
     private struct DecodedChunk {
         let parsed: [ParsedFrame]
         let decoded: Streams
-        let rejected: [[UInt8]]
-        /// `rejected` less the intact records of a layout with no storage lane (W06-005), split here, off the
-        /// main actor, in one pass (W06-126).
-        let undecodable: [[UInt8]]
+        /// The records the screen gives to the archive, each with its reason, from the parse it already does
+        /// (W06-130), off the main actor (W06-126).
+        let rejected: [RejectedHistoricalRecord]
     }
 
     private func finishChunk(unix: UInt32, trim: UInt32, endFrame: [UInt8]) async {
@@ -653,11 +652,10 @@ final class Backfiller {
                 let parsed = frames.map { parseFrame($0, family: fam) }
                 let decoded = extractFn(parsed, frames, dev, wall, oldest, newest)
                 // The same gate inputs the extraction used, so a record it refuses is archived (W01-004).
-                let rejected = rejectedHistoricalRecords(frames, family: fam,
-                                                         wallNow: max(wall, Int(Date().timeIntervalSince1970)),
-                                                         sessionOldestUnix: oldest, sessionNewestUnix: newest)
-                let undecodable = rejected.filter { !isIntactRecordWithoutStorageLane($0) }
-                return DecodedChunk(parsed: parsed, decoded: decoded, rejected: rejected, undecodable: undecodable)
+                let rejected = classifyRejectedHistoricalRecords(frames, family: fam,
+                                                                 wallNow: max(wall, Int(Date().timeIntervalSince1970)),
+                                                                 sessionOldestUnix: oldest, sessionNewestUnix: newest)
+                return DecodedChunk(parsed: parsed, decoded: decoded, rejected: rejected)
             }.value
             let parsed = d.parsed
             // #1008: per-chunk clock basis + R-R packing. The session summary logs only the FIRST chunk's
@@ -831,7 +829,7 @@ final class Backfiller {
             // type-50 console/diagnostic frames, which decode to 0 rows by design and are NOT a loss
             // (the "rejected frames" red herring users kept reporting — #77/#120). Drives both the
             // log wording below and the archive guard further down.
-            let rejected = d.rejected
+            let rejected = d.rejected.map(\.frame)
             // Tally this chunk's outcome so a completed-but-empty session is distinguishable from a
             // caught-up one (#77 family): did it decode sensor rows, and was it console-only?
             onChunk?(!decoded.isEmpty, decoded.isEmpty && rejected.isEmpty)
@@ -843,18 +841,23 @@ final class Backfiller {
             // Log + hex-sample the GENUINE rejects whenever there are any — INCLUDING a partially-decoded
             // chunk (some good rows alongside CRC-failed / unmapped records), which used to archive those
             // raw bytes with no log line at all (only the all-empty case was observable). (ryanbr, PR #123)
-            // W06-005: an intact record of a mapped layout with no storage lane (v20, v21) reaches the archive
-            // because nothing stores it, not because it failed to decode. Said apart from the undecodable ones,
-            // and kept out of the hex dump, which exists to map layouts that are not mapped yet.
-            let undecodable = d.undecodable
-            let withoutLane = rejected.count - undecodable.count
-            if withoutLane > 0 {
-                let versions = mappedWhoop5HistoricalVersions.subtracting(whoop5HistoricalVersionsWithStorageLane)
-                    .sorted().map { "v\($0)" }.joined(separator: "/")
-                log?("Backfill: \(withoutLane) intact \(versions) record(s) of \(frames.count) frame(s) (trim=\(trim)) — no storage lane for these layouts yet, archiving raw bytes before ack (W06-003).")
+            // W06-005 / W06-129: an intact record of a mapped layout that banks no row reaches the archive because
+            // nothing stores it, not because it failed to decode. Only the screen's undecodable reasons are said
+            // as such and hex-dumped, since the dump exists to map layouts that are not mapped yet. Each line
+            // says what the chunk held, not what the archive will do with it (W06-132); the sink logs a full or
+            // failed archive. An intact record the timestamp gate refused is the #547 line's, above.
+            let undecodable = d.rejected.filter { $0.rejection.isUndecodable }.map(\.frame)
+            let intact = rejected.count - undecodable.count
+            let noLane = d.rejected.filter { $0.rejection == .noStorageLane }.map(\.frame)
+            if !noLane.isEmpty {
+                log?("Backfill: \(noLane.count) intact record(s) (\(Backfiller.versionCounts(noLane))) of \(frames.count) frame(s) (trim=\(trim)) — no storage lane for these layouts yet (W06-003).")
+            }
+            let noSamples = d.rejected.filter { $0.rejection == .noSamples }.count
+            if noSamples > 0 {
+                log?("Backfill: \(noSamples) intact v16 record(s) of \(frames.count) frame(s) (trim=\(trim)) hold no FIFO sample — no row to bank.")
             }
             if !undecodable.isEmpty {
-                log?("Backfill: \(undecodable.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) — archiving raw bytes before ack (CRC/unmapped layout).")
+                log?("Backfill: \(undecodable.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) (\(Backfiller.undecodableCauses(d.rejected))).")
                 // #91 / #30: dump a hex sample of the genuine rejects so an unmapped firmware's record
                 // layout can be mapped from a user's strap log. Dump the FULL frame (not a 64-byte
                 // prefix — v25/v26 records run ~84 B and the truncated tail is exactly where the
@@ -880,7 +883,7 @@ final class Backfiller {
                 if rejectHexBudget <= 0, !rejectHexSuppressedNoted {
                     rejectHexSuppressedNoted = true
                     log?("Backfill: hex dumps capped at \(Backfiller.rejectHexDumpBudget) frame(s) while this connection lasts "
-                         + "(\(rejectFramesSeen) reject frame(s) seen so far); the complete records are in the "
+                         + "(\(rejectFramesSeen) undecodable frame(s) seen so far); the complete records are in the "
                          + "reject archive. Sample is enough to map a layout (#1992)")
                 }
             }
@@ -935,7 +938,7 @@ final class Backfiller {
             // chunk (no setCursor, no ack) so the strap re-sends it next session — no data loss
             // either way. (A full archive is reported as success by the sink; we still ack.)
             if !rejected.isEmpty, let rejectedSink {
-                guard rejectedSink(rejected, trim, family, withoutLane) else {
+                guard rejectedSink(rejected, trim, family, intact) else {
                     log?("Backfill: rejected-frame archive failed (trim=\(trim)) — holding ack so the strap re-sends.")
                     persistStalled = true   // #57
                     return
@@ -1008,6 +1011,26 @@ final class Backfiller {
 
         ackTrim(trim, endData)
         lastAckedTrim = trim   // #364: record the advanced cursor for the auto-continue spin-detector
+    }
+
+    /// `v20: 12, v21: 18`: how many of `frames` carry each WHOOP 5/MG layout version, read from the frames
+    /// themselves, so a line names only the layouts its chunk held (W06-133).
+    static func versionCounts(_ frames: [[UInt8]]) -> String {
+        var byVersion: [Int: Int] = [:]
+        for f in frames where f.count > 9 { byVersion[Int(f[9]), default: 0] += 1 }
+        return byVersion.keys.sorted().map { "v\($0): \(byVersion[$0]!)" }.joined(separator: ", ")
+    }
+
+    /// The causes of a chunk's undecodable records, from the screen's reasons: `2 failed the integrity check,
+    /// 1 of an unmapped layout`. Only the causes present are named.
+    static func undecodableCauses(_ rejected: [RejectedHistoricalRecord]) -> String {
+        let causes: [(HistoricalRecordRejection, String)] = [(.notIntact, "failed the integrity check"),
+                                                             (.unmappedLayout, "of an unmapped layout"),
+                                                             (.noBiometrics, "decoded no timestamp or biometrics")]
+        return causes.compactMap { reason, text in
+            let n = rejected.filter { $0.rejection == reason }.count
+            return n > 0 ? "\(n) \(text)" : nil
+        }.joined(separator: ", ")
     }
 
     /// Called when a backfill watchdog timer fires (strap went silent mid-offload).
