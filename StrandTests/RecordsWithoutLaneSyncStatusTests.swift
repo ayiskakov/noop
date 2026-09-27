@@ -35,14 +35,16 @@ final class RecordsWithoutLaneSyncStatusTests: XCTestCase {
     func testAChunkOfV21SaysSoAndDumpsNoHex() async {
         var lines: [String] = []
         var archived: [[UInt8]] = []
+        var withoutLane = 0
         let backfiller = Backfiller(store: NoopStore(), deviceId: "w06-005", ackTrim: { _, _ in },
                                     log: { lines.append($0) },
-                                    rejectedSink: { frames, _, _ in archived += frames; return true })
+                                    rejectedSink: { frames, _, _, n in archived += frames; withoutLane += n; return true })
         backfiller.begin(family: .whoop5)
         await backfiller.ingest(v21)
         await backfiller.ingest(historyEnd(trim: 100))
 
         XCTAssertEqual(archived, [v21], "the record is still archived raw before the ack")
+        XCTAssertEqual(withoutLane, 1, "the sink is told how many of them have no lane, so the status can leave them out")
         XCTAssertEqual(lines.filter { $0.contains("1 intact v20/v21 record(s)") && $0.contains("no storage lane") }.count, 1,
                        lines.joined(separator: "\n"))
         XCTAssertFalse(lines.contains { $0.contains("undecodable") }, lines.joined(separator: "\n"))

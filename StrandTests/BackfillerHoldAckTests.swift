@@ -66,7 +66,7 @@ final class BackfillerHoldAckTests: XCTestCase {
             store: store, deviceId: "hold-ack",
             ackTrim: { trim, _ in journal.steps.append("ack \(trim)") },
             enableRawCapture: rawCapture,
-            rejectedSink: { _, _, _ in journal.steps.append("archive"); return !archiveFails })
+            rejectedSink: { _, _, _, _ in journal.steps.append("archive"); return !archiveFails })
         backfiller.begin(family: .whoop5)
         return (backfiller, store, journal)
     }

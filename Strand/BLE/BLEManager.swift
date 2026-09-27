@@ -1557,8 +1557,9 @@ public final class BLEManager: NSObject, ObservableObject {
                                 },
                                 enableRawCapture: enableRawCapture,
                                 log: { [weak self] s in self?.log(s) },
-                                rejectedSink: { [weak self] frames, trim, family in
-                                    self?.archiveRejectedFrames(frames, trim: trim, family: family) ?? true
+                                rejectedSink: { [weak self] frames, trim, family, withoutLane in
+                                    self?.archiveRejectedFrames(frames, trim: trim, family: family,
+                                                                withoutLane: withoutLane) ?? true
                                 },
                                 onChunk: { [weak self] decoded, console in
                                     if decoded { self?.state.decodedChunksThisSession += 1 }
@@ -3143,8 +3144,10 @@ public final class BLEManager: NSObject, ObservableObject {
     /// counters that drive the honest sync status. Returns false ONLY on a genuine write failure,
     /// which makes the Backfiller hold the cursor/ack so the strap re-sends the chunk (no data loss
     /// either way). Frames carry sensor payloads, not identifiers — no serials/MACs are archived.
-    private func archiveRejectedFrames(_ frames: [[UInt8]], trim: UInt32, family: DeviceFamily) -> Bool {
-        let withoutLane = frames.filter(isIntactRecordWithoutStorageLane).count
+    /// `withoutLane` is how many of `frames` are intact records of a layout with no storage lane, as the
+    /// Backfiller's off-main decode counted them (W06-005, W06-126).
+    private func archiveRejectedFrames(_ frames: [[UInt8]], trim: UInt32, family: DeviceFamily,
+                                       withoutLane: Int) -> Bool {
         switch rejectedHistoryArchive.archive(frames, trim: trim, family: family) {
         case .written(let count):
             state.rejectedFramesThisSession += count
