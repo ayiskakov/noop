@@ -9,17 +9,20 @@ import XCTest
 final class LiveStateLogGenerationsTests: XCTestCase {
     private let tailKey = "strapLog.tail"
     private let gensKey = "strapLog.generations"
+    private let tailSessionLinesKey = "strapLog.tailSessionLines"
 
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: tailKey)
         UserDefaults.standard.removeObject(forKey: gensKey)
+        UserDefaults.standard.removeObject(forKey: tailSessionLinesKey)
         LiveState.resetGenerationRollLatchForTesting()
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: tailKey)
         UserDefaults.standard.removeObject(forKey: gensKey)
+        UserDefaults.standard.removeObject(forKey: tailSessionLinesKey)
         LiveState.resetGenerationRollLatchForTesting()
         super.tearDown()
     }
@@ -139,5 +142,89 @@ final class LiveStateLogGenerationsTests: XCTestCase {
                       "export before the first append must roll + include the previous session")
         XCTAssertTrue(text.contains("previous app session"), "the previous session keeps its header")
         XCTAssertEqual(LiveState.persistedLogTail(), [], "the roll clears the live slot")
+    }
+
+    // MARK: - W06-108: a clipped current session says so
+
+    /// One line past the ring's trim point evicts the head. Both exports must say how much is gone, and must
+    /// print the header with no previous generation ahead of it: the live one from the ring, the scheduled one
+    /// from the durable tail, over the same session's line count.
+    func testAClippedCurrentSessionSaysSoInBothExports() {
+        let live = LiveState()
+        let total = LiveState.maxLogLines + 257
+        for i in 0..<total { live.append(log: "line \(i)") }
+        live.clearBiometrics()   // the disconnect flush, so the durable tail is current
+
+        XCTAssertEqual(live.droppedLogLines, 257)
+        XCTAssertTrue(live.exportableLogText().contains(
+            "===== current app session, \(LiveState.maxLogLines) of \(total) line(s), head clipped ====="))
+        XCTAssertTrue(LiveState.scheduledExportText().contains(
+            "===== current app session, \(LiveState.tailLimit) of \(total) line(s), head clipped ====="))
+    }
+
+    /// ...and a session that kept every line claims no loss.
+    func testAnUnclippedCurrentSessionClaimsNoLoss() {
+        let live = LiveState()
+        for i in 0..<10 { live.append(log: "line \(i)") }
+        live.clearBiometrics()
+        XCTAssertFalse(live.exportableLogText().contains("clipped"))
+        XCTAssertFalse(LiveState.scheduledExportText().contains("clipped"))
+    }
+
+    // MARK: - W06-113: a previous session's header counts the session, not the tail's cap
+
+    /// The durable tail holds the newest `tailLimit` lines of a session that logged more. The generation's
+    /// header must report the session's own count, which the tail's length cannot tell.
+    func testAGenerationHeaderCountsTheWholeSessionNotTheTailCap() {
+        let tail = (0..<LiveState.tailLimit).map { "line \($0)" }
+        UserDefaults.standard.set(tail, forKey: tailKey)
+        UserDefaults.standard.set(["lines": 5_185, "lastLine": tail.last!], forKey: tailSessionLinesKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations()[0][0]
+        XCTAssertTrue(header.contains("\(LiveState.generationTailLimit) of 5185 line(s), head clipped"), header)
+    }
+
+    /// A tail the ring and the cap both kept whole is unclipped even when its count was persisted.
+    func testAWholeSessionWithACountClaimsNoLoss() {
+        UserDefaults.standard.set(["a", "b"], forKey: tailKey)
+        UserDefaults.standard.set(["lines": 2, "lastLine": "b"], forKey: tailSessionLinesKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations()[0][0]
+        XCTAssertTrue(header.contains("2 line(s)"), header)
+        XCTAssertFalse(header.contains("clipped"), header)
+    }
+
+    /// W06-119: a build without the count key writes a tail and never the count, so a count left by a newer
+    /// build must not be read against that tail and invent a clip.
+    func testACountLeftByAnotherBuildIsNotPairedWithItsTail() {
+        let live = LiveState()
+        for i in 0..<40 { live.append(log: "new build line \(i)") }   // persists the tail and its count at 32
+        LiveState.resetGenerationRollLatchForTesting()
+        // An older build runs: it rolls nothing we check here and writes a short tail of its own.
+        UserDefaults.standard.set(["old build a", "old build b"], forKey: tailKey)
+
+        LiveState.rollLogGenerationsIfNeeded()
+
+        let header = LiveState.persistedLogGenerations().last?[0] ?? ""
+        XCTAssertTrue(header.contains("2 line(s)"), header)
+        XCTAssertFalse(header.contains("clipped"), header)
+    }
+
+    /// W06-120: a scheduled export in a fresh process, before its first line, reads the previous process's
+    /// tail. It must file that tail under a previous-session header, as the manual export does (#1263), not
+    /// call it the current session.
+    func testAScheduledExportBeforeTheFirstLineCallsTheTailPrevious() {
+        UserDefaults.standard.set(["last night 03:14 reconnect storm", "03:15 gave up"], forKey: tailKey)
+        UserDefaults.standard.set(["lines": 10, "lastLine": "03:15 gave up"], forKey: tailSessionLinesKey)
+
+        let text = LiveState.scheduledExportText()
+
+        XCTAssertTrue(text.contains("previous app session, 2 of 10 line(s), head clipped"), text)
+        XCTAssertFalse(text.contains("current app session, 2 of 10"), text)
+        XCTAssertTrue(text.contains("last night 03:14 reconnect storm"), text)
     }
 }

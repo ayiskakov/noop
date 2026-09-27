@@ -407,6 +407,11 @@ public final class LiveState: ObservableObject {
     /// Wrist-wear state from WRIST_ON/WRIST_OFF events. Defaults true so wear-gated features work
     /// before the first event arrives; flipped by FrameRouter on a real event.
     @Published public var worn: Bool = true
+    /// W06-109: the last live wrist event on the CURRENT link (true = WRIST_ON, false = WRIST_OFF), nil until
+    /// one arrives. `worn` survives a disconnect, and a strap put back on while unlinked sends its WRIST_ON only
+    /// as history, which never reaches `worn`; so a verdict that excuses an empty offload as off-wrist reads
+    /// this, which `BLEManager` clears at every connect, and never `worn`.
+    public var wristEventThisLink: Bool?
 
     /// #580 — true when a connected WHOOP 5/MG streams live HR fine but its firmware hands over no history
     /// offload (consecutive empty backfills). Lets the home state read "connected, history sync is
@@ -689,7 +694,7 @@ public final class LiveState: ObservableObject {
         lastFrameAtUnix = nil             // #987: a stale "last frame" freshness must not outlive it either
         // Perf: flush the durable log tail on disconnect (mirroring is batched in `append`), so a completed
         // session's tail is always persisted for a later scheduled export despite the per-line throttle.
-        Self.persistTail(log)
+        Self.persistTail(log, sessionLines: log.count + droppedLogLines)
         logsSincePersist = 0
     }
 
@@ -713,6 +718,10 @@ public final class LiveState: ObservableObject {
     /// — turning an O(n) `Array.removeFirst` on every line at steady state into one per `trimSlack` lines.
     /// Still hard-bounded (never exceeds `maxLogLines + trimSlack`).
     private static let trimSlack = 256
+    /// Lines this process's ring has evicted from its head (W06-108). No app path clears `log`, so this is
+    /// the number missing ahead of `log`, and the export's current-session header says so; without it a
+    /// clipped session reads as one that began where its first surviving line does.
+    private(set) var droppedLogLines = 0
 
     public func append(log line: String, domain: TestDomain? = nil) {
         // FIRST append of this process: rescue the previous process's durable tail into the generation ring
@@ -725,13 +734,16 @@ public final class LiveState: ObservableObject {
         let tagged = domain.map { "[\($0.id)] " + line } ?? line
         log.append(Self.redactPii(tagged))
         // Batched trim: overrun by `trimSlack`, then trim back to the cap in one shot (amortized O(1)/line).
-        if log.count > Self.maxLogLines + Self.trimSlack { log.removeFirst(log.count - Self.maxLogLines) }
+        if log.count > Self.maxLogLines + Self.trimSlack {
+            droppedLogLines += log.count - Self.maxLogLines
+            log.removeFirst(log.count - Self.maxLogLines)
+        }
         // Batched durable-tail mirror: persist every `persistEveryNLines` lines, not on every line;
         // `clearBiometrics()` flushes on disconnect so a completed session is always fully mirrored.
         logsSincePersist += 1
         if logsSincePersist >= Self.persistEveryNLines {
             logsSincePersist = 0
-            Self.persistTail(log)
+            Self.persistTail(log, sessionLines: log.count + droppedLogLines)
         }
         // #990: fold the Backfiller's per-session "session persisted N rows" summary into the persisted
         // ALL-TIME drained-rows tally, right here at the single log sink (no new BLE seam). The summary
@@ -767,9 +779,26 @@ public final class LiveState: ObservableObject {
     /// Mirror the most recent `tailLimit` lines to UserDefaults (called from `append`). Synchronous and
     /// cheap (a single small array write); UserDefaults coalesces the disk flush. `nonisolated` (touches
     /// only UserDefaults, no actor state) so the background/static export path can read the twin getter.
-    nonisolated private static func persistTail(_ lines: [String]) {
+    nonisolated private static func persistTail(_ lines: [String], sessionLines: Int) {
         let tail = lines.count > tailLimit ? Array(lines.suffix(tailLimit)) : lines
         UserDefaults.standard.set(tail, forKey: tailKey)
+        UserDefaults.standard.set(["lines": sessionLines, "lastLine": tail.last ?? ""], forKey: tailSessionLinesKey)
+    }
+
+    /// How many lines the process behind the durable tail had logged when it was last mirrored (W06-108), so
+    /// an export read from the tail can say how much of that session's head is missing. Written with the
+    /// tail and cleared with it; 0 when unknown.
+    ///
+    /// W06-119: stored with the tail's last line and read only when that still ends the tail. A build without
+    /// this key writes a tail and never the count, and a count left by a newer build would otherwise be read
+    /// against that tail and invent a clip.
+    private static let tailSessionLinesKey = "strapLog.tailSessionLines"
+
+    nonisolated static func persistedTailSessionLines() -> Int {
+        guard let stored = UserDefaults.standard.dictionary(forKey: tailSessionLinesKey),
+              let lines = stored["lines"] as? Int, let lastLine = stored["lastLine"] as? String,
+              lastLine == (persistedLogTail().last ?? "") else { return 0 }
+        return lines
     }
 
     /// The persisted log tail, newest-last — what a scheduled export reads when no live session is open.
@@ -825,9 +854,13 @@ public final class LiveState: ObservableObject {
         // announced "2,000 line(s)" and read as a complete session — a reader (or a log tool) then
         // measures the missing head as silence. Both numbers are printed: the pre-clip total is what
         // tells anyone how much is gone.
-        let count = clipped.count == tail.count
-            ? "\(tail.count) line(s)"
-            : "\(clipped.count) of \(tail.count) line(s), head clipped"
+        // W06-113: the pre-clip total is the SESSION's line count, persisted beside the tail, not the tail's
+        // length: the tail holds at most `tailLimit`, so every longer session read as one of exactly 2,000.
+        // A tail from a build before that key has no count, and its length is the best there is.
+        let total = max(tail.count, persistedTailSessionLines())
+        let count = clipped.count == total
+            ? "\(total) line(s)"
+            : "\(clipped.count) of \(total) line(s), head clipped"
         let header = "===== previous app session, \(count), rolled at "
             + iso.string(from: now) + " (this launch) ====="
         var gens = persistedLogGenerations()
@@ -837,6 +870,7 @@ public final class LiveState: ObservableObject {
         // Clear the live slot: this tail now belongs to a generation, and leaving it would duplicate it in
         // every export until 32 fresh lines happen to overwrite it.
         UserDefaults.standard.set([String](), forKey: tailKey)
+        UserDefaults.standard.removeObject(forKey: tailSessionLinesKey)
     }
 
     /// The stored generations, oldest-first. Each element's first line is its own separator header.
@@ -844,13 +878,23 @@ public final class LiveState: ObservableObject {
         (UserDefaults.standard.array(forKey: generationsKey) as? [[String]]) ?? []
     }
 
-    /// The previous processes' lines, oldest-first, ready to sit AHEAD of the current session in an export.
-    /// Empty string when there are none, so a caller can concatenate unconditionally.
-    nonisolated static func previousSessionsText() -> String {
+    /// The previous processes' lines, oldest-first, ready to sit AHEAD of the current session in an export,
+    /// then the current session's header. Empty string when there are no generations and the current session
+    /// kept every line, so a caller can concatenate unconditionally.
+    ///
+    /// W06-108: `currentKept` and `currentTotal` are the current session's surviving and logged line counts.
+    /// When the ring or the durable tail dropped its head, the header says so in the generation headers'
+    /// words, and it is printed even with no generation ahead of it: the bare header read as a session that
+    /// began at its first surviving line, which had cost a connect's handshake an hour after it happened.
+    nonisolated static func previousSessionsText(currentKept: Int = 0, currentTotal: Int = 0) -> String {
         let gens = persistedLogGenerations()
-        guard !gens.isEmpty else { return "" }
-        return gens.map { $0.joined(separator: "\n") }.joined(separator: "\n") + "\n"
-            + "===== current app session =====\n"
+        let clipped = currentTotal > currentKept
+        guard !gens.isEmpty || clipped else { return "" }
+        let header = clipped
+            ? "===== current app session, \(currentKept) of \(currentTotal) line(s), head clipped =====\n"
+            : "===== current app session =====\n"
+        let previous = gens.isEmpty ? "" : gens.map { $0.joined(separator: "\n") }.joined(separator: "\n") + "\n"
+        return previous + header
     }
 
     /// Drop every stored generation (Settings → the same place the log is cleared from).
@@ -866,6 +910,10 @@ public final class LiveState: ObservableObject {
     /// reads the same as a manual share; falls back to the live `log` is not available here by design
     /// (this is a `static` so a background task needs no main-actor instance).
     nonisolated public static func scheduledExportText(extraHeaderLines: [String] = []) -> String {
+        // W06-120: roll first, as `exportableLogText()` does (#1263). A scheduled export in a fresh process,
+        // before its first line (macOS catch-up at launch), otherwise reads the previous process's tail and
+        // prints it under the current-session header.
+        rollLogGenerationsIfNeeded()
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         #if os(iOS)
         let osName = "iOS"
@@ -883,7 +931,9 @@ public final class LiveState: ObservableObject {
         header += String(repeating: "-", count: 40) + "\n"
         // Same generations-then-current shape as `exportableLogText()`: a scheduled drop that fires after a
         // restart must not report only the (possibly empty) current tail.
-        return header + previousSessionsText() + persistedLogTail().joined(separator: "\n")
+        let tail = persistedLogTail()
+        return header + previousSessionsText(currentKept: tail.count, currentTotal: persistedTailSessionLines())
+            + tail.joined(separator: "\n")
     }
 
     /// Scrub personal identifiers from a strap-log line so it's safe to share publicly (#445): BLE MAC
@@ -1106,7 +1156,8 @@ public final class LiveState: ObservableObject {
         header += String(repeating: "-", count: 40) + "\n"
         // Previous processes first, so the body stays in chronological order and the log-parsing tools read
         // it unchanged — they just get the night that a wake-time restart used to erase.
-        return header + Self.previousSessionsText() + log.joined(separator: "\n")
+        return header + Self.previousSessionsText(currentKept: log.count, currentTotal: log.count + droppedLogLines)
+            + log.joined(separator: "\n")
     }
 }
 

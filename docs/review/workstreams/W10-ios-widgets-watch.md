@@ -57,7 +57,9 @@ an on-device run for behaviour changes. Say in the PR when the watch app was not
 
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
+| W10-001 | S4 | Reported | The strap-log widget funnel reads `129 reloaded / 29 admitted / 603 offered`: `noteAdmitted` counts only HR-throttle admissions while `noteReloaded` counts reloads from every publish path, so the funnel mixes two populations and reads inverted | `WidgetPublish.swift` `saveAndReloadIfChanged`, `HRPublishThrottle.admit`; `WidgetTelemetry.swift` | V0: the 2026-09-27 export's header and the two call sites | |
 
 ## Log
 
 - 2026-09-25 — File created from the plan.
+- 2026-09-27 — W10-001 recorded from the owner's 11.9.12 strap-log header.

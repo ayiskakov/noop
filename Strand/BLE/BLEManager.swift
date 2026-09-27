@@ -267,11 +267,21 @@ struct EmptySyncTracker {
     /// emptiness is SUSTAINED (≥ threshold consecutive console-only cycles) — the caller shows the
     /// "clock has lost sync" banner only then. Any banking cycle, or a caught-up cycle with nothing to
     /// offload, clears the streak.
-    mutating func recordCompletedSync(bankedSensorRecords: Bool, consoleOnly: Bool) -> Bool {
+    ///
+    /// W06-109: `strapOffWrist` = the last wrist event seen on this link was WRIST_OFF when the offload
+    /// began (`LiveState.wristEventThisLink`). An off-wrist strap handing over nothing says nothing about its
+    /// clock (the 2026-09-27 export: WRIST_OFF, then two empty offloads 10 min apart and no banked record), so
+    /// such a cycle neither counts toward the streak nor clears it. Back on the wrist, an empty one counts again.
+    /// W06-116: "nor clears" includes the verdict. An excused cycle returns the streak it leaves standing, so a
+    /// banner that on-wrist cycles already raised stays up while the strap sits off the wrist (on a charger,
+    /// say) rather than vanishing with the streak still at the threshold.
+    mutating func recordCompletedSync(bankedSensorRecords: Bool, consoleOnly: Bool,
+                                      strapOffWrist: Bool = false) -> Bool {
         guard consoleOnly, !bankedSensorRecords else {
             consecutiveEmptySyncs = 0
             return false
         }
+        if strapOffWrist { return consecutiveEmptySyncs >= threshold }
         consecutiveEmptySyncs += 1
         return consecutiveEmptySyncs >= threshold
     }
@@ -2531,7 +2541,8 @@ public final class BLEManager: NSObject, ObservableObject {
         // #42/#364: consecutiveAutoContinues > 0 means this offload is re-kicked after an EARLIER session in
         // the same burst banked rows — tell the backfiller so its no-cursor END reads as "caught up", not
         // "no banked history / charge to 100%". A fresh offload (count 0) keeps the honest guidance.
-        backfiller.begin(family: selectedModel.deviceFamily, continuedAfterRows: consecutiveAutoContinues > 0)
+        backfiller.begin(family: selectedModel.deviceFamily, continuedAfterRows: consecutiveAutoContinues > 0,
+                         strapOffWrist: state.wristEventThisLink == false)
         backfilling = true
         state.backfilling = true
         state.syncChunksThisSession = 0
@@ -2798,9 +2809,21 @@ public final class BLEManager: NSObject, ObservableObject {
             // confirms we're caught up. Don't surface the "charge to 100%" framing, and don't count it toward
             // the sustained-empty streak (the productive session already cleared it).
             let productiveBurstTail = consecutiveAutoContinues > 0
-            let bankedNothing = banking.bankedNothing && !productiveBurstTail
+            // W06-109: an empty offload whose link last saw WRIST_OFF is not read as a clock or
+            // charge state. Read from the Backfiller's snapshot, the one its no-cursor line used, so the line
+            // and the banner cannot disagree about the wrist.
+            let strapOffWrist = backfiller?.strapOffWrist == true
             let sustainedEmpty = productiveBurstTail ? false : emptySyncTracker.recordCompletedSync(
-                bankedSensorRecords: bankedSensorRecords, consoleOnly: banking.bankedNothing)
+                bankedSensorRecords: bankedSensorRecords, consoleOnly: banking.bankedNothing,
+                strapOffWrist: strapOffWrist)
+            // W06-116: an off-wrist cycle is excused only from raising the banner. One the streak already holds
+            // keeps its branch below, so `lastSyncError` and `sustainedEmptyOffload` agree with the streak.
+            let bankedNothing = banking.bankedNothing && !productiveBurstTail && (!strapOffWrist || sustainedEmpty)
+            if banking.bankedNothing, strapOffWrist, !productiveBurstTail {
+                // W06-117: name the counter it skips. The poll backoff (`consecutiveEmptyOffloads`) still counts the
+                // cycle, which is wanted: an off-wrist strap need not be polled every 10 min.
+                log("Backfill: completed with no sensor history while the last wrist event seen on this link was WRIST_OFF; not counted toward the empty-sync banner streak (it stays \(emptySyncTracker.consecutiveEmptySyncs)), though the sync poll still backs off.")
+            }
             // #612: expose the streak as a queryable flag (previously only reached UI as `lastSyncError`
             // free text below). Set on EVERY HISTORY_COMPLETE, not just the empty branch, so a productive
             // sync clears it immediately.
@@ -5743,6 +5766,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // an ordinary `didConnect` publish must always read false (only the deliberate post-bond #52
         // handoff republish carries it true), so this clear has to precede the publish, not follow it.
         state.encryptedBond = false   // re-proved per connection at the genuine-bond site (#69)
+        state.wristEventThisLink = nil   // W06-109: only a wrist event seen on this link may excuse an empty offload
         // Multi-WHOOP: publish the strap's stable BLE identity so the app can persist it onto the active
         // registry device (it observes this and calls registry.setPeripheralId). Additive observation
         // only — BLEManager stays decoupled from the store and the connect flow below is unchanged.

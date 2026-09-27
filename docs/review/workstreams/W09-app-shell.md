@@ -62,7 +62,9 @@ Tests: `StrandTests` (8 file names match AICoach, AIProvider or Update).
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
 | W09-001 | S3 | Reported | Concurrency is unchecked by the compiler (Swift 5 mode, strict concurrency `minimal`) | `project.yml` | 5 `@unchecked Sendable`, 2 `nonisolated(unsafe)`, 246 `Task` spawns unchecked | |
+| W09-002 | S4 | Reported | The strap-log header prints `scoped-access FAILED, bookmark FAILED` after an export pick: the export pickers record `picked`, but the two flags are written only by `BackupSync.saveFolder`, so keys that were never set read as FAILED | `DebugDataDiagnostics.swift` folder-picker block; `DocumentPicker.recordEvent`; `BackupSync.swift` `saveFolder` | V0: the 2026-09-27 export's header, taken right after a backup export, and the key writers | |
 
 ## Log
 
 - 2026-09-25 — File created from the plan. W09-001 seeded from the baseline scan.
+- 2026-09-27 — W09-002 recorded from the owner's 11.9.12 strap-log header.
