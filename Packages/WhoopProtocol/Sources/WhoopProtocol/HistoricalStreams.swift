@@ -129,7 +129,8 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         // different type byte, so they never pass this gate — they are excluded by construction.
         guard f.count > typeIndex, Int(f[typeIndex]) == 47 else { return false }
         // v26 PPG: skipped BECAUSE `extractHistoricalStreams` stores it durably in its own waveform
-        // stream (ppgWaveform) — so the skip holds only while that premise does. A REJECTED v26 record
+        // stream (ppgWaveform), whose row keeps the whole intact frame when the caller passes the frames
+        // (W01-006) — so the skip holds only while that premise does. A REJECTED v26 record
         // is dropped by the extraction like any other, which leaves it stored nowhere while the section
         // is acked anyway. Bind the skip to the verdict, not to the version byte alone.
         if family == .whoop5, f.count > versionIndex, Int(f[versionIndex]) == 26 {
@@ -138,7 +139,8 @@ public func rejectedHistoricalRecords(_ rawFrames: [[UInt8]], family: DeviceFami
         }
         // v16 MAX86176 FIFO (#891): skipped for the same reason as v26 above — `extractHistoricalStreams`
         // stores the FIFO durably in its own stream (`Streams.ecgCandidate` / WhoopStore's
-        // `ecgCandidateSample`) — but bound to the PREMISE ITSELF, not to the version plus a clean verdict.
+        // `ecgCandidateSample`, with the whole intact frame since W01-006) — but bound to the PREMISE
+        // ITSELF, not to the version plus a clean verdict.
         // Without this, a v16 record — mapped, but carrying no HR/gravity — would fall through to the
         // decode-outcome screen below and be archived RAW at 1 Hz beside its durable stream (double storage).
         //
@@ -202,6 +204,12 @@ public func isEmptyRecordFrame(_ frame: [UInt8]) -> Bool {
 /// EVENT and COMMAND_RESPONSE handling is identical to extractStreams.
 /// CRC-failed and non-ok frames are skipped.
 public func extractHistoricalStreams(_ parsed: [ParsedFrame],
+                                     // W01-006: the frames `parsed` was decoded from, index-aligned with it.
+                                     // A v16 or v26 row keeps its whole intact frame (`rawRecord`), because the
+                                     // strap frees the record at the trim ack and the row maps only some of its
+                                     // bytes. `ParsedFrame.rawHex` cannot serve: the ingest fast path leaves it
+                                     // empty (D#969). nil, or a count that does not match, banks no raw record.
+                                     rawFrames: [[UInt8]]? = nil,
                                      deviceClockRef: Int, wallClockRef: Int,
                                      // SESSION-RELATIVE bounds (#547): the strap's own GET_DATA_RANGE
                                      // oldest/newest markers for THIS sync. nil on the replay/import/no-range
@@ -301,7 +309,8 @@ public func extractHistoricalStreams(_ parsed: [ParsedFrame],
     var ppgRecords: [(ts: Int, samples: [Int])] = []
     // #891: packet types that reach `default:` and are dropped. See `Streams.unhandledPacketTypes`.
     var unhandledTypes: [String: Int] = [:]
-    for r in parsed {
+    let alignedRawFrames = rawFrames.flatMap { $0.count == parsed.count ? $0 : nil }
+    for (index, r) in parsed.enumerated() {
         // `ok` is now the FULL verdict — header checksum, payload CRC32 and structural length — so it
         // alone rejects everything the two-part check used to. The `crcOK` half is kept because this
         // function takes parse results from its CALLER, and a `ParsedFrame` decoded from a capture file
@@ -324,7 +333,8 @@ public func extractHistoricalStreams(_ parsed: [ParsedFrame],
                 ppgRecords.append((ts: ts, samples: samples))
                 out.ppgWaveform.append(PpgWaveformSample(ts: ts, samples: samples,
                                                          burstIndex: p["burst_index"]?.intValue,
-                                                         baseCode: p["ppg_base_code"]?.intValue))
+                                                         baseCode: p["ppg_base_code"]?.intValue,
+                                                         rawRecord: alignedRawFrames?[index]))
             }
             // v16 R16 raw ECG record (#891): EXPLICITLY UNVALIDATED instrumentation, the twin of the
             // ppg_waveform persist above. A v16 record carries no heart_rate/gravity/ppg_waveform, so it
@@ -351,7 +361,8 @@ public func extractHistoricalStreams(_ parsed: [ParsedFrame],
                     progress: p["ecg_progress"]?.intValue ?? 0,
                     leadOffCount: p["ecg_lead_off_count"]?.intValue ?? 0,
                     leadOffI: p["ecg_lead_off_i"]?.intArrayValue ?? [],
-                    leadOffQ: p["ecg_lead_off_q"]?.intArrayValue ?? []))
+                    leadOffQ: p["ecg_lead_off_q"]?.intArrayValue ?? [],
+                    rawRecord: alignedRawFrames?[index]))
             }
             if let bpm = p["heart_rate"]?.intValue, bpm != 0 {  // skip startup hr=0
                 out.hr.append(HRSample(ts: ts, bpm: bpm))

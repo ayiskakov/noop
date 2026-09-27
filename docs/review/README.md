@@ -112,7 +112,8 @@ item as it lands.
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
       recorded V2 or V3 stay `Fixed`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
-      W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows.
+      W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows. W01-006 fixed on
+      `review/w01-raw-record` (migration v50); a strap sync then shows new v26 rows carrying their record.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one

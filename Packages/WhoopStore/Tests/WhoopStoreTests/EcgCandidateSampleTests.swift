@@ -34,7 +34,7 @@ final class EcgCandidateSampleTests: XCTestCase {
         let cols = try await store.columnNamesForTest(table: "ecgCandidateSample")
         XCTAssertEqual(Set(cols), Set(["deviceId", "ts", "samples", "recordIndex", "declaredCount", "quality", "stateBits",
                       "classifierResult", "classifierState", "progress", "leadOffCount", "contactMask",
-                      "sampleFlags", "leadOffI", "leadOffQ"]),
+                      "sampleFlags", "leadOffI", "leadOffQ", "rawRecord"]),
                        "v49 widened the row from a waveform to a RECORD; a waveform stored without its "
                        + "acquisition context preserves a signal nobody can later tell the conditions of")
     }

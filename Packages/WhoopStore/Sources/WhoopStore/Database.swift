@@ -1188,6 +1188,15 @@ extension WhoopStore {
                 t.add(column: "leadOffQ", .blob)
             }
         }
+        // W01-006: the whole intact frame behind each v26 PPG and v16 ECG row. Both layouts are mapped, so
+        // they skip the rolling raw archive, and the strap frees the record at the trim ack; the columns
+        // above keep only the bytes a field maps (v26 drops its record index and footer, v16 bytes 26 and
+        // 28–31 and the reserved bits). Additive and nullable: existing rows stay as they are, with no copy
+        // of bytes nobody kept, and nothing is rewritten.
+        migrator.registerMigration("v50-historical-raw-record") { db in
+            try db.alter(table: "ppgWaveformSample") { t in t.add(column: "rawRecord", .blob) }
+            try db.alter(table: "ecgCandidateSample") { t in t.add(column: "rawRecord", .blob) }
+        }
         return migrator
     }
 }

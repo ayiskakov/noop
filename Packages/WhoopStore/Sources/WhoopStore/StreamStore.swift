@@ -548,13 +548,13 @@ extension WhoopStore {
             // `packPpgSamples`) rather than 24 scalar rows, so this insert is O(records), not O(samples).
             if !streams.ppgWaveform.isEmpty {
                 let stmt = try db.cachedStatement(sql: """
-                    INSERT INTO ppgWaveformSample (deviceId, ts, samples, burstIndex, baseCode)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO ppgWaveformSample (deviceId, ts, samples, burstIndex, baseCode, rawRecord)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(deviceId, ts) DO NOTHING
                     """)
                 for s in streams.ppgWaveform {
                     try stmt.execute(arguments: [deviceId, s.ts, WhoopStore.packPpgSamples(s.samples),
-                                                 s.burstIndex, s.baseCode])
+                                                 s.burstIndex, s.baseCode, s.rawRecord.map { Data($0) }])
                     ppgWaveformWritten += 1
                 }
             }
@@ -568,8 +568,8 @@ extension WhoopStore {
                     INSERT INTO ecgCandidateSample
                         (deviceId, ts, samples, recordIndex, declaredCount, quality, stateBits,
                          classifierResult, classifierState, progress, leadOffCount, contactMask,
-                         sampleFlags, leadOffI, leadOffQ)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         sampleFlags, leadOffI, leadOffQ, rawRecord)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(deviceId, ts) DO NOTHING
                     """)
                 for s in streams.ecgCandidate {
@@ -581,7 +581,8 @@ extension WhoopStore {
                         WhoopStore.packEcgContactMask(s.contactFlags),
                         WhoopStore.packEcgSampleFlags(s.sampleFlags),
                         WhoopStore.packEcgLeadOff(s.leadOffI),
-                        WhoopStore.packEcgLeadOff(s.leadOffQ)])
+                        WhoopStore.packEcgLeadOff(s.leadOffQ),
+                        s.rawRecord.map { Data($0) }])
                     ecgCandidateWritten += 1
                 }
             }
@@ -1062,6 +1063,16 @@ extension WhoopStore {
 
     public func ecgCandidateCountForTest() async throws -> Int {
         try syncRead { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ecgCandidateSample") ?? 0 }
+    }
+
+    /// W01-006: one row's stored `rawRecord`, for tests; nil for a NULL column or no row. Only the two tables
+    /// that carry the column are accepted, since the name is spliced into the SQL.
+    public func rawRecordForTest(table: String, deviceId: String, ts: Int) async throws -> Data? {
+        precondition(table == "ppgWaveformSample" || table == "ecgCandidateSample")
+        return try syncRead { db in
+            try Data.fetchOne(db, sql: "SELECT rawRecord FROM \(table) WHERE deviceId = ? AND ts = ?",
+                              arguments: [deviceId, ts])
+        }
     }
 
     /// Write newline-delimited JSON of every `ecgCandidateSample` row across all devices (#891) to `url`,

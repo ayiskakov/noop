@@ -34,7 +34,7 @@ final class PpgWaveformSampleTests: XCTestCase {
         // #2019: `baseCode` is the absolute optical code `samples` are deltas from. Nullable and
         // additive, so an existing row keeps its deltas and reads null, which is the true statement
         // about it: a delta series cannot be inverted without its starting point.
-        XCTAssertEqual(Set(cols), ["deviceId", "ts", "samples", "burstIndex", "baseCode"])
+        XCTAssertEqual(Set(cols), ["deviceId", "ts", "samples", "burstIndex", "baseCode", "rawRecord"])
     }
 
     func testPpgWaveformInsertRoundTripAndDedup() async throws {
