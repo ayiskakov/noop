@@ -139,7 +139,8 @@ item as it lands.
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one
       from 11.9.7, one from 11.9.8): 37 tables and about 4.28 M rows each come back identical after export,
       import and a restore over an open store. Re-run on the 2026-09-27 export from 11.9.12: 49 → 49
-      migrations, 37 tables and about 5.33 M rows, identical.
+      migrations, 37 tables and about 5.33 M rows, identical. Re-run on the 2026-09-27 evening export from 11.9.13: 50 →
+      50 migrations, 37 tables and about 5.53 M rows, identical.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 
