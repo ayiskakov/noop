@@ -156,10 +156,10 @@ final class BackfillerHoldAckTests: XCTestCase {
     }
 }
 
-/// W06-124, W06-135, W06-136: an END whose store write outlives its session (the link ends, the idle timeout
-/// fires, or a new session begins) stops at its resume. Its rows stay stored, but it archives nothing, moves
-/// neither the cursor nor `lastAckedTrim`, acks nothing, and leaves the next session's tallies and stall flag
-/// alone.
+/// W06-124, W06-135, W06-136: an END whose store write outlives its session (the link ends, or a new session
+/// begins) stops at its resume. Its rows stay stored, but it archives nothing, moves neither the cursor nor
+/// `lastAckedTrim`, acks nothing, and leaves the next session's tallies and stall flag alone. The idle timeout
+/// alone is not such a boundary: an END still writing on the same link, with no session after it, acks.
 @MainActor
 final class StaleSessionChunkTests: XCTestCase {
 
@@ -229,15 +229,25 @@ final class StaleSessionChunkTests: XCTestCase {
     }
 
     func testAnEndThatOutlivedItsLinkArchivesNothingAndAcksNothing() async {
-        for interruption in [Interruption.linkEnds, .timeout, .newSession] {
+        for interruption in [Interruption.linkEnds, .newSession] {
             let (backfiller, _, steps, lines) = await run(interruption)
             XCTAssertEqual(steps, ["insert"], "\(interruption): its rows are stored and nothing else happens")
             XCTAssertNil(backfiller.lastAckedTrim, "\(interruption): W06-135")
             XCTAssertEqual(backfiller.sessionRowsPersisted, 0, "\(interruption): W06-124")
-            XCTAssertEqual(lines.filter { $0.contains("offload session ended while chunk trim=100 was being written; "
+            XCTAssertEqual(lines.filter { $0.contains("offload session ended while chunk trim=100 was in progress; "
                                                       + "its rows are stored") }.count, 1,
                            "\(interruption): \(lines.joined(separator: "\n"))")
         }
+    }
+
+    /// A store write slower than the idle watchdog (queued behind a long re-score, W07-004) still acks: the END is
+    /// on its own link and no session followed. Judging it stale would re-send the chunk into the same slow write
+    /// every session, and the offload would never advance.
+    func testAnEndWhoseWriteOutlastsTheIdleTimeoutStillAcks() async {
+        let (backfiller, _, steps, lines) = await run(.timeout)
+        XCTAssertEqual(steps, ["insert", "archive", "cursor 100", "ack 100"])
+        XCTAssertEqual(backfiller.lastAckedTrim, 100)
+        XCTAssertFalse(lines.contains { $0.contains("offload session ended while") })
     }
 
     /// W06-124: a failed write of the previous session's END must not stall the new session's acks.

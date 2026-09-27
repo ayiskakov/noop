@@ -192,10 +192,12 @@ final class Backfiller {
     /// an offload — a still-fraction only means something over a whole night's worth of records.
     private(set) var sessionDynAccel = Streams.DynAccelDiag()
 
-    /// Moves when a session ends or the link does (`begin()`, `timeoutFired()`, `linkEnded()`). A chunk's END
-    /// reads it on entry and again after each await, and stops when it moved: an END that outlived its session
-    /// writes nothing into the next one's state, archives nothing, and acks nothing (W06-124, W06-135,
-    /// W06-136). Rows it already stored stay, and dedupe when the strap re-sends the chunk.
+    /// Moves when the next session begins or the link ends (`begin()`, `linkEnded()`). A chunk's END reads it on
+    /// entry and again after each await, and stops when it moved: an END that outlived its session writes
+    /// nothing into the next one's state, archives nothing, and acks nothing (W06-124, W06-135, W06-136). Rows
+    /// it already stored stay, and dedupe when the strap re-sends the chunk. The idle timeout alone does not
+    /// move it: an END still writing when it fires is on the same link with no session after it, and its ack is
+    /// honest; stranding it would re-send the chunk into the same slow write every session.
     private var session = 0
 
     /// The trim cursor of the LAST chunk this Backfiller acked (durably persisted + confirmed to the
@@ -1036,7 +1038,7 @@ final class Backfiller {
     /// and the only trace). `stored` says whether the chunk's rows were written before it was noticed.
     private func outlived(_ token: Int, trim: UInt32, stored: Bool) -> Bool {
         guard token != session else { return false }
-        log?("Backfill: the offload session ended while chunk trim=\(trim) was being written; "
+        log?("Backfill: the offload session ended while chunk trim=\(trim) was in progress; "
              + (stored ? "its rows are stored, " : "")
              + "nothing more of it is written and it is not acked, so the strap keeps it to re-send (W06-135)")
         return true
@@ -1071,7 +1073,6 @@ final class Backfiller {
     /// Called when a backfill watchdog timer fires (strap went silent mid-offload).
     /// Clears state without acking — the chunk was never durably committed.
     func timeoutFired() {
-        session &+= 1
         isBackfilling = false
         chunk.removeAll(keepingCapacity: true)
         chunkOpen = false

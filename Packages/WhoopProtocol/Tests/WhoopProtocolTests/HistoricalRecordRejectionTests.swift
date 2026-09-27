@@ -72,7 +72,9 @@ final class HistoricalRecordRejectionTests: XCTestCase {
     }
 
     /// Every mapped layout whose intact record banks no row is archived with a reason that is not undecodable,
-    /// so a layout that gains or loses a lane cannot bring the false "couldn't be decoded" status back.
+    /// so a layout that gains or loses a lane cannot bring the false "couldn't be decoded" status back. Only
+    /// layouts this synthetic zero-body frame parses as intact are covered (v20 and v21 today); v16's empty-FIFO
+    /// case uses the hardware fixture in `Whoop5HistoricalV16Tests`.
     func testAMappedLayoutThatBanksNoRowIsNeverUndecodable() {
         for version in mappedWhoop5HistoricalVersions.sorted() {
             let f = frame(version: UInt8(version))

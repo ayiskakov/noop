@@ -2543,7 +2543,9 @@ public final class BLEManager: NSObject, ObservableObject {
         // W06-008: a chunk whose END began ingesting on a link that has since ended is not acked on the one now
         // up. Its rows are persisted, so the ack would be honest, but it would reach the strap out of sequence
         // on a link that never delivered that chunk, and an ack frees flash. Not sending it costs one re-sent
-        // chunk, which dedupes by timestamp. Always-on: rare, and the only trace of the case.
+        // chunk, which dedupes by timestamp. Always-on: rare, and the only trace of the case. Since W06-135 the
+        // Backfiller stops such an END before it asks for an ack (every link boundary that moves the drain's
+        // counter moves its session too), so this is a second guard that cannot disagree with the first.
         if backfillDrain.ingestOutlivedItsLink {
             log("Backfill: chunk ack (trim=\(trim)) not sent — its END began on a link that has since ended, so the chunk stays on the strap to be re-sent (W06-008)")
             return
