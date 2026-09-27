@@ -57,7 +57,9 @@ Fixture tests including malformed input; import → export round-trip; app build
 
 | ID | Sev | Status | Finding | Location | Evidence | PR |
 |---|---|---|---|---|---|---|
+| W04-001 | S4 | Reported | The raw-sensor CSV's `spo2_red`/`spo2_ir` columns read `spo2Sample`, which a 5/MG never fills, and the 5/MG byte 82 candidate (`v18AuxSample`) is not exported at all | `StreamStore.swift` `exportRawCSV` | V0 (2026-09-27 export): 0 `spo2Sample` rows and 85,007 `v18AuxSample` rows in the CSV's window | |
 
 ## Log
 
 - 2026-09-25 — File created from the plan.
+- 2026-09-27 — The owner's 24-hour raw CSV matches the backup taken at the same moment row for row on every stream (a full multiset compare, 0 mismatches); the one event missing from the CSV arrived after it was written. W04-001 recorded.

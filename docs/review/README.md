@@ -90,16 +90,23 @@ item as it lands.
       reasons) and W06-104 … W06-106 (proposed for Phase 5). Then a strap run: a plain connect sends no SET_CLOCK, a
       relaunch during a Raw Data Collector session skips no IMU label, a Test Centre connect logs the #1303 line, a
       relaunch with Test Centre on logs the second read and an in-sync verdict, and Bluetooth off and on inside a
-      connect's first 10 s leaves the next link with a clock verdict of its own.
-- [ ] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8; the day
-      and night on the strap with 11.9.8 is due before their findings move to `Verified`.
+      connect's first 10 s leaves the next link with a clock verdict of its own. Merged as PR #33 and shipped in
+      11.9.12. First strap check done on the owner's 2026-09-27 export: a plain connect sent no SET_CLOCK and moved
+      the strap clock 0 s (the strap's own `SET_RTC` events; W06-050's row). The log ring had evicted that
+      connect's handshake (W06-108), so the other four checks are still due; export the log within an hour of
+      each.
+- [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
+      and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
+      export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
+      recorded V2 or V3 stay `Fixed`.
 - [x] Owner decisions, 2026-09-25: W02-004 deferred to Phase 5, W02-007 to Phase 4, W02-009 to Phase 3;
       W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one
       from 11.9.7, one from 11.9.8): 37 tables and about 4.28 M rows each come back identical after export,
-      import and a restore over an open store.
+      import and a restore over an open store. Re-run on the 2026-09-27 export from 11.9.12: 49 → 49
+      migrations, 37 tables and about 5.33 M rows, identical.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 
