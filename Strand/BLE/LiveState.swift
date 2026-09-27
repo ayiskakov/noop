@@ -1120,8 +1120,14 @@ public final class LiveState: ObservableObject {
         // "Ryan". A multi-token rule cannot tell a name from the surrounding log text and would swallow
         // "Discovered" with it. A fully custom name with no possessive stays a known gap. Kotlin twin in
         // `redactStrapLogPii` as `PII_DEVICE_NAME_RE`.
+        //
+        // W06-140: a match starts only where a run of the class starts, or where the previous match ended
+        // (`\G`). Tried from every position, the run backtracked to its end from each one, which is quadratic
+        // in the run's length: a hex dump is one long run, and a 2,140-byte frame's took 0.29 s in this rule
+        // alone on the main actor, ahead of the offload's ack (W06-110). The matches are the same, since a
+        // match found inside a run is also found from where that run, or the previous match, starts.
         out = out.replacingOccurrences(
-            of: "[\\p{L}\\p{N}_.\\-]+(['\u{2019}]s\\s+(?i:whoop))",
+            of: "(?:(?<![\\p{L}\\p{N}_.\\-])|\\G)[\\p{L}\\p{N}_.\\-]+(['\u{2019}]s\\s+(?i:whoop))",
             with: "<name>$1", options: .regularExpression)
         return out
     }
