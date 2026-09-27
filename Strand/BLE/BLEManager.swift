@@ -1438,8 +1438,38 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// Where the bootstrap opens the store, and how. Properties so a test can run the bootstrap against a
+    /// temporary file (W06-014).
+    var bootstrapStorePath: () throws -> String = { try StorePaths.defaultDatabasePath() }
+    var bootstrapOpenStore: (String) async throws -> WhoopStore = { try await WhoopStore(path: $0) }
+    /// True once the bootstrap has built the pipeline that persists strap data.
+    var storeBootstrapped: Bool { collector != nil && backfiller != nil && registryStore != nil }
+
+    /// The bootstrap in flight, if any (W06-014). Cleared by the task itself as it ends, on the main actor.
+    private var bootstrapInFlight: Task<Void, Never>?
+
+    /// Build the store and the pipeline that persists strap data, once. Callers that arrive while a bootstrap
+    /// is in flight wait for it instead of starting another (W06-014): an iOS state-restoration relaunch runs
+    /// this from `willRestoreState` and `poweredOn` together, and the old `collector == nil` check was read
+    /// before the store-open await and acted on after it, so both opened a store and the second pipeline
+    /// replaced the first. A bootstrap that fails leaves `collector` nil, so the next caller retries (#222).
     func bootstrapStore() async {
         guard collector == nil else { return }
+        if let running = bootstrapInFlight {
+            // Rare-event evidence: the only trace on a strap log that the relaunch race fired.
+            log("Backfill: bootstrap already in flight — waiting for it rather than opening a second store")
+            await running.value
+            return
+        }
+        let run = Task { @MainActor in
+            await self.runBootstrapStore()
+            self.bootstrapInFlight = nil
+        }
+        bootstrapInFlight = run
+        await run.value
+    }
+
+    private func runBootstrapStore() async {
         // Surface store-open failures instead of swallowing them with `try?` (#222): a silent failure
         // here left `backfiller` nil forever and the only visible symptom was the downstream
         // "store not ready" tick, with no clue why. On iOS a background reconnect that opens the
@@ -1447,14 +1477,14 @@ public final class BLEManager: NSObject, ObservableObject {
         // code proves it; the periodic tick (see beginBackfill) re-attempts so it self-heals on unlock.
         let path: String
         do {
-            path = try StorePaths.defaultDatabasePath()
+            path = try bootstrapStorePath()
         } catch {
             log("Backfill: bootstrap FAILED resolving DB path — \(error)")
             return
         }
         let store: WhoopStore
         do {
-            store = try await WhoopStore(path: path)
+            store = try await bootstrapOpenStore(path)
         } catch {
             let ns = error as NSError
             log("Backfill: bootstrap FAILED opening store — \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
