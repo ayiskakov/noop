@@ -107,6 +107,8 @@ final class Collector {
     private var stdHR: [HRSample] = []
     private var stdRR: [RRInterval] = []
     private var stdContact: [WhoopEvent] = []
+    /// W06-118: the readings received since the last flush, for its one summary line.
+    private var stdReceipts = LivePersistTrace.StandardHRReceiptTally()
     /// Last contact state buffered, so only transitions are recorded. See `shouldRecordContact`.
     private var lastStdContact: StandardHRContact?
     private var batchStartedAt: TimeInterval
@@ -296,12 +298,14 @@ final class Collector {
                 fromHR: hr, rr: [], contact: contact, at: ts
             ).events)
         }
-        // W06-108: one line per reading is a per-second readout, and ungated it was half of every strap log and
-        // limited the 5,000-line ring to about an hour. The flush lines below still say what landed every ~30
-        // readings, so the per-reading line sits behind Test Centre → Connection. A reading with a rejected
-        // value is rare (0 to 10 per log across the owner's exports) and stays always-on.
+        // W06-108 / W06-118: one line per reading is a per-second readout. Ungated it was half of every strap log
+        // and limited the 5,000-line ring to about an hour, and under Test Centre → Connection, which the owner
+        // runs, it did the same. The readings are tallied instead, and `flushStandardHR` prints one summary line
+        // per batch; the per-reading line is left to Log Everything.
         let rejectedHR = 1 - acceptedHR, rejectedRR = rr.count - acceptedRR.count
-        if rejectedHR > 0 || rejectedRR > 0 || TestCentre.active(.connection) {
+        stdReceipts.note(hostUnixSec: ts, acceptedHRRows: acceptedHR, acceptedRRRows: acceptedRR.count,
+                         rejectedHRRows: rejectedHR, rejectedRRRows: rejectedRR)
+        if TestCentre.active(.master) {
             log?(LivePersistTrace.standardHRHostReceivedLine(
                 hostUnixSeconds: ts,
                 acceptedHRRows: acceptedHR, acceptedRRRows: acceptedRR.count,
@@ -315,6 +319,11 @@ final class Collector {
 
     /// Persist the buffered standard HR/RR/contact. Re-buffers on failure so nothing is lost.
     func flushStandardHR(reason: LivePersistTrace.StandardHRFlushReason = .explicit) async {
+        // W06-118: the batch's receipt summary, ahead of the empty-buffer return so a run of readings that were
+        // all rejected is still reported. Under Test Centre → Connection, or always when the batch rejected a
+        // value: at most one line per flush, so a strap rejecting every reading cannot flood the log.
+        let receiptsHadRejections = stdReceipts.hasRejections
+        if let line = stdReceipts.take(), receiptsHadRejections || TestCentre.active(.connection) { log?(line) }
         guard !stdHR.isEmpty || !stdRR.isEmpty || !stdContact.isEmpty else { return }
         let hr = stdHR, rr = stdRR, contact = stdContact
         stdHR.removeAll(keepingCapacity: true)

@@ -19,6 +19,25 @@ final class LivePersistTraceTests: XCTestCase {
         )
     }
 
+    /// W06-118: one line per batch, with the longest receipt gap measured across the flush boundary.
+    func testStandardHRReceiptTallySummarisesABatchAndCarriesTheGapAcrossFlushes() {
+        var tally = LivePersistTrace.StandardHRReceiptTally()
+        XCTAssertNil(tally.take(), "no reading, no line")
+        tally.note(hostUnixSec: 100, acceptedHRRows: 1, acceptedRRRows: 2, rejectedHRRows: 0, rejectedRRRows: 0)
+        tally.note(hostUnixSec: 101, acceptedHRRows: 1, acceptedRRRows: 1, rejectedHRRows: 0, rejectedRRRows: 0)
+        tally.note(hostUnixSec: 104, acceptedHRRows: 0, acceptedRRRows: 0, rejectedHRRows: 1, rejectedRRRows: 1)
+        XCTAssertTrue(tally.hasRejections)
+        XCTAssertEqual(tally.take(),
+                       "standard-hr transport host-received-summary readings=3 hostUnixSec=100...104 maxGapSec=3"
+                           + " acceptedHRRows=2 acceptedRRRows=3 rejectedHRRows=1 rejectedRRRows=1")
+        XCTAssertFalse(tally.hasRejections, "take() starts a fresh batch")
+        tally.note(hostUnixSec: 110, acceptedHRRows: 1, acceptedRRRows: 0, rejectedHRRows: 0, rejectedRRRows: 0)
+        XCTAssertEqual(tally.take(),
+                       "standard-hr transport host-received-summary readings=1 hostUnixSec=110...110 maxGapSec=6"
+                           + " acceptedHRRows=1 acceptedRRRows=0 rejectedHRRows=0 rejectedRRRows=0",
+                       "the 104 → 110 wait straddles the flush and is still measured")
+    }
+
     func testStandardHRFlushSuccessSeparatesOfferedFromActuallyInsertedRows() {
         XCTAssertEqual(
             LivePersistTrace.standardHRFlushAttemptLine(

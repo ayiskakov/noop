@@ -59,6 +59,58 @@ public enum LivePersistTrace {
             + " pendingHRRows=\(pendingHRRows) pendingRRRows=\(pendingRRRows)"
     }
 
+    /// The readings a standard-HR batch received, summarised in one line per flush (W06-118).
+    ///
+    /// ``standardHRHostReceivedLine(hostUnixSeconds:acceptedHRRows:acceptedRRRows:rejectedHRRows:rejectedRRRows:pendingHRRows:pendingRRRows:)``
+    /// is one line per reading, about one a second: under Test Centre → Connection it was over half of a strap
+    /// log and evicted a connect's handshake within the hour. This keeps what that line was for, the
+    /// host-observed receipt timing and the accepted/rejected split, at one line per ~30 readings. `maxGapSec`
+    /// is the longest wait between consecutive readings, measured across flushes, so a stall that straddles
+    /// one is not split in two; after a reconnect it includes the time the link was down.
+    public struct StandardHRReceiptTally: Equatable {
+        public private(set) var readings = 0
+        public private(set) var firstHostUnixSec: Int?
+        public private(set) var lastHostUnixSec: Int?
+        public private(set) var maxGapSec = 0
+        public private(set) var acceptedHRRows = 0
+        public private(set) var acceptedRRRows = 0
+        public private(set) var rejectedHRRows = 0
+        public private(set) var rejectedRRRows = 0
+        /// The last reading before this batch; kept by `take()` so the first gap of a batch is measured.
+        private var previousHostUnixSec: Int?
+
+        public init() {}
+
+        public var hasRejections: Bool { rejectedHRRows > 0 || rejectedRRRows > 0 }
+
+        public mutating func note(hostUnixSec: Int, acceptedHRRows: Int, acceptedRRRows: Int,
+                                  rejectedHRRows: Int, rejectedRRRows: Int) {
+            if let previousHostUnixSec { maxGapSec = max(maxGapSec, hostUnixSec - previousHostUnixSec) }
+            previousHostUnixSec = hostUnixSec
+            readings += 1
+            if firstHostUnixSec == nil { firstHostUnixSec = hostUnixSec }
+            lastHostUnixSec = hostUnixSec
+            self.acceptedHRRows += acceptedHRRows
+            self.acceptedRRRows += acceptedRRRows
+            self.rejectedHRRows += rejectedHRRows
+            self.rejectedRRRows += rejectedRRRows
+        }
+
+        /// The batch's summary line, or nil when it received no reading, and a fresh batch.
+        public mutating func take() -> String? {
+            defer {
+                let previous = previousHostUnixSec
+                self = StandardHRReceiptTally()
+                previousHostUnixSec = previous
+            }
+            guard readings > 0, let first = firstHostUnixSec, let last = lastHostUnixSec else { return nil }
+            return "standard-hr transport host-received-summary readings=\(readings)"
+                + " hostUnixSec=\(first)...\(last) maxGapSec=\(maxGapSec)"
+                + " acceptedHRRows=\(acceptedHRRows) acceptedRRRows=\(acceptedRRRows)"
+                + " rejectedHRRows=\(rejectedHRRows) rejectedRRRows=\(rejectedRRRows)"
+        }
+    }
+
     public static func standardHRFlushAttemptLine(
         reason: StandardHRFlushReason, offeredHRRows: Int, offeredRRRows: Int
     ) -> String {
