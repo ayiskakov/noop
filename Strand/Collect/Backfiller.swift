@@ -839,16 +839,26 @@ final class Backfiller {
             // Log + hex-sample the GENUINE rejects whenever there are any — INCLUDING a partially-decoded
             // chunk (some good rows alongside CRC-failed / unmapped records), which used to archive those
             // raw bytes with no log line at all (only the all-empty case was observable). (ryanbr, PR #123)
-            if !rejected.isEmpty {
-                log?("Backfill: \(rejected.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) — archiving raw bytes before ack (CRC/unmapped layout).")
+            // W06-005: an intact record of a mapped layout with no storage lane (v20, v21) reaches the archive
+            // because nothing stores it, not because it failed to decode. Said apart from the undecodable ones,
+            // and kept out of the hex dump, which exists to map layouts that are not mapped yet.
+            let withoutLane = rejected.filter(isIntactRecordWithoutStorageLane)
+            let undecodable = rejected.filter { !isIntactRecordWithoutStorageLane($0) }
+            if !withoutLane.isEmpty {
+                let versions = mappedWhoop5HistoricalVersions.subtracting(whoop5HistoricalVersionsWithStorageLane)
+                    .sorted().map { "v\($0)" }.joined(separator: "/")
+                log?("Backfill: \(withoutLane.count) intact \(versions) record(s) of \(frames.count) frame(s) (trim=\(trim)) — no storage lane for these layouts yet, archiving raw bytes before ack (W06-003).")
+            }
+            if !undecodable.isEmpty {
+                log?("Backfill: \(undecodable.count) undecodable sensor record(s) of \(frames.count) frame(s) (trim=\(trim)) — archiving raw bytes before ack (CRC/unmapped layout).")
                 // #91 / #30: dump a hex sample of the genuine rejects so an unmapped firmware's record
                 // layout can be mapped from a user's strap log. Dump the FULL frame (not a 64-byte
                 // prefix — v25/v26 records run ~84 B and the truncated tail is exactly where the
                 // unmapped motion/HR fields sit), and sample a few more so one log carries enough
-                // records to triangulate offsets. These only ever fire for unmapped firmware.
-                rejectFramesSeen += rejected.count
+                // records to triangulate offsets.
+                rejectFramesSeen += undecodable.count
                 // #1992: spend from a SESSION budget, not a fresh 8 per chunk. See `hexDumpAllowance`.
-                let sample = Array(rejected.prefix(Backfiller.hexDumpAllowance(rejected.count, rejectHexBudget)))
+                let sample = Array(undecodable.prefix(Backfiller.hexDumpAllowance(undecodable.count, rejectHexBudget)))
                 var emptySkipped = 0
                 for (i, f) in sample.enumerated() {
                     // #1007: an all-zero frame has no record layout to map, so its hex dump is pure log
