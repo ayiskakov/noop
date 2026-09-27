@@ -56,8 +56,10 @@ final class BootstrapStoreSingleFlightTests: XCTestCase {
         XCTAssertTrue(manager.storeBootstrapped, "the waiting caller returned before the store was ready")
         await first.value
         XCTAssertEqual(opens, 1)
-        XCTAssertEqual(live.log.filter { $0.contains("Backfill: bootstrap already in flight") }.count, 1,
-                       live.log.joined(separator: "\n"))
+        // At least once, not exactly: the manager's real CBCentralManager can report poweredOn inside the open's
+        // window, and that path calls `bootstrapStore()` too, which waits and says so as well.
+        XCTAssertGreaterThanOrEqual(live.log.filter { $0.contains("Backfill: bootstrap already in flight") }.count, 1,
+                                    live.log.joined(separator: "\n"))
     }
 
     func testAFailedBootstrapIsRetriedByTheNextCaller() async {
