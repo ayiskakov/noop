@@ -112,7 +112,8 @@ item as it lands.
       drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
       and v21 records as undecodable). V2 (independent subagent) held W06-014 and W07-009 and held W06-008 and
       W06-005 with caveats; it added W06-123 … W06-128: W06-123, W06-125 and W06-126 are fixed on the same branch,
-      W06-124, W06-127 and W06-128 are recorded. StrandTests 2,084, WhoopProtocol 788, both builds. Then a strap
+      W06-124, W06-127 and W06-128 are recorded. StrandTests 2,084, WhoopProtocol 788, both builds. An xhigh code
+      review of the batch added W06-129 … W06-139 and W07-010 … W07-013, fixed on the same branch. Then a strap
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
       status no longer names v20/v21 records as undecodable.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
