@@ -706,27 +706,33 @@ final class IntelligenceEngine: ObservableObject {
         UserDefaults.standard.set(false, forKey: Self.timestampHealPendingKey)
     }
 
+    /// The one check of the `computing` lock, made on entry to `analyzeRecent` and again after its last await
+    /// before the lock is taken (W07-009). True when the caller must return.
+    ///
+    /// #899-A: a concurrent pass already holds the lock. A NON-forced idle tick is safe to drop (the
+    /// in-flight pass already covers the same window). But a FORCED call is a real update path (a
+    /// post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
+    /// until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
+    private func queueBehindRunningPass(force: Bool) -> Bool {
+        guard computing else { return false }
+        if force {
+            // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
+            // turns every post-offload re-score into a silent no-op, and the log shows syncs but no scores.
+            if !pendingForcedRescore, let started = runningPassStart {
+                let heldFor = Int(Double(DispatchTime.now().uptimeNanoseconds &- started) / 1_000_000_000)
+                diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
+            }
+            pendingForcedRescore = true
+        }
+        return true
+    }
+
     /// Compute on-device scores for each of the last `maxDays` that actually has raw HR data.
     /// Personal baselines (HRV / resting HR) are folded from the imported history, so even the first
     /// live night can be scored against your norm.
     func analyzeRecent(maxDays: Int = 21, force: Bool = true, skipIfUnchanged: Bool = false,
                        triggerLabel: String? = nil) async {
-        // #899-A: a concurrent pass already holds the lock. A NON-forced idle tick is safe to drop (the
-        // in-flight pass already covers the same window). But a FORCED call is a real update path (a
-        // post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
-        // until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
-        guard !computing else {
-            if force {
-                // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
-                // turns every post-offload re-score into a silent no-op, and the log shows syncs but no scores.
-                if !pendingForcedRescore, let started = runningPassStart {
-                    let heldFor = Int(Double(DispatchTime.now().uptimeNanoseconds &- started) / 1_000_000_000)
-                    diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
-                }
-                pendingForcedRescore = true
-            }
-            return
-        }
+        if queueBehindRunningPass(force: force) { return }
         guard let store = await repo.storeHandle() else { note = String(localized: "No on-device store yet."); return }
         guard let hrvCfg = Baselines.metricCfg["hrv"],
               let rhrCfg = Baselines.metricCfg["resting_hr"],
@@ -749,6 +755,10 @@ final class IntelligenceEngine: ObservableObject {
         // fired and a night finishing after launch stayed unscored until relaunch. Scoring below still reads
         // the registry's ACTIVE device (`owner`); only this change-detector needed to be cross-device.
         let wmKey = (try? await store.analysisFingerprint()) ?? ""
+        // W07-009: checked again past the entry's last await. A call arriving while another was between the
+        // check above and here passed that check too, and without this both ran the pass. Nothing below
+        // suspends before `computing = true`, so this check and that write cannot be split.
+        if queueBehindRunningPass(force: force) { return }
         // #1538: read the stored watermark ONCE for both gates and the attribution line below. There is no
         // suspension point between them, so the three reads this replaces could not disagree — but the log
         // line asserting `newData` and the gate deciding whether to run must be the SAME comparison by
