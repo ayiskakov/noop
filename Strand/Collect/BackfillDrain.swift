@@ -55,7 +55,6 @@ final class BackfillDrain {
         lastDrain = Task { @MainActor in
             await previous?.value
             await self.drain(link: started)
-            self.runningDrains -= 1
         }
     }
 
@@ -72,6 +71,9 @@ final class BackfillDrain {
     }
 
     private func drain(link started: Int) async {
+        // Counted down in the same synchronous frame that clears `draining`, so a re-route cannot see one
+        // without the other and log a wait that is not happening.
+        defer { runningDrains -= 1 }
         while !queue.isEmpty {
             // The link ended while this drain waited for the previous one: the queue is the next link's.
             guard link == started else { return }

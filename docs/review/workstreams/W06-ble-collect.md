@@ -337,3 +337,4 @@ exactly what was tested on hardware.
 - 2026-09-27 — W06-123 fixed.
 - 2026-09-27 — W06-125 fixed (test only).
 - 2026-09-27 — W06-126 fixed (one off-main split; the sink carries the count).
+- 2026-09-27 — W06-123: the drain count now goes down in `drain()`'s own `defer`, in the frame that clears `draining`, so no await boundary sits between them (advisor check before the PR).
