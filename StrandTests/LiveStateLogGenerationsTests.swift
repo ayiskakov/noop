@@ -213,4 +213,18 @@ final class LiveStateLogGenerationsTests: XCTestCase {
         XCTAssertTrue(header.contains("2 line(s)"), header)
         XCTAssertFalse(header.contains("clipped"), header)
     }
+
+    /// W06-120: a scheduled export in a fresh process, before its first line, reads the previous process's
+    /// tail. It must file that tail under a previous-session header, as the manual export does (#1263), not
+    /// call it the current session.
+    func testAScheduledExportBeforeTheFirstLineCallsTheTailPrevious() {
+        UserDefaults.standard.set(["last night 03:14 reconnect storm", "03:15 gave up"], forKey: tailKey)
+        UserDefaults.standard.set(["lines": 10, "lastLine": "03:15 gave up"], forKey: tailSessionLinesKey)
+
+        let text = LiveState.scheduledExportText()
+
+        XCTAssertTrue(text.contains("previous app session, 2 of 10 line(s), head clipped"), text)
+        XCTAssertFalse(text.contains("current app session, 2 of 10"), text)
+        XCTAssertTrue(text.contains("last night 03:14 reconnect storm"), text)
+    }
 }

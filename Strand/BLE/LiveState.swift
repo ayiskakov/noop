@@ -910,6 +910,10 @@ public final class LiveState: ObservableObject {
     /// reads the same as a manual share; falls back to the live `log` is not available here by design
     /// (this is a `static` so a background task needs no main-actor instance).
     nonisolated public static func scheduledExportText(extraHeaderLines: [String] = []) -> String {
+        // W06-120: roll first, as `exportableLogText()` does (#1263). A scheduled export in a fresh process,
+        // before its first line (macOS catch-up at launch), otherwise reads the previous process's tail and
+        // prints it under the current-session header.
+        rollLogGenerationsIfNeeded()
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         #if os(iOS)
         let osName = "iOS"
