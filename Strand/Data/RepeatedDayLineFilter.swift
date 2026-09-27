@@ -21,8 +21,10 @@ import Foundation
 struct RepeatedDayLineFilter {
     static let refreshAfter: TimeInterval = 3_600
 
-    private var lastPrint: [String: (line: String, at: Date)] = [:]
+    private var lastPrint: [String: (line: String, at: Date, day: String)] = [:]
     private var occurrences: [String: Int] = [:]
+    private var keysThisPass: Set<String> = []
+    private var daysThisPass: Set<String> = []
     private(set) var withheld = 0
     private var oldestWithheldPrint: Date?
 
@@ -31,6 +33,8 @@ struct RepeatedDayLineFilter {
     /// judges the age itself, because a pass runs for minutes and can cross the hour after it began.
     mutating func beginPass(now: Date) {
         occurrences = [:]
+        keysThisPass = []
+        daysThisPass = []
         withheld = 0
         oldestWithheldPrint = nil
         lastPrint = lastPrint.filter { now.timeIntervalSince($0.value.at) < Self.refreshAfter }
@@ -42,21 +46,41 @@ struct RepeatedDayLineFilter {
         let n = occurrences[base, default: 0]
         occurrences[base] = n + 1
         let key = "\(base)#\(n)"
+        let day = String(base.suffix(10))
+        keysThisPass.insert(key)
+        daysThisPass.insert(day)
         if let last = lastPrint[key], last.line == line, now.timeIntervalSince(last.at) < Self.refreshAfter {
             withheld += 1
             oldestWithheldPrint = min(oldestWithheldPrint ?? last.at, last.at)
             return false
         }
-        lastPrint[key] = (line, now)
+        lastPrint[key] = (line, now, day)
         return true
     }
 
-    /// One line accounting for this pass's withheld lines; nil when it withheld none. The time is local
-    /// `HH:mm:ss`, the stamp the Collector's lines around it carry.
+    /// End a pass: forget every key it did not produce, and return one line accounting for what it
+    /// withheld and for lines the last pass printed on a day this pass scored but no longer produces; nil
+    /// when there is neither (W07-007). Without the second part a vanished line (a bout that merged away)
+    /// read as still true, and its stale slot could withhold a later line on the same key. A day the pass
+    /// did not score at all is forgotten unnamed: its absence is the pass's own window and skip lines to
+    /// explain. The time is local `HH:mm:ss`, the stamp the Collector's lines around it carry.
     mutating func endPass() -> String? {
-        guard withheld > 0, let oldest = oldestWithheldPrint else { return nil }
-        return "re-score: \(withheld) per-day line(s) unchanged since their last print, not repeated "
-            + "(oldest print \(Self.timeFormatter.string(from: oldest)))"
+        let gone = lastPrint.filter { !keysThisPass.contains($0.key) }
+        let named = Set(gone.filter { daysThisPass.contains($0.value.day) }.keys.map { key in
+            String(key[..<(key.lastIndex(of: "#") ?? key.endIndex)])
+        }).sorted()
+        for key in gone.keys { lastPrint[key] = nil }
+        var parts: [String] = []
+        if withheld > 0, let oldest = oldestWithheldPrint {
+            parts.append("\(withheld) per-day line(s) unchanged since their last print, not repeated "
+                         + "(oldest print \(Self.timeFormatter.string(from: oldest)))")
+        }
+        let goneCount = gone.filter { daysThisPass.contains($0.value.day) }.count
+        if goneCount > 0 {
+            parts.append((parts.isEmpty ? "\(goneCount) per-day line(s)" : "\(goneCount)")
+                         + " printed before no longer produced: " + named.joined(separator: ", "))
+        }
+        return parts.isEmpty ? nil : "re-score: " + parts.joined(separator: "; ")
     }
 
     static let timeFormatter: DateFormatter = {

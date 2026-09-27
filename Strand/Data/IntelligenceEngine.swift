@@ -2397,6 +2397,9 @@ final class IntelligenceEngine: ObservableObject {
             }
         }
 
+        // W07-005/W07-007: account for the per-day lines withheld or no longer produced right after the
+        // last of them, not after the post-loop persistence, which can run for minutes.
+        if let line = dayLineFilter.endPass() { diagnosticSink?(line, nil) }
         markPostLoopPhase("score2")
         // ── Apple-Watch recovery fold (M1 "Watch as a device") ──────────────────────────────────────
         // A watch-only user has apple-health DAILY aggregates (SDNN HRV + resting HR) but no raw stream, so
@@ -2951,7 +2954,6 @@ final class IntelligenceEngine: ObservableObject {
         // by more than an order of magnitude with history size.
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds &- reScoreStart) / 1_000_000_000
         let settled = RescoreBackgroundScheduler.markRescoreCompleted(seconds: elapsed, owedToken: owedToken)
-        if let line = dayLineFilter.endPass() { diagnosticSink?(line, nil) }
         diagnosticSink?("re-score: done — scored \(scoredNights.count) night(s) in \(Int(elapsed * 1000)) ms (#1005)", nil)
         diagnosticSink?(RescoreBackgroundScheduler.passCostLogLine(
             cpuSeconds: RescoreBackgroundScheduler.processCPUSeconds().flatMap { end in reScoreCPUStart.map { end - $0 } },

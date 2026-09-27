@@ -85,6 +85,12 @@ final class RepeatedDayLineTests: XCTestCase {
             XCTAssertEqual(summaries.count, 1, "\(log.map(\.0))")
             XCTAssertTrue(summaries.first?.contains("re-score: \(first.count) per-day line(s) unchanged") == true,
                           "the summary must count every withheld line: \(summaries)")
+            // W07-007: said right after the last per-day line, not after the post-loop persistence.
+            let lines = log.map(\.0)
+            let summaryAt = lines.firstIndex { $0.hasPrefix("re-score: ") && $0.contains("unchanged") }
+            let postLoopAt = lines.firstIndex { $0.hasPrefix("analyzeRecent postLoop") }
+            XCTAssertNotNil(postLoopAt)
+            XCTAssertLessThan(summaryAt ?? .max, postLoopAt ?? .min, "\(lines)")
         }
     }
 
@@ -251,4 +257,21 @@ final class RepeatedDayLineTests: XCTestCase {
         XCTAssertEqual(RepeatedDayLineFilter.dayKey(of: "hrv dedup day=2026-01-02 exactN=1/2"), "hrv dedup day=2026-01-02")
     }
 
+    /// W07-007: a line the last pass printed and this pass no longer produces is named, not left to read as
+    /// still true, and its slot is freed so it cannot withhold a later line.
+    func testALineNoLongerProducedIsNamedAndFreesItsSlot() {
+        var filter = RepeatedDayLineFilter()
+        let bouts = Array(shapes.suffix(2))
+        _ = pass(&filter, bouts, at: t0)
+        let second = pass(&filter, [bouts[0]], at: t0 + 600)
+        XCTAssertEqual(second.0, [])
+        XCTAssertEqual(second.1, "re-score: 1 per-day line(s) unchanged since their last print, not repeated "
+                                 + "(oldest print \(RepeatedDayLineFilter.timeFormatter.string(from: t0))); "
+                                 + "1 printed before no longer produced: effort bout day=2026-01-02")
+        XCTAssertEqual(pass(&filter, bouts, at: t0 + 1_200).0, [bouts[1]])
+        // A day this pass did not score at all (aged out, or skipped) is not named: its absence is the
+        // pass's own `sleep SKIPPED` / window lines to explain.
+        _ = pass(&filter, [bouts[0], "resp day=2026-01-01 rpm=14.0"], at: t0 + 1_800)
+        XCTAssertNil(pass(&filter, [], at: t0 + 2_400).1)
+    }
 }
