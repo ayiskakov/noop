@@ -147,7 +147,7 @@ final class RepeatedDayLineTests: XCTestCase {
         XCTAssertNil(first.1, "a pass that withheld nothing prints no summary")
         let second = pass(&filter, shapes, at: t0 + 600)
         XCTAssertEqual(second.0, [])
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0)
+        let stamp = AppModel.logTimeFormatter.string(from: t0)
         XCTAssertEqual(second.1, "re-score: 13 per-day line(s) unchanged since their last print, not repeated "
                                  + "(oldest print \(stamp))")
     }
@@ -183,7 +183,7 @@ final class RepeatedDayLineTests: XCTestCase {
         // The refresh restarts the clock: the next pass withholds against the reprint, not the first print.
         let after = pass(&filter, shapes, at: t0 + RepeatedDayLineFilter.refreshAfter + 600)
         XCTAssertEqual(after.0, [])
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0 + RepeatedDayLineFilter.refreshAfter)
+        let stamp = AppModel.logTimeFormatter.string(from: t0 + RepeatedDayLineFilter.refreshAfter)
         XCTAssertTrue(after.1?.hasSuffix("(oldest print \(stamp))") == true, "\(String(describing: after.1))")
     }
 
@@ -200,7 +200,7 @@ final class RepeatedDayLineTests: XCTestCase {
         _ = pass(&filter, [shapes[0]], at: t0)
         _ = pass(&filter, [shapes[0], shapes[2]], at: t0 + 600)
         let third = pass(&filter, [shapes[0], shapes[2]], at: t0 + 1_200)
-        let stamp = RepeatedDayLineFilter.timeFormatter.string(from: t0)
+        let stamp = AppModel.logTimeFormatter.string(from: t0)
         XCTAssertEqual(third.1, "re-score: 2 per-day line(s) unchanged since their last print, not repeated "
                                 + "(oldest print \(stamp))")
     }
@@ -240,7 +240,7 @@ final class RepeatedDayLineTests: XCTestCase {
         let second = pass(&filter, [bouts[0]], at: t0 + 600)
         XCTAssertEqual(second.0, [])
         XCTAssertEqual(second.1, "re-score: 1 per-day line(s) unchanged since their last print, not repeated "
-                                 + "(oldest print \(RepeatedDayLineFilter.timeFormatter.string(from: t0))); "
+                                 + "(oldest print \(AppModel.logTimeFormatter.string(from: t0))); "
                                  + "1 printed before no longer produced: effort bout day=2026-01-02")
         XCTAssertEqual(pass(&filter, bouts, at: t0 + 1_200).0, [bouts[1]])
         // A day this pass did not score at all (aged out, or skipped) is not named: its absence is the

@@ -63,7 +63,7 @@ struct RepeatedDayLineFilter {
     /// when there is neither (W07-007). Without the second part a vanished line (a bout that merged away)
     /// read as still true, and its stale slot could withhold a later line on the same key. A day the pass
     /// did not score at all is forgotten unnamed: its absence is the pass's own window and skip lines to
-    /// explain. The time is local `HH:mm:ss`, the stamp the Collector's lines around it carry.
+    /// explain. The time is `AppModel.logTimeFormatter`'s, the stamp the lines around it carry (W07-012).
     mutating func endPass() -> String? {
         let gone = lastPrint.filter { !keysThisPass.contains($0.key) }
         let named = Set(gone.filter { daysThisPass.contains($0.value.day) }.keys.map { key in
@@ -73,7 +73,7 @@ struct RepeatedDayLineFilter {
         var parts: [String] = []
         if withheld > 0, let oldest = oldestWithheldPrint {
             parts.append("\(withheld) per-day line(s) unchanged since their last print, not repeated "
-                         + "(oldest print \(Self.timeFormatter.string(from: oldest)))")
+                         + "(oldest print \(AppModel.logTimeFormatter.string(from: oldest)))")
         }
         let goneCount = gone.filter { daysThisPass.contains($0.value.day) }.count
         if goneCount > 0 {
@@ -90,10 +90,6 @@ struct RepeatedDayLineFilter {
         let age = now.timeIntervalSince(at)
         return age >= 0 && age < refreshAfter
     }
-
-    static let timeFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
-    }()
 
     /// The line's label (its leading words, up to the first `key=value` token) and its first
     /// `day=YYYY-MM-DD`, as `label day=D`; nil when it has no day. Not the text through the day token: two
