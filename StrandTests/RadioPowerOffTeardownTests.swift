@@ -115,4 +115,14 @@ final class RadioPowerOffTeardownTests: XCTestCase {
         manager.linkDropped(peripheralUUID: "strap-1", error: nil)
         XCTAssertEqual(alreadyEndedLines, 0)
     }
+
+    /// W06-150: a link known only by its uptime clock (the flag not set) still ends, with its epitaph naming the cause.
+    func testALinkKnownByItsUptimeEndsWithAnEpitaph() {
+        manager.linkUpSince = DispatchTime.now()
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        XCTAssertEqual(lines(containing: "Link epitaph:").filter { $0.contains("ended=Bluetooth off") }.count, 1,
+                       live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "Link ended: Bluetooth off").count, 1)
+        XCTAssertNil(manager.linkUpSince)
+    }
 }

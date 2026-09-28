@@ -799,8 +799,9 @@ public final class BLEManager: NSObject, ObservableObject {
     /// ~60 s between link RSSI reads, matching the Android odd-tick cadence.
     private static let rssiReadIntervalSeconds: TimeInterval = 60
 
-    /// Uptime clock for the epitaph. Monotonic, so a wall-clock change mid-link cannot make it negative.
-    private var linkUpSince: DispatchTime?
+    /// Uptime clock for the epitaph. Monotonic, so a wall-clock change mid-link cannot make it negative. Internal for
+    /// `RadioPowerOffTeardownTests`, which cannot run the `didConnect` that sets it (W06-150).
+    var linkUpSince: DispatchTime?
     /// Last time ANY notification arrived — drives the liveness watchdog.
     private var lastDataAt = Date()
     /// True while a Live/Health screen is on-screen and wants the realtime stream. One of the two
