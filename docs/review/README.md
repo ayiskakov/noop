@@ -142,6 +142,14 @@ item as it lands.
       undecodable records whose ack follows its chunk within about 2 s. Shipped in 11.9.14; not yet on the
       phone at the 2026-09-28 export. W06-083 (a Bluetooth power-off skips the
       next link's handshake) is proposed to the owner for the next batch.
+- [ ] Ninth W6 batch, `review/w06-fixes-9` (stacked on `review/strap-run-2026-09-28`): W06-083 (a Bluetooth
+      power-off or reset ends the held link through the same teardown as a disconnect), W06-144 (the #617 bond-loop
+      trip parks its standing connect after the link is cleared), W06-141 (the launch reconnect line names the app
+      state it saw), W06-121 with W06-115 (wrist events ordered by strap time; history sets `worn` only). W06-142
+      deferred to Phase 3 (a file-backed strap log). AD-15 recorded with the owner (split `BLEManager` into transport,
+      link session and WHOOP policy; Phase 5, W06-143). StrandTests 2,113, both builds (NOOPiOS without the watch
+      app). Then V2, and a strap run: Bluetooth off and on mid-link from Settings and from Control Center (a `Link
+      ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back on while unlinked.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
