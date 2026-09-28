@@ -45,7 +45,7 @@ final class LinkTeardownFramingTests: XCTestCase {
         let guardLine = try XCTUnwrap(source.range(of: "        guard central.state == .poweredOn else {\n",
                                                    range: delegate.upperBound..<source.endIndex))
         let next = source[guardLine.upperBound...].prefix { $0 != "\n" }
-        XCTAssertEqual(next, "            endLinkForRadioState(central.state)")
+        XCTAssertEqual(next, "            endLinkForRadioState(central.state, peripheralUUID: peripheral?.identifier.uuidString)")
     }
 
     /// The tally folds a reassembler's drops as growth past the total it last saw, so a fresh reassembler

@@ -1144,9 +1144,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// cannot run the handshake that sets it.
     var whoop5HandshakeAt: Double?
     private var intentionalDisconnect = false
-    /// Set when a Bluetooth power-off ended the link (W06-083), so a late `didDisconnectPeripheral` for that link,
-    /// which macOS can still send, does not tear down twice. Cleared wherever a link comes up.
-    private var linkEndedAtRadioLoss = false
+    /// The identifier of the peripheral whose link a Bluetooth power-off or reset ended (W06-083), so a later
+    /// `didDisconnectPeripheral` for that same link does not tear down twice. Whether CoreBluetooth sends one after a
+    /// power-off is not established: iOS sent none on three hardware toggles, and macOS has not been checked.
+    /// Cleared wherever a link comes up, and by the disconnect it answers; nil when no peripheral was held.
+    private var linkEndedAtRadioLoss: String?
     /// Consecutive `didFailToConnect` count, for the auto-reconnect backoff (#414). Reset to 0 on a
     /// successful connect; grows the reschedule delay so a strap that's genuinely out of range doesn't
     /// hammer Bluetooth (vs the disconnect path's flat 3s, which is fine for an already-bonded drop).
@@ -1726,7 +1728,7 @@ public final class BLEManager: NSObject, ObservableObject {
         // device (registry said B, radio stayed on A). No pin (single-WHOOP) → always true, unchanged.
         if let p = peripheral, p.state == .connected, isPreferredPeripheral(p) {
             state.connected = true
-            linkEndedAtRadioLoss = false   // W06-083: this link is a new one
+            linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
             p.delegate = self
             log("Already connected to \(model.displayName) — refreshing services and notifications")
             discoverPrimaryServices(on: p)
@@ -5658,7 +5660,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
     /// while a restored link is being re-discovered, and `.unsupported`, where no link can exist. The drop detectors
     /// (#80, #617) and the bond-refusal count (#1635) are not fed, since a radio switched off says nothing about the
     /// strap. Internal for `RadioPowerOffTeardownTests`, which cannot make a `CBCentralManager` report a state.
-    func endLinkForRadioState(_ radio: CBManagerState) {
+    func endLinkForRadioState(_ radio: CBManagerState, peripheralUUID: String?) {
         let cause: String
         switch radio {
         case .poweredOff: cause = "Bluetooth off"
@@ -5668,7 +5670,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         guard state.connected || linkUpSince != nil else { return }
         endLinkReadouts(ended: cause)
         resetLinkState()
-        linkEndedAtRadioLoss = true
+        linkEndedAtRadioLoss = peripheralUUID
         log("Link ended: \(cause) — torn down at the radio state change (W06-083)")
         if TestCentre.active(.connection) {
             let held = ConnectionTrace.sessionHeldSuffix(
@@ -5685,7 +5687,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         unauthorizedSettleWork?.cancel()
         unauthorizedSettleWork = nil
         guard central.state == .poweredOn else {
-            endLinkForRadioState(central.state)
+            endLinkForRadioState(central.state, peripheralUUID: peripheral?.identifier.uuidString)
             // #280: a non-poweredOn radio state used to be a SILENT return — the strap log showed only
             // "Central state: 3" and the UI just read "not connected", so a user whose Mac had denied NOOP
             // Bluetooth (.unauthorized == raw 3) had nothing explaining why no strap was ever found. This is
@@ -5879,7 +5881,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // (the Sync Strap shortcut, a state-restoration relaunch) reconnects by identifier, not by scan.
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: Self.lastConnectedPeripheralKey)
         state.connected = true
-        linkEndedAtRadioLoss = false   // W06-083: this link is a new one
+        linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
         // A connect succeeded → clear the stale-bond re-pair guide UNLESS we are in a known bond-loop
         // (#617). In that loop the strap "connects" every ~3 s before timing out again, so clearing here
         // wiped the guide on EVERY cycle: it flashed for ~1 s and vanished, so the user could never read it
@@ -6217,12 +6219,15 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
     /// `didDisconnectPeripheral`'s body. It needs only the peripheral's identifier, so a test, which cannot make a
     /// `CBPeripheral`, can end a link through it (W06-147).
     func linkDropped(peripheralUUID: String, error: Error?) {
-        // W06-083: a link a Bluetooth power-off or reset already ended gets no second teardown. On macOS the disconnect can
-        // still arrive for it; the next link, or poweredOn's connect, owns what happens now.
-        guard !linkEndedAtRadioLoss else {
-            linkEndedAtRadioLoss = false
-            log("Disconnected — that link already ended at the radio state change (W06-083)")
-            return
+        // W06-083: a link a Bluetooth power-off or reset already ended gets no second teardown, should a disconnect
+        // for it still arrive; the next link, or poweredOn's connect, owns what happens now. W06-148: only a
+        // disconnect for that peripheral, and never the user's own Disconnect, whose branch below must run.
+        if let ended = linkEndedAtRadioLoss, ended == peripheralUUID {
+            linkEndedAtRadioLoss = nil
+            if !intentionalDisconnect {
+                log("Disconnected — that link already ended at the radio state change (W06-083)")
+                return
+            }
         }
         // Reboot trail: if a user reboot is in flight, this drop is the strap acting on it. Log how long
         // the link stayed up (a real reboot drops within ~1-2 s) and cancel the no-disconnect watchdog. The
@@ -6480,7 +6485,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         if p.state == .connected {
             state.connected = true
-            linkEndedAtRadioLoss = false   // W06-083: this link is a new one
+            linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
             // #613: the inherited notify subscriptions come back reported-active but dead. Force one real
             // off→on re-subscribe this session (see `requestNotify`) so live HR/R-R resume AND
             // `didUpdateNotificationStateFor` fires → `cmdNotifyConfirmedActive` → `connectSettled` → the

@@ -34,7 +34,7 @@ final class RadioPowerOffTeardownTests: XCTestCase {
     func testAPowerOffEndsAHeldLinkSoTheNextOneRunsTheHandshake() {
         holdALinkPastTheHandshake()
         let token = manager.strapClockCheckToken
-        manager.endLinkForRadioState(.poweredOff)
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
         XCTAssertFalse(live.connected, live.log.joined(separator: "\n"))
         XCTAssertFalse(live.historyReady)
         XCTAssertNil(live.charging)
@@ -45,7 +45,7 @@ final class RadioPowerOffTeardownTests: XCTestCase {
 
     func testABluetoothResetEndsAHeldLinkToo() {
         holdALinkPastTheHandshake()
-        manager.endLinkForRadioState(.resetting)
+        manager.endLinkForRadioState(.resetting, peripheralUUID: "strap-1")
         XCTAssertFalse(live.connected)
         XCTAssertFalse(manager.whoop5SessionStarted)
         XCTAssertEqual(lines(containing: "Link ended: Bluetooth resetting").count, 1)
@@ -56,7 +56,7 @@ final class RadioPowerOffTeardownTests: XCTestCase {
     func testAStateThatDoesNotDropLinksLeavesTheLinkAlone() {
         for radio in [CBManagerState.unknown, .unauthorized, .unsupported] {
             holdALinkPastTheHandshake()
-            manager.endLinkForRadioState(radio)
+            manager.endLinkForRadioState(radio, peripheralUUID: "strap-1")
             XCTAssertTrue(live.connected, "\(radio.rawValue)")
             XCTAssertTrue(manager.whoop5SessionStarted, "\(radio.rawValue)")
         }
@@ -64,14 +64,55 @@ final class RadioPowerOffTeardownTests: XCTestCase {
     }
 
     func testAPowerOffWithNoLinkHeldSaysNothing() {
-        manager.endLinkForRadioState(.poweredOff)
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
         XCTAssertEqual(lines(containing: "Link ended").count, 0)
     }
 
     func testASecondPowerOffForTheSameLinkSaysNothing() {
         holdALinkPastTheHandshake()
-        manager.endLinkForRadioState(.poweredOff)
-        manager.endLinkForRadioState(.poweredOff)
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
         XCTAssertEqual(lines(containing: "Link ended").count, 1)
+    }
+
+    // MARK: - A disconnect after the power-off (W06-147, W06-148)
+
+    private var alreadyEndedLines: Int { lines(containing: "that link already ended at the radio state change").count }
+    private var fullDisconnectLines: Int { live.log.filter { $0.hasPrefix("Disconnected") || $0.contains("] Disconnected") }.count - alreadyEndedLines }
+
+    /// A late disconnect for the link the power-off ended is not torn down again: one line says so.
+    func testALateDisconnectForTheSameLinkIsNotTornDownTwice() {
+        holdALinkPastTheHandshake()
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        manager.linkDropped(peripheralUUID: "strap-1", error: nil)
+        XCTAssertEqual(alreadyEndedLines, 1, live.log.joined(separator: "\n"))
+        XCTAssertEqual(fullDisconnectLines, 0)
+    }
+
+    /// W06-148: a disconnect for another peripheral is its own, and runs the handler.
+    func testADisconnectForAnotherPeripheralRunsTheHandler() {
+        holdALinkPastTheHandshake()
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        manager.linkDropped(peripheralUUID: "strap-2", error: nil)
+        XCTAssertEqual(alreadyEndedLines, 0, live.log.joined(separator: "\n"))
+        XCTAssertEqual(fullDisconnectLines, 1)
+    }
+
+    /// W06-148: the user's own Disconnect after a power-off runs its intentional branch.
+    func testTheUsersDisconnectAfterAPowerOffRunsItsOwnBranch() {
+        holdALinkPastTheHandshake()
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        manager.disconnect()
+        manager.linkDropped(peripheralUUID: "strap-1", error: nil)
+        XCTAssertEqual(alreadyEndedLines, 0, live.log.joined(separator: "\n"))
+        XCTAssertEqual(lines(containing: "Disconnected (intentional)").count, 1)
+    }
+
+    /// A power-off that held no peripheral swallows nothing.
+    func testAPowerOffWithNoPeripheralSwallowsNoDisconnect() {
+        holdALinkPastTheHandshake()
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: nil)
+        manager.linkDropped(peripheralUUID: "strap-1", error: nil)
+        XCTAssertEqual(alreadyEndedLines, 0)
     }
 }
