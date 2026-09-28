@@ -1782,15 +1782,15 @@ public final class BLEManager: NSObject, ObservableObject {
         // iOS honours in the background: it has no timeout and wakes the app when the strap advertises, the
         // same call the pinned path above and the standing reconnect already make. An active app still scans,
         // so a Connect tap finds a strap the user has switched to. W06-141: a cold launch from the icon takes
-        // this path too, since the app is `.inactive` until its first scene activates. That is kept: the
-        // targeted connect cannot land on another strap, and it connected on every such launch in the owner's
-        // logs. The line names the state it saw rather than claiming the app is off screen.
+        // this path too, since the app is `.inactive` until its first scene activates, and so does a reconnect
+        // with Control Center pulled over the app. That is kept: the targeted connect reaches only the last strap
+        // that connected (whether that is still the active one is not checked here), and it connected on every
+        // such launch in the owner's logs. W06-146: the line names the state it saw and no cause for it.
         let appState = UIApplication.shared.applicationState
         if appState != .active,
            let last = Self.lastConnectedPeripheralUUID,
            let p = central.retrievePeripherals(withIdentifiers: [last]).first {
-            let seen = appState == .background ? "in the background, where a scan would not find it"
-                                               : "inactive, as at a cold launch before the app is on screen"
+            let seen = appState == .background ? "in the background, where a scan would not find it" : "inactive"
             log("Connecting to last strap \(last) — targeted (app \(seen))")
             preparePeripheral(p)
             central.connect(p, options: nil)
