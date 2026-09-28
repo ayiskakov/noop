@@ -836,9 +836,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// silently. Reset on a clean session / intentional disconnect / a successful connect.
     private var postBondLoop = PostBondTimeoutLoopDetector()
     /// Wall time the encrypted bond was established this connection, to measure how soon a drop follows
-    /// the bond (the #617 bond-loop tell). nil until bonded; cleared on disconnect. Internal for
-    /// `BondLoopParkTests`, which cannot run a bond.
-    var bondedAt: Date?
+    /// the bond (the #617 bond-loop tell). nil until bonded; cleared on disconnect.
+    private var bondedAt: Date?
     /// Monotonic per-connection token, bumped on every didConnect. The #711 bond-loop stabilization check
     /// captures it and clears the re-pair guide only if it is UNCHANGED when the check fires, i.e. the SAME
     /// continuous connection survived. CoreBluetooth reuses the CBPeripheral object across reconnects, so a
@@ -6216,7 +6215,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
     }
 
     /// `didDisconnectPeripheral`'s body. It needs only the peripheral's identifier, so a test, which cannot make a
-    /// `CBPeripheral`, can end a link through it (W06-144).
+    /// `CBPeripheral`, can end a link through it (W06-147).
     func linkDropped(peripheralUUID: String, error: Error?) {
         // W06-083: a link a Bluetooth power-off or reset already ended gets no second teardown. On macOS the disconnect can
         // still arrive for it; the next link, or poweredOn's connect, owns what happens now.
@@ -6276,7 +6275,6 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // trips, surface the EXISTING re-pair guide (the same forget-and-re-pair steps the #74/firmware-reset
         // path shows) rather than letting the link loop silently and drain the battery.
         let connTimedOut: Bool = (error as? CBError)?.code == .connectionTimeout
-        var bondLoopParkDue = false
         let sinceBond = bondedAt.map { Date().timeIntervalSince($0) }
         if postBondLoop.connectionEnded(wasBonded: bondedAt != nil,
                                         secondsSinceBond: sinceBond,
@@ -6291,9 +6289,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             bondLoopPausedAt = Date()   // the #78 hole-4 salvage probe covers this pause too (one bounded cycle)
             // #1539: arm the parked connect in the same breath as the pause. The salvage probe only fires on
             // app-foreground, so without this a pause tripped with the phone in a pocket strands the strap
-            // until someone opens the app. W06-144: armed after `resetLinkState()` below, since the park is
-            // refused while `state.connected` is still set, and this call ran before it did.
-            bondLoopParkDue = true
+            // until someone opens the app. W06-144: this runs while `state.connected` is still set, so the park is
+            // refused. Kept so on purpose: a strap that trips #617 is reachable and bonds, and its bond clears the
+            // pause, so a park that went through would resume the #844 loop. The fix needs the owner's call.
+            standingConnectWhilePausedIfDue(justTripped: true)
             if TestCentre.active(.connection) {
                 state.append(log: "reconnect paused=bondLoop (#617: \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles)", domain: .connection)
             }
@@ -6319,7 +6318,6 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
                                                alreadyBonded: didBond,
                                                family: selectedModel.deviceFamily)
         resetLinkState()
-        if bondLoopParkDue { standingConnectWhilePausedIfDue(justTripped: true) }
         if helloRefused {
             recordWhoop5BondRefusal(authRefusal: false, peripheralUUID: peripheralUUID)
         }
