@@ -557,9 +557,9 @@ public final class FrameRouter {
                 state.append(log: "Double-tap (strap time \(ts)) arrived \(age) s late during a sync; "
                              + "not acted on (live window \(FrameRouter.liveGestureWindowSeconds) s)")
             }
-            // W06-121: a wrist event older than the window is history, yet the newest one is still the strap's
-            // wear state: a strap put back on while unlinked reports its WRIST_ON only this way. One stamped
-            // ahead of the strap's clock-now is not its latest state, and would block every later event.
+            // W06-121: a wrist event older than the window is history; a strap put back on while unlinked reports
+            // its WRIST_ON only this way. One stamped ahead of the strap's clock-now is not its latest state, and
+            // would block every later event.
             if age > 0, ev.hasPrefix("WRIST_ON") || ev.hasPrefix("WRIST_OFF") {
                 noteHistoricalWristEvent(on: ev.hasPrefix("WRIST_ON"), strapTime: ts, age: age)
             }
@@ -594,17 +594,19 @@ public final class FrameRouter {
         if state.worn != on { state.worn = on; state.onWristChange?(on) }
     }
 
-    /// A wrist event older than the live window, from an offload (W06-121). The newest one sets `worn` and nothing
-    /// else: the wrist Shortcuts and macOS auto-lock behind `onWristChange` are for a change happening now, and the
-    /// per-link record is live-only (W06-109). A change is logged, always-on, since it moves every wear-gated
-    /// feature and is otherwise invisible.
+    /// A wrist event older than the live window, from an offload (W06-121). The newest one moves the order, and a
+    /// WRIST_ON among them sets `worn` and nothing else: the wrist Shortcuts and macOS auto-lock behind
+    /// `onWristChange` are for a change happening now, and the per-link record is live-only (W06-109). A WRIST_OFF
+    /// from history never turns `worn` off (W06-145): the history delivered so far is the strap's state only once
+    /// the offload reaches the present, and one synced in pieces can stop on a WRIST_OFF whose WRIST_ON is still on
+    /// the strap, which no live event would correct. So history can only restore the default. A change is logged,
+    /// always-on, since it moves every wear-gated feature and is otherwise invisible.
     private func noteHistoricalWristEvent(on: Bool, strapTime: Int, age: Int) {
         if let newest = newestWristEventTime, strapTime <= newest { return }
         newestWristEventTime = strapTime
-        guard state.worn != on else { return }
-        state.worn = on
-        state.append(log: "Wrist: \(on ? "WRIST_ON" : "WRIST_OFF") reached through a sync, \(age) s old by the "
-                     + "strap's clock; wear state set \(on ? "on" : "off")")
+        guard on, !state.worn else { return }
+        state.worn = true
+        state.append(log: "Wrist: WRIST_ON reached through a sync, \(age) s old by the strap's clock; wear state set on")
     }
 
     // MARK: - Double-tap de-duplication
