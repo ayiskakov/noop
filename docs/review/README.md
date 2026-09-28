@@ -143,13 +143,15 @@ item as it lands.
       phone at the 2026-09-28 export. W06-083 (a Bluetooth power-off skips the
       next link's handshake) is proposed to the owner for the next batch.
 - [ ] Ninth W6 batch, `review/w06-fixes-9` (stacked on `review/strap-run-2026-09-28`): W06-083 (a Bluetooth
-      power-off or reset ends the held link through the same teardown as a disconnect), W06-144 (the #617 bond-loop
-      trip parks its standing connect after the link is cleared), W06-141 (the launch reconnect line names the app
-      state it saw), W06-121 with W06-115 (wrist events ordered by strap time; history sets `worn` only). W06-142
-      deferred to Phase 3 (a file-backed strap log). AD-15 recorded with the owner (split `BLEManager` into transport,
-      link session and WHOOP policy; Phase 5, W06-143). StrandTests 2,113, both builds (NOOPiOS without the watch
-      app). Then V2, and a strap run: Bluetooth off and on mid-link from Settings and from Control Center (a `Link
-      ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back on while unlinked.
+      power-off or reset ends the held link through the same teardown as a disconnect), W06-141 (the launch reconnect
+      line names the app state it saw), W06-121 with W06-115 (wrist events ordered by strap time). W06-142 deferred to
+      Phase 3 (a file-backed strap log). AD-15 recorded with the owner (split `BLEManager` into transport, link session
+      and WHOOP policy; Phase 5, W06-143). V2 (independent subagent) held W06-083, W06-141 and W06-121/115 with caveats
+      and refuted W06-144: its park would resume the #844 bond loop, so it is backed out and waits on the owner's call.
+      Its other findings, W06-145 … W06-153, are fixed on the same branch except W06-153 (recorded). StrandTests 2,119,
+      both builds (NOOPiOS without the watch app). Then a strap run: Bluetooth off and on mid-link from Settings and from
+      Control Center (a `Link ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back
+      on while unlinked (`WRIST_ON reached through a sync`).
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
