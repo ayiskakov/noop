@@ -1997,7 +1997,9 @@ public final class BLEManager: NSObject, ObservableObject {
             intentionalDisconnect: intentionalDisconnect,
             secondsSincePauseTripped: since) else { return }
         bondLoopPausedAt = now
-        log("Bond-loop pause: parking a standing connect so the strap is claimed the moment it is reachable (#1539) - the give-up stays latched")
+        // W06-152: "asking", not "parking": `issueStandingConnect` can still refuse (connect gate, radio off, no cached
+        // strap), and it logs the outcome either way.
+        log("Bond-loop pause: asking for a standing connect so the strap is claimed the moment it is reachable (#1539) - the give-up stays latched")
         issueStandingConnect(whilePausedForBondLoop: true)
     }
 
