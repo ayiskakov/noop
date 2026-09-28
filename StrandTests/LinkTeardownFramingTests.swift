@@ -35,7 +35,7 @@ final class LinkTeardownFramingTests: XCTestCase {
                 line.range(of: "//").map { line[..<$0.lowerBound] } ?? line
             }
         }
-        let handler = try topLevelCode(after: "didDisconnectPeripheral peripheral: CBPeripheral,")
+        let handler = try topLevelCode(after: "func linkDropped(peripheralUUID: String, error: Error?) {")
         XCTAssertTrue(handler.contains("        endLinkReadouts(ended: endedReason)"))
         XCTAssertTrue(handler.contains("        resetLinkState()"))
         let readouts = try topLevelCode(after: "private func endLinkReadouts(ended endedReason: String) {")
