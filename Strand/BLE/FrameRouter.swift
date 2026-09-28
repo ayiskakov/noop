@@ -17,7 +17,16 @@ public final class FrameRouter {
     /// a path that sets the family and forgets the id then attributes nothing rather than carrying the
     /// previous connection's strap forward, which is the very mistake this attribution exists to stop.
     /// nil in pure/unit contexts, which the verdict treats as unattributed rather than guessing.
-    var deviceId: String?
+    /// W06-151: a different strap starts the wrist-event order again, since its clock is its own. Keyed on the last
+    /// id seen, not on every change: `family`'s didSet clears this at each connect before it is set again.
+    var deviceId: String? {
+        didSet {
+            guard let id = deviceId, id != wristOrderDeviceId else { return }
+            wristOrderDeviceId = id
+            newestWristEventTime = nil
+        }
+    }
+    private var wristOrderDeviceId: String?
 
     /// Which family's framing to decode with. Set per connection by BLEManager. WHOOP 5.0/MG frames
     /// use the CRC16/offset-8 envelope; the biometric field decode for puffin is still a stub, so
