@@ -141,8 +141,6 @@ final class WristEventOrderTests: XCTestCase {
         XCTAssertTrue(live.worn)
     }
 
-    /// An event stamped ahead of the strap's own clock-now is not the strap's latest state; it must not block
-    /// every later one either.
     /// W06-151: the order is per strap. A strap switched to whose clock is behind the last one's still gets its
     /// history heard.
     func testASwitchToAnotherStrapStartsTheOrderAgain() {
@@ -163,6 +161,8 @@ final class WristEventOrderTests: XCTestCase {
         XCTAssertFalse(live.worn)
     }
 
+    /// An event stamped ahead of the strap's own clock-now is not the strap's latest state; it must not block
+    /// every later one either.
     func testAHistoricalEventFromTheFutureIsIgnored() {
         router.handle(frame: bytes(Self.off[0]))
         offload(Self.on[600], at: 0)
