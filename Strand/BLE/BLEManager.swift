@@ -6330,8 +6330,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // seconds later - so it never reached the give-up on this platform and nothing could end the loop.
         // Read it HERE, while `clientHelloWriteAt` and `didBond` are both still valid, and feed it in
         // through the same split the auth path uses. `countsAsBondRefusal` gates on family, so a 4.0 (which
-        // bonds cleanly) can never latch the suppression. Recorded after the reset: a give-up it trips parks a
-        // standing connect (#1539), which `state.connected` would refuse.
+        // bonds cleanly) can never latch the suppression. Read before the reset, which clears both; recording it after
+        // changes nothing (W06-160): this refusal is never an auth refusal, so a give-up suppresses the hello and
+        // parks no connect, and `state.connected` was already clear here before the ninth batch.
         let helloRefused = countsAsBondRefusal(isAuthRefusalStatus: false,
                                                helloUnacked: clientHelloWriteAt != nil,
                                                alreadyBonded: didBond,
