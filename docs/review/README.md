@@ -81,7 +81,9 @@ item as it lands.
       (tests pin every hold-ack path). A code review of the batch added W06-054 … W06-064: W06-054 (W06-052's fix
       missed the relaunch's first frames) and the rest are fixed on the same branch, except W06-057 (not a bug). Owner decisions 2026-09-25: W06-050 reads the clock before setting it, in its own PR with W06-001;
       W06-052 keeps an honest line rather than none. Then a strap run: a relaunch mid-session logs no Raw IMU line,
-      and an MG ECG session that brings a type-43 stream logs one line naming it.
+      and an MG ECG session that brings a type-43 stream logs one line naming it. On the owner's 2026-09-28
+      export an ECG session that produced only ECG records logged no note, which is correct; the positive
+      case (a non-ECG type-43 stream) and the relaunch are still due.
 - [ ] W06-050 with W06-001, `review/w06-clock-read-first`: the 5/MG handshake reads the strap clock and sets it only
       when the reading is refused, invalid or more than 2 s off (the owner's 2026-09-25 decision); W06-022 and
       W06-065 ride along. A code review of the batch added W06-069 … W06-083: ten are fixed on the same branch, two
@@ -96,7 +98,10 @@ item as it lands.
       connect's handshake (W06-108). Second strap check on the owner's 2026-09-27 evening export (11.9.13): checks
       3 (the #1303 line) and 4 (a relaunch's second read and in-sync verdict) pass; checks 2 and 5 are still due.
       The same export showed W06-083 on hardware: a Bluetooth power-off later in a link leaves the next link with
-      no handshake and no clock check, so check 5 covers only the first 10 s until W06-083 is fixed.
+      no handshake and no clock check, so check 5 covers only the first 10 s until W06-083 is fixed. The
+      owner's 2026-09-28 morning export (11.9.13) showed W06-083 twice more (toggles 140 s and 22 s into their
+      links) and one SET_CLOCK last evening that stepped the strap 2 s; four app launches soon after evicted its
+      process from the three-generation log ring, so its reason is not attributable. Checks 2 and 5 are still due.
 - [ ] Sixth W6 batch, `review/w06-fixes-6` (stacked on `review/strap-run-2026-09-27`), from the 2026-09-27 export:
       W06-108 (the strap log keeps hours, and a clipped session says so), W06-113, W06-109; W06-114 and W06-115
       recorded. V2 (independent subagent) held all three with caveats and added W06-116 … W06-122 and W07-005:
@@ -107,13 +112,16 @@ item as it lands.
       strap run, on the owner's 2026-09-27 evening export, is partial: an 82-minute session with Connection on came
       out whole (about 2.2 h of ring at its density, and W06-118's per-reading flood is gone), and the off-wrist
       offload logged the wrist line and no clock or charge line but stalled before the no-cursor branch (W06-110).
-      Still due: the 2 h session, and an off-wrist offload that ends on trim=0xFFFFFFFF.
+      Still due: the 2 h session, and an off-wrist offload that ends on trim=0xFFFFFFFF. The off-wrist offload
+      passed on the owner's 2026-09-28 export (W06-109 and W06-113 Verified); the 2 h session is still due and
+      needs an export taken without relaunching the app first (W06-142).
 - [ ] W07-005 on `review/w07-day-line-repeats` (stacked on `review/w06-fixes-6`): a re-score prints a day's line
       only when it changed or its last print is an hour old, and counts what it withheld. On the 2026-09-27 log's 12
       passes, 840 per-day lines become 171 and 11 summaries. V2 (independent subagent) held with caveats and added
       W07-006 … W07-009: W07-006 … W07-008 are fixed on the same branch, W07-009 (the `analyzeRecent` lock is not
       single-flight, S3, predates the fix) is recorded. Merged as PR #35 and shipped in 11.9.13; V3 passes on the
-      owner's 2026-09-27 evening export (18 passes: 1,422 per-day lines become 366 and 16 summaries).
+      owner's 2026-09-27 evening export (18 passes: 1,422 per-day lines become 366 and 16 summaries), and
+      again on the 2026-09-28 export; W07-005 Verified.
 - [ ] Seventh W6 batch, `review/w06-fixes-7` (rebased onto `main` after #35 and #36 merged), strap-free: W06-014 (a
       relaunch can bootstrap the store twice), W07-009 (two re-scores can hold the lock at once), W06-008 (a
       drain can outlive its link and interleave with the next one's), W06-005 (every sync reports intact v20
@@ -124,13 +132,29 @@ item as it lands.
       W06-124, except W07-013 (deferred: the fix would rewrite PR #35's pushed history); W07-014 recorded. On `main` with
       #36: StrandTests 2,097, WhoopProtocol 794, WhoopStore 554, both builds (NOOPiOS without the watch app). Then a strap
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
-      status no longer names v20/v21 records as undecodable.
+      status no longer names v20/v21 records as undecodable. Shipped in 11.9.14; the 2026-09-28 export ran on
+      11.9.13, so only a replay was possible: `main` classifies the 24 dumped rejects of that export's sync as
+      0 undecodable.
 - [ ] Eighth W6 batch, `review/w06-fixes-8` (stacked on `review/strap-run-2026-09-27b`, which is stacked on the
       seventh batch), from the owner's 2026-09-27 evening export: W06-140 (the owner-name redaction rule was
       quadratic on a long hex run) and W06-110 (the reject hex dump is logged after the ack, since the strap drops a
       transfer acked 7 s or more after its chunk). StrandTests 2,100, both builds. Then a strap run: a sync with
-      undecodable records whose ack follows its chunk within about 2 s. W06-083 (a Bluetooth power-off skips the
+      undecodable records whose ack follows its chunk within about 2 s. Shipped in 11.9.14; not yet on the
+      phone at the 2026-09-28 export. W06-083 (a Bluetooth power-off skips the
       next link's handshake) is proposed to the owner for the next batch.
+- [ ] Ninth W6 batch, `review/w06-fixes-9` (stacked on `review/strap-run-2026-09-28`): W06-083 (a Bluetooth
+      power-off or reset ends the held link through the same teardown as a disconnect), W06-141 (the launch reconnect
+      line names the app state it saw), W06-121 with W06-115 (wrist events ordered by strap time). W06-142 deferred to
+      Phase 3 (a file-backed strap log). AD-15 recorded with the owner (split `BLEManager` into transport, link session
+      and WHOOP policy; Phase 5, W06-143). V2 (independent subagent) held W06-083, W06-141 and W06-121/115 with caveats
+      and refuted W06-144: its park would resume the #844 bond loop, so it is backed out and waits on the owner's call.
+      Its other findings, W06-145 … W06-153, are fixed on the same branch except W06-153 (recorded). A code review
+      (`/code-review xhigh`) then found W06-154 … W06-166; all are fixed on the same branch except W06-156, W06-163 and
+      W06-164 (recorded; W06-163 is the owner's call and W06-164 goes to Phase 5 with W06-143). StrandTests 2,125, both
+      builds (NOOPiOS without the watch app). Then a strap run: Bluetooth off and on mid-link from Settings and from
+      Control Center (a `Link ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back
+      on while unlinked (`WRIST_ON reached through a sync`), then on and off again while unlinked
+      (`WRIST_OFF reached through a sync`).
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
@@ -139,14 +163,16 @@ item as it lands.
       W01-006 delegated and decided (a `rawRecord` storage lane). Recorded in the workstream rows. W01-006 fixed on
       `review/w01-raw-record` (migration v50); a strap sync then shows new v26 rows carrying their record.
       Merged as PR #36 and shipped in 11.9.13: on the owner's 2026-09-27 evening export all 154 new v26 rows carry
-      their record; the v16 half waits for an ECG session.
+      their record; the v16 half passed on the owner's 2026-09-28 export (38 of 38 new v16 rows after an ECG
+      session). The row stays Fixed until an independent V2 runs.
 - [ ] Exit gate: a migration test and a `.noopbak` export → import round trip on a copy of the newest
       backup, and no open S1 or S2 in the three areas. The first half passes: `StrandTests/RealBackupGateTests`
       (run with `TEST_RUNNER_NOOP_GATE_BACKUPS`) on three real backups, and on both 2026-09-25 exports (one
       from 11.9.7, one from 11.9.8): 37 tables and about 4.28 M rows each come back identical after export,
       import and a restore over an open store. Re-run on the 2026-09-27 export from 11.9.12: 49 → 49
       migrations, 37 tables and about 5.33 M rows, identical. Re-run on the 2026-09-27 evening export from 11.9.13: 50 →
-      50 migrations, 37 tables and about 5.53 M rows, identical.
+      50 migrations, 37 tables and about 5.53 M rows, identical. Re-run on the 2026-09-28 export from 11.9.13: 50 →
+      50 migrations, 37 tables and about 5.85 M rows, identical.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

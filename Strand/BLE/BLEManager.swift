@@ -799,8 +799,9 @@ public final class BLEManager: NSObject, ObservableObject {
     /// ~60 s between link RSSI reads, matching the Android odd-tick cadence.
     private static let rssiReadIntervalSeconds: TimeInterval = 60
 
-    /// Uptime clock for the epitaph. Monotonic, so a wall-clock change mid-link cannot make it negative.
-    private var linkUpSince: DispatchTime?
+    /// Uptime clock for the epitaph. Monotonic, so a wall-clock change mid-link cannot make it negative. Internal for
+    /// `RadioPowerOffTeardownTests`, which cannot run the `didConnect` that sets it (W06-150).
+    var linkUpSince: DispatchTime?
     /// Last time ANY notification arrived — drives the liveness watchdog.
     private var lastDataAt = Date()
     /// True while a Live/Health screen is on-screen and wants the realtime stream. One of the two
@@ -1009,7 +1010,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Published so the app/AppModel can persist it onto the active registry device
     /// (`registry.setPeripheralId`) — letting "my-whoop" adopt its strap's id on first connect and a
     /// specific WHOOP confirm its identity. BLEManager stays decoupled: it never writes the registry.
-    @Published public private(set) var connectedPeripheralUUID: String?
+    /// It also tells the router which physical strap the link is to (W06-158). The `connectCore` refresh branch does not
+    /// set it: it re-holds the strap already held, and only the preferred one, so it brings no other strap.
+    @Published public private(set) var connectedPeripheralUUID: String? {
+        didSet { if let id = connectedPeripheralUUID { router.strapPeripheralId = id } }
+    }
     /// Multi-WHOOP Add-a-WHOOP wizard surface: straps seen while `isPresentingScan` is true, WITHOUT
     /// auto-connecting. Cleared at the start of each `scanForWhoops()`. Empty/unused on the default path.
     @Published public private(set) var discoveredWhoops: [(uuid: String, name: String, rssi: Int)] = []
@@ -1137,13 +1142,18 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Readable by `StrapClockCheckTests`, which time out the check a second read re-arms.
     private(set) var strapClockCheckToken = 0
     /// The `connectGeneration` of the link the clock check began on, so its timeout can tell that link from a
-    /// later one that came up without `didDisconnectPeripheral` (a Bluetooth power-off, W06-069).
+    /// later one (W06-069). Since W06-083 a power-off ends the link and moves the token, so this is a second fence.
     private var strapClockCheckLink = 0
     /// When this link's 5/MG handshake ran, in `monotonicSeconds()`, so the first offload keeps its ~1.5 s settle
     /// delay after it and no wall-clock step moves that (W06-086). Internal for `StrapClockCheckTests`, which
     /// cannot run the handshake that sets it.
     var whoop5HandshakeAt: Double?
     private var intentionalDisconnect = false
+    /// The identifier of the peripheral whose link a Bluetooth power-off or reset ended (W06-083), so a later
+    /// `didDisconnectPeripheral` for that same link does not tear down twice. Whether CoreBluetooth sends one after a
+    /// power-off is not established: iOS sent none on three hardware toggles, and macOS has not been checked.
+    /// Cleared wherever a link comes up, and by the disconnect it answers; nil when no peripheral was held.
+    private var linkEndedAtRadioLoss: String?
     /// Consecutive `didFailToConnect` count, for the auto-reconnect backoff (#414). Reset to 0 on a
     /// successful connect; grows the reschedule delay so a strap that's genuinely out of range doesn't
     /// hammer Bluetooth (vs the disconnect path's flat 3s, which is fine for an already-bonded drop).
@@ -1723,6 +1733,7 @@ public final class BLEManager: NSObject, ObservableObject {
         // device (registry said B, radio stayed on A). No pin (single-WHOOP) → always true, unchanged.
         if let p = peripheral, p.state == .connected, isPreferredPeripheral(p) {
             state.connected = true
+            linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
             p.delegate = self
             log("Already connected to \(model.displayName) — refreshing services and notifications")
             discoverPrimaryServices(on: p)
@@ -1774,12 +1785,18 @@ public final class BLEManager: NSObject, ObservableObject {
         // showed eight minutes of alternating 5.0/4.0 scans finding nothing, then the strap discovered eight
         // seconds after the app came to the foreground — twice. A targeted connect to the last strap is what
         // iOS honours in the background: it has no timeout and wakes the app when the strap advertises, the
-        // same call the pinned path above and the standing reconnect already make. Foreground behaviour is
-        // unchanged, so a scan still finds a strap the user has switched to.
-        if UIApplication.shared.applicationState != .active,
+        // same call the pinned path above and the standing reconnect already make. An active app still scans,
+        // so a Connect tap finds a strap the user has switched to. W06-141: a cold launch from the icon takes
+        // this path too, since the app is `.inactive` until its first scene activates, and so does a reconnect
+        // with Control Center pulled over the app. That is kept: the targeted connect reaches only the last strap
+        // that connected (whether that is still the active one is not checked here), and it connected on every
+        // such launch in the owner's logs. W06-146: the line names the state it saw and no cause for it.
+        let appState = UIApplication.shared.applicationState
+        if appState != .active,
            let last = Self.lastConnectedPeripheralUUID,
            let p = central.retrievePeripherals(withIdentifiers: [last]).first {
-            log("Connecting to last strap \(last) — targeted (app not on screen; a background scan would not find it)")
+            let seen = appState == .background ? "in the background, where a scan would not find it" : "inactive"
+            log("Connecting to last strap \(last) — targeted (app \(seen))")
             preparePeripheral(p)
             central.connect(p, options: nil)
             return
@@ -1984,7 +2001,9 @@ public final class BLEManager: NSObject, ObservableObject {
             intentionalDisconnect: intentionalDisconnect,
             secondsSincePauseTripped: since) else { return }
         bondLoopPausedAt = now
-        log("Bond-loop pause: parking a standing connect so the strap is claimed the moment it is reachable (#1539) - the give-up stays latched")
+        // W06-152: "asking", not "parking": `issueStandingConnect` can still refuse (connect gate, radio off, no cached
+        // strap), and it logs the outcome either way.
+        log("Bond-loop pause: asking for a standing connect so the strap is claimed the moment it is reachable (#1539) - the give-up stays latched")
         issueStandingConnect(whilePausedForBondLoop: true)
     }
 
@@ -2329,8 +2348,9 @@ public final class BLEManager: NSObject, ObservableObject {
     public func send(_ command: WhoopCommand, payload: [UInt8] = [0x00],
                      writeType: CBCharacteristicWriteType = .withoutResponse) {
         // #314 parity: this `p.state == .connected` guard makes a write a no-op once the radio powers off (no
-        // DeadObjectException to crash on). `state.connected` alone is not enough: a power-off reaches neither
-        // `didDisconnectPeripheral` nor any other write of it, so the flag outlives the link (W06-083).
+        // DeadObjectException to crash on). `state.connected` alone is not enough: iOS sends no
+        // `didDisconnectPeripheral` for a power-off, and the flag is cleared only when the radio state change
+        // arrives (W06-083), which can come after the link is already gone.
         guard state.connected, let p = peripheral, p.state == .connected, let ch = cmdCharacteristic else {
             let reason = state.connected ? "command characteristic unavailable" : "not connected"
             log("send(\(command.label)) ignored — \(reason)")
@@ -3865,8 +3885,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// command; consumed by `didDisconnectPeripheral` (to log how long the link stayed up = the strap acting
     /// on the reboot) and by the connect handshake (to log the reconnect round-trip). Cleared on reconnect
     /// or by the no-disconnect timeout. The whole point is a self-contained strap-log trail for a reboot,
-    /// so a "restart did nothing" report is triageable.
-    private var rebootRequestedAt: DispatchTime?
+    /// so a "restart did nothing" report is triageable. Internal for `RadioPowerOffTeardownTests` (W06-157).
+    var rebootRequestedAt: DispatchTime?
     private var rebootTimeoutWork: DispatchWorkItem?
     private var rebootSettleWork: DispatchWorkItem?
 
@@ -5639,6 +5659,45 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(BLEManager.unauthorizedSettleSeconds), execute: work)
     }
 
+    /// W06-083: ends a held link when the radio drops every link. CoreBluetooth on iOS sends no
+    /// `didDisconnectPeripheral` for a Bluetooth power-off, so without this the link's state outlived it and the
+    /// reconnect skipped the 5/MG handshake and its clock check (seen on the strap three times on 11.9.13, each
+    /// toggle logging `Central state: 4` and no disconnect). The teardown handles `.poweredOff` and `.resetting`.
+    /// It leaves a launch's `.unknown` and macOS's transient `.unauthorized` (#391) alone, since either can arrive
+    /// while a restored link is being re-discovered, and `.unsupported`, where no link can exist. The drop detectors
+    /// (#80, #617) and the bond-refusal count (#1635) are not fed, since a radio switched off says nothing about the
+    /// strap. Internal for `RadioPowerOffTeardownTests`, which cannot make a `CBCentralManager` report a state.
+    func endLinkForRadioState(_ radio: CBManagerState, peripheralUUID: String?) {
+        let cause: String
+        switch radio {
+        case .poweredOff: cause = "Bluetooth off"
+        case .resetting: cause = "Bluetooth resetting"
+        default: return
+        }
+        guard state.connected || linkUpSince != nil else { return }
+        // W06-157: a reboot in flight loses its evidence here, since the link ended for the radio's reason. Close the
+        // trail, or the reconnect after power-on is logged as the reboot's round trip and clears its pill.
+        if let t = rebootRequestedAt {
+            let ms = Int(Double(DispatchTime.now().uptimeNanoseconds &- t.uptimeNanoseconds) / 1_000_000)
+            log("reboot: link ended by \(cause) \(ms)ms after send — whether the strap rebooted is unknown")
+            clearRebootState()
+        }
+        endLinkReadouts(ended: cause)
+        resetLinkState()
+        linkEndedAtRadioLoss = peripheralUUID
+        log("Link ended: \(cause) — torn down at the radio state change (W06-083)")
+        if TestCentre.active(.connection) {
+            state.append(log: "connect down (\(cause)\(connSessionHeldSuffix()))", domain: .connection)
+        }
+    }
+
+    /// #1020: how long the connection session held, as the suffix of a `connect down` line. Both teardowns print it,
+    /// so it is built in one place and their lines keep one format for the ConnectionReadout parser (W06-166).
+    private func connSessionHeldSuffix() -> String {
+        ConnectionTrace.sessionHeldSuffix(
+            millis: connSessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1)
+    }
+
     public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         log("Central state: \(central.state.rawValue) (5 = poweredOn)")
         // #391: ANY state update means the cold-start settling window moved on — a pending
@@ -5647,6 +5706,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         unauthorizedSettleWork?.cancel()
         unauthorizedSettleWork = nil
         guard central.state == .poweredOn else {
+            endLinkForRadioState(central.state, peripheralUUID: peripheral?.identifier.uuidString)
             // #280: a non-poweredOn radio state used to be a SILENT return — the strap log showed only
             // "Central state: 3" and the UI just read "not connected", so a user whose Mac had denied NOOP
             // Bluetooth (.unauthorized == raw 3) had nothing explaining why no strap was ever found. This is
@@ -5840,6 +5900,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // (the Sync Strap shortcut, a state-restoration relaunch) reconnects by identifier, not by scan.
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: Self.lastConnectedPeripheralKey)
         state.connected = true
+        linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
         // A connect succeeded → clear the stale-bond re-pair guide UNLESS we are in a known bond-loop
         // (#617). In that loop the strap "connects" every ~3 s before timing out again, so clearing here
         // wiped the guide on EVERY cycle: it flashed for ~1 s and vanished, so the user could never read it
@@ -5961,44 +6022,11 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
     }
 
-    public func centralManager(_ central: CBCentralManager,
-                               didDisconnectPeripheral peripheral: CBPeripheral,
-                               error: Error?) {
+    /// The first half of ending a link, shared by `didDisconnectPeripheral` and a Bluetooth power-off (W06-083):
+    /// flush what the link buffered, print its epitaph and banked summary, and clear its tallies and framing.
+    /// `ended` is the cause as the caller can attribute it.
+    private func endLinkReadouts(ended endedReason: String) {
         Task { @MainActor in await collector?.flush() }
-        // Reboot trail: if a user reboot is in flight, this drop is the strap acting on it. Log how long
-        // the link stayed up (a real reboot drops within ~1-2 s) and cancel the no-disconnect watchdog. The
-        // reconnect time is logged separately once the handshake completes. `rebootRequestedAt` stays set so
-        // the handshake can compute the round-trip; it's cleared there (or by the watchdog).
-        if let t = rebootRequestedAt {
-            let ms = Int(Double(DispatchTime.now().uptimeNanoseconds &- t.uptimeNanoseconds) / 1_000_000)
-            rebootTimeoutWork?.cancel(); rebootTimeoutWork = nil
-            // #275: a dropped LINK only proves a reboot on WHOOP 5.0 (verified fw). On WHOOP 4.0 the frame
-            // is unconfirmed — opcode 29/payload01 was observed to drop the BLE link WITHOUT power-cycling
-            // the strap (the sensor stayed on) — so don't claim a reboot; report the drop honestly. Twin of
-            // Kotlin handleDisconnect.
-            if selectedModel.deviceFamily == .whoop5 {
-                log("reboot: link dropped \(ms)ms after send — reboot took effect; awaiting reconnect")
-            } else {
-                log("reboot: link dropped \(ms)ms after send — but a WHOOP 4.0 reboot isn't confirmed; a dropped link alone isn't proof (a real reboot also switches the sensor light off). Awaiting reconnect")
-            }
-        }
-        // #80 marginal-radio detection: judge this drop BEFORE the state resets below clobber the
-        // arm timestamp. A drop that is unintentional, error-bearing, and lands shortly after we armed
-        // the R10/R11 burst is the marginal-radio tell. Feed the detector; if it trips, the NEXT connect
-        // skips the heavy arm (the flag is intentionally NOT reset on disconnect so it survives rescan).
-        // #1809: the epitaph goes out BEFORE the resets below, for the same reason the two detectors read
-        // their state here - `realtimeArmedAt` is about to be cleared. `ended` carries the CBError CASE, not
-        // just the OS sentence: the #617 branch already computes that code and the strap log never saw it.
-        let endedReason: String
-        if intentionalDisconnect {
-            endedReason = "intentional"
-        } else if let cb = error as? CBError {
-            endedReason = "CBError.\(cb.code)(\(cb.code.rawValue))"
-        } else if let error {
-            endedReason = "\(error)"
-        } else {
-            endedReason = "no error reported"
-        }
         // Only for a link we actually held. Emitting without one would report "the strap sent NOTHING on
         // this link" using the PREVIOUS link's counters, fabricating the very symptom #1809 is about.
         if let since = linkUpSince {
@@ -6065,52 +6093,11 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // W06-033: the link's bytes die with it. A standing reconnect never runs connectCore, where the
         // reassembler is otherwise rebuilt.
         resetLinkFraming()
+    }
 
-        let timedOut = !intentionalDisconnect && error != nil
-        let sinceArm = realtimeArmedAt.map { Date().timeIntervalSince($0) }
-        if marginalRadio.connectionEnded(wasArmed: realtimeArmedAt != nil,
-                                         secondsSinceArm: sinceArm,
-                                         timedOut: timedOut) {
-            standardHRFallback = true
-            log("Marginal radio (#80): \(marginalRadio.consecutiveArmTimeouts) arm-then-timeout cycles — next connect uses standard-HR mode (0x2A37 only)")
-        }
-        // #617 bond-loop detection: same pre-reset read. The bond-loop tell is a CONNECTION TIMEOUT that
-        // lands within seconds of a genuine bond — bond → drop → rescan → bond → drop, forever. We require
-        // the OS to classify the drop as a connection timeout (`CBError.connectionTimeout`), not merely any
-        // error, so a one-off radio blip or a different failure doesn't get mistaken for the loop. Once it
-        // trips, surface the EXISTING re-pair guide (the same forget-and-re-pair steps the #74/firmware-reset
-        // path shows) rather than letting the link loop silently and drain the battery.
-        let connTimedOut: Bool = (error as? CBError)?.code == .connectionTimeout
-        let sinceBond = bondedAt.map { Date().timeIntervalSince($0) }
-        if postBondLoop.connectionEnded(wasBonded: bondedAt != nil,
-                                        secondsSinceBond: sinceBond,
-                                        timedOut: connTimedOut && !intentionalDisconnect) {
-            log("Bond-loop (#617): \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles — surfacing the re-pair guide and pausing auto-reconnect")
-            // #844 — the loop is bond → drop → 3s rescan → bond → drop, forever, draining the battery.
-            // Surfacing the guide alone left the involuntary-drop rescan (below) running. Pause auto-reconnect
-            // too: the disconnect rescan and didFailToConnect both already skip while this is set, and a user
-            // Connect (connect()) or a genuine bond re-arms it. We do NOT touch the bond/parse path — the bond
-            // is real; the stale OS pairing is the problem, which the guide tells the user how to clear.
-            autoReconnectPausedForBondLoop = true
-            bondLoopPausedAt = Date()   // the #78 hole-4 salvage probe covers this pause too (one bounded cycle)
-            // #1539: arm the parked connect in the same breath as the pause. The salvage probe only fires on
-            // app-foreground, so without this a pause tripped with the phone in a pocket strands the strap
-            // until someone opens the app.
-            standingConnectWhilePausedIfDue(justTripped: true)
-            if TestCentre.active(.connection) {
-                state.append(log: "reconnect paused=bondLoop (#617: \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles)", domain: .connection)
-            }
-            if state.reconnectGuide == nil {
-                state.reconnectGuide = """
-                Your strap keeps connecting and then dropping a second later. This is almost always a stale Bluetooth pairing - usually after a WHOOP firmware update, or the official WHOOP app holding the strap. NOOP works fine once it's re-paired:
-
-                1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
-                2. Open System Settings → Bluetooth and Forget your WHOOP if it's listed.
-                3. Tap the strap repeatedly until its LEDs flash blue (pairing mode).
-                4. Come back here and reconnect.
-                """
-            }
-        }
+    /// The second half: every per-link flag, probe, timer and session counter back to its between-links value, so
+    /// the next link runs the 5/MG handshake, clock check included. Read anything a detector needs before this.
+    private func resetLinkState() {
         bondedAt = nil   // cleared after the bond-loop detector above read it (#617)
         state.connected = false
         state.encryptedBond = false   // cleared with didBond; next session must re-prove the bond (#69)
@@ -6164,18 +6151,6 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         state.clearBiometrics()       // and a stale HR / R-R must not outlive the link either
         state.liveFeedActive = false  // a drop while Live is open must not leave a stale "Stop live feed"
-        // #1635: an unanswered CLIENT_HELLO produces no write error at all - the link simply drops a few
-        // seconds later - so it never reached the give-up on this platform and nothing could end the loop.
-        // Read it HERE, while `clientHelloWriteAt` and `didBond` are both still valid, and feed it in
-        // through the same split the auth path uses. `countsAsBondRefusal` gates on family, so a 4.0 (which
-        // bonds cleanly) can never latch the suppression.
-        if countsAsBondRefusal(isAuthRefusalStatus: false,
-                               helloUnacked: clientHelloWriteAt != nil,
-                               alreadyBonded: didBond,
-                               family: selectedModel.deviceFamily) {
-            recordWhoop5BondRefusal(authRefusal: false,
-                                    peripheralUUID: peripheral.identifier.uuidString)
-        }
         didBond = false
         clientHelloWriteAt = nil   // #1635: no hello survives the link that carried it
         whoop5RealtimeArmed = false
@@ -6252,6 +6227,125 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         puffinEventLog.close()   // release the event-log handle so the file is safe to export
         puffinDeepBufferLog.close()   // same for the high-rate deep-buffer log (#423)
         Task { @MainActor in await collector?.flushStandardHR(reason: .disconnect) }   // persist any buffered 0x2A37 HR
+    }
+
+    public func centralManager(_ central: CBCentralManager,
+                               didDisconnectPeripheral peripheral: CBPeripheral,
+                               error: Error?) {
+        linkDropped(peripheralUUID: peripheral.identifier.uuidString, error: error)
+    }
+
+    /// `didDisconnectPeripheral`'s body. It needs only the peripheral's identifier, so a test, which cannot make a
+    /// `CBPeripheral`, can end a link through it (W06-147).
+    func linkDropped(peripheralUUID: String, error: Error?) {
+        // W06-083: a link a Bluetooth power-off or reset already ended gets no second teardown, should a disconnect
+        // for it still arrive; the next link, or poweredOn's connect, owns what happens now. W06-148: only a
+        // disconnect for that peripheral, and never the user's own Disconnect, whose branch below must run.
+        if let ended = linkEndedAtRadioLoss, ended == peripheralUUID {
+            linkEndedAtRadioLoss = nil
+            if !intentionalDisconnect {
+                log("Disconnected — that link already ended at the radio state change (W06-083)")
+                return
+            }
+        }
+        // Reboot trail: if a user reboot is in flight, this drop is the strap acting on it. Log how long
+        // the link stayed up (a real reboot drops within ~1-2 s) and cancel the no-disconnect watchdog. The
+        // reconnect time is logged separately once the handshake completes. `rebootRequestedAt` stays set so
+        // the handshake can compute the round-trip; it's cleared there (or by the watchdog).
+        if let t = rebootRequestedAt {
+            let ms = Int(Double(DispatchTime.now().uptimeNanoseconds &- t.uptimeNanoseconds) / 1_000_000)
+            rebootTimeoutWork?.cancel(); rebootTimeoutWork = nil
+            // #275: a dropped LINK only proves a reboot on WHOOP 5.0 (verified fw). On WHOOP 4.0 the frame
+            // is unconfirmed — opcode 29/payload01 was observed to drop the BLE link WITHOUT power-cycling
+            // the strap (the sensor stayed on) — so don't claim a reboot; report the drop honestly. Twin of
+            // Kotlin handleDisconnect.
+            if selectedModel.deviceFamily == .whoop5 {
+                log("reboot: link dropped \(ms)ms after send — reboot took effect; awaiting reconnect")
+            } else {
+                log("reboot: link dropped \(ms)ms after send — but a WHOOP 4.0 reboot isn't confirmed; a dropped link alone isn't proof (a real reboot also switches the sensor light off). Awaiting reconnect")
+            }
+        }
+        // #80 marginal-radio detection: judge this drop BEFORE the state resets below clobber the
+        // arm timestamp. A drop that is unintentional, error-bearing, and lands shortly after we armed
+        // the R10/R11 burst is the marginal-radio tell. Feed the detector; if it trips, the NEXT connect
+        // skips the heavy arm (the flag is intentionally NOT reset on disconnect so it survives rescan).
+        // #1809: the epitaph goes out BEFORE the resets below, for the same reason the two detectors read
+        // their state here - `realtimeArmedAt` is about to be cleared. `ended` carries the CBError CASE, not
+        // just the OS sentence: the #617 branch already computes that code and the strap log never saw it.
+        let endedReason: String
+        if intentionalDisconnect {
+            endedReason = "intentional"
+        } else if let cb = error as? CBError {
+            endedReason = "CBError.\(cb.code)(\(cb.code.rawValue))"
+        } else if let error {
+            endedReason = "\(error)"
+        } else {
+            endedReason = "no error reported"
+        }
+        endLinkReadouts(ended: endedReason)
+
+        let timedOut = !intentionalDisconnect && error != nil
+        let sinceArm = realtimeArmedAt.map { Date().timeIntervalSince($0) }
+        if marginalRadio.connectionEnded(wasArmed: realtimeArmedAt != nil,
+                                         secondsSinceArm: sinceArm,
+                                         timedOut: timedOut) {
+            standardHRFallback = true
+            log("Marginal radio (#80): \(marginalRadio.consecutiveArmTimeouts) arm-then-timeout cycles — next connect uses standard-HR mode (0x2A37 only)")
+        }
+        // #617 bond-loop detection: same pre-reset read. The bond-loop tell is a CONNECTION TIMEOUT that
+        // lands within seconds of a genuine bond — bond → drop → rescan → bond → drop, forever. We require
+        // the OS to classify the drop as a connection timeout (`CBError.connectionTimeout`), not merely any
+        // error, so a one-off radio blip or a different failure doesn't get mistaken for the loop. Once it
+        // trips, surface the EXISTING re-pair guide (the same forget-and-re-pair steps the #74/firmware-reset
+        // path shows) rather than letting the link loop silently and drain the battery.
+        let connTimedOut: Bool = (error as? CBError)?.code == .connectionTimeout
+        let sinceBond = bondedAt.map { Date().timeIntervalSince($0) }
+        if postBondLoop.connectionEnded(wasBonded: bondedAt != nil,
+                                        secondsSinceBond: sinceBond,
+                                        timedOut: connTimedOut && !intentionalDisconnect) {
+            log("Bond-loop (#617): \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles — surfacing the re-pair guide and pausing auto-reconnect")
+            // #844 — the loop is bond → drop → 3s rescan → bond → drop, forever, draining the battery.
+            // Surfacing the guide alone left the involuntary-drop rescan (below) running. Pause auto-reconnect
+            // too: the disconnect rescan and didFailToConnect both already skip while this is set, and a user
+            // Connect (connect()) or a genuine bond re-arms it. We do NOT touch the bond/parse path — the bond
+            // is real; the stale OS pairing is the problem, which the guide tells the user how to clear.
+            autoReconnectPausedForBondLoop = true
+            bondLoopPausedAt = Date()   // the #78 hole-4 salvage probe covers this pause too (one bounded cycle)
+            // #1539: arm the parked connect in the same breath as the pause. The salvage probe only fires on
+            // app-foreground, so without this a pause tripped with the phone in a pocket strands the strap
+            // until someone opens the app. W06-144: this runs while `state.connected` is still set, so the park is
+            // refused. Kept so on purpose: a strap that trips #617 is reachable and bonds, and its bond clears the
+            // pause, so a park that went through would resume the #844 loop. The fix needs the owner's call.
+            standingConnectWhilePausedIfDue(justTripped: true)
+            if TestCentre.active(.connection) {
+                state.append(log: "reconnect paused=bondLoop (#617: \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles)", domain: .connection)
+            }
+            if state.reconnectGuide == nil {
+                state.reconnectGuide = """
+                Your strap keeps connecting and then dropping a second later. This is almost always a stale Bluetooth pairing - usually after a WHOOP firmware update, or the official WHOOP app holding the strap. NOOP works fine once it's re-paired:
+
+                1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
+                2. Open System Settings → Bluetooth and Forget your WHOOP if it's listed.
+                3. Tap the strap repeatedly until its LEDs flash blue (pairing mode).
+                4. Come back here and reconnect.
+                """
+            }
+        }
+        // #1635: an unanswered CLIENT_HELLO produces no write error at all - the link simply drops a few
+        // seconds later - so it never reached the give-up on this platform and nothing could end the loop.
+        // Read it HERE, while `clientHelloWriteAt` and `didBond` are both still valid, and feed it in
+        // through the same split the auth path uses. `countsAsBondRefusal` gates on family, so a 4.0 (which
+        // bonds cleanly) can never latch the suppression. Read before the reset, which clears both; recording it after
+        // changes nothing (W06-160): this refusal is never an auth refusal, so a give-up suppresses the hello and
+        // parks no connect, and `state.connected` was already clear here before the ninth batch.
+        let helloRefused = countsAsBondRefusal(isAuthRefusalStatus: false,
+                                               helloUnacked: clientHelloWriteAt != nil,
+                                               alreadyBonded: didBond,
+                                               family: selectedModel.deviceFamily)
+        resetLinkState()
+        if helloRefused {
+            recordWhoop5BondRefusal(authRefusal: false, peripheralUUID: peripheralUUID)
+        }
         if autoReconnectPausedForBondLoop {
             // #747: the bond keeps being refused, so auto-reconnect is paused: we stop hammering a strap that
             // can't bond (the epitaph + paused hint were already surfaced when the give-up tripped). The user
@@ -6276,9 +6370,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
                     ? "connectionTimeout" : connErrorToken(error)
                 // #1020: the session's length separates the causes of a drop at a glance. Same suffix the
                 // Android twin emits, so the shared ConnectionReadout parser sees one format.
-                let held = ConnectionTrace.sessionHeldSuffix(
-                    millis: connSessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1)
-                state.append(log: "connect down (uptime ends\(held))", domain: .connection)
+                state.append(log: "connect down (uptime ends\(connSessionHeldSuffix()))", domain: .connection)
                 state.append(log: "reconnect n=\(connReconnectCount) reason=\(reason)", domain: .connection)
             }
             // #1413: route through the standing-connect regime, not a bare timer, so a suspension in the
@@ -6411,6 +6503,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         if p.state == .connected {
             state.connected = true
+            linkEndedAtRadioLoss = nil   // W06-083: this link is a new one
             // #613: the inherited notify subscriptions come back reported-active but dead. Force one real
             // off→on re-subscribe this session (see `requestNotify`) so live HR/R-R resume AND
             // `didUpdateNotificationStateFor` fires → `cmdNotifyConfirmedActive` → `connectSettled` → the
@@ -6999,14 +7092,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     }
 
     /// What the clock check's timeout finds of the link (W06-085): the one the check began on, still able to take
-    /// a command (W06-091); a newer one that came up without `didDisconnectPeripheral` (a Bluetooth power-off,
-    /// W06-083) and is past its CLIENT_HELLO, so it skipped the handshake; or neither.
+    /// a command (W06-091); a newer one that is past its CLIENT_HELLO and skipped the handshake, which a Bluetooth
+    /// power-off caused before W06-083 ended such a link at the radio state change; or neither.
     enum ClockCheckLink: Equatable { case same, newer, none }
 
     /// The link as the clock check's timeout sees it. W06-069: a Bluetooth power-off does not end the link
-    /// through `didDisconnectPeripheral`, so the token outlives it and `state.connected` stays set (W06-083).
-    /// Ask the link itself, as `send` does, and whether it is still the one the check began on, since a
-    /// reconnect after a power-off bumps no token.
+    /// through `didDisconnectPeripheral`; since W06-083 the radio state change ends it and moves the token, but
+    /// that callback can lag the link. Ask the link itself, as `send` does, and whether it is still the one the
+    /// check began on.
     private var clockCheckLink: ClockCheckLink {
         Self.classifyClockCheckLink(connected: state.connected, peripheralConnected: peripheral?.state == .connected,
                                     sameGeneration: connectGeneration == strapClockCheckLink,

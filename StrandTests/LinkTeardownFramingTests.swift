@@ -21,18 +21,30 @@ final class LinkTeardownFramingTests: XCTestCase {
         }
     }
 
-    /// Every disconnect runs the reset: the handler calls it at its top level, not under a condition and not
-    /// commented out. The handler takes a `CBPeripheral`, which a test cannot make, so this one reads the
-    /// source with comments removed.
-    func testTheDisconnectHandlerResetsTheFraming() throws {
+    /// A disconnect runs the reset, driven through the handler's body (`linkDropped`, W06-147) rather than read from
+    /// the source, so an early return added before the teardown fails it (W06-162): half a buffer before the drop,
+    /// and the next link's first buffer still banks. The one early return there is, for a link a power-off already
+    /// tore down, is covered by `RadioPowerOffTeardownTests`.
+    func testTheDisconnectHandlerResetsTheFraming() {
+        let buffer = CollectorImuBankingTests.fixture(type: 43, layout: 21)
+        let rig = ImuBankingRig()
+        defer { rig.close() }
+        rig.manager.feedWhoop5(Array(buffer.prefix(600)), char: ImuBankingRig.dataChar)
+        rig.manager.linkDropped(peripheralUUID: "strap-1", error: nil)
+        rig.manager.feedWhoop5(buffer, char: ImuBankingRig.dataChar)
+        XCTAssertTrue(rig.banked, rig.live.log.joined(separator: "\n"))
+    }
+
+    /// The radio state change reaches the power-off teardown first thing when the radio is not powered on (W06-083).
+    /// A test cannot make a `CBCentralManager` report a state, so this one reads the source.
+    func testTheRadioStateChangeReachesThePowerOffTeardown() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Strand/BLE/BLEManager.swift"))
-        let start = try XCTUnwrap(source.range(of: "didDisconnectPeripheral peripheral: CBPeripheral,"))
-        let end = try XCTUnwrap(source.range(of: "\n    public func centralManager(", range: start.upperBound..<source.endIndex))
-        let code = source[start.upperBound..<end.lowerBound].split(separator: "\n").map { line in
-            line.range(of: "//").map { line[..<$0.lowerBound] } ?? line
-        }
-        XCTAssertTrue(code.contains("        resetLinkFraming()"))
+        let delegate = try XCTUnwrap(source.range(of: "public func centralManagerDidUpdateState(_ central: CBCentralManager) {"))
+        let guardLine = try XCTUnwrap(source.range(of: "        guard central.state == .poweredOn else {\n",
+                                                   range: delegate.upperBound..<source.endIndex))
+        let next = source[guardLine.upperBound...].prefix { $0 != "\n" }
+        XCTAssertEqual(next, "            endLinkForRadioState(central.state, peripheralUUID: peripheral?.identifier.uuidString)")
     }
 
     /// The tally folds a reassembler's drops as growth past the total it last saw, so a fresh reassembler

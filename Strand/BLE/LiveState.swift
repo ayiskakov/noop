@@ -405,12 +405,15 @@ public final class LiveState: ObservableObject {
     @Published public var ecgRawDataGate: EcgRawDataGateReport? = nil
 
     /// Wrist-wear state from WRIST_ON/WRIST_OFF events. Defaults true so wear-gated features work
-    /// before the first event arrives; flipped by FrameRouter on a real event.
+    /// before the first event arrives; FrameRouter sets it from live events, and a WRIST_ON that arrives only
+    /// through an offload sets it back on (W06-121), so a strap put back on while unlinked reads as worn once its
+    /// history arrives. History sets it off only to take back its own WRIST_ON (W06-145, W06-154), and a link to
+    /// another strap puts it back to the default (W06-159).
     @Published public var worn: Bool = true
     /// W06-109: the last live wrist event on the CURRENT link (true = WRIST_ON, false = WRIST_OFF), nil until
-    /// one arrives. `worn` survives a disconnect, and a strap put back on while unlinked sends its WRIST_ON only
-    /// as history, which never reaches `worn`; so a verdict that excuses an empty offload as off-wrist reads
-    /// this, which `BLEManager` clears at every connect, and never `worn`.
+    /// one arrives. `worn` survives a disconnect and follows history too, so it can say what the strap did
+    /// before this link; a verdict that excuses an empty offload as off-wrist reads this, which `BLEManager`
+    /// clears at every connect, and never `worn`.
     public var wristEventThisLink: Bool?
 
     /// #580 — true when a connected WHOOP 5/MG streams live HR fine but its firmware hands over no history

@@ -1,6 +1,6 @@
 # Architectural decisions register
 
-Fourteen decisions carry the structure. Each gets a verdict backed by evidence before any refactor
+Fifteen decisions carry the structure. Each gets a verdict backed by evidence before any refactor
 touches it. **Verdicts live only in this file.** An Amend or Replace verdict becomes a `design` finding
 in the owning workstream's table, with its own PR in Phase 5.
 
@@ -22,6 +22,7 @@ Verdict values: `Open` → `Keep` | `Amend` | `Replace`.
 | [AD-12](#ad-12) | XcodeGen source of truth; app build CI on every app-path PR | W11 | 0 | Keep |
 | [AD-13](#ad-13) | Fork diverges from upstream | W11 | 0 | Amend |
 | [AD-14](#ad-14) | Error policy: `fatalError`, silent `try?`, strap-log logging | W9 | 3 | Open |
+| [AD-15](#ad-15) | `BLEManager` holds CoreBluetooth, per-link state and WHOOP policy in one class | W6 | 5 | Amend |
 
 Each section below holds the question, the evidence to gather, and, once decided, the evidence found
 and the verdict's reasoning. Keep the verdict in the table above in step with the section.
@@ -332,3 +333,32 @@ store write; fault-injection tests for a full disk and a corrupt row.
 **Evidence found.** —
 
 **Verdict.** Open.
+
+### AD-15
+
+**Decision.** `BLEManager` (`Strand/BLE/BLEManager.swift`, 7.6k lines, 174 stored properties) talks to
+`CBCentralManager` and `CBPeripheral` directly, keeps every per-link fact as a loose property of its own,
+and carries the WHOOP policy (CLIENT_HELLO and bonding, the clock check, offload and acks, reconnect,
+ECG and R22 flows, diagnostics) in the same class. No third-party BLE library is used and nothing stands
+between it and CoreBluetooth.
+
+**Question.** Should the transport and the per-link state move out, so that ending a link cannot leave
+state behind and tests can drive a link without a strap?
+
+**Evidence found.** `didDisconnectPeripheral` resets about 75 fields one by one, and `didConnect`
+re-clears about 20 of them for a link that began without that teardown. Every path that ends a link
+without the callback, and every new field someone forgets to reset, leaves the old link's state on the
+next one. Findings of this shape so far: W06-033 (reassembler), W06-069 and W06-085 (clock check after a
+power-off), W06-083 (a power-off runs none of the teardown), W06-138 (drain link counter). Tests cannot
+create a `CBPeripheral`, so the disconnect handler is pinned by reading its source text
+(`LinkTeardownFramingTests`, W06-043), and app-layer tests reach a link only through seams such as
+`ClockCheckLink`. Libraries (Bluejay, RxBluetoothKit, AsyncBluetooth; Nordic's CoreBluetoothMock for
+tests) cover the transport and the link lifecycle, which is perhaps a tenth of the file; the WHOOP and
+iOS background policy is ours either way.
+
+**Verdict.** Amend (owner, 2026-09-28). Split in Phase 5, in its own PRs and never with a fix:
+(1) a thin transport layer behind a protocol, so tests can supply a fake central and peripheral
+(written in-house or adopted; CoreBluetoothMock is the candidate to weigh); (2) one link-session object
+per connection holding all per-link state, created at connect and dropped at any link end, including a
+radio power-off, so nothing has to be reset by hand; (3) WHOOP policy on top. Until then, fixes keep one
+teardown funnel (W06-083). Tracked as [W06-143](workstreams/W06-ble-collect.md#findings).
