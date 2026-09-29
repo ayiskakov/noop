@@ -407,7 +407,8 @@ public final class LiveState: ObservableObject {
     /// Wrist-wear state from WRIST_ON/WRIST_OFF events. Defaults true so wear-gated features work
     /// before the first event arrives; FrameRouter sets it from live events, and a WRIST_ON that arrives only
     /// through an offload sets it back on (W06-121), so a strap put back on while unlinked reads as worn once its
-    /// history arrives. History sets it off only to take back its own WRIST_ON (W06-145, W06-154).
+    /// history arrives. History sets it off only to take back its own WRIST_ON (W06-145, W06-154), and a link to
+    /// another strap puts it back to the default (W06-159).
     @Published public var worn: Bool = true
     /// W06-109: the last live wrist event on the CURRENT link (true = WRIST_ON, false = WRIST_OFF), nil until
     /// one arrives. `worn` survives a disconnect and follows history too, so it can say what the strap did

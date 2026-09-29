@@ -1010,7 +1010,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Published so the app/AppModel can persist it onto the active registry device
     /// (`registry.setPeripheralId`) — letting "my-whoop" adopt its strap's id on first connect and a
     /// specific WHOOP confirm its identity. BLEManager stays decoupled: it never writes the registry.
-    @Published public private(set) var connectedPeripheralUUID: String?
+    /// It also tells the router which physical strap the link is to (W06-158). The `connectCore` refresh branch does not
+    /// set it: it re-holds the strap already held, and only the preferred one, so it brings no other strap.
+    @Published public private(set) var connectedPeripheralUUID: String? {
+        didSet { if let id = connectedPeripheralUUID { router.strapPeripheralId = id } }
+    }
     /// Multi-WHOOP Add-a-WHOOP wizard surface: straps seen while `isPresentingScan` is true, WITHOUT
     /// auto-connecting. Cleared at the start of each `scanForWhoops()`. Empty/unused on the default path.
     @Published public private(set) var discoveredWhoops: [(uuid: String, name: String, rssi: Int)] = []

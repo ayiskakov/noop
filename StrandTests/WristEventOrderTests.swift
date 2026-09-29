@@ -9,7 +9,8 @@ import XCTest
 /// macOS auto-lock (`onWristChange`) are for a change happening now, and W06-109's per-link record is live-only.
 /// W06-145: history moves `worn` only back to on, the documented default. An offload synced in pieces can stop on a
 /// WRIST_OFF whose WRIST_ON it has not delivered yet, and no live event would correct that on a worn strap.
-/// W06-154: history can take back a WRIST_ON it applied itself, until a live event takes over.
+/// W06-154: history can take back a WRIST_ON it applied itself, until a live event takes over. W06-158, W06-159:
+/// another physical strap starts the order and the wear state afresh.
 @MainActor
 final class WristEventOrderTests: XCTestCase {
     /// The captured WHOOP 5 DOUBLE_TAP frame of `FrameRouterDoubleTapDedupTests` with its event byte set to
@@ -141,22 +142,46 @@ final class WristEventOrderTests: XCTestCase {
         XCTAssertTrue(live.worn)
     }
 
-    /// W06-151: the order is per strap. A strap switched to whose clock is behind the last one's still gets its
-    /// history heard.
-    func testASwitchToAnotherStrapStartsTheOrderAgain() {
-        router.deviceId = "strap-a"
+    /// W06-151, W06-158: the order is per physical strap, so a replacement strap on the same registry row, whose
+    /// clock is behind the last one's, still has an offloaded event inside the live window heard.
+    func testAnotherStrapOnTheSameRegistryRowStartsTheOrderAgain() {
+        router.deviceId = "my-whoop"
+        router.strapPeripheralId = "peripheral-a"
         router.handle(frame: bytes(Self.off[600]))
-        router.deviceId = "strap-b"
-        offload(Self.on[10], at: 900)
+        router.family = .whoop5
+        router.deviceId = "my-whoop"
+        router.strapPeripheralId = "peripheral-b"
+        offload(Self.on[10], at: 20)
+        XCTAssertEqual(live.wristEventThisLink, true, live.log.joined(separator: "\n"))
         XCTAssertTrue(live.worn)
     }
 
-    /// The same strap re-announced at a connect keeps its order, although setting the family clears the id first.
+    /// W06-159: the last strap's WRIST_OFF says nothing about the next one, so another strap starts from the default
+    /// wear state. The wrist Shortcuts do not run: nothing happened on a wrist.
+    func testAnotherStrapStartsFromTheDefaultWearState() {
+        router.strapPeripheralId = "peripheral-a"
+        router.handle(frame: bytes(Self.off[0]))
+        router.strapPeripheralId = "peripheral-b"
+        XCTAssertTrue(live.worn)
+        XCTAssertEqual(callbacks, [false])
+        XCTAssertEqual(lines(containing: "Wrist: another strap connected").count, 1)
+    }
+
+    /// The same strap re-announced at a connect keeps its order and its wear state.
     func testTheSameStrapReannouncedKeepsTheOrder() {
-        router.deviceId = "strap-a"
+        router.strapPeripheralId = "peripheral-a"
         router.handle(frame: bytes(Self.off[600]))
         router.family = .whoop5
-        router.deviceId = "strap-a"
+        router.strapPeripheralId = "peripheral-a"
+        offload(Self.on[10], at: 900)
+        XCTAssertFalse(live.worn)
+    }
+
+    /// A strap known only after the first connect of the process has nothing to reset.
+    func testTheFirstStrapOfTheProcessResetsNothing() {
+        router.handle(frame: bytes(Self.off[600]))
+        router.strapPeripheralId = "peripheral-a"
+        XCTAssertFalse(live.worn)
         offload(Self.on[10], at: 900)
         XCTAssertFalse(live.worn)
     }

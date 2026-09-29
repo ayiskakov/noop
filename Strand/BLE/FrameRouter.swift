@@ -17,16 +17,30 @@ public final class FrameRouter {
     /// a path that sets the family and forgets the id then attributes nothing rather than carrying the
     /// previous connection's strap forward, which is the very mistake this attribution exists to stop.
     /// nil in pure/unit contexts, which the verdict treats as unattributed rather than guessing.
-    /// W06-151: a different strap starts the wrist-event order again, since its clock is its own. Keyed on the last
-    /// id seen, not on every change: `family`'s didSet clears this at each connect before it is set again.
-    var deviceId: String? {
+    var deviceId: String?
+
+    /// The physical strap of the current link: its peripheral identifier, set by BLEManager whenever it publishes
+    /// `connectedPeripheralUUID`. A different strap starts the wrist-event order again, since its clock is its own
+    /// (W06-151), and puts `worn` back to the default, since the last strap's WRIST_OFF says nothing about this one
+    /// (W06-159). Keyed on the peripheral, not `deviceId` (W06-158): the single-WHOOP path keeps "my-whoop" for any
+    /// strap, and a replacement strap can take over a registry row. nil and the same strap again change nothing,
+    /// and so does the first strap of the process, which has no earlier state to discard. Assumed, not checked: iOS
+    /// can give a strap a new identifier after it is forgotten and paired again, which costs one reset to defaults.
+    var strapPeripheralId: String? {
         didSet {
-            guard let id = deviceId, id != wristOrderDeviceId else { return }
-            wristOrderDeviceId = id
+            guard let id = strapPeripheralId, id != wristOrderPeripheralId else { return }
+            defer { wristOrderPeripheralId = id }
+            guard wristOrderPeripheralId != nil else { return }
             newestWristEventTime = nil
+            wornSetByHistory = false
+            // `onWristChange` stays quiet: the wrist Shortcuts and auto-lock are for a change on a wrist.
+            if !state.worn {
+                state.worn = true
+                state.append(log: "Wrist: another strap connected; wear state back to on until it reports")
+            }
         }
     }
-    private var wristOrderDeviceId: String?
+    private var wristOrderPeripheralId: String?
 
     /// Which family's framing to decode with. Set per connection by BLEManager. WHOOP 5.0/MG frames
     /// use the CRC16/offset-8 envelope; the biometric field decode for puffin is still a stub, so
