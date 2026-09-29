@@ -613,7 +613,7 @@ public final class FrameRouter {
     /// offload delivery (`live` false) applies only when it is the newest seen.
     private func noteWristEvent(on: Bool, strapTime: Int?, live: Bool) {
         if !live, let t = strapTime, let newest = newestWristEventTime, t <= newest { return }
-        if let t = strapTime { newestWristEventTime = live ? t : max(t, newestWristEventTime ?? t) }
+        if let t = strapTime { newestWristEventTime = t }   // offload: newer than the baseline, by the guard above
         wornSetByHistory = false
         if state.wristEventThisLink != on {
             state.wristEventThisLink = on
