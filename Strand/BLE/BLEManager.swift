@@ -5687,10 +5687,15 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         linkEndedAtRadioLoss = peripheralUUID
         log("Link ended: \(cause) — torn down at the radio state change (W06-083)")
         if TestCentre.active(.connection) {
-            let held = ConnectionTrace.sessionHeldSuffix(
-                millis: connSessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1)
-            state.append(log: "connect down (\(cause)\(held))", domain: .connection)
+            state.append(log: "connect down (\(cause)\(connSessionHeldSuffix()))", domain: .connection)
         }
+    }
+
+    /// #1020: how long the connection session held, as the suffix of a `connect down` line. Both teardowns print it,
+    /// so it is built in one place and their lines keep one format for the ConnectionReadout parser (W06-166).
+    private func connSessionHeldSuffix() -> String {
+        ConnectionTrace.sessionHeldSuffix(
+            millis: connSessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1)
     }
 
     public func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -6365,9 +6370,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
                     ? "connectionTimeout" : connErrorToken(error)
                 // #1020: the session's length separates the causes of a drop at a glance. Same suffix the
                 // Android twin emits, so the shared ConnectionReadout parser sees one format.
-                let held = ConnectionTrace.sessionHeldSuffix(
-                    millis: connSessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1)
-                state.append(log: "connect down (uptime ends\(held))", domain: .connection)
+                state.append(log: "connect down (uptime ends\(connSessionHeldSuffix()))", domain: .connection)
                 state.append(log: "reconnect n=\(connReconnectCount) reason=\(reason)", domain: .connection)
             }
             // #1413: route through the standing-connect regime, not a bare timer, so a suspension in the
