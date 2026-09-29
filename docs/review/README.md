@@ -148,10 +148,13 @@ item as it lands.
       Phase 3 (a file-backed strap log). AD-15 recorded with the owner (split `BLEManager` into transport, link session
       and WHOOP policy; Phase 5, W06-143). V2 (independent subagent) held W06-083, W06-141 and W06-121/115 with caveats
       and refuted W06-144: its park would resume the #844 bond loop, so it is backed out and waits on the owner's call.
-      Its other findings, W06-145 … W06-153, are fixed on the same branch except W06-153 (recorded). StrandTests 2,119,
-      both builds (NOOPiOS without the watch app). Then a strap run: Bluetooth off and on mid-link from Settings and from
+      Its other findings, W06-145 … W06-153, are fixed on the same branch except W06-153 (recorded). A code review
+      (`/code-review xhigh`) then found W06-154 … W06-166; all are fixed on the same branch except W06-156, W06-163 and
+      W06-164 (recorded; W06-163 is the owner's call and W06-164 goes to Phase 5 with W06-143). StrandTests 2,125, both
+      builds (NOOPiOS without the watch app). Then a strap run: Bluetooth off and on mid-link from Settings and from
       Control Center (a `Link ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back
-      on while unlinked (`WRIST_ON reached through a sync`).
+      on while unlinked (`WRIST_ON reached through a sync`), then on and off again while unlinked
+      (`WRIST_OFF reached through a sync`).
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
