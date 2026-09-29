@@ -9,6 +9,7 @@ import XCTest
 /// macOS auto-lock (`onWristChange`) are for a change happening now, and W06-109's per-link record is live-only.
 /// W06-145: history moves `worn` only back to on, the documented default. An offload synced in pieces can stop on a
 /// WRIST_OFF whose WRIST_ON it has not delivered yet, and no live event would correct that on a worn strap.
+/// W06-154: history can take back a WRIST_ON it applied itself, until a live event takes over.
 @MainActor
 final class WristEventOrderTests: XCTestCase {
     /// The captured WHOOP 5 DOUBLE_TAP frame of `FrameRouterDoubleTapDedupTests` with its event byte set to
@@ -19,11 +20,13 @@ final class WristEventOrderTests: XCTestCase {
         0: "aa0110000100208130340a008089266a3d2a00004a18349b",
         10: "aa0110000100208130340a008a89266a3d2a00008204f40a",
         600: "aa0110000100208130340a00d88b266a3d2a000010e1688a",
+        900: "aa0110000100208130340a00048d266a3d2a000079b70ab8",
     ]
     private static let on: [Int: String] = [
         0: "aa01100001002081303409008089266a3d2a000049a30370",
         10: "aa01100001002081303409008a89266a3d2a000081bfc3e1",
         600: "aa0110000100208130340900d88b266a3d2a0000135a5f61",
+        900: "aa0110000100208130340900048d266a3d2a00007a0c3d53",
     ]
 
     private var live: LiveState!
@@ -103,6 +106,28 @@ final class WristEventOrderTests: XCTestCase {
         offload(Self.off[600], at: 900)
         offload(Self.on[10], at: 900)
         XCTAssertFalse(live.worn)
+    }
+
+    /// W06-154: history may take back what history set. Taken off on the link, then put on and taken off again
+    /// while unlinked: the offload carries both, and the strap is on the desk.
+    func testAWristOffFromHistoryTakesBackAWristOnHistorySet() {
+        router.handle(frame: bytes(Self.off[0]))
+        offload(Self.on[10], at: 1_200)
+        offload(Self.off[600], at: 1_200)
+        XCTAssertFalse(live.worn, live.log.joined(separator: "\n"))
+        XCTAssertEqual(callbacks, [false], "history must not run the wrist Shortcuts")
+        XCTAssertEqual(lines(containing: "Wrist: WRIST_OFF reached through a sync").count, 1)
+        offload(Self.on[900], at: 1_200)
+        XCTAssertTrue(live.worn)
+    }
+
+    /// W06-154: a live event ends history's claim, so a WRIST_OFF from history after it leaves the wear state on.
+    func testALiveEventEndsWhatHistorySet() {
+        router.handle(frame: bytes(Self.off[0]))
+        offload(Self.on[10], at: 1_200)
+        router.handle(frame: bytes(Self.on[600]))
+        offload(Self.off[900], at: 1_200)
+        XCTAssertTrue(live.worn)
     }
 
     /// A live event is the strap's state now, even when the strap's clock stepped back behind an event history set.

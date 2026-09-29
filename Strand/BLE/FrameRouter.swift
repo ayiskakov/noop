@@ -588,6 +588,10 @@ public final class FrameRouter {
     /// change. Not cleared at a disconnect: the wear state it orders outlives the link on purpose.
     private var newestWristEventTime: Int?
 
+    /// True while `worn` is on only because history set it (W06-154), so a newer WRIST_OFF from history may take it
+    /// back. Any event from the live window clears it: from then on the wear state is not history's to undo.
+    private var wornSetByHistory = false
+
     /// One wrist event inside the live window: the wear state, its callback, and the per-link record an empty
     /// offload is judged by (W06-109). A change of the per-link record is logged, always-on: it is rare, and it is
     /// the only trace of why an empty offload was or was not excused as off-wrist. `live` is true for `handle`,
@@ -596,6 +600,7 @@ public final class FrameRouter {
     private func noteWristEvent(on: Bool, strapTime: Int?, live: Bool) {
         if !live, let t = strapTime, let newest = newestWristEventTime, t <= newest { return }
         if let t = strapTime { newestWristEventTime = live ? t : max(t, newestWristEventTime ?? t) }
+        wornSetByHistory = false
         if state.wristEventThisLink != on {
             state.wristEventThisLink = on
             state.append(log: "Wrist: \(on ? "WRIST_ON" : "WRIST_OFF") on this link")
@@ -606,16 +611,24 @@ public final class FrameRouter {
     /// A wrist event older than the live window, from an offload (W06-121). The newest one moves the order, and a
     /// WRIST_ON among them sets `worn` and nothing else: the wrist Shortcuts and macOS auto-lock behind
     /// `onWristChange` are for a change happening now, and the per-link record is live-only (W06-109). A WRIST_OFF
-    /// from history never turns `worn` off (W06-145): the history delivered so far is the strap's state only once
-    /// the offload reaches the present, and one synced in pieces can stop on a WRIST_OFF whose WRIST_ON is still on
-    /// the strap, which no live event would correct. So history can only restore the default. A change is logged,
-    /// always-on, since it moves every wear-gated feature and is otherwise invisible.
+    /// from history turns `worn` off only when history turned it on (W06-145, W06-154): the history delivered so far
+    /// is the strap's state only once the offload reaches the present, and one synced in pieces can stop on a
+    /// WRIST_OFF whose WRIST_ON is still on the strap, which no live event would correct. So history restores the
+    /// default and can take back only its own restore, as when the strap went on and off again while unlinked. A
+    /// change is logged, always-on, since it moves every wear-gated feature and is otherwise invisible.
     private func noteHistoricalWristEvent(on: Bool, strapTime: Int, age: Int) {
         if let newest = newestWristEventTime, strapTime <= newest { return }
         newestWristEventTime = strapTime
-        guard on, !state.worn else { return }
-        state.worn = true
-        state.append(log: "Wrist: WRIST_ON reached through a sync, stamped \(age) s before the phone's clock; wear state set on")
+        if on, !state.worn {
+            state.worn = true
+            wornSetByHistory = true
+            state.append(log: "Wrist: WRIST_ON reached through a sync, stamped \(age) s before the phone's clock; wear state set on")
+        } else if !on, wornSetByHistory {
+            state.worn = false
+            wornSetByHistory = false
+            state.append(log: "Wrist: WRIST_OFF reached through a sync, stamped \(age) s before the phone's clock; "
+                         + "wear state back off, which a sync had set on")
+        }
     }
 
     // MARK: - Double-tap de-duplication
