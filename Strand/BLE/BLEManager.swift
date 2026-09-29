@@ -3885,8 +3885,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// command; consumed by `didDisconnectPeripheral` (to log how long the link stayed up = the strap acting
     /// on the reboot) and by the connect handshake (to log the reconnect round-trip). Cleared on reconnect
     /// or by the no-disconnect timeout. The whole point is a self-contained strap-log trail for a reboot,
-    /// so a "restart did nothing" report is triageable.
-    private var rebootRequestedAt: DispatchTime?
+    /// so a "restart did nothing" report is triageable. Internal for `RadioPowerOffTeardownTests` (W06-157).
+    var rebootRequestedAt: DispatchTime?
     private var rebootTimeoutWork: DispatchWorkItem?
     private var rebootSettleWork: DispatchWorkItem?
 
@@ -5675,6 +5675,13 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         default: return
         }
         guard state.connected || linkUpSince != nil else { return }
+        // W06-157: a reboot in flight loses its evidence here, since the link ended for the radio's reason. Close the
+        // trail, or the reconnect after power-on is logged as the reboot's round trip and clears its pill.
+        if let t = rebootRequestedAt {
+            let ms = Int(Double(DispatchTime.now().uptimeNanoseconds &- t.uptimeNanoseconds) / 1_000_000)
+            log("reboot: link ended by \(cause) \(ms)ms after send — whether the strap rebooted is unknown")
+            clearRebootState()
+        }
         endLinkReadouts(ended: cause)
         resetLinkState()
         linkEndedAtRadioLoss = peripheralUUID

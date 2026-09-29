@@ -45,10 +45,13 @@ final class RadioPowerOffTeardownTests: XCTestCase {
 
     func testABluetoothResetEndsAHeldLinkToo() {
         holdALinkPastTheHandshake()
+        manager.rebootRequestedAt = .now()
         manager.endLinkForRadioState(.resetting, peripheralUUID: "strap-1")
         XCTAssertFalse(live.connected)
         XCTAssertFalse(manager.whoop5SessionStarted)
         XCTAssertEqual(lines(containing: "Link ended: Bluetooth resetting").count, 1)
+        XCTAssertNil(manager.rebootRequestedAt, "a reset closes a reboot trail too (W06-157)")
+        XCTAssertEqual(lines(containing: "reboot: link ended by Bluetooth resetting").count, 1)
     }
 
     /// A launch reports `.unknown` and, on macOS, can report a transient `.unauthorized` (#391) while a restored link
@@ -73,6 +76,20 @@ final class RadioPowerOffTeardownTests: XCTestCase {
         manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
         manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
         XCTAssertEqual(lines(containing: "Link ended").count, 1)
+    }
+
+    /// W06-157: a reboot in flight when Bluetooth powers off loses its evidence, since the link ended for the radio's
+    /// reason. The trail closes and says so; left armed, the reconnect after power-on is logged as the reboot's round
+    /// trip and clears the "Reconnecting…" pill as if the strap had rebooted.
+    func testAPowerOffClosesARebootTrailItCannotAttribute() {
+        holdALinkPastTheHandshake()
+        manager.rebootRequestedAt = .now()
+        live.rebootInProgress = true
+        manager.endLinkForRadioState(.poweredOff, peripheralUUID: "strap-1")
+        XCTAssertNil(manager.rebootRequestedAt, live.log.joined(separator: "\n"))
+        XCTAssertFalse(live.rebootInProgress)
+        XCTAssertEqual(lines(containing: "reboot: link ended by Bluetooth off").count, 1)
+        XCTAssertEqual(lines(containing: "whether the strap rebooted is unknown").count, 1)
     }
 
     // MARK: - A disconnect after the power-off (W06-147, W06-148)
