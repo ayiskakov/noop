@@ -567,8 +567,8 @@ public final class FrameRouter {
                              + "not acted on (live window \(FrameRouter.liveGestureWindowSeconds) s)")
             }
             // W06-121: a wrist event older than the window is history; a strap put back on while unlinked reports
-            // its WRIST_ON only this way. One stamped ahead of the strap's clock-now is not its latest state, and
-            // would block every later event.
+            // its WRIST_ON only this way. One stamped ahead of `now` is not its latest state, and would block every
+            // later event. W06-155: `now` is the phone's clock, since `strapClockNow` has no correlation to apply.
             if age > 0, ev.hasPrefix("WRIST_ON") || ev.hasPrefix("WRIST_OFF") {
                 noteHistoricalWristEvent(on: ev.hasPrefix("WRIST_ON"), strapTime: ts, age: age)
             }
@@ -615,7 +615,7 @@ public final class FrameRouter {
         newestWristEventTime = strapTime
         guard on, !state.worn else { return }
         state.worn = true
-        state.append(log: "Wrist: WRIST_ON reached through a sync, \(age) s old by the strap's clock; wear state set on")
+        state.append(log: "Wrist: WRIST_ON reached through a sync, stamped \(age) s before the phone's clock; wear state set on")
     }
 
     // MARK: - Double-tap de-duplication
