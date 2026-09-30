@@ -474,6 +474,38 @@ final class Spo2CandidateSeriesTests: XCTestCase {
         XCTAssertEqual(note(windows: 26, attempted: 26, lowQuality: nil), .ungated)
     }
 
+    /// W03-011/W03-018: one loaded `Read` answers every surface. A per-day lookup and a trend both leave
+    /// out a mean left over on a night with no reliable reading — the mean a failed delete, or a mean under
+    /// another computed id the reader unions, would otherwise put back on screen.
+    func testOneReadAnswersEveryReaderAndDropsALeftoverMean() {
+        let read = Spo2CandidateSeries.Read(
+            mean: ["2026-09-28": 95.8, "2026-09-29": 93.6, "2026-09-30": 91.2],
+            minimum: ["2026-09-30": 73],
+            windows: ["2026-09-29": 10, "2026-09-30": 0],
+            windowsAttempted: ["2026-09-29": 26, "2026-09-30": 29],
+            lowQuality: ["2026-09-29": 13, "2026-09-30": 29])
+        XCTAssertEqual(read.meanByDay, ["2026-09-28": 95.8, "2026-09-29": 93.6])
+        XCTAssertTrue(read.night(on: "2026-09-30")!.hasNoReliableReading)
+        XCTAssertNil(read.night(on: "2026-09-30")?.minimum)
+        XCTAssertEqual(read.night(on: "2026-09-29")?.meanRounded, 94)
+        XCTAssertNil(read.night(on: "2026-09-27"), "a day with no series is not a night")
+        XCTAssertEqual(read.latest, read.night(on: "2026-09-30"))
+        XCTAssertEqual(Spo2CandidateSeries.latest(mean: read.mean, minimum: read.minimum, windows: read.windows,
+                                                  windowsAttempted: read.windowsAttempted,
+                                                  lowQuality: read.lowQuality), read.latest)
+    }
+
+    /// The loader's key list is every key the writer banks, spelled from the same constants.
+    func testTheReadLoadsEveryStoredKey() {
+        XCTAssertEqual(Set(Spo2CandidateSeries.Read.keys),
+                       [Spo2CandidateSeries.meanKey, Spo2CandidateSeries.minimumKey, Spo2CandidateSeries.dipsKey,
+                        Spo2CandidateSeries.dipSecondsKey, Spo2CandidateSeries.samplesKey,
+                        Spo2CandidateSeries.windowsKey, Spo2CandidateSeries.windowsAttemptedKey,
+                        Spo2CandidateSeries.lowQualityKey])
+        let read = Spo2CandidateSeries.Read(byKey: [Spo2CandidateSeries.lowQualityKey: ["2026-09-30": 2]])
+        XCTAssertEqual(read.lowQuality, ["2026-09-30": 2])
+    }
+
     /// A night scored before W03-007 carries no low-quality count, and reads as ungated rather than as
     /// "none left out".
     func testAPreGateNightReportsNoLowQualityCount() {

@@ -1969,6 +1969,30 @@ final class Repository: ObservableObject {
         return spo2SingleChannelPlausible.contains(v) ? v : nil
     }
 
+    /// Every SpO₂ candidate series, read once for a surface and resolved through
+    /// `Spo2CandidateSeries.Read` (W03-011, W03-018). The Health card and tile, both Today screens and the
+    /// Metric Explorer all read the candidate through this, so none of them can show a night, or a mean,
+    /// that another surface's rules would refuse. The keys load concurrently. `days` is `exploreSeries`'
+    /// lookback, defaulting to the same full-history window.
+    func spo2CandidateSeries(days: Int = 4000) async -> Spo2CandidateSeries.Read {
+        func load(_ key: String) async -> [String: Double] {
+            let pts = await exploreSeries(key: key, source: "my-whoop", days: days)
+            return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+        }
+        async let mean = load(Spo2CandidateSeries.meanKey)
+        async let minimum = load(Spo2CandidateSeries.minimumKey)
+        async let dips = load(Spo2CandidateSeries.dipsKey)
+        async let dipSeconds = load(Spo2CandidateSeries.dipSecondsKey)
+        async let samples = load(Spo2CandidateSeries.samplesKey)
+        async let windows = load(Spo2CandidateSeries.windowsKey)
+        async let attempted = load(Spo2CandidateSeries.windowsAttemptedKey)
+        async let lowQuality = load(Spo2CandidateSeries.lowQualityKey)
+        return Spo2CandidateSeries.Read(mean: await mean, minimum: await minimum, dips: await dips,
+                                        dipSeconds: await dipSeconds, samples: await samples,
+                                        windows: await windows, windowsAttempted: await attempted,
+                                        lowQuality: await lowQuality)
+    }
+
     /// The SpO₂ candidate seconds a chart of the night `[from, to]` may plot beside the strap-estimate
     /// card's figures: the in-band seconds of the RELIABLE readings only, cut by the same windows and the
     /// same quality verdict the figures were resolved with (`AnalyticsEngine.spo2CandidateReliableSeconds`,

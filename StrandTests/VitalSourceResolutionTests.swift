@@ -1,4 +1,5 @@
 import XCTest
+import StrandAnalytics
 import WhoopStore
 @testable import Strand
 
@@ -176,6 +177,33 @@ final class VitalSourceResolutionTests: XCTestCase {
         XCTAssertEqual(spo2?.value, 96.0)
         XCTAssertEqual(spo2?.source, .noopComputed)
         XCTAssertTrue(spo2?.missingCaption.contains("strap estimate") == true)
+    }
+
+    /// W03-009: the newest candidate night had no reliable reading. The tile says so, as the card beside
+    /// it does, instead of carrying the previous night's mean past it or claiming no estimate exists.
+    func testANewestNightWithNoReliableReadingStopsTheCandidateCarry() {
+        UserDefaults.standard.set(true, forKey: PuffinExperiment.spo2CandidateDisplayKey)
+        defer { UserDefaults.standard.set(false, forKey: PuffinExperiment.spo2CandidateDisplayKey) }
+        let read = Spo2CandidateSeries.Read(
+            mean: ["2026-06-11": 95.0],
+            windows: ["2026-06-11": 20, "2026-06-12": 0],
+            windowsAttempted: ["2026-06-11": 22, "2026-06-12": 26],
+            lowQuality: ["2026-06-11": 1, "2026-06-12": 20])
+
+        func tile(_ night: Spo2CandidateSeries.Night?) -> BodyVitalReading? {
+            BodyVitalSigns.readings(
+                sourceRows: [SourcedDailyMetric(metric: daily(day: "2026-06-12", spo2Pct: nil), source: .noopComputed)],
+                temperatureUnit: .celsius,
+                now: localNoon(day: "2026-06-13"),
+                spo2CandidateByDay: read.meanByDay,
+                spo2CandidateNight: night
+            ).first { $0.key == "spo2" }
+        }
+        let gated = tile(read.latest)
+        XCTAssertNil(gated?.value, "the 11th's 95 % must not stand in for the 12th")
+        XCTAssertEqual(gated?.missingCaption, String(localized: "no reliable reading"))
+        // Without the resolved night the tile falls back to the old carry: the regression this pins.
+        XCTAssertEqual(tile(nil)?.value, 95.0)
     }
 
     /// When the toggle is OFF, the candidate is never surfaced even if data exists.

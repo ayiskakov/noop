@@ -1325,24 +1325,13 @@ private struct VitalsSection: View {
         return UnitPrefs.resolveTemperature(system: system, override: temperatureRaw)
     }
 
-    // #103/queue-11a: SpO₂ candidate nightly means from metricSeries — WHOOP `spo2_candidate_82`, or an
-    // Oura owner's ceiling@100 `0x6F` mean (device-conditional, see IntelligenceEngine) — loaded when
-    // the experimental toggle is ON. Empty when the toggle is OFF or no candidate data exists.
-    @State private var spo2CandidateByDay: [String: Double] = [:]
     @State private var hrvOverCountByDay: [String: Double] = [:]   // #1118
-    // #103: the figures the candidate MEAN cannot carry — the night's low, its dips and the readings
-    // (windows) behind all of it. Separate metricSeries rows, loaded beside the mean above
-    // and resolved into ONE night by `Spo2CandidateSeries.latest` so the card cannot show last night's
-    // mean beside an older night's low. Empty whenever the mean is, except that a quality-gated night
-    // with no reliable reading (W03-007) has counts and no mean.
-    @State private var spo2CandidateMinByDay: [String: Double] = [:]
-    @State private var spo2CandidateDipsByDay: [String: Double] = [:]
-    // W03-003: the night's measurement windows, valued and attempted.
-    @State private var spo2CandidateWindowsByDay: [String: Double] = [:]
-    @State private var spo2CandidateWindowsAttemptedByDay: [String: Double] = [:]
-    // W03-007: readings left out as low quality; its presence marks a quality-gated night, which may
-    // carry no mean at all when none of its readings was reliable.
-    @State private var spo2CandidateLowQualityByDay: [String: Double] = [:]
+    // #103/queue-11a: every SpO₂ candidate series — WHOOP `spo2_candidate_82`, or an Oura owner's
+    // ceiling@100 `0x6F` mean (device-conditional, see IntelligenceEngine) — loaded ONCE when the
+    // experimental toggle is ON and resolved through `Spo2CandidateSeries.Read` (W03-011, W03-018): the
+    // vital tile, the strap-estimate card and its trend all ask this one value, so none of them can show
+    // a night or a mean the others' rules would refuse. Empty when the toggle is OFF.
+    @State private var spo2Candidate = Spo2CandidateSeries.Read()
     /// The resolved night's per-second in-band readings from its reliable readings only (W03-007), for
     /// the card's chart. Keyed to that night's day.
     @State private var spo2NightTrace: [TrendPoint] = []
@@ -1351,7 +1340,8 @@ private struct VitalsSection: View {
         let readings = BodyVitalSigns.readings(
             sourceRows: repo.vitalMetricRows,
             temperatureUnit: temperatureUnit,
-            spo2CandidateByDay: spo2CandidateByDay,
+            spo2CandidateByDay: spo2Candidate.meanByDay,
+            spo2CandidateNight: spo2CandidateNight,
             hrvOverCountByDay: hrvOverCountByDay,
             skinTempPreferred: SkinTempDisplay.Kind(rawValue: skinTempDisplayRaw) ?? .absolute   // #1846
         )
@@ -1403,33 +1393,11 @@ private struct VitalsSection: View {
             // an Oura ring's own computed id. Empty when the toggle is OFF (the engine writes nothing) or
             // the owner has no in-band reading for its device.
             guard PuffinExperiment.spo2CandidateDisplayEnabled else {
-                spo2CandidateByDay = [:]
-                // W03-007: a gated night with no reliable reading resolves without a mean, so clearing
-                // the mean alone no longer hides the card; the series that can stand in for it go too.
-                spo2CandidateLowQualityByDay = [:]
-                spo2CandidateWindowsAttemptedByDay = [:]
+                spo2Candidate = Spo2CandidateSeries.Read()
                 return
             }
-            let pts = await repo.exploreSeries(key: Spo2CandidateSeries.meanKey, source: "my-whoop", days: 14)
-            spo2CandidateByDay = Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
-            // #103: the companion series behind the strap-estimate card. Read with the SAME window
-            // and source as the mean above so they describe the same span, and keyed off
-            // `Spo2CandidateSeries` rather than literals — the writer spells them from that same enum,
-            // which is the only thing stopping a rename from silently banking rows nothing reads.
-            spo2CandidateMinByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.minimumKey)
-            spo2CandidateDipsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.dipsKey)
-            spo2CandidateWindowsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.windowsKey)
-            spo2CandidateWindowsAttemptedByDay = await Self.loadCandidateSeries(
-                repo, Spo2CandidateSeries.windowsAttemptedKey)
-            spo2CandidateLowQualityByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.lowQualityKey)
+            spo2Candidate = await repo.spo2CandidateSeries(days: 14)
         }
-    }
-
-    /// One candidate companion series as day → value. Same window and source as the mean, so the card's
-    /// figures cannot come from a different span than its headline.
-    private static func loadCandidateSeries(_ repo: Repository, _ key: String) async -> [String: Double] {
-        let pts = await repo.exploreSeries(key: key, source: "my-whoop", days: 14)
-        return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
     }
 
     /// The per-second in-band readings of the sleep session that `day` was scored from — the same night
@@ -1453,19 +1421,12 @@ private struct VitalsSection: View {
     /// The night the strap-estimate card describes, resolved through the ONE funnel (pure + CI-tested in
     /// `StrandAnalytics`). nil when the toggle is OFF or nothing has been scored — the card then renders
     /// nothing rather than an empty frame that would read as "the strap sent nothing".
-    private var spo2CandidateNight: Spo2CandidateSeries.Night? {
-        Spo2CandidateSeries.latest(mean: spo2CandidateByDay,
-                                   minimum: spo2CandidateMinByDay,
-                                   dips: spo2CandidateDipsByDay,
-                                   windows: spo2CandidateWindowsByDay,
-                                   windowsAttempted: spo2CandidateWindowsAttemptedByDay,
-                                   lowQuality: spo2CandidateLowQualityByDay)
-    }
+    private var spo2CandidateNight: Spo2CandidateSeries.Night? { spo2Candidate.latest }
 
     /// The nightly means oldest → newest for the card's sparkline. Sorted by day KEY (`YYYY-MM-DD` sorts
     /// lexicographically), not by insertion, so the trail reads left-to-right in time.
     private var spo2CandidateMeanTrend: [Double] {
-        spo2CandidateByDay.sorted { $0.key < $1.key }.map(\.value)
+        spo2Candidate.meanByDay.sorted { $0.key < $1.key }.map(\.value)
     }
 }
 

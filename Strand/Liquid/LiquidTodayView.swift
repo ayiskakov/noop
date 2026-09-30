@@ -58,12 +58,14 @@ struct LiquidTodayView: View {
     @State private var fitnessAge: Double?         // exploreSeries("fitness_age").last
     @State private var vo2max: Double?             // exploreSeries("vo2max_est").last (#1391)
     @State private var vitality: Double?           // exploreSeries("vitality").last
-    // Queue 11a: day-keyed "spo2_candidate" metricSeries (WHOOP `spo2_candidate_82` or Oura
-    // ceiling@100 `0x6F`, device-conditional — see `IntelligenceEngine`). Empty when the
+    // Queue 11a: the "spo2_candidate" metricSeries and its companions (WHOOP `spo2_candidate_82` or
+    // Oura ceiling@100 `0x6F`, device-conditional — see `IntelligenceEngine`). Empty when the
     // experimental toggle is OFF (the engine writes nothing) or the owner has no in-band reading.
-    // Read unconditionally like the classic TodayView's `spo2CandidateSpark` — always empty when
-    // the toggle is off, so no separate gate is needed at fetch time.
-    @State private var spo2CandidateByDay: [String: Double] = [:]
+    // Read unconditionally like the classic TodayView — always empty when the toggle is off, so no
+    // separate gate is needed at fetch time. W03-015: through the one read the Health card and classic
+    // Today use, so the Blood Oxygen tile and card resolve a day's night by the same rules: a night
+    // with no reliable reading says so rather than showing a bare "—", and its leftover mean never shows.
+    @State private var spo2Candidate = Spo2CandidateSeries.Read()
     @State private var stepsEst: Double?           // steps_est, day-keyed to the selected day (fallback)
     @State private var importedStepsDay: Int?      // Apple Health steps for the selected day (middle tier)
     @State private var importedActiveKcalDay: Double?  // #616: Apple Health active energy for the day (calorie fallback)
@@ -998,10 +1000,11 @@ struct LiquidTodayView: View {
             // copied; see below for why the two are not interchangeable.
             let spo2Real = displayDay?.spo2Pct ?? vitalsDay?.spo2Pct
             let spo2CandidateOn = PuffinExperiment.spo2CandidateDisplayEnabled
-            let spo2Candidate = spo2Real == nil && spo2CandidateOn
-                ? spo2CandidateByDay[cachedDisplayDay?.day ?? selectedDayKey]
+            let candidateNight = spo2Real == nil && spo2CandidateOn
+                ? spo2Candidate.night(on: cachedDisplayDay?.day ?? selectedDayKey)
                 : nil
-            let spo2 = spo2Real ?? spo2Candidate
+            let spo2CandidateValue = candidateNight?.meanRounded.map(Double.init)
+            let spo2 = spo2Real ?? spo2CandidateValue
             // ALWAYS routes to "spo2", never "spo2_candidate". The Key Metrics tile switches that string,
             // but there it is a SPARKLINE SERIES key (ktile feeds it to windowedSpark; navigation goes
             // through its separate detailMetric argument). Here the string is a NAVIGATION route resolved
@@ -1015,7 +1018,9 @@ struct LiquidTodayView: View {
             // is the DEFAULT Today screen on iOS 26. The subtitle is the slot this card has.
             cardLink(.metric("spo2"),
                      title: card.title,
-                     sub: spo2Candidate != nil ? String(localized: "strap estimate (unverified)") : card.subtitle,
+                     sub: spo2CandidateValue != nil ? String(localized: "strap estimate (unverified)")
+                        : (candidateNight?.hasNoReliableReading == true
+                           ? String(localized: "no reliable reading") : card.subtitle),
                      // Em dash, not the en dash the stub used: the classic Blood Oxygen card and
                      // skinTempCardValue both return "—", so the stub's "–" would have left the two
                      // adjacent cards printing different glyphs for the same "no reading" state.
@@ -1374,12 +1379,14 @@ struct LiquidTodayView: View {
             // toggle is ON — same gating as the classic tile, never as the default.
             let spo2Real = displayDay?.spo2Pct ?? vitalsDay?.spo2Pct
             let spo2CandidateOn = PuffinExperiment.spo2CandidateDisplayEnabled
-            let spo2CandidateValue = spo2Real == nil && spo2CandidateOn
-                ? spo2CandidateByDay[cachedDisplayDay?.day ?? selectedDayKey]
+            let candidateNight = spo2Real == nil && spo2CandidateOn
+                ? spo2Candidate.night(on: cachedDisplayDay?.day ?? selectedDayKey)
                 : nil
+            let spo2CandidateValue = candidateNight?.meanRounded.map(Double.init)
             let spo2 = spo2Real ?? spo2CandidateValue
             ktile(String(localized: "Blood Oxygen"), icon: keyMetricIcon(metric), intText(spo2), "%", StrandPalette.metricCyan, fracOver(spo2, 100), key: spo2CandidateValue != nil ? "spo2_candidate" : "spo2",
-                  caption: spo2CandidateValue != nil ? String(localized: "strap estimate (unverified)") : nil)
+                  caption: spo2CandidateValue != nil ? String(localized: "strap estimate (unverified)")
+                    : (candidateNight?.hasNoReliableReading == true ? String(localized: "no reliable reading") : nil))
         case .respiratory:
             let resp = displayDay?.respRateBpm ?? vitalsDay?.respRateBpm ?? respDay?.respRateBpm
             ktile(String(localized: "Respiratory"), icon: keyMetricIcon(metric), resp.map { String(format: "%.1f", locale: AppLanguage.activeLocale, $0) } ?? "—", "rpm", StrandPalette.accent, fracOver(resp, 24), key: "resp_rate")
@@ -1666,8 +1673,8 @@ struct LiquidTodayView: View {
         async let vo2A = repo.exploreSeries(key: "vo2max_est", source: "my-whoop")
         async let vitA = repo.exploreSeries(key: "vitality", source: "my-whoop")
         async let stepsA = repo.exploreSeries(key: "steps_est", source: "my-whoop")
-        // Queue 11a: SpO₂ candidate fallback (see `spo2CandidateByDay`'s declaration).
-        async let spo2CandA = repo.exploreSeries(key: "spo2_candidate", source: "my-whoop")
+        // Queue 11a: SpO₂ candidate fallback (see `spo2Candidate`'s declaration).
+        async let spo2CandA = repo.spo2CandidateSeries()
         async let weightA = repo.series(key: "weight", source: "apple-health", days: 91)
         async let appleA = repo.appleDailyRows()
         async let hrA = repo.hrBuckets(from: from, to: to, bucketSeconds: 300)
@@ -1716,8 +1723,8 @@ struct LiquidTodayView: View {
         let appleRowsForSpark = await appleA
         // Queue 11a: SpO₂ candidate fallback — day-keyed for the tile's value lookup, windowed for its
         // detailed-mode sparkline below (same shape as `restByDay`/`kSparks["spo2"]` above).
-        let spo2CandSeries = await spo2CandA
-        spo2CandidateByDay = Dictionary(spo2CandSeries.map { ($0.day, $0.value) }, uniquingKeysWith: { _, last in last })
+        spo2Candidate = await spo2CandA
+        let spo2CandSeries = spo2Candidate.meanByDay.sorted { $0.key < $1.key }.map { (day: $0.key, value: $0.value) }
         var winImportedKcal: [String: Double] = [:]
         for r in appleRowsForSpark where r.day >= sparkCutoff && r.day <= selectedDayKey {
             if let k = r.activeKcal { winImportedKcal[r.day] = max(winImportedKcal[r.day] ?? 0, k) }

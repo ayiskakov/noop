@@ -446,9 +446,9 @@ public enum Spo2CandidateSeries {
     /// `lowQualityKey` and `windowsAttemptedKey` present, and `windowsKey` 0 (W03-007). Any other night
     /// present only in a companion series is a half-written night and is skipped rather than shown with a
     /// blank headline. On a gated night with no reliable reading a mean row is IGNORED even if present:
-    /// the writer deletes it, and a delete that failed must not bring back an average the resolver
-    /// refused to state. `latest` picks the highest day key present, which is a plain lexicographic max
-    /// because the keys are `YYYY-MM-DD`.
+    /// the writer deletes it, and a delete that failed, or a mean left under another computed id the
+    /// reader unions, must not bring back an average the resolver refused to state. `latest` picks the
+    /// highest day key present, which is a plain lexicographic max because the keys are `YYYY-MM-DD`.
     ///
     /// Passing the dictionaries in (rather than each surface reading its own) is the point: the mean, the
     /// minimum and the dip count on one card must describe ONE night, and a surface that resolved each
@@ -462,16 +462,74 @@ public enum Spo2CandidateSeries {
                               windows: [String: Double] = [:],
                               windowsAttempted: [String: Double] = [:],
                               lowQuality: [String: Double] = [:]) -> Night? {
-        func noReliableReading(_ d: String) -> Bool {
-            lowQuality[d] != nil && windowsAttempted[d] != nil && windows[d].map { $0.rounded() == 0 } == true
+        Read(mean: mean, minimum: minimum, dips: dips, dipSeconds: dipSeconds, samples: samples,
+             windows: windows, windowsAttempted: windowsAttempted, lowQuality: lowQuality).latest
+    }
+
+    /// Every candidate series as one value, loaded once by a surface and resolved through the rules above
+    /// (W03-011, W03-018). Each surface used to load the keys it cared about and resolve the night its own
+    /// way, and the ones that read only the mean kept showing an older night's average beside a card that
+    /// said the newest night had no reliable reading. A surface now holds one `Read` and asks it for the
+    /// night (`latest`, `night(on:)`) or for the means (`meanByDay`).
+    public struct Read: Equatable, Sendable {
+        public var mean: [String: Double]
+        public var minimum: [String: Double]
+        public var dips: [String: Double]
+        public var dipSeconds: [String: Double]
+        public var samples: [String: Double]
+        public var windows: [String: Double]
+        public var windowsAttempted: [String: Double]
+        public var lowQuality: [String: Double]
+
+        /// Every key a `Read` is built from, for the loader. Spelled from the constants above.
+        public static let keys = [meanKey, minimumKey, dipsKey, dipSecondsKey, samplesKey, windowsKey,
+                                  windowsAttemptedKey, lowQualityKey]
+
+        public init(mean: [String: Double] = [:], minimum: [String: Double] = [:],
+                    dips: [String: Double] = [:], dipSeconds: [String: Double] = [:],
+                    samples: [String: Double] = [:], windows: [String: Double] = [:],
+                    windowsAttempted: [String: Double] = [:], lowQuality: [String: Double] = [:]) {
+            self.mean = mean; self.minimum = minimum; self.dips = dips; self.dipSeconds = dipSeconds
+            self.samples = samples; self.windows = windows; self.windowsAttempted = windowsAttempted
+            self.lowQuality = lowQuality
         }
-        let days = Set(mean.keys).union(lowQuality.keys.filter(noReliableReading))
-        guard let day = days.max() else { return nil }
-        func int(_ d: [String: Double]) -> Int? { d[day].map { Int($0.rounded()) } }
-        let empty = noReliableReading(day)
-        return Night(day: day, mean: empty ? nil : mean[day], minimum: empty ? nil : int(minimum),
-                     dips: int(dips), dipSeconds: int(dipSeconds), samples: int(samples),
-                     windows: int(windows), windowsAttempted: int(windowsAttempted),
-                     windowsLowQuality: int(lowQuality))
+
+        /// Built from a loader's `key → (day → value)` map, keyed by `keys`.
+        public init(byKey: [String: [String: Double]]) {
+            self.init(mean: byKey[meanKey] ?? [:], minimum: byKey[minimumKey] ?? [:],
+                      dips: byKey[dipsKey] ?? [:], dipSeconds: byKey[dipSecondsKey] ?? [:],
+                      samples: byKey[samplesKey] ?? [:], windows: byKey[windowsKey] ?? [:],
+                      windowsAttempted: byKey[windowsAttemptedKey] ?? [:],
+                      lowQuality: byKey[lowQualityKey] ?? [:])
+        }
+
+        /// A quality-gated night on which nothing was reliable.
+        private func noReliableReading(_ day: String) -> Bool {
+            lowQuality[day] != nil && windowsAttempted[day] != nil
+                && windows[day].map { $0.rounded() == 0 } == true
+        }
+
+        /// The days that are nights at all (see `latest(mean:…)`).
+        private var nightDays: Set<String> {
+            Set(mean.keys).union(lowQuality.keys.filter(noReliableReading))
+        }
+
+        /// The newest night.
+        public var latest: Night? { nightDays.max().flatMap(night(on:)) }
+
+        /// The night of `day`, or nil when `day` is not a night.
+        public func night(on day: String) -> Night? {
+            guard nightDays.contains(day) else { return nil }
+            func int(_ d: [String: Double]) -> Int? { d[day].map { Int($0.rounded()) } }
+            let empty = noReliableReading(day)
+            return Night(day: day, mean: empty ? nil : mean[day], minimum: empty ? nil : int(minimum),
+                         dips: int(dips), dipSeconds: int(dipSeconds), samples: int(samples),
+                         windows: int(windows), windowsAttempted: int(windowsAttempted),
+                         windowsLowQuality: int(lowQuality))
+        }
+
+        /// Nightly means by day, with the mean of any night that has no reliable reading left out: what a
+        /// trend, a sparkline or a per-day fallback may plot.
+        public var meanByDay: [String: Double] { mean.filter { !noReliableReading($0.key) } }
     }
 }
