@@ -419,12 +419,12 @@ final class Spo2CandidateSeriesTests: XCTestCase {
     /// it would put the previous night's average on the card as if it were last night's.
     func testANightWithNoReliableReadingIsTheNewestNightNotSkipped() {
         let n = Spo2CandidateSeries.latest(
-            mean: ["2026-09-29": 95.2],
-            dips: ["2026-09-29": 0, "2026-09-30": 0],
-            windows: ["2026-09-29": 20, "2026-09-30": 0],
-            windowsAttempted: ["2026-09-29": 22, "2026-09-30": 26],
-            lowQuality: ["2026-09-29": 1, "2026-09-30": 24])
-        XCTAssertEqual(n?.day, "2026-09-30")
+            mean: ["2026-06-11": 96.0],
+            dips: ["2026-06-11": 0, "2026-06-12": 0],
+            windows: ["2026-06-11": 20, "2026-06-12": 0],
+            windowsAttempted: ["2026-06-11": 22, "2026-06-12": 26],
+            lowQuality: ["2026-06-11": 1, "2026-06-12": 24])
+        XCTAssertEqual(n?.day, "2026-06-12")
         XCTAssertTrue(n?.hasNoReliableReading == true)
         XCTAssertNil(n?.meanRounded)
         XCTAssertEqual(n?.windowsLowQuality, 24)
@@ -435,9 +435,9 @@ final class Spo2CandidateSeriesTests: XCTestCase {
     /// night with no reliable reading a leftover mean or minimum row is ignored.
     func testALeftoverMeanOnANightWithNoReliableReadingIsIgnored() {
         let n = Spo2CandidateSeries.latest(
-            mean: ["2026-09-30": 91.2], minimum: ["2026-09-30": 73],
-            windows: ["2026-09-30": 0], windowsAttempted: ["2026-09-30": 26],
-            lowQuality: ["2026-09-30": 26])
+            mean: ["2026-06-12": 90.0], minimum: ["2026-06-12": 80],
+            windows: ["2026-06-12": 0], windowsAttempted: ["2026-06-12": 26],
+            lowQuality: ["2026-06-12": 26])
         XCTAssertNil(n?.mean)
         XCTAssertNil(n?.minimum)
     }
@@ -494,17 +494,17 @@ final class Spo2CandidateSeriesTests: XCTestCase {
     /// another computed id the reader unions, would otherwise put back on screen.
     func testOneReadAnswersEveryReaderAndDropsALeftoverMean() {
         let read = Spo2CandidateSeries.Read(
-            mean: ["2026-09-28": 95.8, "2026-09-29": 93.6, "2026-09-30": 91.2],
-            minimum: ["2026-09-30": 73],
-            windows: ["2026-09-29": 10, "2026-09-30": 0],
-            windowsAttempted: ["2026-09-29": 26, "2026-09-30": 29],
-            lowQuality: ["2026-09-29": 13, "2026-09-30": 29])
-        XCTAssertEqual(read.meanByDay, ["2026-09-28": 95.8, "2026-09-29": 93.6])
-        XCTAssertTrue(read.night(on: "2026-09-30")!.hasNoReliableReading)
-        XCTAssertNil(read.night(on: "2026-09-30")?.minimum)
-        XCTAssertEqual(read.night(on: "2026-09-29")?.meanRounded, 94)
-        XCTAssertNil(read.night(on: "2026-09-27"), "a day with no series is not a night")
-        XCTAssertEqual(read.latest, read.night(on: "2026-09-30"))
+            mean: ["2026-06-10": 96.2, "2026-06-11": 94.6, "2026-06-12": 90.0],
+            minimum: ["2026-06-12": 80],
+            windows: ["2026-06-11": 10, "2026-06-12": 0],
+            windowsAttempted: ["2026-06-11": 26, "2026-06-12": 29],
+            lowQuality: ["2026-06-11": 13, "2026-06-12": 29])
+        XCTAssertEqual(read.meanByDay, ["2026-06-10": 96.2, "2026-06-11": 94.6])
+        XCTAssertTrue(read.night(on: "2026-06-12")!.hasNoReliableReading)
+        XCTAssertNil(read.night(on: "2026-06-12")?.minimum)
+        XCTAssertEqual(read.night(on: "2026-06-11")?.meanRounded, 95)
+        XCTAssertNil(read.night(on: "2026-06-09"), "a day with no series is not a night")
+        XCTAssertEqual(read.latest, read.night(on: "2026-06-12"))
         XCTAssertEqual(Spo2CandidateSeries.latest(mean: read.mean, minimum: read.minimum, windows: read.windows,
                                                   windowsAttempted: read.windowsAttempted,
                                                   lowQuality: read.lowQuality), read.latest)
