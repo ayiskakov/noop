@@ -10,7 +10,9 @@ import WhoopProtocol
 /// below is that oracle: its expected literal is the real helper's own output over a spread of cases
 /// (including the whole legal byte space and a night of real-shaped 30-second windows), captured once,
 /// checked line for line against an independent Python implementation of the per-window rule (W03-003),
-/// and pinned verbatim. The named tests after it say what each line is FOR, so a diff explains itself
+/// and pinned verbatim. Re-captured for W03-007's reading-quality gate (28 cases, matched line for line
+/// by a new independent Python implementation); the pre-existing lines that moved are the ones whose
+/// windows are mostly codes or whose seconds disagree. The named tests after it say what each line is FOR, so a diff explains itself
 /// instead of only failing.
 final class Spo2CandidateNightStatsTests: XCTestCase {
 
@@ -19,18 +21,24 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     }
     private func aux(_ ts: Int, _ v: Int?) -> V18AuxSample { V18AuxSample(ts: ts, auxByte82: v) }
 
-    /// One case's whole result as a single line — the format the oracle was captured in.
+    /// One case's whole result as a single line — the format the oracle was captured in. `lq` is the
+    /// low-quality readings as coverage+unsettled (W03-007); `-` is a figure the night does not state.
     private func line(_ name: String, _ sessions: [SleepSession], _ samples: [V18AuxSample]) -> String {
         guard let n = AnalyticsEngine.nightlySpo2CandidateNight(sessions, aux: samples) else {
             return "\(name) -> nil"
         }
         let ev = n.events.map { "\($0.start)-\($0.end)/n\($0.nadir)/s\($0.samples)/sp\($0.spanSeconds)" }
             .joined(separator: ",")
-        return "\(name) -> mean=\(String(format: "%.6f", n.mean)) rounded=\(n.meanRounded) "
-            + "min=\(n.minimum) max=\(n.maximum) samples=\(n.samples) "
-            + "windows=\(n.windows)/\(n.windowsAttempted) thr=\(n.threshold) "
-            + "below=\(n.dipSamples) secs=\(n.dipSpanSeconds) "
-            + "nadir=\(n.nadir.map(String.init) ?? "-") events=[\(ev)]"
+        let mean: String = n.mean.map { String(format: "%.6f", $0) } ?? "-"
+        let rounded: String = n.meanRounded.map(String.init) ?? "-"
+        let low: String = n.minimum.map(String.init) ?? "-"
+        let high: String = n.maximum.map(String.init) ?? "-"
+        let nadir: String = n.nadir.map(String.init) ?? "-"
+        var s = "\(name) -> mean=\(mean) rounded=\(rounded) min=\(low) max=\(high)"
+        s += " samples=\(n.samples) windows=\(n.windows)/\(n.windowsAttempted)"
+        s += " lq=\(n.windowsLowCoverage)+\(n.windowsUnsettled) thr=\(n.threshold)"
+        s += " below=\(n.dipSamples) secs=\(n.dipSpanSeconds) nadir=\(nadir) events=[\(ev)]"
+        return s
     }
 
     /// A 30-second window starting at `start`, one value per second from `values` (cycled).
@@ -70,25 +78,58 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
         out.append(line("even-count-lower-median", [sess(1000, 600)], [aux(1000, 91), aux(1001, 89)]))
         out.append(line("gap-at-budget", [sess(1000, 600)], [aux(1000, 95), aux(1030, 85), aux(1061, 85)]))
         out.append(line("window-straddles-session-end", [sess(1000, 15)], window(1000, [88, 97])))
+        out.append(line("window-straddles-session-end-steady", [sess(1000, 15)], window(1000, [88, 89])))
+        // W03-007: reading quality. A third of the seconds codes still covers; half does not; a reading
+        // that sweeps the band is unsettled; a settling ramp into a steady value is reliable; a night of
+        // failed readings is a night with no reliable reading, not nil; and both exact boundaries pass.
+        out.append(line("third-codes-covers", [sess(0, 600)], window(0, [32, 94, 95])))
+        out.append(line("half-codes-low-coverage", [sess(0, 600)], window(0, [160, 74])))
+        out.append(line("sweep-unsettled", [sess(0, 600)],
+                        window(0, [72, 75, 80, 85, 90, 95, 98, 100, 100, 99])))
+        out.append(line("settling-ramp", [sess(0, 600)],
+                        window(0, [83, 86, 90, 94] + Array(repeating: 95, count: 26))))
+        out.append(line("no-reliable-reading", [sess(0, 3 * 1200)],
+                        window(0, [160, 74]) + window(1200, [8, 40]) + window(2400, [32, 128, 73])))
+        out.append(line("coverage-exactly-two-thirds", [sess(0, 600)], window(0, [128, 95, 95])))
+        out.append(line("coverage-just-under", [sess(0, 600)],
+                        (0..<29).map { aux($0, $0 < 10 ? 128 : 95) }))
+        out.append(line("agreement-exactly-three-fifths", [sess(0, 600)],
+                        window(0, [95, 95, 95, 80, 99])))
+        out.append(line("agreement-just-under", [sess(0, 600)],
+                        (0..<29).map { aux($0, $0 % 29 < 17 ? 95 : ($0 % 2 == 0 ? 80 : 99)) }))
+        out.append(line("mixed-night", [sess(0, 4 * 1200)],
+                        window(0, [95, 96]) + window(1200, [160, 74]) + window(2400, [87, 88, 87])
+                        + window(3600, [72, 75, 80, 85, 90, 95, 98, 100, 100, 99])))
 
         let expected = """
-        flat-96 -> mean=96.000000 rounded=96 min=96 max=96 samples=10 windows=1/1 thr=90 below=0 secs=0 nadir=- events=[]
-        all-bytes-contiguous -> mean=85.000000 rounded=85 min=85 max=85 samples=31 windows=1/5 thr=90 below=31 secs=30 nadir=85 events=[70-100/n85/s31/sp30]
-        all-bytes-per-window -> mean=85.000000 rounded=85 min=70 max=100 samples=31 windows=31/255 thr=90 below=20 secs=0 nadir=70 events=[84000-84000/n70/s1/sp0,85200-85200/n71/s1/sp0,86400-86400/n72/s1/sp0,87600-87600/n73/s1/sp0,88800-88800/n74/s1/sp0,90000-90000/n75/s1/sp0,91200-91200/n76/s1/sp0,92400-92400/n77/s1/sp0,93600-93600/n78/s1/sp0,94800-94800/n79/s1/sp0,96000-96000/n80/s1/sp0,97200-97200/n81/s1/sp0,98400-98400/n82/s1/sp0,99600-99600/n83/s1/sp0,100800-100800/n84/s1/sp0,102000-102000/n85/s1/sp0,103200-103200/n86/s1/sp0,104400-104400/n87/s1/sp0,105600-105600/n88/s1/sp0,106800-106800/n89/s1/sp0]
-        one-dip-77 -> mean=95.000000 rounded=95 min=95 max=95 samples=4 windows=1/1 thr=90 below=0 secs=0 nadir=- events=[]
-        run-of-5 -> mean=88.000000 rounded=88 min=88 max=88 samples=7 windows=1/1 thr=90 below=7 secs=6 nadir=88 events=[1000-1006/n88/s7/sp6]
-        gap-split -> mean=84.000000 rounded=84 min=83 max=85 samples=4 windows=2/2 thr=90 below=4 secs=2 nadir=83 events=[1000-1001/n85/s2/sp1,2000-2001/n83/s2/sp1]
-        recovery-split -> mean=86.000000 rounded=86 min=86 max=86 samples=3 windows=1/1 thr=90 below=3 secs=2 nadir=86 events=[1000-1002/n86/s3/sp2]
-        run-of-5-shuffled -> mean=88.000000 rounded=88 min=88 max=88 samples=7 windows=1/1 thr=90 below=7 secs=6 nadir=88 events=[1000-1006/n88/s7/sp6]
-        out-of-band-only -> nil
-        two-sessions -> mean=90.000000 rounded=90 min=88 max=92 samples=2 windows=2/2 thr=90 below=1 secs=0 nadir=88 events=[5050-5050/n88/s1/sp0]
-        edges -> mean=90.000000 rounded=90 min=89 max=91 samples=2 windows=2/2 thr=90 below=1 secs=0 nadir=89 events=[1100-1100/n89/s1/sp0]
-        round-half-up -> mean=96.500000 rounded=97 min=96 max=97 samples=2 windows=2/2 thr=90 below=0 secs=0 nadir=- events=[]
-        all-below -> mean=83.000000 rounded=83 min=83 max=83 samples=4 windows=1/1 thr=90 below=4 secs=3 nadir=83 events=[1000-1003/n83/s4/sp3]
-        night-of-windows -> mean=93.600000 rounded=94 min=89 max=96 samples=125 windows=5/6 thr=90 below=30 secs=29 nadir=89 events=[4800-4829/n89/s30/sp29]
-        even-count-lower-median -> mean=89.000000 rounded=89 min=89 max=89 samples=2 windows=1/1 thr=90 below=2 secs=1 nadir=89 events=[1000-1001/n89/s2/sp1]
-        gap-at-budget -> mean=85.000000 rounded=85 min=85 max=85 samples=3 windows=2/2 thr=90 below=3 secs=30 nadir=85 events=[1000-1030/n85/s2/sp30,1061-1061/n85/s1/sp0]
-        window-straddles-session-end -> mean=88.000000 rounded=88 min=88 max=88 samples=16 windows=1/1 thr=90 below=16 secs=15 nadir=88 events=[1000-1015/n88/s16/sp15]
+        flat-96 -> mean=96.000000 rounded=96 min=96 max=96 samples=10 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        all-bytes-contiguous -> mean=- rounded=- min=- max=- samples=0 windows=0/5 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
+        all-bytes-per-window -> mean=85.000000 rounded=85 min=70 max=100 samples=31 windows=31/255 lq=0+0 thr=90 below=20 secs=0 nadir=70 events=[84000-84000/n70/s1/sp0,85200-85200/n71/s1/sp0,86400-86400/n72/s1/sp0,87600-87600/n73/s1/sp0,88800-88800/n74/s1/sp0,90000-90000/n75/s1/sp0,91200-91200/n76/s1/sp0,92400-92400/n77/s1/sp0,93600-93600/n78/s1/sp0,94800-94800/n79/s1/sp0,96000-96000/n80/s1/sp0,97200-97200/n81/s1/sp0,98400-98400/n82/s1/sp0,99600-99600/n83/s1/sp0,100800-100800/n84/s1/sp0,102000-102000/n85/s1/sp0,103200-103200/n86/s1/sp0,104400-104400/n87/s1/sp0,105600-105600/n88/s1/sp0,106800-106800/n89/s1/sp0]
+        one-dip-77 -> mean=95.000000 rounded=95 min=95 max=95 samples=4 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        run-of-5 -> mean=88.000000 rounded=88 min=88 max=88 samples=7 windows=1/1 lq=0+0 thr=90 below=7 secs=6 nadir=88 events=[1000-1006/n88/s7/sp6]
+        gap-split -> mean=84.000000 rounded=84 min=83 max=85 samples=4 windows=2/2 lq=0+0 thr=90 below=4 secs=2 nadir=83 events=[1000-1001/n85/s2/sp1,2000-2001/n83/s2/sp1]
+        recovery-split -> mean=86.000000 rounded=86 min=86 max=86 samples=3 windows=1/1 lq=0+0 thr=90 below=3 secs=2 nadir=86 events=[1000-1002/n86/s3/sp2]
+        run-of-5-shuffled -> mean=88.000000 rounded=88 min=88 max=88 samples=7 windows=1/1 lq=0+0 thr=90 below=7 secs=6 nadir=88 events=[1000-1006/n88/s7/sp6]
+        out-of-band-only -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        two-sessions -> mean=90.000000 rounded=90 min=88 max=92 samples=2 windows=2/2 lq=0+0 thr=90 below=1 secs=0 nadir=88 events=[5050-5050/n88/s1/sp0]
+        edges -> mean=90.000000 rounded=90 min=89 max=91 samples=2 windows=2/2 lq=0+0 thr=90 below=1 secs=0 nadir=89 events=[1100-1100/n89/s1/sp0]
+        round-half-up -> mean=96.500000 rounded=97 min=96 max=97 samples=2 windows=2/2 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        all-below -> mean=83.000000 rounded=83 min=83 max=83 samples=4 windows=1/1 lq=0+0 thr=90 below=4 secs=3 nadir=83 events=[1000-1003/n83/s4/sp3]
+        night-of-windows -> mean=93.600000 rounded=94 min=89 max=96 samples=125 windows=5/6 lq=0+0 thr=90 below=30 secs=29 nadir=89 events=[4800-4829/n89/s30/sp29]
+        even-count-lower-median -> mean=89.000000 rounded=89 min=89 max=89 samples=2 windows=1/1 lq=0+0 thr=90 below=2 secs=1 nadir=89 events=[1000-1001/n89/s2/sp1]
+        gap-at-budget -> mean=85.000000 rounded=85 min=85 max=85 samples=1 windows=1/2 lq=0+1 thr=90 below=1 secs=0 nadir=85 events=[1061-1061/n85/s1/sp0]
+        window-straddles-session-end -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=0+1 thr=90 below=0 secs=0 nadir=- events=[]
+        window-straddles-session-end-steady -> mean=88.000000 rounded=88 min=88 max=88 samples=16 windows=1/1 lq=0+0 thr=90 below=16 secs=15 nadir=88 events=[1000-1015/n88/s16/sp15]
+        third-codes-covers -> mean=94.000000 rounded=94 min=94 max=94 samples=20 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        half-codes-low-coverage -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
+        sweep-unsettled -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=0+1 thr=90 below=0 secs=0 nadir=- events=[]
+        settling-ramp -> mean=95.000000 rounded=95 min=95 max=95 samples=30 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        no-reliable-reading -> mean=- rounded=- min=- max=- samples=0 windows=0/3 lq=2+0 thr=90 below=0 secs=0 nadir=- events=[]
+        coverage-exactly-two-thirds -> mean=95.000000 rounded=95 min=95 max=95 samples=20 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        coverage-just-under -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
+        agreement-exactly-three-fifths -> mean=95.000000 rounded=95 min=95 max=95 samples=30 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        agreement-just-under -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=0+1 thr=90 below=0 secs=0 nadir=- events=[]
+        mixed-night -> mean=91.000000 rounded=91 min=87 max=95 samples=60 windows=2/4 lq=1+1 thr=90 below=30 secs=29 nadir=87 events=[2400-2429/n87/s30/sp29]
         """
         XCTAssertEqual(out.joined(separator: "\n"), expected)
     }
@@ -116,7 +157,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     func testMeanKeepsSubPercentPrecisionAndRoundsOnlyForDisplay() {
         let n = AnalyticsEngine.nightlySpo2CandidateNight(
             [sess(1000, 3000)], aux: [aux(1000, 96), aux(2200, 97), aux(3400, 97)])
-        XCTAssertEqual(n!.mean, 96.66666666666667, accuracy: 1e-12)
+        XCTAssertEqual(n!.mean!, 96.66666666666667, accuracy: 1e-12)
         XCTAssertEqual(n?.meanRounded, 97)
     }
 
@@ -192,16 +233,25 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     }
 
     /// Failure codes are the strap MEASURING and failing, so they hold a window together and a window of
-    /// nothing but codes still counts as attempted. Zero is the strap not measuring at all.
+    /// nothing but codes still counts as attempted. Zero is the strap not measuring at all. The first
+    /// window is ONE reading of 21 measured seconds with two values in it — too few to stand for it
+    /// (W03-007), so it is low quality rather than two one-second readings of 95 and 96.
     func testCodesHoldAWindowTogetherAndACodeOnlyWindowIsAttemptedNotValued() {
         let window1 = [aux(1000, 32), aux(1001, 95)] + (2..<20).map { aux(1000 + $0, 8) } + [aux(1020, 96)]
         let window2 = (0..<30).map { aux(2200 + $0, $0 % 2 == 0 ? 136 : 40) }
         let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)],
                                                           aux: window1 + window2 + [aux(3000, 0)])
         XCTAssertEqual(n?.windowsAttempted, 2)
-        XCTAssertEqual(n?.windows, 1)
-        XCTAssertEqual(n?.samples, 2)
-        XCTAssertEqual(n?.minimum, 95, "the lower of the two middle readings: always a reported value")
+        XCTAssertEqual(n?.windowsLowCoverage, 1)
+        XCTAssertEqual(n?.windows, 0)
+        XCTAssertNil(n?.mean, "attempted, with nothing reliable: a night with no reliable reading, not nil")
+    }
+
+    /// Two in-band seconds in two seconds measured is full coverage, and the value is the lower of the
+    /// two middle readings: always one the strap reported.
+    func testAnEvenCountTakesTheLowerMiddleReading() {
+        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 600)], aux: [aux(1000, 96), aux(1001, 95)])
+        XCTAssertEqual(n?.minimum, 95)
     }
 
     /// A window whose only in-band second is below the threshold is a dip with a span of ZERO seconds, not
@@ -210,7 +260,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// `dipSamples` and `nadir`.
     func testASingleReadingDipWindowReportsNoDurationButIsStillCounted() {
         let n = AnalyticsEngine.nightlySpo2CandidateNight(
-            [sess(1000, 1800)], aux: [aux(1000, 8), aux(1001, 88), aux(1002, 8), aux(2200, 96)])
+            [sess(1000, 1800)], aux: [aux(1001, 88), aux(2200, 96)])
         XCTAssertEqual(n?.events.count, 1)
         XCTAssertEqual(n?.dipSpanSeconds, 0)
         XCTAssertEqual(n?.dipSamples, 1)
@@ -326,7 +376,7 @@ final class Spo2CandidateSeriesTests: XCTestCase {
     /// `meanRounded` does, so the card and the vital tile cannot show two different numbers for one night.
     func testMeanPrecisionSurvivesAndRoundsLikeTheResolver() {
         let n = Spo2CandidateSeries.latest(mean: ["2026-09-22": 96.61])
-        XCTAssertEqual(n!.mean, 96.61, accuracy: 1e-12)
+        XCTAssertEqual(n!.mean!, 96.61, accuracy: 1e-12)
         XCTAssertEqual(n?.meanRounded, 97)
     }
 
@@ -341,6 +391,54 @@ final class Spo2CandidateSeriesTests: XCTestCase {
         XCTAssertEqual(Spo2CandidateSeries.samplesKey, "spo2_candidate_samples")
         XCTAssertEqual(Spo2CandidateSeries.windowsKey, "spo2_candidate_windows")
         XCTAssertEqual(Spo2CandidateSeries.windowsAttemptedKey, "spo2_candidate_windows_attempted")
+        XCTAssertEqual(Spo2CandidateSeries.lowQualityKey, "spo2_candidate_windows_low_quality")
+    }
+
+    /// W03-007: a quality-gated night on which nothing was reliable is still the newest night. Skipping
+    /// it would put the previous night's average on the card as if it were last night's.
+    func testANightWithNoReliableReadingIsTheNewestNightNotSkipped() {
+        let n = Spo2CandidateSeries.latest(
+            mean: ["2026-09-29": 95.2],
+            dips: ["2026-09-29": 0, "2026-09-30": 0],
+            windows: ["2026-09-29": 20, "2026-09-30": 0],
+            windowsAttempted: ["2026-09-29": 22, "2026-09-30": 26],
+            lowQuality: ["2026-09-29": 1, "2026-09-30": 24])
+        XCTAssertEqual(n?.day, "2026-09-30")
+        XCTAssertTrue(n?.hasNoReliableReading == true)
+        XCTAssertNil(n?.meanRounded)
+        XCTAssertEqual(n?.windowsLowQuality, 24)
+        XCTAssertEqual(n?.windowsAttempted, 26)
+    }
+
+    /// A delete that failed must not bring back an average the resolver refused to state: on a gated
+    /// night with no reliable reading a leftover mean or minimum row is ignored.
+    func testALeftoverMeanOnANightWithNoReliableReadingIsIgnored() {
+        let n = Spo2CandidateSeries.latest(
+            mean: ["2026-09-30": 91.2], minimum: ["2026-09-30": 73],
+            windows: ["2026-09-30": 0], windowsAttempted: ["2026-09-30": 26],
+            lowQuality: ["2026-09-30": 26])
+        XCTAssertNil(n?.mean)
+        XCTAssertNil(n?.minimum)
+    }
+
+    /// Only a GATED night may exist without a mean. A night with a zero window count and no low-quality
+    /// row is a half-written night from before W03-007, and stays hidden as it always was.
+    func testOnlyAGatedNightMayExistWithoutAMean() {
+        XCTAssertNil(Spo2CandidateSeries.latest(mean: [:], windows: ["2026-09-30": 0],
+                                                windowsAttempted: ["2026-09-30": 26]))
+        XCTAssertNil(Spo2CandidateSeries.latest(mean: [:], windows: ["2026-09-30": 3],
+                                                windowsAttempted: ["2026-09-30": 26],
+                                                lowQuality: ["2026-09-30": 2]),
+                     "reliable readings without a mean row is half-written, not a night to show")
+    }
+
+    /// A night scored before W03-007 carries no low-quality count, and reads as ungated rather than as
+    /// "none left out".
+    func testAPreGateNightReportsNoLowQualityCount() {
+        let n = Spo2CandidateSeries.latest(mean: ["2026-09-28": 95.8], windows: ["2026-09-28": 25],
+                                           windowsAttempted: ["2026-09-28": 26])
+        XCTAssertNil(n?.windowsLowQuality)
+        XCTAssertFalse(n!.hasNoReliableReading)
     }
 
     /// The window counts resolve from the same night as every other figure (W03-003).

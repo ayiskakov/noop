@@ -1246,8 +1246,10 @@ public enum AnalyticsEngine {
     /// WINDOWS rather than seconds (see `Spo2CandidateNight`), and `samples` is still in-band seconds.
     public static func nightlySpo2CandidateMean(_ sessions: [SleepSession],
                                          aux: [V18AuxSample]) -> (mean: Int, samples: Int)? {
-        guard let night = nightlySpo2CandidateNight(sessions, aux: aux) else { return nil }
-        return (mean: night.meanRounded, samples: night.samples)
+        guard let night = nightlySpo2CandidateNight(sessions, aux: aux), let mean = night.meanRounded else {
+            return nil
+        }
+        return (mean: mean, samples: night.samples)
     }
 
     /// The plausible range for a raw Oura `0x6F` SpO2 sample before the ceiling transform below.
