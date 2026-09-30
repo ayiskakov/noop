@@ -1969,6 +1969,29 @@ final class Repository: ObservableObject {
         return spo2SingleChannelPlausible.contains(v) ? v : nil
     }
 
+    /// The SpO₂ candidate seconds a chart of the night `[from, to]` may plot beside the strap-estimate
+    /// card's figures: the in-band seconds of the RELIABLE readings only, cut by the same windows and the
+    /// same quality verdict the figures were resolved with (`AnalyticsEngine.spo2CandidateReliableSeconds`,
+    /// W03-007). The Deep Timeline keeps plotting every in-band second through `timelineSeries`; this is
+    /// the card's chart, and it must not draw a low its own tiles left out as low quality.
+    ///
+    /// Reads the same worn-timeline union as `timelineSeries`, first source winning a shared second, so
+    /// the chart covers the same seconds it covered before the gate.
+    func spo2CandidateReliableTrace(from: Int, to: Int) async -> [TrendPoint] {
+        guard to > from, let store = await ensureStore() else { return [] }
+        var seen = Set<Int>()
+        var aux: [V18AuxSample] = []
+        for id in rawPhysiologyReadIds(store: store) {
+            let rows = (try? await store.v18AuxSamples(deviceId: id, from: from, to: to, limit: 200_000)) ?? []
+            for row in rows where seen.insert(row.ts).inserted { aux.append(row) }
+        }
+        let night = [SleepSession(start: from, end: to, efficiency: 0, stages: [], restingHR: nil, avgHRV: nil)]
+        return await Task.detached(priority: .utility) {
+            AnalyticsEngine.spo2CandidateReliableSeconds(night, aux: aux)
+                .map { Self.timelinePoint($0.ts, Double($0.value)) }
+        }.value
+    }
+
     /// Deep-Timeline read facade. Returns ~`targetPoints` points for `metric` over `[from, to]` from
     /// `source` (defaults to the user's own strap), choosing raw seconds vs coarse buckets adaptively so
     /// the chart never draws ~86k points (the #575 day-scale risk). HR rides the existing COALESCE reads

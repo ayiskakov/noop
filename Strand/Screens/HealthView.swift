@@ -1333,13 +1333,18 @@ private struct VitalsSection: View {
     // #103: the figures the candidate MEAN cannot carry — the night's low, its dips and the readings
     // (windows) behind all of it. Separate metricSeries rows, loaded beside the mean above
     // and resolved into ONE night by `Spo2CandidateSeries.latest` so the card cannot show last night's
-    // mean beside an older night's low. Empty whenever the mean is.
+    // mean beside an older night's low. Empty whenever the mean is, except that a quality-gated night
+    // with no reliable reading (W03-007) has counts and no mean.
     @State private var spo2CandidateMinByDay: [String: Double] = [:]
     @State private var spo2CandidateDipsByDay: [String: Double] = [:]
     // W03-003: the night's measurement windows, valued and attempted.
     @State private var spo2CandidateWindowsByDay: [String: Double] = [:]
     @State private var spo2CandidateWindowsAttemptedByDay: [String: Double] = [:]
-    /// The resolved night's per-second in-band readings, for the card's chart. Keyed to that night's day.
+    // W03-007: readings left out as low quality; its presence marks a quality-gated night, which may
+    // carry no mean at all when none of its readings was reliable.
+    @State private var spo2CandidateLowQualityByDay: [String: Double] = [:]
+    /// The resolved night's per-second in-band readings from its reliable readings only (W03-007), for
+    /// the card's chart. Keyed to that night's day.
     @State private var spo2NightTrace: [TrendPoint] = []
 
     var body: some View {
@@ -1399,6 +1404,10 @@ private struct VitalsSection: View {
             // the owner has no in-band reading for its device.
             guard PuffinExperiment.spo2CandidateDisplayEnabled else {
                 spo2CandidateByDay = [:]
+                // W03-007: a gated night with no reliable reading resolves without a mean, so clearing
+                // the mean alone no longer hides the card; the series that can stand in for it go too.
+                spo2CandidateLowQualityByDay = [:]
+                spo2CandidateWindowsAttemptedByDay = [:]
                 return
             }
             let pts = await repo.exploreSeries(key: Spo2CandidateSeries.meanKey, source: "my-whoop", days: 14)
@@ -1412,6 +1421,7 @@ private struct VitalsSection: View {
             spo2CandidateWindowsByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.windowsKey)
             spo2CandidateWindowsAttemptedByDay = await Self.loadCandidateSeries(
                 repo, Spo2CandidateSeries.windowsAttemptedKey)
+            spo2CandidateLowQualityByDay = await Self.loadCandidateSeries(repo, Spo2CandidateSeries.lowQualityKey)
         }
     }
 
@@ -1436,9 +1446,8 @@ private struct VitalsSection: View {
             .filter { fmt.string(from: Date(timeIntervalSince1970: TimeInterval($0.endTs))) == day }
             .max { ($0.endTs - $0.effectiveStartTs) < ($1.endTs - $1.effectiveStartTs) }
         guard let session, session.endTs > session.effectiveStartTs else { return [] }
-        let series = await repo.timelineSeries(metric: .spo2Candidate, from: session.effectiveStartTs,
-                                               to: session.endTs, targetPoints: 100_000)
-        return series.points
+        // W03-007: only the reliable readings' seconds, so the chart cannot draw a low the tiles left out.
+        return await repo.spo2CandidateReliableTrace(from: session.effectiveStartTs, to: session.endTs)
     }
 
     /// The night the strap-estimate card describes, resolved through the ONE funnel (pure + CI-tested in
@@ -1449,7 +1458,8 @@ private struct VitalsSection: View {
                                    minimum: spo2CandidateMinByDay,
                                    dips: spo2CandidateDipsByDay,
                                    windows: spo2CandidateWindowsByDay,
-                                   windowsAttempted: spo2CandidateWindowsAttemptedByDay)
+                                   windowsAttempted: spo2CandidateWindowsAttemptedByDay,
+                                   lowQuality: spo2CandidateLowQualityByDay)
     }
 
     /// The nightly means oldest → newest for the card's sparkline. Sorted by day KEY (`YYYY-MM-DD` sorts

@@ -314,6 +314,10 @@ struct TodayView: View {
 
     // 14-day sparkline series, keyed by metric key. Loaded once in .task.
     @State private var sparks: [String: [Double]] = [:]
+    /// W03-007: the newest scored SpO₂ candidate night, resolved through `Spo2CandidateSeries.latest` —
+    /// the funnel the Health card uses — so the Blood Oxygen fallback cannot show an older night's
+    /// average while the newest night had no reliable reading. nil when the toggle is OFF.
+    @State private var spo2CandidateNight: Spo2CandidateSeries.Night?
     @State private var workouts: [WorkoutRow] = []
     /// #1694: a tapped Latest-Workouts tile. Wrapped so `.sheet(item:)` drives presentation, mirroring
     /// WorkoutsView's own detail target — the feed was read-only, so the only route to a session's
@@ -2785,7 +2789,8 @@ struct TodayView: View {
             // IntelligenceEngine) so the card shows a strap-estimate (unverified) number instead of "—".
             let calibrated = (d?.spo2Pct ?? lastVitalsDay?.spo2Pct ?? lastSpo2Day?.spo2Pct)
             if let v = calibrated { return String(format: "%.0f%%", locale: AppLanguage.activeLocale, v) }
-            if PuffinExperiment.spo2CandidateDisplayEnabled, let tail = sparks["spo2_candidate"]?.last {
+            // W03-007: the newest night's own mean, never an older one's when that night had none.
+            if PuffinExperiment.spo2CandidateDisplayEnabled, let tail = spo2CandidateNight?.mean {
                 return String(format: "%.0f%%", locale: AppLanguage.activeLocale, tail)
             }
             return "—"
@@ -4078,15 +4083,21 @@ struct TodayView: View {
             // the user can tell "toggle off" apart from "toggle on but no data" — a silent blank reads as
             // broken.
             let spo2CandidateOn = PuffinExperiment.spo2CandidateDisplayEnabled
-            let candidateTail = spo2CandidateOn ? sparks["spo2_candidate"]?.last : nil
+            // W03-007: the tail is the newest night's own mean, resolved through the Health card's
+            // funnel. When that night's readings all failed the quality check it has no mean, and the
+            // tile says so rather than showing the previous night's figure undated.
+            let candidateTail = spo2CandidateOn ? spo2CandidateNight?.mean : nil
+            let candidateUnreliable = spo2CandidateOn && spo2CandidateNight?.hasNoReliableReading == true
             let spo2Value = spo2.value == "—" && candidateTail != nil
                 ? String(format: "%.0f%%", locale: AppLanguage.activeLocale, candidateTail!)
                 : spo2.value
             let spo2Caption: String = spo2.value == "—" && candidateTail != nil
                 ? String(localized: "strap estimate (unverified)")
-                : (spo2.value == "—" && spo2CandidateOn
-                   ? String(localized: "toggle ON · no estimate yet")
-                   : (spo2.caption ?? ""))
+                : (spo2.value == "—" && candidateUnreliable
+                   ? String(localized: "no reliable reading")
+                   : (spo2.value == "—" && spo2CandidateOn
+                      ? String(localized: "toggle ON · no estimate yet")
+                      : (spo2.caption ?? "")))
             StatTile(
                 label: "Blood Oxygen",
                 value: spo2Value,
@@ -4691,6 +4702,7 @@ struct TodayView: View {
         sparks["rhr"]             = await rhrSpark
         sparks["spo2"]            = await spo2Spark
         sparks["spo2_candidate"]  = await spo2CandidateSpark
+        spo2CandidateNight = await loadSpo2CandidateNight()
         sparks["skin_temp"]       = await skinTempSpark
         sparks["resp_rate"]   = await respRateSpark
         sparks["steps"]       = await stepsAppleSpark
@@ -5148,6 +5160,21 @@ struct TodayView: View {
     /// falls back to `dailyColumn` so the strap's own nightly respiratory rate fills the trend.
     /// Mirrors the Android `rememberTrendWindow` which builds the resp spark from
     /// `DailyMetric.respRateBpm` directly. Used for `resp_rate` (parity fix).
+    /// The newest SpO₂ candidate night within the sparkline's 14 days, through the one funnel (W03-007).
+    /// A night whose readings all failed the quality check is the newest night, so the tile says so
+    /// instead of falling back to the previous night's average.
+    private func loadSpo2CandidateNight() async -> Spo2CandidateSeries.Night? {
+        guard PuffinExperiment.spo2CandidateDisplayEnabled else { return nil }
+        func series(_ key: String) async -> [String: Double] {
+            let pts = trailingWindow(await repo.exploreSeries(key: key, source: "my-whoop", days: 15), days: 14)
+            return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+        }
+        return Spo2CandidateSeries.latest(mean: await series(Spo2CandidateSeries.meanKey),
+                                          windows: await series(Spo2CandidateSeries.windowsKey),
+                                          windowsAttempted: await series(Spo2CandidateSeries.windowsAttemptedKey),
+                                          lowQuality: await series(Spo2CandidateSeries.lowQualityKey))
+    }
+
     private func sparkValuesExplore(_ key: String, source: String, window: Int) async -> [Double] {
         let all = await repo.exploreSeries(key: key, source: source, days: window + 1)
         guard !all.isEmpty else { return [] }

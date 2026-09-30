@@ -10696,6 +10696,70 @@
         }
       }
     },
+    "%lld left out as low quality": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld wegen geringer Qualität ausgelassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld left out as low quality"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld descartadas por baja calidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld écartées pour qualité insuffisante"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld escluse per bassa qualità"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld pominięto z powodu niskiej jakości"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld excluídas por baixa qualidade"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld исключено из-за низкого качества"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 次因质量低被排除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 次因品質低被排除"
+          }
+        }
+      }
+    },
     "%lld logged caffeines are past your bedtime cutoff. They may still be on board and keep you up. Just a timing heads-up.": {
       "localizations": {
         "de": {
@@ -76426,6 +76490,70 @@
         }
       }
     },
+    "Each point is one second of a reading that passed the quality check. A reading counts as low when its middle value is under the dashed line at %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Punkt ist eine Sekunde einer Messung, die die Qualitätsprüfung bestanden hat. Eine Messung zählt als niedrig, wenn ihr mittlerer Wert unter der gestrichelten Linie bei %@ liegt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each point is one second of a reading that passed the quality check. A reading counts as low when its middle value is under the dashed line at %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada punto es un segundo de una lectura que superó el control de calidad. Una lectura cuenta como baja cuando su valor central queda por debajo de la línea discontinua en %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque point est une seconde d’une mesure qui a passé le contrôle de qualité. Une mesure compte comme basse quand sa valeur médiane passe sous la ligne pointillée à %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni punto è un secondo di una lettura che ha superato il controllo di qualità. Una lettura conta come bassa quando il suo valore centrale è sotto la linea tratteggiata a %@."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Każdy punkt to jedna sekunda odczytu, który przeszedł kontrolę jakości. Odczyt liczy się jako niski, gdy jego środkowa wartość leży poniżej linii przerywanej na %@."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ponto é um segundo de uma leitura que passou o controlo de qualidade. Uma leitura conta como baixa quando o seu valor central fica abaixo da linha tracejada em %@."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая точка — одна секунда измерения, прошедшего проверку качества. Измерение считается низким, если его медианное значение ниже пунктирной линии на %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个点是通过质量检查的读数中的一秒。当一次读数的中间值低于 %@ 处的虚线时，计为低读数。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個點是通過品質檢查的讀數中的一秒。當一次讀數的中間值低於 %@ 處的虛線時，計為低讀數。"
+          }
+        }
+      }
+    },
     "Each score follows a published method, computed on your device. We name the method family so you can read up on it, and we never claim to reproduce another company's number exactly.": {
       "localizations": {
         "de": {
@@ -119473,6 +119601,70 @@
         }
       }
     },
+    "Low readings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niedrige Messungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low readings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecturas bajas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesures basses"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letture basse"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niskie odczyty"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leituras baixas"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Низкие измерения"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低读数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低讀數"
+          }
+        }
+      }
+    },
     "Low refresh": {
       "localizations": {
         "de": {
@@ -137306,6 +137498,70 @@
         }
       }
     },
+    "None of this night's readings passed the quality check. This can happen when the strap sits loose or has shifted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Messung dieser Nacht hat die Qualitätsprüfung bestanden. Das kann passieren, wenn der Strap locker sitzt oder verrutscht ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None of this night's readings passed the quality check. This can happen when the strap sits loose or has shifted."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguna lectura de esta noche superó el control de calidad. Puede pasar cuando la banda está suelta o se ha desplazado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune mesure de cette nuit n’a passé le contrôle de qualité. Cela peut arriver quand le bracelet est lâche ou a glissé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna lettura di questa notte ha superato il controllo di qualità. Può succedere quando la fascia è allentata o si è spostata."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Żaden odczyt z tej nocy nie przeszedł kontroli jakości. Może się tak zdarzyć, gdy opaska jest luźna lub się przesunęła."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma leitura desta noite passou o controlo de qualidade. Pode acontecer quando a pulseira está folgada ou se deslocou."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ни одно измерение этой ночи не прошло проверку качества. Так бывает, когда ремешок сидит свободно или сместился."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一晚没有任何读数通过质量检查。手环过松或移位时可能出现这种情况。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這一晚沒有任何讀數通過品質檢查。手環過鬆或移位時可能出現這種情況。"
+          }
+        }
+      }
+    },
     "None — silence, start to finish": {
       "localizations": {
         "de": {
@@ -143010,6 +143266,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "W dni, w których Twój telefon również liczył kroki, NOOP dowiaduje się, w jakim stopniu Twój ruch jest odwzorowywany na kroki, a następnie stosuje to do dni, w których korzystasz tylko z paska. Im więcej ma pasujących dni, tym bardziej ufa szacunkom."
+          }
+        }
+      }
+    },
+    "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none. A reading counts only when most of its seconds carry a value and those values agree; the rest are left out as low quality. Each reading counts once, by its middle value, so a one-second blip inside it is not a low reading. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei den bisher gemessenen Straps nimmt das Armband etwa alle 20 Minuten eine 30-Sekunden-Messung vor, sobald es dich als schlafend einstuft – ein kurzes Nickerchen hat also womöglich keine. Eine Messung zählt nur, wenn die meisten ihrer Sekunden einen Wert tragen und diese Werte übereinstimmen; die übrigen werden wegen geringer Qualität ausgelassen. Jede Messung zählt einmal, mit ihrem mittleren Wert, daher ist ein einsekündiger Ausreißer darin keine niedrige Messung. Es ist die eigene, nicht verifizierte Zahl des Armbands, keine kalibrierte Blutsauerstoffmessung — NOOP verwendet sie nie für Erholung oder einen anderen Score."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none. A reading counts only when most of its seconds carry a value and those values agree; the rest are left out as low quality. Each reading counts once, by its middle value, so a one-second blip inside it is not a low reading. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En las bandas medidas hasta ahora, la banda toma una lectura de 30 segundos aproximadamente cada 20 minutos una vez que te considera dormido, así que una siesta corta puede no tener ninguna. Una lectura solo cuenta cuando la mayoría de sus segundos tienen un valor y esos valores coinciden; las demás se descartan por baja calidad. Cada lectura cuenta una vez, por su valor central, así que un pico de un segundo dentro de ella no es una lectura baja. Es la cifra propia y sin verificar de la banda, no una medición calibrada de oxígeno en sangre, y NOOP nunca la usa para la recuperación ni para ninguna otra puntuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur les bracelets mesurés jusqu’ici, le bracelet prend une mesure de 30 secondes environ toutes les 20 minutes dès qu’il vous considère endormi : une courte sieste peut donc n’en avoir aucune. Une mesure ne compte que si la plupart de ses secondes portent une valeur et que ces valeurs concordent ; les autres sont écartées pour qualité insuffisante. Chaque mesure compte une fois, par sa valeur médiane, donc un pic d’une seconde à l’intérieur n’est pas une mesure basse. C’est le chiffre propre au bracelet, non vérifié, et non une mesure calibrée d’oxygène sanguin : NOOP ne l’utilise jamais pour la récupération ni pour aucun autre score."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sulle fasce misurate finora, la fascia esegue una lettura di 30 secondi circa ogni 20 minuti quando ti considera addormentato, quindi un breve pisolino può non averne. Una lettura conta solo quando la maggior parte dei suoi secondi ha un valore e quei valori concordano; le altre vengono escluse per bassa qualità. Ogni lettura conta una volta, con il suo valore centrale, quindi un picco di un secondo al suo interno non è una lettura bassa. È il dato della fascia stessa, non verificato, non una misurazione calibrata dell’ossigeno nel sangue, e NOOP non lo usa mai per il recupero né per alcun altro punteggio."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na zmierzonych dotąd opaskach opaska wykonuje 30-sekundowy odczyt mniej więcej co 20 minut, gdy uzna, że śpisz, więc krótka drzemka może nie mieć żadnego. Odczyt liczy się tylko wtedy, gdy większość jego sekund ma wartość i te wartości są zgodne; pozostałe są pomijane z powodu niskiej jakości. Każdy odczyt liczy się raz, według środkowej wartości, więc jednosekundowy skok w jego trakcie nie jest niskim odczytem. To własna, niezweryfikowana liczba opaski, a nie skalibrowany pomiar tlenu we krwi — NOOP nigdy nie używa jej do regeneracji ani żadnego innego wyniku."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nas pulseiras medidas até agora, a pulseira faz uma leitura de 30 segundos cerca de 20 em 20 minutos quando o considera a dormir, por isso uma sesta curta pode não ter nenhuma. Uma leitura só conta quando a maioria dos seus segundos tem um valor e esses valores concordam; as restantes são excluídas por baixa qualidade. Cada leitura conta uma vez, pelo seu valor central, por isso um pico de um segundo dentro dela não é uma leitura baixa. É o número próprio da pulseira, não verificado, e não uma medição calibrada de oxigénio no sangue — o NOOP nunca o usa na recuperação nem em qualquer outra pontuação."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На изученных пока ремешках ремешок делает 30-секундное измерение примерно каждые 20 минут, когда считает, что вы спите, поэтому у короткого дневного сна их может не быть. Измерение учитывается, только если у большинства его секунд есть значение и эти значения согласуются; остальные исключаются из-за низкого качества. Каждое измерение учитывается один раз, по медианному значению, поэтому односекундный всплеск внутри него — не низкое измерение. Это собственная непроверенная цифра ремешка, а не калиброванное измерение кислорода в крови, и NOOP никогда не использует её для восстановления или любой другой оценки."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在目前测过的手环上，手环判定你入睡后，大约每 20 分钟进行一次 30 秒读数，因此短暂的小睡可能没有读数。只有当一次读数的大部分秒数都有数值且这些数值一致时，该读数才会计入；其余读数因质量低被排除。每次读数按其中间值只计一次，因此其中一秒的跳变不算低读数。这是手环自己的未验证数值，不是校准的血氧测量结果，NOOP 从不将其用于恢复度或任何其他评分。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在目前測過的手環上，手環判定你入睡後，大約每 20 分鐘進行一次 30 秒讀數，因此短暫的小睡可能沒有讀數。只有當一次讀數的大部分秒數都有數值且這些數值一致時，該讀數才會計入；其餘讀數因品質低被排除。每次讀數按其中間值只計一次，因此其中一秒的跳變不算低讀數。這是手環自己的未驗證數值，不是校準的血氧測量結果，NOOP 從不將其用於恢復度或任何其他評分。"
           }
         }
       }
@@ -241154,6 +241474,70 @@
         }
       }
     },
+    "no reliable reading": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine verlässliche Messung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reliable reading"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sin lectura fiable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aucune mesure fiable"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nessuna lettura affidabile"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "brak wiarygodnego odczytu"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem leitura fiável"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет надёжных измерений"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无可靠读数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無可靠讀數"
+          }
+        }
+      }
+    },
     "no session yet": {
       "localizations": {
         "de": {
@@ -242271,6 +242655,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "częściowy"
+          }
+        }
+      }
+    },
+    "passed the quality check": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bestanden die Qualitätsprüfung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "passed the quality check"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "superaron el control de calidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ont passé le contrôle de qualité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hanno superato il controllo di qualità"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "przeszły kontrolę jakości"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "passaram o controlo de qualidade"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "прошли проверку качества"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过质量检查"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通過品質檢查"
           }
         }
       }
@@ -251711,70 +252159,6 @@
         }
       }
     },
-    "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bei den bisher gemessenen Straps nimmt das Armband etwa alle 20 Minuten eine 30-Sekunden-Messung vor, sobald es dich als schlafend einstuft – ein kurzes Nickerchen hat also womöglich keine, und manche Messungen scheitern ohne Wert. Jede Messung zählt einmal, mit ihrem mittleren Wert, daher ist ein einsekündiger Ausreißer darin kein Einbruch. Es ist die eigene, nicht verifizierte Zahl des Armbands, keine kalibrierte Blutsauerstoffmessung — NOOP verwendet sie nie für Erholung oder einen anderen Score."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En las bandas medidas hasta ahora, la banda toma una lectura de 30 segundos aproximadamente cada 20 minutos una vez que te considera dormido, así que una siesta corta puede no tener ninguna, y algunas lecturas fallan sin valor. Cada lectura cuenta una vez, por su valor central, así que un pico de un segundo dentro de ella no es una caída. Es la cifra propia y sin verificar de la banda, no una medición calibrada de oxígeno en sangre, y NOOP nunca la usa para la recuperación ni para ninguna otra puntuación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sur les bracelets mesurés jusqu’ici, le bracelet prend une mesure de 30 secondes environ toutes les 20 minutes dès qu’il vous considère endormi : une courte sieste peut donc n’en avoir aucune, et certaines mesures échouent sans valeur. Chaque mesure compte une fois, par sa valeur médiane, donc un pic d’une seconde à l’intérieur n’est pas une baisse. C’est le chiffre propre au bracelet, non vérifié, et non une mesure calibrée d’oxygène sanguin : NOOP ne l’utilise jamais pour la récupération ni pour aucun autre score."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sulle fasce misurate finora, la fascia esegue una lettura di 30 secondi circa ogni 20 minuti quando ti considera addormentato, quindi un breve pisolino può non averne, e alcune letture falliscono senza un valore. Ogni lettura conta una volta, con il suo valore centrale, quindi un picco di un secondo al suo interno non è un calo. È il dato della fascia stessa, non verificato, non una misurazione calibrata dell’ossigeno nel sangue, e NOOP non lo usa mai per il recupero né per alcun altro punteggio."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Na zmierzonych dotąd opaskach opaska wykonuje 30-sekundowy odczyt mniej więcej co 20 minut, gdy uzna, że śpisz, więc krótka drzemka może nie mieć żadnego, a niektóre odczyty kończą się bez wartości. Każdy odczyt liczy się raz, według środkowej wartości, więc jednosekundowy skok w jego trakcie nie jest spadkiem. To własna, niezweryfikowana liczba opaski, a nie skalibrowany pomiar tlenu we krwi — NOOP nigdy nie używa jej do regeneracji ani żadnego innego wyniku."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nas pulseiras medidas até agora, a pulseira faz uma leitura de 30 segundos cerca de 20 em 20 minutos quando o considera a dormir, por isso uma sesta curta pode não ter nenhuma, e algumas leituras falham sem valor. Cada leitura conta uma vez, pelo seu valor central, por isso um pico de um segundo dentro dela não é uma descida. É o número próprio da pulseira, não verificado, e não uma medição calibrada de oxigénio no sangue — o NOOP nunca o usa na recuperação nem em qualquer outra pontuação."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На изученных пока ремешках ремешок делает 30-секундное измерение примерно каждые 20 минут, когда считает, что вы спите, поэтому у короткого дневного сна их может не быть, а некоторые измерения не дают значения. Каждое измерение учитывается один раз, по медианному значению, поэтому односекундный всплеск внутри него — не провал. Это собственная непроверенная цифра ремешка, а не калиброванное измерение кислорода в крови, и NOOP никогда не использует её для восстановления или любой другой оценки."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在目前测过的手环上，手环判定你入睡后，大约每 20 分钟进行一次 30 秒读数，因此短暂的小睡可能没有读数，部分读数也会失败而没有数值。每次读数按其中间值只计一次，因此其中一秒的跳变不算下降。这是手环自己的未验证数值，不是校准的血氧测量结果，NOOP 从不将其用于恢复度或任何其他评分。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在目前測過的手環上，手環判定你入睡後，大約每 20 分鐘進行一次 30 秒讀數，因此短暫的小睡可能沒有讀數，部分讀數也會失敗而沒有數值。每次讀數按其中間值只計一次，因此其中一秒的跳變不算下降。這是手環自己的未驗證數值，不是校準的血氧測量結果，NOOP 從不將其用於恢復度或任何其他評分。"
-          }
-        }
-      }
-    },
     "dipped below %@": {
       "localizations": {
         "de": {
@@ -252095,70 +252479,6 @@
         }
       }
     },
-    "Dips": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einbrüche"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dips"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Caídas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Baisses"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cali"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spadki"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quedas"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Снижения"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下降次数"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下降次數"
-          }
-        }
-      }
-    },
     "Better than target": {
       "localizations": {
         "de": {
@@ -252329,70 +252649,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "整晚"
-          }
-        }
-      }
-    },
-    "Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at %@.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jeder Punkt ist eine vom Strap gemeldete Sekunde. Eine Messung zählt als Einbruch, wenn ihr mittlerer Wert unter der gestrichelten Linie bei %@ liegt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada punto es un segundo informado por la banda. Una lectura cuenta como caída cuando su valor central queda por debajo de la línea discontinua en %@."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque point est une seconde transmise par le bracelet. Une mesure compte comme une baisse quand sa valeur médiane passe sous la ligne pointillée à %@."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ogni punto è un secondo riportato dalla fascia. Una lettura conta come calo quando il suo valore centrale è sotto la linea tratteggiata a %@."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Każdy punkt to jedna sekunda podana przez opaskę. Odczyt liczy się jako spadek, gdy jego środkowa wartość leży poniżej linii przerywanej na %@."
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada ponto é um segundo comunicado pela pulseira. Uma leitura conta como descida quando o seu valor central fica abaixo da linha tracejada em %@."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Каждая точка — одна секунда, переданная ремешком. Измерение считается провалом, если его медианное значение ниже пунктирной линии на %@."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每个点是手环上报的一秒。当一次读数的中间值低于 %@ 处的虚线时，计为一次下降。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每個點是手環回報的一秒。當一次讀數的中間值低於 %@ 處的虛線時，計為一次下降。"
           }
         }
       }

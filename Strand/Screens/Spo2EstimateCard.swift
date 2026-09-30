@@ -55,11 +55,16 @@ struct Spo2EstimateCard: View {
                     alignment: .leading,
                     spacing: NoopMetrics.gap
                 ) {
+                    // W03-007: a night whose readings all failed the quality check has no average. It
+                    // says so rather than borrowing the previous night's number or averaging noise.
                     StatTile(label: "Average",
-                             value: "\(night.meanRounded)%",
-                             caption: String(localized: "strap estimate (unverified)"),
+                             value: night.meanRounded.map { "\($0)%" } ?? "—",
+                             caption: night.hasNoReliableReading
+                                ? String(localized: "no reliable reading")
+                                : String(localized: "strap estimate (unverified)"),
                              accent: StrandPalette.metricCyan,
-                             sparkline: Self.spark(meanTrend),
+                             // No trend under "—": the trail would end at an older night's average.
+                             sparkline: night.hasNoReliableReading ? nil : Self.spark(meanTrend),
                              sparkColor: StrandPalette.metricCyan)
                     // A night scored before the window keys shipped carries a per-second low and
                     // per-second dips. Shown under this card's per-reading copy they would say a blip
@@ -68,19 +73,27 @@ struct Spo2EstimateCard: View {
                              value: Self.perReading(night) ? night.minimum.map { "\($0)%" } ?? "—" : "—",
                              caption: Self.perReading(night) ? lowCaption(night) : "",
                              accent: StrandPalette.metricCyan)
-                    StatTile(label: "Dips",
-                             value: Self.perReading(night) ? night.dips.map(String.init) ?? "—" : "—",
-                             caption: Self.perReading(night) ? dipsCaption(night) : "",
+                    // "Low readings", not "Dips": one 30-second reading about every 20 minutes cannot
+                    // show a desaturation event, only a reading whose value was low (W03-007).
+                    StatTile(label: "Low readings",
+                             value: Self.showsLowReadings(night) ? night.dips.map(String.init) ?? "—" : "—",
+                             caption: Self.showsLowReadings(night) ? dipsCaption(night) : "",
                              accent: StrandPalette.metricCyan)
                     StatTile(label: "Readings",
                              value: readingsValue(night),
                              caption: readingsCaption(night),
                              accent: StrandPalette.textPrimary)
                 }
+                if night.hasNoReliableReading {
+                    Text("None of this night's readings passed the quality check. This can happen when the strap sits loose or has shifted.")
+                        .font(StrandFont.caption)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if trace.count >= 2 {
                     traceCard
                 }
-                Text("On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none, and some readings fail without a value. Each reading counts once, by its middle value, so a one-second blip inside it is not a dip. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.")
+                Text("On the straps measured so far, the band takes a 30-second reading about every 20 minutes once it scores you as asleep, so a short nap may have none. A reading counts only when most of its seconds carry a value and those values agree; the rest are left out as low quality. Each reading counts once, by its middle value, so a one-second blip inside it is not a low reading. It is the band's own unverified figure, not a calibrated blood-oxygen measurement, and NOOP never feeds it into recovery or any other score.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,10 +103,11 @@ struct Spo2EstimateCard: View {
 
     // MARK: - Night trace
 
-    /// Every in-band second of the night, plotted as the strap reported it. The dashed rule is the dip
-    /// threshold the Low and Dips tiles are cut at; a READING is a dip when its middle value is under it,
-    /// so a single second below the line is not one. Out-of-band seconds were dropped by the reader,
-    /// never zeroed.
+    /// The in-band seconds of the night's reliable readings, plotted as the strap reported them; a
+    /// low-quality reading is left out here exactly as it is left out of the tiles (W03-007). The dashed
+    /// rule is the threshold the Low and Low readings tiles are cut at; a READING is low when its middle
+    /// value is under it, so a single second below the line is not one. Out-of-band seconds were dropped
+    /// by the reader, never zeroed.
     private var traceCard: some View {
         NoopCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space2) {
@@ -109,7 +123,7 @@ struct Spo2EstimateCard: View {
                            dateFormat: { Self.traceTimeFormatter.string(from: $0) },
                            accessibilityLabel: String(localized: "Blood oxygen strap estimate through the night"),
                            yDomain: traceDomain)
-                Text("Each point is one second the strap reported. A reading is a dip when its middle value is under the dashed line at \(thresholdLabel).")
+                Text("Each point is one second of a reading that passed the quality check. A reading counts as low when its middle value is under the dashed line at \(thresholdLabel).")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -141,8 +155,19 @@ struct Spo2EstimateCard: View {
         return String(localized: "\(windows) of \(attempted)")
     }
 
+    /// Before W03-007 the count was every reading with a value. On a gated night it is the reliable
+    /// readings, and the caption says how many were left out, so "12 of 26" is never read as 14 failures
+    /// the strap could not measure at all.
+    /// Resolved by `Spo2CandidateSeries.Night.readingsNote`, which keeps a reading left out as low
+    /// quality apart from a reading of codes only, so "passed the quality check" appears only when every
+    /// attempted reading passed.
     private func readingsCaption(_ night: Spo2CandidateSeries.Night) -> String {
-        night.windows == nil ? "" : String(localized: "readings with a value")
+        guard night.windows != nil else { return "" }
+        switch night.readingsNote {
+        case .ungated, .someWithoutValue: return String(localized: "readings with a value")
+        case .leftOut(let left): return String(localized: "\(left) left out as low quality")
+        case .allPassed: return String(localized: "passed the quality check")
+        }
     }
 
     /// The threshold as a display string, interpolated into the captions below as `%@`.
@@ -164,8 +189,8 @@ struct Spo2EstimateCard: View {
             : String(localized: "stayed above \(thresholdLabel)")
     }
 
-    /// The Dips tile's caption. A dip is a READING whose middle value is under the threshold, so the tile
-    /// counts readings and the caption says so. It gives no duration: a reading's seconds are one rolling
+    /// The Low readings tile's caption. A low reading is a READING whose middle value is under the
+    /// threshold, so the tile counts readings and the caption says so. It gives no duration: a reading's seconds are one rolling
     /// measurement, and how long the value itself stayed under the line is not something one 30-second
     /// reading establishes (W03-003).
     private func dipsCaption(_ night: Spo2CandidateSeries.Night) -> String {
@@ -177,6 +202,12 @@ struct Spo2EstimateCard: View {
     /// True when the night was resolved per reading (window). A night scored before the window keys
     /// shipped has no window count, and its low and dips were resolved per second.
     static func perReading(_ night: Spo2CandidateSeries.Night) -> Bool { night.windows != nil }
+
+    /// The Low readings tile states a count only for a night that has reliable readings: on a night with
+    /// none, "0 — none below 90%" would claim a finding the night cannot support.
+    static func showsLowReadings(_ night: Spo2CandidateSeries.Night) -> Bool {
+        perReading(night) && !night.hasNoReliableReading
+    }
 
     /// "Night of 21 Sep" — the night this card's figures came from, stamped because the Blood Oxygen tile
     /// resolves its own day through a carry and the two can honestly differ.
