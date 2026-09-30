@@ -2003,17 +2003,32 @@ final class Repository: ObservableObject {
     /// the chart covers the same seconds it covered before the gate.
     func spo2CandidateReliableTrace(from: Int, to: Int) async -> [TrendPoint] {
         guard to > from, let store = await ensureStore() else { return [] }
-        var seen = Set<Int>()
-        var aux: [V18AuxSample] = []
+        var perId: [[V18AuxSample]] = []
         for id in rawPhysiologyReadIds(store: store) {
-            let rows = (try? await store.v18AuxSamples(deviceId: id, from: from, to: to, limit: 200_000)) ?? []
-            for row in rows where seen.insert(row.ts).inserted { aux.append(row) }
+            perId.append((try? await store.v18AuxSamples(deviceId: id, from: from, to: to, limit: 200_000)) ?? [])
         }
         let night = [SleepSession(start: from, end: to, efficiency: 0, stages: [], restingHR: nil, avgHRV: nil)]
+        // W03-014: the merge and the resolve both run off the main actor, like `dedupSortDownsampleRaw`.
         return await Task.detached(priority: .utility) {
-            AnalyticsEngine.spo2CandidateReliableSeconds(night, aux: aux)
+            AnalyticsEngine.spo2CandidateReliableSeconds(night, aux: Self.mergeSpo2CandidateAux(perId))
                 .map { Self.timelinePoint($0.ts, Double($0.value)) }
         }.value
+    }
+
+    /// Merges the per-id aux rows of one span, the first id to report a NONZERO byte 82 at a second
+    /// claiming it (W03-014). A row without a byte-82 value (nil or 0, the strap not measuring) claims
+    /// nothing, so it cannot hide another strap's value at the same second, which is how the per-point
+    /// merge this replaced behaved. Codes are nonzero and do claim their second: the resolver needs them to
+    /// judge the reading they sit in.
+    nonisolated static func mergeSpo2CandidateAux(_ perId: [[V18AuxSample]]) -> [V18AuxSample] {
+        var seen = Set<Int>()
+        var merged: [V18AuxSample] = []
+        for rows in perId {
+            for row in rows where (row.auxByte82 ?? 0) != 0 && seen.insert(row.ts).inserted {
+                merged.append(row)
+            }
+        }
+        return merged
     }
 
     /// Deep-Timeline read facade. Returns ~`targetPoints` points for `metric` over `[from, to]` from
