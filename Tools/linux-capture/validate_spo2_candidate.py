@@ -685,6 +685,13 @@ def night_mean_at_offset(
     figure is a rolling value that can blip for one second, and a blip must not move the window. Using
     the app's rule keeps this tool's nightly figure equal to the one the app shows for the same night,
     which is the number a volunteer compares against the WHOOP app.
+
+    One difference remains, by design. At byte 82 the app also leaves out low-quality windows (W03-007):
+    windows where fewer than two thirds of the records carried an in-band value rather than one of the
+    strap's non-percentage codes, and windows whose values do not settle near their median. This
+    scanner drops out-of-band values before it windows, because at an arbitrary offset those values
+    mean nothing, so it applies neither rule. Its byte-82 figure therefore matches the app's only on a
+    night where no window failed either rule.
     """
     duty_cycled = is_duty_cycled(duty)
     per_window: Dict[int, List[int]] = {}
