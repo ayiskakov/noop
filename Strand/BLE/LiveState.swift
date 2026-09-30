@@ -534,6 +534,23 @@ public final class LiveState: ObservableObject {
     /// Wall time (unix seconds) of the last successfully-completed offload (a sync, even if nothing new
     /// came — i.e. caught up). Drives the sync tile + the staleness nudge.
     @Published public var lastSyncedAt: TimeInterval?
+    /// Which writer set `lastSyncedAt` last (W07-016). Written only by the two methods below, each before
+    /// the value, so an observer of `$lastSyncedAt` reads the origin of the value it was handed.
+    private(set) var lastSyncedAtOrigin: LastSyncOrigin?
+
+    /// Publish the last-sync time a previous session persisted. Never overwrites a value this session has
+    /// already earned: a HISTORY_COMPLETE is newer than anything persisted and must win.
+    func seedLastSynced(_ at: TimeInterval) {
+        guard lastSyncedAt == nil else { return }
+        lastSyncedAtOrigin = .persisted
+        lastSyncedAt = at
+    }
+
+    /// Stamp a sync that completed in this session (HISTORY_COMPLETE).
+    func stampCompletedSync(at: TimeInterval) {
+        lastSyncedAtOrigin = .completedSync
+        lastSyncedAt = at
+    }
 
     /// Set when an offload ended abnormally (the idle watchdog fired — the strap went quiet mid-sync),
     /// so a stalled history download isn't silent. Cleared by the next successful HISTORY_COMPLETE.

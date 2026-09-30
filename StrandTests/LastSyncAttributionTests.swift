@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Strand
 
@@ -79,5 +80,57 @@ final class LastSyncAttributionTests: XCTestCase {
         XCTAssertNotEqual(
             LastSyncAttribution.writeHealthPrefKey(peripheralId: "aa:bb:cc:dd:ee:ff", kind: "lastWriteOkAt"),
             LastSyncAttribution.writeHealthPrefKey(peripheralId: "ff:ee:dd:cc:bb:aa", kind: "lastWriteOkAt"))
+    }
+
+    // MARK: - W07-016: the launch seed is not a completed sync
+
+    /// The launch seed publishes a persisted time; the log may not call the refresh it causes a sync.
+    @MainActor
+    func testTheLaunchSeedIsAttributedToThePersistedTime() {
+        let live = LiveState()
+        XCTAssertNil(live.lastSyncedAtOrigin)
+        live.seedLastSynced(1_790_000_000)
+        XCTAssertEqual(live.lastSyncedAt, 1_790_000_000)
+        XCTAssertEqual(live.lastSyncedAtOrigin, .persisted)
+    }
+
+    /// A HISTORY_COMPLETE after the seed re-attributes the value, and one before it is not overwritten by
+    /// the seed: in both orders the value and its origin are the completed sync's.
+    @MainActor
+    func testACompletedSyncWinsOverTheSeedInEitherOrder() {
+        let seededFirst = LiveState()
+        seededFirst.seedLastSynced(1_790_000_000)
+        seededFirst.stampCompletedSync(at: 1_790_000_900)
+        XCTAssertEqual(seededFirst.lastSyncedAt, 1_790_000_900)
+        XCTAssertEqual(seededFirst.lastSyncedAtOrigin, .completedSync)
+
+        let syncedFirst = LiveState()
+        syncedFirst.stampCompletedSync(at: 1_790_000_900)
+        syncedFirst.seedLastSynced(1_790_000_000)
+        XCTAssertEqual(syncedFirst.lastSyncedAt, 1_790_000_900)
+        XCTAssertEqual(syncedFirst.lastSyncedAtOrigin, .completedSync)
+    }
+
+    /// The origin is set before the value, so a `$lastSyncedAt` subscriber reads the origin of the value
+    /// it is being handed (`@Published` emits in willSet).
+    @MainActor
+    func testASubscriberReadsTheOriginOfTheValueItIsHanded() {
+        let live = LiveState()
+        var seen: [LastSyncOrigin?] = []
+        let c = live.$lastSyncedAt.dropFirst().sink { _ in seen.append(live.lastSyncedAtOrigin) }
+        live.seedLastSynced(1_790_000_000)
+        live.stampCompletedSync(at: 1_790_000_900)
+        c.cancel()
+        XCTAssertEqual(seen, [.persisted, .completedSync])
+    }
+
+    /// The completed-sync strings are the ones logs have always carried; the seed gets its own, and its
+    /// re-score is not labelled `post-offload`.
+    func testOnlyACompletedSyncIsLoggedAsOne() {
+        XCTAssertEqual(LastSyncOrigin.completedSync.refreshLogLine,
+                       "Backfill: refreshing dashboard cache from completed sync")
+        XCTAssertNil(LastSyncOrigin.completedSync.rescoreTriggerLabel)
+        XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.contains("completed sync"))
+        XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "launch-seed")
     }
 }

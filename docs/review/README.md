@@ -191,6 +191,11 @@ item as it lands.
       Package suite, `StrandTests`, both builds (NOOPiOS without the watch app), i18n and hygiene gates pass. Then a strap run: a night on the build
       whose card reads "N of M" with the readings left out named, and its strap-log line; ideally one night
       with the strap deliberately loose, to see "no reliable reading".
+- [ ] W07-016 on `review/w07-launch-seed` (stacked on `review/strap-run-2026-09-30`): the refresh and re-score
+      a launch runs off the persisted last-sync time are logged as a launch seed (`trigger=launch-seed`), not as
+      a completed sync; the pass itself is kept. StrandTests 2,132, both builds (NOOPiOS without the watch
+      app). Then a strap run: a launch's log reads the launch line before `Connected`, and `post-offload`
+      only after a HISTORY_COMPLETE.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

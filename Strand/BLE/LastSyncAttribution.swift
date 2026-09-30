@@ -68,3 +68,40 @@ enum LastSyncAttribution {
         return "sync.\(kind).\(p.lowercased())"
     }
 }
+
+/// Where the published `lastSyncedAt` came from, carried beside the value because the value cannot say.
+///
+/// There are two writers: the launch seed, which republishes the time a PREVIOUS session persisted, and
+/// HISTORY_COMPLETE, which stamps a sync this session finished. Both are emissions of the same published
+/// property, so the observer that refreshes the dashboard and re-scores ran for both and logged both as a
+/// completed sync (W07-016): a launch read "refreshing dashboard cache from completed sync" and
+/// `trigger=post-offload` before the strap had connected.
+///
+/// The work is the same either way, and on a background launch the seeded pass is the only one the
+/// launch gets, so the pass is kept. What differs is what the log may claim about it.
+enum LastSyncOrigin: Equatable {
+    /// Read back from defaults at launch. No sync has completed in this session.
+    case persisted
+    /// Stamped by a HISTORY_COMPLETE in this session.
+    case completedSync
+
+    /// The strap-log line for the dashboard refresh this origin causes. The completed-sync wording is
+    /// unchanged, since existing logs and their readers know it.
+    var refreshLogLine: String {
+        switch self {
+        case .persisted:
+            return "Launch: refreshing dashboard cache from the persisted last-sync time (no sync this session yet)"
+        case .completedSync:
+            return "Backfill: refreshing dashboard cache from completed sync"
+        }
+    }
+
+    /// The `trigger=` label for the re-score that follows. nil leaves `analyzeRecent` to derive
+    /// `post-offload`, as it did before this type existed.
+    var rescoreTriggerLabel: String? {
+        switch self {
+        case .persisted: return "launch-seed"
+        case .completedSync: return nil
+        }
+    }
+}

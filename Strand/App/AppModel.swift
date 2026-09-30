@@ -373,7 +373,11 @@ final class AppModel: ObservableObject {
             .removeDuplicates()
             .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                Task { [weak self] in await self?.refreshAfterCompletedBackfill() }
+                // W07-016: the launch seed of the persisted time is an emission too. Read the origin here,
+                // after the debounce: if a HISTORY_COMPLETE landed inside it, a sync did complete.
+                guard let self else { return }
+                let origin = self.live.lastSyncedAtOrigin ?? .completedSync
+                Task { [weak self] in await self?.refreshAfterCompletedBackfill(origin: origin) }
             }
             .store(in: &hrCancellables)
 
@@ -691,8 +695,8 @@ final class AppModel: ObservableObject {
         #endif
     }
 
-    private func refreshAfterCompletedBackfill() async {
-        live.append(log: "Backfill: refreshing dashboard cache from completed sync")
+    private func refreshAfterCompletedBackfill(origin: LastSyncOrigin) async {
+        live.append(log: origin.refreshLogLine)
         await repo.refresh(days: 120)
         // Score the freshly-offloaded raw data RIGHT NOW rather than waiting for the next 15-minute
         // analyzeRecent tick , otherwise a just-synced night's Charge / Effort / Rest can take up to
@@ -712,7 +716,7 @@ final class AppModel: ObservableObject {
         // foreground pass is never deferred.
         await RescoreBackgroundScheduler.run(passInProgress: intelligence.computing,
                                              log: { [live] line in live.append(log: line) }) {
-            await intelligence.analyzeRecent(skipIfUnchanged: true)
+            await intelligence.analyzeRecent(skipIfUnchanged: true, triggerLabel: origin.rescoreTriggerLabel)
         }
         await refreshV5Signals()
         #if os(iOS)
