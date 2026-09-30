@@ -181,6 +181,8 @@ item as it lands.
       migrations, 37 tables and about 5.33 M rows, identical. Re-run on the 2026-09-27 evening export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.53 M rows, identical. Re-run on the 2026-09-28 export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.85 M rows, identical.
+      Re-run on the 2026-09-30 export from 11.9.15: 50 → 50 migrations, 37 tables and about 6.96 M rows,
+      identical.
 - [ ] W3 out of phase, `review/w03-spo2-quality` (off `main`), from the owner's 2026-09-30 export: W03-007
       (the SpO₂ candidate leaves low-quality byte-82 readings out of the night and states a night with no
       reliable reading as such, the owner's choice). V2 (independent subagent) found one S2, four S3 and
