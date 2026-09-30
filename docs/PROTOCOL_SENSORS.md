@@ -372,10 +372,11 @@ means; the value remains an unvalidated candidate.
 - **No other marker.** Neither the status-word pair at 77/79 nor bit 7 of byte 36
   separates code records from in-band records inside a window, so the byte's own codes
   are the only per-record marker observed.
-- **Use.** NOOP counts a window only when at least two thirds of its nonzero records
-  are in band and at least three fifths of those lie within 2 points of the window's
-  median (W03-007). The thresholds come from this one strap without a reference
-  oximeter; they judge how the window was reported, not its value.
+
+NOOP counts a window only when at least two thirds of its nonzero records are in band
+and at least three fifths of those lie within 2 points of the window's median
+(W03-007). The thresholds come from this one strap without a reference oximeter; they
+judge how the window was reported, not its value.
 
 An official-app overnight capture of another strap, used by
 `Tools/linux-capture/validate_spo2_candidate.py`, shows the same 30-record, 1200 s
