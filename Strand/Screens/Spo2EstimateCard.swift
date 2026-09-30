@@ -84,8 +84,12 @@ struct Spo2EstimateCard: View {
                              caption: readingsCaption(night),
                              accent: StrandPalette.textPrimary)
                 }
-                if night.hasNoReliableReading {
-                    Text("None of this night's readings passed the quality check. This can happen when the strap sits loose or has shifted.")
+                // W03-010: the two causes are different facts. Only readings that had values and failed
+                // the check say anything about fit; a night of codes only had nothing to check.
+                if let reason = night.noReliableReadingReason {
+                    Text(reason == .lowQuality
+                         ? String(localized: "None of this night's readings passed the quality check. This can happen when the strap sits loose or has shifted.")
+                         : String(localized: "None of this night's readings produced a value."))
                         .font(StrandFont.caption)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -428,6 +428,22 @@ public enum Spo2CandidateSeries {
             case allPassed
         }
 
+        /// Why a night has no reliable reading, when it has none (W03-010). The two causes are different
+        /// facts and a surface must not blame one on the other: readings that had values and failed the
+        /// quality check, against readings that were the strap's codes only and never had a value to check.
+        public enum NoReliableReadingReason: Equatable, Sendable {
+            /// At least one reading had in-band values and was left out as low quality.
+            case lowQuality
+            /// Every reading was codes only.
+            case noValue
+        }
+
+        /// nil when the night has a reliable reading.
+        public var noReliableReadingReason: NoReliableReadingReason? {
+            guard hasNoReliableReading else { return nil }
+            return (windowsLowQuality ?? 0) > 0 ? .lowQuality : .noValue
+        }
+
         public var readingsNote: ReadingsNote {
             guard let left = windowsLowQuality else { return .ungated }
             if left > 0 { return .leftOut(left) }

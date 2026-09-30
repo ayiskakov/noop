@@ -474,6 +474,21 @@ final class Spo2CandidateSeriesTests: XCTestCase {
         XCTAssertEqual(note(windows: 26, attempted: 26, lowQuality: nil), .ungated)
     }
 
+    /// W03-010: a night of codes-only readings had nothing to fail the quality check with, and a surface
+    /// must not tell its wearer the readings failed a check (or blame the fit) on its strength.
+    func testTheReasonANightHasNoReliableReadingKeepsItsTwoCausesApart() {
+        let read = Spo2CandidateSeries.Read(
+            windows: ["2026-09-29": 0, "2026-09-30": 0],
+            windowsAttempted: ["2026-09-29": 26, "2026-09-30": 26],
+            lowQuality: ["2026-09-29": 20, "2026-09-30": 0])
+        XCTAssertEqual(read.night(on: "2026-09-29")?.noReliableReadingReason, .lowQuality)
+        XCTAssertEqual(read.night(on: "2026-09-30")?.noReliableReadingReason, .noValue)
+        let reliable = Spo2CandidateSeries.latest(mean: ["2026-09-30": 95], windows: ["2026-09-30": 20],
+                                                  windowsAttempted: ["2026-09-30": 26],
+                                                  lowQuality: ["2026-09-30": 6])
+        XCTAssertNil(reliable?.noReliableReadingReason)
+    }
+
     /// W03-011/W03-018: one loaded `Read` answers every surface. A per-day lookup and a trend both leave
     /// out a mean left over on a night with no reliable reading — the mean a failed delete, or a mean under
     /// another computed id the reader unions, would otherwise put back on screen.
