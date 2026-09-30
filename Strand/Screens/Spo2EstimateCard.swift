@@ -188,9 +188,11 @@ struct Spo2EstimateCard: View {
         guard night.minimum != nil else { return "" }
         // `dipped == nil` is a night scored before the dip keys shipped: unknown, so claim nothing.
         guard let dipped = night.dipped else { return "" }
+        // "below", not "dipped below": one reading about every 20 minutes shows a low reading, not a
+        // desaturation (W03-020), and "stayed above" claimed a continuity nothing measured.
         return dipped
-            ? String(localized: "dipped below \(thresholdLabel)")
-            : String(localized: "stayed above \(thresholdLabel)")
+            ? String(localized: "below \(thresholdLabel)")
+            : String(localized: "all readings at or above \(thresholdLabel)")
     }
 
     /// The Low readings tile's caption. A low reading is a READING whose middle value is under the
