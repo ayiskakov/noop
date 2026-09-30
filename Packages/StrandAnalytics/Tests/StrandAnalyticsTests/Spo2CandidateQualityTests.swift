@@ -68,6 +68,18 @@ final class Spo2CandidateQualityTests: XCTestCase {
         XCTAssertEqual(quality(spread(17))?.low, 1)
     }
 
+    /// W03-013: a ratio cannot judge a fragment. A reading cut to a few seconds by a session edge passes
+    /// both ratios trivially (one in-band second of one measured is full coverage and full agreement),
+    /// so it needs a floor; below it, it is low quality, never the night's low.
+    func testAFewSecondFragmentIsNotAReliableReading() {
+        let fragment = [aux(1190, 74)]
+        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(0, 1190)], aux: reading(0, clean) + fragment)
+        XCTAssertEqual(n?.windows, 1)
+        XCTAssertEqual(n?.windowsLowCoverage, 1)
+        XCTAssertEqual(n?.minimum, 96)
+        XCTAssertTrue(n!.events.isEmpty)
+    }
+
     /// A night on which the strap attempted readings and none was reliable is NOT nil: it is a night
     /// with no reliable reading, which is exactly what a surface needs to say.
     func testANightOfFailedReadingsIsStatedNotDropped() {

@@ -373,9 +373,9 @@ means; the value remains an unvalidated candidate.
   separates code records from in-band records inside a window, so the byte's own codes
   are the only per-record marker observed.
 
-NOOP counts a window only when at least two thirds of its nonzero records are in band
-and at least three fifths of those lie within 2 points of the window's median
-(W03-007). The thresholds come from this one strap without a reference oximeter; they
+NOOP counts a window only when it holds at least ten in-band records, at least two thirds
+of its nonzero records are in band, and at least three fifths of those lie within 2
+points of the window's median (W03-007, W03-013). The thresholds come from this one strap without a reference oximeter; they
 judge how the window was reported, not its value.
 
 An official-app overnight capture of another strap, used by

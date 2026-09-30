@@ -1244,9 +1244,13 @@ public enum AnalyticsEngine {
     /// is the failure AGENTS.md's "two readouts of one fact" rule is about. The same in-band gate, the
     /// same inclusive session bounds and the same rounding; since W03-003 the mean averages measurement
     /// WINDOWS rather than seconds (see `Spo2CandidateNight`), and `samples` is still in-band seconds.
-    public static func nightlySpo2CandidateMean(_ sessions: [SleepSession],
-                                         aux: [V18AuxSample]) -> (mean: Int, samples: Int)? {
-        guard let night = nightlySpo2CandidateNight(sessions, aux: aux), let mean = night.meanRounded else {
+    public static func nightlySpo2CandidateMean(
+        _ sessions: [SleepSession],
+        aux: [V18AuxSample],
+        minimumSeconds: Int = AnalyticsEngine.spo2CandidateMinReadingSeconds
+    ) -> (mean: Int, samples: Int)? {
+        guard let night = nightlySpo2CandidateNight(sessions, aux: aux, minimumSeconds: minimumSeconds),
+              let mean = night.meanRounded else {
             return nil
         }
         return (mean: mean, samples: night.samples)

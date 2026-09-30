@@ -42,7 +42,8 @@ public enum Spo2CandidateReadingQuality: Equatable, Sendable {
     /// Enough in-band seconds, and most of them agree with the reading's middle value.
     case reliable
     /// Fewer than `AnalyticsEngine.spo2CandidateMinCoverage` of the reading's measured seconds carried an
-    /// in-band value; the rest were the strap's own non-percentage codes.
+    /// in-band value (the rest were the strap's own non-percentage codes), or fewer in-band seconds than
+    /// the floor (`AnalyticsEngine.spo2CandidateMinReadingSeconds`) to judge at all.
     case lowCoverage
     /// Enough seconds, but too few of them sit near the middle value: the reading swept across the band
     /// instead of settling on a figure.
@@ -85,9 +86,14 @@ struct Spo2CandidateWindow {
     /// `spo2CandidateAgreementTolerance` of its median has settled on a figure. That test, rather than a
     /// cap on the reading's spread, is what tolerates the settling ramp a clean reading can open with
     /// (four seconds climbing into a steady value) while still refusing a reading that sweeps the band.
-    var quality: Spo2CandidateReadingQuality {
+    ///
+    /// Both tests are ratios, and a ratio cannot judge a fragment: one in-band second of one measured is
+    /// full coverage and full agreement. `minimumSeconds` is the floor below which a reading is too short
+    /// to stand for anything (W03-013).
+    func quality(minimumSeconds: Int = AnalyticsEngine.spo2CandidateMinReadingSeconds) -> Spo2CandidateReadingQuality {
         guard let median = value else { return .noValue }
         let n = inBand.count
+        guard n >= minimumSeconds else { return .lowCoverage }
         let cover = AnalyticsEngine.spo2CandidateMinCoverage
         guard n * cover.denominator >= measuredSeconds * cover.numerator else { return .lowCoverage }
         let tol = AnalyticsEngine.spo2CandidateAgreementTolerance
@@ -219,6 +225,12 @@ extension AnalyticsEngine {
     /// validated wrist oximeters discard 15–50 % of overnight data by their own quality indices.
     public static let spo2CandidateMinCoverage = (numerator: 2, denominator: 3)
 
+    /// W03-013: the fewest in-band seconds a reading needs before the two ratios can judge it. Ten, a
+    /// third of the strap's 30-record reading. On the owner's 15 backups 302 of 303 distinct readings
+    /// have 30 measured seconds and every reliable one has 20 or more in-band seconds, so the floor moves
+    /// no real reading; it exists for a reading a session edge cuts to a few seconds.
+    public static let spo2CandidateMinReadingSeconds = 10
+
     /// W03-007: how far, in points, an in-band second may sit from its reading's median and still agree
     /// with it. On the same MG, 70 of 74 clean readings (no code, 28+ in-band seconds) never step more
     /// than 2 points between consecutive seconds.
@@ -282,11 +294,12 @@ extension AnalyticsEngine {
         _ sessions: [SleepSession],
         aux: [V18AuxSample],
         threshold: Int = AnalyticsEngine.spo2CandidateDipThreshold,
-        windowGapSeconds: Int = AnalyticsEngine.spo2CandidateWindowGapSeconds
+        windowGapSeconds: Int = AnalyticsEngine.spo2CandidateWindowGapSeconds,
+        minimumSeconds: Int = AnalyticsEngine.spo2CandidateMinReadingSeconds
     ) -> Spo2CandidateNight? {
         let windows = spo2CandidateWindows(sessions, aux: aux, windowGapSeconds: windowGapSeconds)
         guard !windows.isEmpty else { return nil }
-        let quality = windows.map(\.quality)
+        let quality = windows.map { $0.quality(minimumSeconds: minimumSeconds) }
         // `value` is non-nil for every reliable window: `quality` returns `.noValue` first otherwise.
         let reliable = zip(windows, quality).filter { $0.1 == .reliable }
             .map { (window: $0.0, value: $0.0.value!) }
@@ -317,7 +330,7 @@ extension AnalyticsEngine {
         _ sessions: [SleepSession],
         aux: [V18AuxSample]
     ) -> [(ts: Int, value: Int)] {
-        spo2CandidateWindows(sessions, aux: aux).filter { $0.quality == .reliable }.flatMap(\.inBand)
+        spo2CandidateWindows(sessions, aux: aux).filter { $0.quality() == .reliable }.flatMap(\.inBand)
     }
 }
 

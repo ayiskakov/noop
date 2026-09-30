@@ -10,7 +10,7 @@ import WhoopProtocol
 /// below is that oracle: its expected literal is the real helper's own output over a spread of cases
 /// (including the whole legal byte space and a night of real-shaped 30-second windows), captured once,
 /// checked line for line against an independent Python implementation of the per-window rule (W03-003),
-/// and pinned verbatim. Re-captured for W03-007's reading-quality gate (28 cases, matched line for line
+/// and pinned verbatim. Re-captured for W03-007's reading-quality gate (28 cases, 31 with W03-013's floor, matched line for line
 /// by a new independent Python implementation); the pre-existing lines that moved are the ones whose
 /// windows are mostly codes or whose seconds disagree. The named tests after it say what each line is FOR, so a diff explains itself
 /// instead of only failing.
@@ -21,10 +21,20 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     }
     private func aux(_ ts: Int, _ v: Int?) -> V18AuxSample { V18AuxSample(ts: ts, auxByte82: v) }
 
+    /// The resolver with the in-band floor lowered to one second (W03-013). The cases in this file pin
+    /// windowing, medians, thresholds and bounds on short synthetic readings, which the default floor of
+    /// ten seconds would turn into low-quality readings; the floor itself is pinned at its default by the
+    /// oracle's `floor-*` lines and `Spo2CandidateQualityTests`.
+    private func resolve(_ sessions: [SleepSession], aux: [V18AuxSample],
+                         threshold: Int = AnalyticsEngine.spo2CandidateDipThreshold) -> Spo2CandidateNight? {
+        AnalyticsEngine.nightlySpo2CandidateNight(sessions, aux: aux, threshold: threshold, minimumSeconds: 1)
+    }
+
     /// One case's whole result as a single line — the format the oracle was captured in. `lq` is the
     /// low-quality readings as coverage+unsettled (W03-007); `-` is a figure the night does not state.
-    private func line(_ name: String, _ sessions: [SleepSession], _ samples: [V18AuxSample]) -> String {
-        guard let n = AnalyticsEngine.nightlySpo2CandidateNight(sessions, aux: samples) else {
+    private func line(_ name: String, _ sessions: [SleepSession], _ samples: [V18AuxSample],
+                      floor: Int = 1) -> String {
+        guard let n = AnalyticsEngine.nightlySpo2CandidateNight(sessions, aux: samples, minimumSeconds: floor) else {
             return "\(name) -> nil"
         }
         let ev = n.events.map { "\($0.start)-\($0.end)/n\($0.nadir)/s\($0.samples)/sp\($0.spanSeconds)" }
@@ -97,6 +107,13 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
                         window(0, [95, 95, 95, 80, 99])))
         out.append(line("agreement-just-under", [sess(0, 600)],
                         (0..<29).map { aux($0, $0 % 29 < 17 ? 95 : ($0 % 2 == 0 ? 80 : 99)) }))
+        // W03-013: the in-band floor at its default of ten seconds. Nine seconds of an otherwise clean
+        // reading is too short to judge; ten is enough; a session edge that cuts a real reading to three
+        // seconds leaves a fragment, not a reading.
+        out.append(line("floor-nine-seconds", [sess(0, 600)], (0..<9).map { aux($0, 95) }, floor: 10))
+        out.append(line("floor-ten-seconds", [sess(0, 600)], (0..<10).map { aux($0, 95) }, floor: 10))
+        out.append(line("floor-edge-fragment", [sess(0, 1202)],
+                        window(0, [95, 96]) + window(1200, [74, 75]), floor: 10))
         out.append(line("mixed-night", [sess(0, 4 * 1200)],
                         window(0, [95, 96]) + window(1200, [160, 74]) + window(2400, [87, 88, 87])
                         + window(3600, [72, 75, 80, 85, 90, 95, 98, 100, 100, 99])))
@@ -129,6 +146,9 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
         coverage-just-under -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
         agreement-exactly-three-fifths -> mean=95.000000 rounded=95 min=95 max=95 samples=30 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
         agreement-just-under -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=0+1 thr=90 below=0 secs=0 nadir=- events=[]
+        floor-nine-seconds -> mean=- rounded=- min=- max=- samples=0 windows=0/1 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
+        floor-ten-seconds -> mean=95.000000 rounded=95 min=95 max=95 samples=10 windows=1/1 lq=0+0 thr=90 below=0 secs=0 nadir=- events=[]
+        floor-edge-fragment -> mean=95.000000 rounded=95 min=95 max=95 samples=30 windows=1/2 lq=1+0 thr=90 below=0 secs=0 nadir=- events=[]
         mixed-night -> mean=91.000000 rounded=91 min=87 max=95 samples=60 windows=2/4 lq=1+1 thr=90 below=30 secs=29 nadir=87 events=[2400-2429/n87/s30/sp29]
         """
         XCTAssertEqual(out.joined(separator: "\n"), expected)
@@ -142,7 +162,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// average that swallowed a 0x80 would still look like a percentage. (0 is "not measuring" and opens
     /// no window at all.)
     func testOnlyTheThirtyOneInBandBytesGiveAWindowAValue() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(0, 256 * 1200)], aux: (0..<256).map { aux($0 * 1200, $0) })
         XCTAssertEqual(n?.samples, 31)
         XCTAssertEqual(n?.windows, 31)
@@ -155,7 +175,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// climbed within one percent landed as three whole numbers and the climb was invisible. `meanRounded`
     /// still reproduces the rounded value for display.
     func testMeanKeepsSubPercentPrecisionAndRoundsOnlyForDisplay() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(1000, 3000)], aux: [aux(1000, 96), aux(2200, 97), aux(3400, 97)])
         XCTAssertEqual(n!.mean!, 96.66666666666667, accuracy: 1e-12)
         XCTAssertEqual(n?.meanRounded, 97)
@@ -166,7 +186,8 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// longer drags it from 95 to 91.
     func testLegacyMeanDelegatesToTheResolver() {
         let sessions = [sess(1000, 600)]
-        let samples = [aux(1000, 96), aux(1001, 95), aux(1002, 77), aux(1003, 95)]
+        // Twelve seconds, so the reading clears the default in-band floor both functions apply.
+        let samples = (0..<12).map { aux(1000 + $0, [96, 95, 77, 95][$0 % 4]) }
         let legacy = AnalyticsEngine.nightlySpo2CandidateMean(sessions, aux: samples)
         let night = AnalyticsEngine.nightlySpo2CandidateNight(sessions, aux: samples)
         XCTAssertEqual(legacy?.mean, night?.meanRounded)
@@ -182,14 +203,14 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
             + [aux(2200, 85), aux(2201, 86)]
         let shuffled = [aux(1003, 88), aux(2201, 86), aux(1006, 97), aux(1000, 96), aux(1005, 88),
                         aux(1001, 88), aux(2200, 85), aux(1004, 88), aux(1002, 88)]
-        XCTAssertEqual(AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)], aux: ordered),
-                       AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)], aux: shuffled))
+        XCTAssertEqual(resolve([sess(1000, 1800)], aux: ordered),
+                       resolve([sess(1000, 1800)], aux: shuffled))
     }
 
     /// Two measurements separated by a stretch the strap did not report are TWO windows. Bridging them
     /// would print one dip spanning a gap nothing was measured across.
     func testAGapWiderThanTheBudgetSplitsTwoWindows() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(1000, 6000)], aux: [aux(1000, 85), aux(1001, 86), aux(2000, 84), aux(2001, 83)])
         XCTAssertEqual(n?.windows, 2)
         XCTAssertEqual(n?.events.count, 2)
@@ -203,9 +224,9 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// one second more makes two.
     func testTheWindowGapBudgetIsInclusive() {
         let gap = AnalyticsEngine.spo2CandidateWindowGapSeconds
-        let joined = AnalyticsEngine.nightlySpo2CandidateNight(
+        let joined = resolve(
             [sess(1000, 600)], aux: [aux(1000, 95), aux(1000 + gap, 95)])
-        let split = AnalyticsEngine.nightlySpo2CandidateNight(
+        let split = resolve(
             [sess(1000, 600)], aux: [aux(1000, 95), aux(1001 + gap, 95)])
         XCTAssertEqual(joined?.windows, 1)
         XCTAssertEqual(split?.windows, 2)
@@ -216,7 +237,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// still shows as dips and as the night's low.
     func testAContinuousStreamIsCutIntoReadingsSoALongDipSurvives() {
         let night = (0..<(8 * 3600)).map { aux($0, (3600..<4200).contains($0) ? 85 : 96) }
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(0, 8 * 3600)], aux: night)
+        let n = resolve([sess(0, 8 * 3600)], aux: night)
         XCTAssertEqual(n?.minimum, 85)
         XCTAssertEqual(n?.events.count, 10)
         XCTAssertEqual(n?.windows, 480)
@@ -226,7 +247,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// would make that second a reading of its own, and a single blip a dip.
     func testAWindowStretchedByAClockStepStaysWhole() {
         let stretched = (0..<29).map { aux(1000 + $0, 96) } + [aux(1033, 77)]
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 600)], aux: stretched)
+        let n = resolve([sess(1000, 600)], aux: stretched)
         XCTAssertEqual(n?.windowsAttempted, 1)
         XCTAssertEqual(n?.events.count, 0)
         XCTAssertEqual(n?.minimum, 96)
@@ -239,7 +260,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     func testCodesHoldAWindowTogetherAndACodeOnlyWindowIsAttemptedNotValued() {
         let window1 = [aux(1000, 32), aux(1001, 95)] + (2..<20).map { aux(1000 + $0, 8) } + [aux(1020, 96)]
         let window2 = (0..<30).map { aux(2200 + $0, $0 % 2 == 0 ? 136 : 40) }
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)],
+        let n = resolve([sess(1000, 1800)],
                                                           aux: window1 + window2 + [aux(3000, 0)])
         XCTAssertEqual(n?.windowsAttempted, 2)
         XCTAssertEqual(n?.windowsLowCoverage, 1)
@@ -250,7 +271,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// Two in-band seconds in two seconds measured is full coverage, and the value is the lower of the
     /// two middle readings: always one the strap reported.
     func testAnEvenCountTakesTheLowerMiddleReading() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 600)], aux: [aux(1000, 96), aux(1001, 95)])
+        let n = resolve([sess(1000, 600)], aux: [aux(1000, 96), aux(1001, 95)])
         XCTAssertEqual(n?.minimum, 95)
     }
 
@@ -259,7 +280,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// `samples × 1 s` would state a duration nothing measured. The window itself is still reported — via
     /// `dipSamples` and `nadir`.
     func testASingleReadingDipWindowReportsNoDurationButIsStillCounted() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(1000, 1800)], aux: [aux(1001, 88), aux(2200, 96)])
         XCTAssertEqual(n?.events.count, 1)
         XCTAssertEqual(n?.dipSpanSeconds, 0)
@@ -271,7 +292,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// inside it read — the counterpart to the blip test below.
     func testAWindowMostlyBelowTheThresholdIsADip() {
         let window = (0..<30).map { aux(1000 + $0, $0 < 19 ? 88 + $0 % 2 : 91) }
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 600)], aux: window)
+        let n = resolve([sess(1000, 600)], aux: window)
         XCTAssertEqual(n?.events.count, 1)
         XCTAssertEqual(n?.nadir, 89)
         XCTAssertEqual(n?.dipSamples, 30)
@@ -281,7 +302,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// `nadir` is nil for a night that never dipped, so a surface can say "no dips" without inferring it
     /// from a `minimum` that legitimately sits above the threshold.
     func testNadirIsNilWithoutDipsAndMinimumStillReports() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(1000, 1800)], aux: [aux(1000, 93), aux(2200, 98)])
         XCTAssertNil(n?.nadir)
         XCTAssertEqual(n?.minimum, 93)
@@ -292,8 +313,8 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// assuming the default.
     func testThresholdIsCarriedAndHonoured() {
         let samples = [aux(1000, 93), aux(2200, 96)]
-        XCTAssertEqual(AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)], aux: samples)?.threshold, 90)
-        let strict = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 1800)], aux: samples, threshold: 95)
+        XCTAssertEqual(resolve([sess(1000, 1800)], aux: samples)?.threshold, 90)
+        let strict = resolve([sess(1000, 1800)], aux: samples, threshold: 95)
         XCTAssertEqual(strict?.threshold, 95)
         XCTAssertEqual(strict?.dipSamples, 1)
         XCTAssertEqual(strict?.nadir, 93)
@@ -304,7 +325,7 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// night that dipped to 77.
     func testASingleSecondBlipInsideAWindowIsNotADip() {
         let window = (0..<30).map { aux(1000 + $0, $0 == 12 ? 77 : 95 + $0 % 2) }
-        let n = AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 600)], aux: window)
+        let n = resolve([sess(1000, 600)], aux: window)
         XCTAssertEqual(n?.events.count, 0)
         XCTAssertEqual(n?.minimum, 95)
         XCTAssertEqual(n?.windows, 1)
@@ -314,11 +335,11 @@ final class Spo2CandidateNightStatsTests: XCTestCase {
     /// Readings outside every in-bed span are daytime readings, and a night with none of its own has no
     /// answer at all rather than a zero.
     func testSessionBoundsAreInclusiveAndDaytimeIsExcluded() {
-        let n = AnalyticsEngine.nightlySpo2CandidateNight(
+        let n = resolve(
             [sess(1000, 100)], aux: [aux(999, 80), aux(1000, 91), aux(1100, 89), aux(1101, 70)])
         XCTAssertEqual(n?.samples, 2)
-        XCTAssertNil(AnalyticsEngine.nightlySpo2CandidateNight([sess(1000, 100)], aux: [aux(5000, 95)]))
-        XCTAssertNil(AnalyticsEngine.nightlySpo2CandidateNight([], aux: [aux(1000, 95)]))
+        XCTAssertNil(resolve([sess(1000, 100)], aux: [aux(5000, 95)]))
+        XCTAssertNil(resolve([], aux: [aux(1000, 95)]))
     }
 }
 
