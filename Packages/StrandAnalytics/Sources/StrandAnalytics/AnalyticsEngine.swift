@@ -1208,8 +1208,10 @@ public enum AnalyticsEngine {
     }
 
     /// Nightly gated mean of the 5/MG SpO2 **candidate** byte (`@82`) over the detected in-bed
-    /// `sessions`, with the sample count it rests on — or nil when no in-band reading fell inside any
-    /// span. (#112, tracking #103.)
+    /// `sessions`, with the sample count it rests on — or nil when the night has no reliable reading:
+    /// no in-band reading fell inside any span, or every reading with one failed the quality check
+    /// (W03-007, W03-019). nil therefore does not mean the strap reported nothing; the full
+    /// `nightlySpo2CandidateNight` result says which. (#112, tracking #103.)
     ///
     /// WHY THIS EXISTS. The candidate is decoded and stored but deliberately never scored: `@82` looks
     /// like a strap-computed SpO2 %, and on one independent 8-night check it tracked the WHOOP app almost
