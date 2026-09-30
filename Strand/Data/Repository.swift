@@ -1969,6 +1969,68 @@ final class Repository: ObservableObject {
         return spo2SingleChannelPlausible.contains(v) ? v : nil
     }
 
+    /// Every SpO₂ candidate series, read once for a surface and resolved through
+    /// `Spo2CandidateSeries.Read` (W03-011, W03-018). The Health card and tile, both Today screens and the
+    /// Metric Explorer all read the candidate through this, so none of them can show a night, or a mean,
+    /// that another surface's rules would refuse. The keys load concurrently. `days` is `exploreSeries`'
+    /// lookback, defaulting to the same full-history window.
+    func spo2CandidateSeries(days: Int = 4000) async -> Spo2CandidateSeries.Read {
+        func load(_ key: String) async -> [String: Double] {
+            let pts = await exploreSeries(key: key, source: "my-whoop", days: days)
+            return Dictionary(pts.map { ($0.day, $0.value) }, uniquingKeysWith: { a, _ in a })
+        }
+        async let mean = load(Spo2CandidateSeries.meanKey)
+        async let minimum = load(Spo2CandidateSeries.minimumKey)
+        async let dips = load(Spo2CandidateSeries.dipsKey)
+        async let dipSeconds = load(Spo2CandidateSeries.dipSecondsKey)
+        async let samples = load(Spo2CandidateSeries.samplesKey)
+        async let windows = load(Spo2CandidateSeries.windowsKey)
+        async let attempted = load(Spo2CandidateSeries.windowsAttemptedKey)
+        async let lowQuality = load(Spo2CandidateSeries.lowQualityKey)
+        return Spo2CandidateSeries.Read(mean: await mean, minimum: await minimum, dips: await dips,
+                                        dipSeconds: await dipSeconds, samples: await samples,
+                                        windows: await windows, windowsAttempted: await attempted,
+                                        lowQuality: await lowQuality)
+    }
+
+    /// The SpO₂ candidate seconds a chart of the night `[from, to]` may plot beside the strap-estimate
+    /// card's figures: the in-band seconds of the RELIABLE readings only, cut by the same windows and the
+    /// same quality verdict the figures were resolved with (`AnalyticsEngine.spo2CandidateReliableSeconds`,
+    /// W03-007). The Deep Timeline keeps plotting every in-band second through `timelineSeries`; this is
+    /// the card's chart, and it must not draw a low its own tiles left out as low quality.
+    ///
+    /// Reads the same worn-timeline union as `timelineSeries`, first source winning a shared second, so
+    /// the chart covers the same seconds it covered before the gate.
+    func spo2CandidateReliableTrace(from: Int, to: Int) async -> [TrendPoint] {
+        guard to > from, let store = await ensureStore() else { return [] }
+        var perId: [[V18AuxSample]] = []
+        for id in rawPhysiologyReadIds(store: store) {
+            perId.append((try? await store.v18AuxSamples(deviceId: id, from: from, to: to, limit: 200_000)) ?? [])
+        }
+        let night = [SleepSession(start: from, end: to, efficiency: 0, stages: [], restingHR: nil, avgHRV: nil)]
+        // W03-014: the merge and the resolve both run off the main actor, like `dedupSortDownsampleRaw`.
+        return await Task.detached(priority: .utility) {
+            AnalyticsEngine.spo2CandidateReliableSeconds(night, aux: Self.mergeSpo2CandidateAux(perId))
+                .map { Self.timelinePoint($0.ts, Double($0.value)) }
+        }.value
+    }
+
+    /// Merges the per-id aux rows of one span, the first id to report a NONZERO byte 82 at a second
+    /// claiming it (W03-014). A row without a byte-82 value (nil or 0, the strap not measuring) claims
+    /// nothing, so it cannot hide another strap's value at the same second, which is how the per-point
+    /// merge this replaced behaved. Codes are nonzero and do claim their second: the resolver needs them to
+    /// judge the reading they sit in.
+    nonisolated static func mergeSpo2CandidateAux(_ perId: [[V18AuxSample]]) -> [V18AuxSample] {
+        var seen = Set<Int>()
+        var merged: [V18AuxSample] = []
+        for rows in perId {
+            for row in rows where (row.auxByte82 ?? 0) != 0 && seen.insert(row.ts).inserted {
+                merged.append(row)
+            }
+        }
+        return merged
+    }
+
     /// Deep-Timeline read facade. Returns ~`targetPoints` points for `metric` over `[from, to]` from
     /// `source` (defaults to the user's own strap), choosing raw seconds vs coarse buckets adaptively so
     /// the chart never draws ~86k points (the #575 day-scale risk). HR rides the existing COALESCE reads

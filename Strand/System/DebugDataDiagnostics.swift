@@ -356,17 +356,30 @@ enum DebugDataDiagnostics {
             //
             // W03-003: every figure is per measurement WINDOW (the strap's 30-second readings), so the
             // line names the windows it rests on — valued of attempted — beside the in-band seconds.
-            let dips = cand.events.isEmpty
-                ? "no dip windows below \(cand.threshold)%"
-                : "\(cand.events.count) dip window(s) below \(cand.threshold)% "
-                    + "(lowest \(cand.nadir.map(String.init) ?? "?")%, \(cand.dipSpanSeconds)s measured)"
-            lines.append("SpO₂ candidate @82 (5/MG): mean \(String(format: "%.1f", cand.mean))% "
-                         + "(shown as \(cand.meanRounded)%) over \(cand.windows) of \(cand.windowsAttempted) "
-                         + "windows (\(cand.samples) in-band seconds), window range "
-                         + "\(cand.minimum)-\(cand.maximum)%, \(dips) "
-                         + "— UNVERIFIED, compare against the WHOOP app's figure for this night (#103).")
+            //
+            // W03-007: the figures rest on reliable readings only, so the line names how many were left
+            // out and why, and a night with none says so instead of printing a mean it does not have.
+            let leftOut = "\(cand.windowsLowQuality) left out as low quality "
+                + "(\(cand.windowsLowCoverage) too few in-band seconds, \(cand.windowsUnsettled) unsettled)"
+            if let mean = cand.mean, let meanRounded = cand.meanRounded,
+               let low = cand.minimum, let high = cand.maximum {
+                let dips = cand.events.isEmpty
+                    ? "no low readings below \(cand.threshold)%"
+                    : "\(cand.events.count) low reading(s) below \(cand.threshold)% "
+                        + "(lowest \(cand.nadir.map(String.init) ?? "?")%, \(cand.dipSpanSeconds)s measured)"
+                lines.append("SpO₂ candidate @82 (5/MG): mean \(String(format: "%.1f", mean))% "
+                             + "(shown as \(meanRounded)%) over \(cand.windows) reliable of "
+                             + "\(cand.windowsAttempted) readings, \(leftOut); \(cand.samples) in-band seconds, "
+                             + "reading range \(low)-\(high)%, \(dips) "
+                             + "— UNVERIFIED, compare against the WHOOP app's figure for this night (#103).")
+            } else {
+                let codesOnly = cand.windowsAttempted - cand.windows - cand.windowsLowQuality
+                lines.append("SpO₂ candidate @82 (5/MG): no reliable reading this night — "
+                             + "\(cand.windowsAttempted) readings attempted, \(leftOut)"
+                             + (codesOnly > 0 ? ", \(codesOnly) codes only." : "."))
+            }
         } else {
-            lines.append("SpO₂ candidate @82 (5/MG): no in-band readings inside this night's span.")
+            lines.append("SpO₂ candidate @82 (5/MG): no nonzero byte-82 second among the aux rows read for this night's span.")
         }
         return lines
     }

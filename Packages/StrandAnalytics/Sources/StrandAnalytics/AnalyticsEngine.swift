@@ -1208,8 +1208,10 @@ public enum AnalyticsEngine {
     }
 
     /// Nightly gated mean of the 5/MG SpO2 **candidate** byte (`@82`) over the detected in-bed
-    /// `sessions`, with the sample count it rests on — or nil when no in-band reading fell inside any
-    /// span. (#112, tracking #103.)
+    /// `sessions`, with the sample count it rests on — or nil when the night has no reliable reading:
+    /// no in-band reading fell inside any span, or every reading with one failed the quality check
+    /// (W03-007, W03-019). nil therefore does not mean the strap reported nothing; the full
+    /// `nightlySpo2CandidateNight` result says which. (#112, tracking #103.)
     ///
     /// WHY THIS EXISTS. The candidate is decoded and stored but deliberately never scored: `@82` looks
     /// like a strap-computed SpO2 %, and on one independent 8-night check it tracked the WHOOP app almost
@@ -1244,10 +1246,16 @@ public enum AnalyticsEngine {
     /// is the failure AGENTS.md's "two readouts of one fact" rule is about. The same in-band gate, the
     /// same inclusive session bounds and the same rounding; since W03-003 the mean averages measurement
     /// WINDOWS rather than seconds (see `Spo2CandidateNight`), and `samples` is still in-band seconds.
-    public static func nightlySpo2CandidateMean(_ sessions: [SleepSession],
-                                         aux: [V18AuxSample]) -> (mean: Int, samples: Int)? {
-        guard let night = nightlySpo2CandidateNight(sessions, aux: aux) else { return nil }
-        return (mean: night.meanRounded, samples: night.samples)
+    public static func nightlySpo2CandidateMean(
+        _ sessions: [SleepSession],
+        aux: [V18AuxSample],
+        minimumSeconds: Int = AnalyticsEngine.spo2CandidateMinReadingSeconds
+    ) -> (mean: Int, samples: Int)? {
+        guard let night = nightlySpo2CandidateNight(sessions, aux: aux, minimumSeconds: minimumSeconds),
+              let mean = night.meanRounded else {
+            return nil
+        }
+        return (mean: mean, samples: night.samples)
     }
 
     /// The plausible range for a raw Oura `0x6F` SpO2 sample before the ceiling transform below.

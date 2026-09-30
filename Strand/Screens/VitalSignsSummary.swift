@@ -133,6 +133,10 @@ enum BodyVitalSigns {
                          temperatureUnit: TemperatureUnit,
                          now: Date = Date(),
                          spo2CandidateByDay: [String: Double] = [:],
+                         // W03-009: the newest candidate night, resolved through `Spo2CandidateSeries.Read`
+                         // like the card beside this tile, so a newest night with no reliable reading stops
+                         // the carry instead of letting an older night's mean stand in for it.
+                         spo2CandidateNight: Spo2CandidateSeries.Night? = nil,
                          hrvOverCountByDay: [String: Double] = [:],
                          // #1846: the Settings lead-with choice, so this tile agrees with Today and the
                          // detail screen. A setting that reaches two of three surfaces is worse than none.
@@ -205,7 +209,17 @@ enum BodyVitalSigns {
         // #103/queue-11a: fall back to the spo2_candidate mean when no calibrated spo2Pct exists. The
         // candidate is labelled "strap estimate (unverified)" in the tile caption so it is never read as
         // a calibrated blood-oxygen percentage.
-        let spo2Row = latest(spo2Points) ?? latest(spo2CandidatePoints)
+        // W03-009: a newest candidate night with no reliable reading, inside the same carry bound, is the
+        // candidate's answer: "no reliable reading", not an older night's mean carried past it, and not
+        // "no estimate yet" for a night that was scored.
+        let carriedCandidate = latest(spo2CandidatePoints)
+        let candidateUnreliable = PuffinExperiment.spo2CandidateDisplayEnabled
+            && spo2CandidateNight.map { night in
+                night.hasNoReliableReading
+                    && night.day >= (carriedCandidate?.day ?? "")
+                    && Baselines.freshestCarried([(day: night.day, value: night)], todayKey: logicalDay) != nil
+            } == true
+        let spo2Row = latest(spo2Points) ?? (candidateUnreliable ? nil : carriedCandidate)
         let spo2IsCandidate = spo2Row != nil && latest(spo2Points) == nil
         let spo2rawRow = latest(spo2rawPoints)
         let rhrRow = latest(rhrPoints)
@@ -346,6 +360,8 @@ enum BodyVitalSigns {
                 // and the parity contract is the relationship between the two tiles, not the row.
                 missingCaption: spo2IsCandidate
                     ? String(localized: "strap estimate (unverified)")
+                    : candidateUnreliable && spo2Row == nil
+                    ? String(localized: "no reliable reading")
                     : (PuffinExperiment.spo2CandidateDisplayEnabled && spo2Row == nil
                        ? String(localized: "toggle ON · no estimate yet")
                        : (spo2rawRow != nil

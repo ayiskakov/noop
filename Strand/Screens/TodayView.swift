@@ -314,6 +314,16 @@ struct TodayView: View {
 
     // 14-day sparkline series, keyed by metric key. Loaded once in .task.
     @State private var sparks: [String: [Double]] = [:]
+    /// W03-007/W03-018: every SpO₂ candidate series, loaded once through `repo.spo2CandidateSeries` —
+    /// the read the Health card uses — so the Blood Oxygen fallback resolves the same night the card does
+    /// and cannot show an older night's average while the newest night had no reliable reading.
+    @State private var spo2Candidate = Spo2CandidateSeries.Read()
+    /// The newest candidate night inside the sparkline's trailing 14 days; nil when the toggle is OFF.
+    private var spo2CandidateNight: Spo2CandidateSeries.Night? {
+        guard PuffinExperiment.spo2CandidateDisplayEnabled, let night = spo2Candidate.latest else { return nil }
+        let cutoff = Repository.localDayKey(Calendar.current.date(byAdding: .day, value: -13, to: Date()) ?? Date())
+        return night.day >= cutoff ? night : nil
+    }
     @State private var workouts: [WorkoutRow] = []
     /// #1694: a tapped Latest-Workouts tile. Wrapped so `.sheet(item:)` drives presentation, mirroring
     /// WorkoutsView's own detail target — the feed was read-only, so the only route to a session's
@@ -2785,8 +2795,10 @@ struct TodayView: View {
             // IntelligenceEngine) so the card shows a strap-estimate (unverified) number instead of "—".
             let calibrated = (d?.spo2Pct ?? lastVitalsDay?.spo2Pct ?? lastSpo2Day?.spo2Pct)
             if let v = calibrated { return String(format: "%.0f%%", locale: AppLanguage.activeLocale, v) }
-            if PuffinExperiment.spo2CandidateDisplayEnabled, let tail = sparks["spo2_candidate"]?.last {
-                return String(format: "%.0f%%", locale: AppLanguage.activeLocale, tail)
+            // W03-007: the newest night's own mean, never an older one's when that night had none, rounded
+            // by `meanRounded` like the Health card (W03-012: `%.0f` rounds a half to even).
+            if PuffinExperiment.spo2CandidateDisplayEnabled, let tail = spo2CandidateNight?.meanRounded {
+                return "\(tail)%"
             }
             return "—"
         case .skinTemp:
@@ -4078,15 +4090,21 @@ struct TodayView: View {
             // the user can tell "toggle off" apart from "toggle on but no data" — a silent blank reads as
             // broken.
             let spo2CandidateOn = PuffinExperiment.spo2CandidateDisplayEnabled
-            let candidateTail = spo2CandidateOn ? sparks["spo2_candidate"]?.last : nil
+            // W03-007: the tail is the newest night's own mean, resolved through the Health card's
+            // funnel. When that night's readings all failed the quality check it has no mean, and the
+            // tile says so rather than showing the previous night's figure undated.
+            let candidateTail = spo2CandidateOn ? spo2CandidateNight?.meanRounded : nil
+            let candidateUnreliable = spo2CandidateOn && spo2CandidateNight?.hasNoReliableReading == true
             let spo2Value = spo2.value == "—" && candidateTail != nil
-                ? String(format: "%.0f%%", locale: AppLanguage.activeLocale, candidateTail!)
+                ? "\(candidateTail!)%"
                 : spo2.value
             let spo2Caption: String = spo2.value == "—" && candidateTail != nil
                 ? String(localized: "strap estimate (unverified)")
-                : (spo2.value == "—" && spo2CandidateOn
-                   ? String(localized: "toggle ON · no estimate yet")
-                   : (spo2.caption ?? ""))
+                : (spo2.value == "—" && candidateUnreliable
+                   ? String(localized: "no reliable reading")
+                   : (spo2.value == "—" && spo2CandidateOn
+                      ? String(localized: "toggle ON · no estimate yet")
+                      : (spo2.caption ?? "")))
             StatTile(
                 label: "Blood Oxygen",
                 value: spo2Value,
@@ -4663,13 +4681,12 @@ struct TodayView: View {
         async let hrvSpark           = sparkValues("hrv", source: "my-whoop", window: 14)
         async let rhrSpark           = sparkValues("rhr", source: "my-whoop", window: 14)
         async let spo2Spark          = sparkValues("spo2", source: "my-whoop", window: 14)
-        // #103/queue-11a: SpO₂ candidate nightly mean — WHOOP `spo2_candidate_82` (see
-        // IntelligenceEngine). Read via `exploreSeries` so the computed "-noop" metricSeries backs the
-        // trend; "my-whoop" here is the generic "active strap" sentinel `exploreSeries` resolves through
-        // `computedReadIds`, not a WHOOP-only filter. Empty when the
-        // toggle is OFF (the engine writes nothing) or the owner has no in-band reading. Used as a
-        // fallback for the Blood Oxygen tile when `spo2Pct` is nil, labelled "strap estimate (unverified)".
-        async let spo2CandidateSpark = sparkValuesExplore("spo2_candidate", source: "my-whoop", window: 14)
+        // #103/queue-11a: every SpO₂ candidate series — WHOOP `spo2_candidate_82` (see
+        // IntelligenceEngine) — through the one read the Health card uses (W03-018), concurrently with the
+        // other sparks. Its means back the trend and its newest night the Blood Oxygen fallback when
+        // `spo2Pct` is nil, labelled "strap estimate (unverified)". Empty when the toggle is OFF (the
+        // engine writes nothing) or the owner has no in-band reading.
+        async let spo2CandidateRead = repo.spo2CandidateSeries(days: 15)
         // Added 2026-08-24 (queue 11c follow-up) for the new Skin Temp Key Metrics tile. `exploreSeries`
         // so a BLE-only strap's computed `DailyMetric.skinTempDevC` column backs the trend, same as
         // `resp_rate` above — the engine writes the column, not a metricSeries point.
@@ -4690,7 +4707,9 @@ struct TodayView: View {
         sparks["hrv"]             = await hrvSpark
         sparks["rhr"]             = await rhrSpark
         sparks["spo2"]            = await spo2Spark
-        sparks["spo2_candidate"]  = await spo2CandidateSpark
+        spo2Candidate = await spo2CandidateRead
+        sparks["spo2_candidate"]  = trailingWindow(spo2Candidate.meanByDay.sorted { $0.key < $1.key }
+                                                       .map { (day: $0.key, value: $0.value) }, days: 14).map(\.value)
         sparks["skin_temp"]       = await skinTempSpark
         sparks["resp_rate"]   = await respRateSpark
         sparks["steps"]       = await stepsAppleSpark

@@ -1104,7 +1104,9 @@ struct MetricDetailView: View {
         // so a `spo2` descriptor under another source is a different metric that happens to share a key,
         // and only the WHOOP partition has a candidate series behind it.
         if metric.key == "spo2", metric.source == "my-whoop", PuffinExperiment.spo2CandidateDisplayEnabled {
-            let candidateSeries = await repo.exploreSeries(key: "spo2_candidate", source: metric.source)
+            // W03-011: through the shared read, so a night with no reliable reading adds no leftover mean.
+            let candidateSeries = await repo.spo2CandidateSeries().meanByDay.sorted { $0.key < $1.key }
+                .map { (day: $0.key, value: $0.value) }
             if !candidateSeries.isEmpty {
                 // `uniquingKeysWith`, matching the `sourceByDay` build above — NOT
                 // `uniqueKeysWithValues`, which TRAPS on a duplicate day. `exploreSeries` collapses by day

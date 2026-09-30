@@ -173,6 +173,14 @@ item as it lands.
       migrations, 37 tables and about 5.33 M rows, identical. Re-run on the 2026-09-27 evening export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.53 M rows, identical. Re-run on the 2026-09-28 export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.85 M rows, identical.
+- [ ] W3 out of phase, `review/w03-spo2-quality` (off `main`), from the owner's 2026-09-30 export: W03-007
+      (the SpO₂ candidate leaves low-quality byte-82 readings out of the night and states a night with no
+      reliable reading as such, the owner's choice). V2 (independent subagent) found one S2, four S3 and
+      eight S4; all fixed on the branch except W03-008 (recorded). A code review (`/code-review xhigh`) then
+      found W03-009 … W03-022; all are fixed on the same branch except W03-022 (deferred to the merge).
+      Package suite, `StrandTests`, both builds (NOOPiOS without the watch app), i18n and hygiene gates pass. Then a strap run: a night on the build
+      whose card reads "N of M" with the readings left out named, and its strap-log line; ideally one night
+      with the strap deliberately loose, to see "no reliable reading".
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

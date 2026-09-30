@@ -223,8 +223,9 @@ final class IntelligenceEngine: ObservableObject {
         let hrvDiag: String?
         /// #103/queue-11a: this night's whole SpO₂ candidate result — mean, range and below-threshold
         /// dips — computed off the main actor when the SpO₂ candidate display toggle is ON from the
-        /// `spo2_candidate_82` V18Aux byte. nil when the toggle is OFF or the night has no in-band
-        /// reading. Written to metricSeries under the "-noop" device ID in pass 2.
+        /// `spo2_candidate_82` V18Aux byte. nil when the toggle is OFF or the strap measured nothing in
+        /// the night; a night whose readings all failed the quality check is non-nil with no mean
+        /// (W03-007). Written to metricSeries under the "-noop" device ID in pass 2.
         ///
         /// Carries the whole `Spo2CandidateNight` rather than the mean it used to: the dips are shown
         /// beside that mean now, and re-resolving them in pass 2 would mean two loops over one night's
@@ -1679,8 +1680,9 @@ final class IntelligenceEngine: ObservableObject {
                 // #103/queue-11a: the night's SpO₂ candidate result — the in-band (70–100)
                 // `spo2_candidate_82` V18Aux readings resolved per measurement window (W03-003) into a
                 // mean, a range, the night's dip readings and its window counts. Only computed when the
-                // display toggle is ON; nil when there is no v18 aux stream, no in-band reading, or the
-                // toggle is OFF.
+                // display toggle is ON; nil when there is no v18 aux stream, no nonzero byte-82 second,
+                // or the toggle is OFF. A night whose readings all failed the quality check is non-nil
+                // with no mean (W03-007).
                 //
                 // Resolved ONCE, here, for everything pass 2 writes: the mean, the minimum, the dip count,
                 // the dip span and the window counts are all read off this single value rather than
@@ -2034,6 +2036,10 @@ final class IntelligenceEngine: ObservableObject {
         // Rest composite (0–100) per computed night, persisted as the `sleep_performance` metric
         // series so the dashboard's Rest score reflects the new composite, not raw efficiency.
         var restPoints: [MetricPoint] = []
+        // W03-007: days whose SpO₂ candidate night had readings but none reliable. Their mean and minimum
+        // rows are deleted after the persist, so a night that re-scores to "no reliable reading" cannot
+        // keep showing the average an earlier pass stored.
+        var spo2NoReliableReadingDays: [String] = []
         // User-corrected sleep windows override the detected sleep when scoring a day's sleep aggregates,
         // so Rest + recovery honor the edit , not just the Sleep tab's session view. An edited block
         // substitutes its detected twin (matched by the stable detected startTs) before totals recompute.
@@ -2286,11 +2292,22 @@ final class IntelligenceEngine: ObservableObject {
             // Every key comes from `Spo2CandidateSeries`, never a literal spelled here — the reader looks
             // these up optionally, so a key spelled twice could drift on one side and bank nothing for a
             // field nobody notices is missing (the `V18AuxSlot.decoderKey` lesson, one layer up).
+            //
+            // W03-007: the figures rest on RELIABLE readings only, and a night whose readings all failed
+            // the quality check has no mean and no minimum. Its counts are still written, with the
+            // low-quality key as the marker of a gated night, and a mean or minimum an earlier pass
+            // stored for that day is deleted after the persist below (`spo2NoReliableReadingDays`).
             if let cand = spo2CandidateByDay[daily.day] {
-                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.meanKey,
-                                              value: cand.mean))
-                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.minimumKey,
-                                              value: Double(cand.minimum)))
+                if let mean = cand.mean, let minimum = cand.minimum {
+                    restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.meanKey,
+                                                  value: mean))
+                    restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.minimumKey,
+                                                  value: Double(minimum)))
+                } else {
+                    spo2NoReliableReadingDays.append(daily.day)
+                }
+                restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.lowQualityKey,
+                                              value: Double(cand.windowsLowQuality)))
                 restPoints.append(MetricPoint(day: daily.day, key: Spo2CandidateSeries.samplesKey,
                                               value: Double(cand.samples)))
                 // W03-003: the window counts. Their presence is also what tells a reader that this
@@ -2535,7 +2552,7 @@ final class IntelligenceEngine: ObservableObject {
             }
             markerSources = sourceIds
         }
-        try? await store.persistComputedScores(
+        let persistedScores = (try? await store.persistComputedScores(
             dailyMetrics: persistedDailies,
             metricPoints: restPoints,
             provenance: Array(provenanceByCell.values),
@@ -2545,7 +2562,7 @@ final class IntelligenceEngine: ObservableObject {
             replaceMetricKeys: markerKeys,
             additionalMetricPoints: markerPoints,
             replaceMetricSourceIds: markerSources
-        )
+        )) != nil
 
         // Now evict only the STALE computed rows in the window , those a prior (e.g. UTC-keyed) run left
         // behind that the current local-keyed run no longer produces. Read the window, diff against the
@@ -2567,6 +2584,13 @@ final class IntelligenceEngine: ObservableObject {
             for day in Self.staleRestPointDays(persisted: persistedDailies, produced: restPoints) {
                 _ = try? await store.deleteMetricSeriesPoint(deviceId: computedId, day: day,
                                                             key: "sleep_performance")
+            }
+            // Only after a persist that landed: deleting the mean and minimum when the gated night's
+            // counts were never written would leave a half-written night, which the funnel skips.
+            for day in spo2NoReliableReadingDays where persistedScores {
+                for key in [Spo2CandidateSeries.meanKey, Spo2CandidateSeries.minimumKey] {
+                    _ = try? await store.deleteMetricSeriesPoint(deviceId: computedId, day: day, key: key)
+                }
             }
         }
         markPostLoopPhase("persist")

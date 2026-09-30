@@ -350,13 +350,33 @@ means; the value remains an unvalidated candidate.
 - **Within a window.** The in-band value changes about every five records and spans a
   few points, with rare one-record excursions. The window, not the record, is the
   independent sample; NOOP's nightly figures use the window's median, taking the
-  lower of the two middle values when the count is even.
+  lower of the two middle values when the count is even, over the windows that pass
+  the quality rule below.
 - **No app-side unlock.** This strap never paired with the official app: its event
   history holds one BLE_BONDED event. It has no account, and it never received the R22
   sequence: no layout-22 record is among 14,866 archived unmapped records. It
   produced in-band values from its first scored night. On this strap and firmware the
   byte therefore needs no app-side unlock. This does not establish whether the
   official app can disable it.
+
+**Codes inside valued windows, same strap, 192 in-session windows over eight nights
+(owner export 2026-09-30).** Again what the byte does, not what the codes mean.
+
+- **Mixing.** Codes 32, 128 and 160 appear interleaved with in-band values inside one
+  window, in runs of one to ten records. Windows holding them were 17–60 % of each of
+  the first six nights and 81–83 % of the last two.
+- **Shape.** Windows without codes change by at most 2 points between records in 70 of
+  74 cases. Windows with many codes hold short in-band runs between them that jump
+  (one crossed 70–100 within ten records) or sit well below the night's code-free
+  windows.
+- **No other marker.** Neither the status-word pair at 77/79 nor bit 7 of byte 36
+  separates code records from in-band records inside a window, so the byte's own codes
+  are the only per-record marker observed.
+
+NOOP counts a window only when it holds at least ten in-band records, at least two thirds
+of its nonzero records are in band, and at least three fifths of those lie within 2
+points of the window's median (W03-007, W03-013). The thresholds come from this one strap without a reference oximeter; they
+judge how the window was reported, not its value.
 
 An official-app overnight capture of another strap, used by
 `Tools/linux-capture/validate_spo2_candidate.py`, shows the same 30-record, 1200 s
