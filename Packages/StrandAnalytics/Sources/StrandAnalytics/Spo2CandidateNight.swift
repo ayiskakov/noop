@@ -308,8 +308,11 @@ extension AnalyticsEngine {
     }
 
     /// The in-band seconds of the night's RELIABLE readings, ascending by timestamp: what a chart of the
-    /// night may plot beside the figures `nightlySpo2CandidateNight` states. Cut by the same windows and
-    /// the same quality verdict, so the chart cannot draw a low the figures left out (W03-007).
+    /// night may plot beside the figures `nightlySpo2CandidateNight` states. Given the same sessions and
+    /// samples it is cut by the same windows and the same verdict, so the chart cannot draw a low the
+    /// figures left out (W03-007). A caller that passes different sessions (a chart of one session where
+    /// the figures cover the day's) can see a reading straddling the session edge cut, and judged,
+    /// differently.
     public static func spo2CandidateReliableSeconds(
         _ sessions: [SleepSession],
         aux: [V18AuxSample]
@@ -395,6 +398,29 @@ public enum Spo2CandidateSeries {
         /// True for a quality-gated night on which the strap attempted readings and none was reliable:
         /// the night to say "no reliable reading" about, rather than show a number for.
         public var hasNoReliableReading: Bool { mean == nil }
+
+        /// What the reading count ("12 of 26") can honestly be captioned with. A reading the check left
+        /// out and a reading of codes only are different facts: "passed the quality check" is true only
+        /// when every attempted reading was reliable, and "left out as low quality" counts only readings
+        /// that had a value to leave out (W03-007).
+        public enum ReadingsNote: Equatable, Sendable {
+            /// Scored before W03-007: the count is every reading with a value.
+            case ungated
+            /// This many readings with a value failed the check.
+            case leftOut(Int)
+            /// None failed the check, but some readings were codes only: the count is every reading
+            /// with a value.
+            case someWithoutValue
+            /// Every attempted reading was reliable.
+            case allPassed
+        }
+
+        public var readingsNote: ReadingsNote {
+            guard let left = windowsLowQuality else { return .ungated }
+            if left > 0 { return .leftOut(left) }
+            if let w = windows, let a = windowsAttempted, w < a { return .someWithoutValue }
+            return .allPassed
+        }
 
         /// True when the night is known to have dipped. nil `dips` is UNKNOWN, not zero: a pre-keys night
         /// must not be captioned "no dips" on the strength of a row that was never written.

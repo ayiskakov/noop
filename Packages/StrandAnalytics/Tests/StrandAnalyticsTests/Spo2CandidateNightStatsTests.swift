@@ -432,6 +432,27 @@ final class Spo2CandidateSeriesTests: XCTestCase {
                      "reliable readings without a mean row is half-written, not a night to show")
     }
 
+    /// The reading count's caption never claims more than the counts support. A night of codes-only
+    /// readings has no low-quality reading, and "passed the quality check" under "0 of 26" would
+    /// contradict the notice beside it; nor may "12 of 26" read as all 26 passing.
+    func testTheReadingsNoteClaimsAPassOnlyWhenEveryReadingPassed() {
+        func note(windows: Double, attempted: Double, lowQuality: Double?) -> Spo2CandidateSeries.Night.ReadingsNote? {
+            Spo2CandidateSeries.latest(mean: windows > 0 ? ["2026-09-30": 95] : [:],
+                                       windows: ["2026-09-30": windows],
+                                       windowsAttempted: ["2026-09-30": attempted],
+                                       lowQuality: lowQuality.map { ["2026-09-30": $0] } ?? [:])?.readingsNote
+        }
+        XCTAssertEqual(note(windows: 0, attempted: 26, lowQuality: 0), .someWithoutValue,
+                       "a codes-only night is a night with no reliable reading, and nothing passed")
+        XCTAssertTrue(Spo2CandidateSeries.latest(mean: [:], windows: ["2026-09-30": 0],
+                                                 windowsAttempted: ["2026-09-30": 26],
+                                                 lowQuality: ["2026-09-30": 0])!.hasNoReliableReading)
+        XCTAssertEqual(note(windows: 12, attempted: 26, lowQuality: 0), .someWithoutValue)
+        XCTAssertEqual(note(windows: 12, attempted: 26, lowQuality: 9), .leftOut(9))
+        XCTAssertEqual(note(windows: 26, attempted: 26, lowQuality: 0), .allPassed)
+        XCTAssertEqual(note(windows: 26, attempted: 26, lowQuality: nil), .ungated)
+    }
+
     /// A night scored before W03-007 carries no low-quality count, and reads as ungated rather than as
     /// "none left out".
     func testAPreGateNightReportsNoLowQualityCount() {

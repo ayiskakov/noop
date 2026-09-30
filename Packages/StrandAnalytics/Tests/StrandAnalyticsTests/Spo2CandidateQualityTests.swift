@@ -53,6 +53,21 @@ final class Spo2CandidateQualityTests: XCTestCase {
         XCTAssertEqual(n?.windowsLowQuality, 0)
     }
 
+    /// The two gates at the strap's real 30-second shape, at and one second past each boundary: 20 of
+    /// 30 in band passes and 19 fails; 18 of 30 agreeing seconds passes and 17 fails.
+    func testTheGatesAtTheirBoundariesOnAThirtySecondReading() {
+        func quality(_ values: [Int]) -> (low: Int, windows: Int)? {
+            AnalyticsEngine.nightlySpo2CandidateNight([sess(0, 600)], aux: reading(0, values))
+                .map { ($0.windowsLowQuality, $0.windows) }
+        }
+        let codes = { (n: Int) in Array(repeating: 128, count: n) }
+        XCTAssertEqual(quality(codes(10) + Array(repeating: 95, count: 20))?.windows, 1)
+        XCTAssertEqual(quality(codes(11) + Array(repeating: 95, count: 19))?.low, 1)
+        let spread = { (agree: Int) in Array(repeating: 95, count: agree) + (0..<(30 - agree)).map { $0 % 2 == 0 ? 80 : 99 } }
+        XCTAssertEqual(quality(spread(18))?.windows, 1)
+        XCTAssertEqual(quality(spread(17))?.low, 1)
+    }
+
     /// A night on which the strap attempted readings and none was reliable is NOT nil: it is a night
     /// with no reliable reading, which is exactly what a surface needs to say.
     func testANightOfFailedReadingsIsStatedNotDropped() {
