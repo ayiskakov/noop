@@ -68,6 +68,18 @@ final class SleepDetectWindowInvarianceTests: XCTestCase {
         XCTAssertEqual(short.map(\.end), full.map(\.end))
     }
 
+    /// W03-044: the "may be incomplete" verdict stored on a night is about that night's motion, not the read's.
+    /// A dense night read with a gravity gap 21 h away must not be stamped as staged on sparse motion.
+    func testADenseNightIsNotStampedSparseByAGapFarAway() {
+        let gap = (midnight + 21 * 3600)..<(midnight + 21 * 3600 + 25 * 60)
+        let s = streams(from: midnight - 30 * 3600, to: midnight + 24 * 3600, gap: gap)
+        let day = AnalyticsEngine.dayString(midnight + 3600, offsetSec: 0)
+        let res = AnalyticsEngine.analyzeDay(day: day, hr: s.hr, gravity: s.grav, profile: UserProfile(),
+                                             tzOffsetSeconds: 0)
+        XCTAssertFalse(res.cachedSleep.isEmpty, "the fixture must score a night")
+        XCTAssertEqual(res.cachedSleep.map(\.stagingSparse), res.cachedSleep.map { _ in false })
+    }
+
     /// The baseline a run is held to is the median of the 24 h around `t`, as `hrBaseline` computes a
     /// median, and it ignores samples further away.
     func testLocalBaselineIsTheMedianOfTheTwentyFourHoursAroundT() {

@@ -577,8 +577,14 @@ public enum AnalyticsEngine {
             consistency: sleepConsistency,
             deepSeconds: deepS)
         // #345: gravity-sparse computed ONCE — reused by the sleep-motion trace below AND the Rest
-        // confidence guard, so the two can never diverge and isGravitySparse runs only once per day.
-        let gravitySparse = SleepStager.isGravitySparse(gravity, hr: hr)
+        // confidence guard, so the two can never diverge. W03-044: judged per session over its own
+        // neighbourhood (`LocalContext.sparse` at its midpoint, the bridge's ±6 h), not over the read, which
+        // stamped dense nights "may be incomplete" for a gravity gap half a day away. The day's value is
+        // whether any session of its main night is sparse.
+        let motionContext = SleepStager.LocalContext(grav: gravity.sorted { $0.ts < $1.ts },
+                                                     hr: hr.sorted { $0.ts < $1.ts })
+        func sessionSparse(_ s: SleepSession) -> Bool { motionContext.sparse(at: (s.start + s.end) / 2) }
+        let gravitySparse = mainGroup.contains(where: sessionSparse)
         // Sleep & Rest test mode (E5): emit the Rest sub-score breakdown for this night, reusing the
         // IDENTICAL inputs `restScore` consumed above so the trace can never disagree with the score.
         // `subScoreLine` itself reuses `Rest.composite` for the final value. Side-effect-only; emitted
@@ -956,10 +962,10 @@ public enum AnalyticsEngine {
                 restingHr: s.restingHR,
                 avgHrv: s.avgHRV,
                 stagesJSON: encodeStages(s.stages),
-                // #345 follow-up: stamp the DAY's motion-coverage verdict on every session so the Sleep
-                // tab can caption a sparse (likely under-detected) night. A NOOP-computed night is always
+                // #345 follow-up: stamp each session's motion-coverage verdict so the Sleep tab can caption
+                // a sparse (likely under-detected) night (per session since W03-044). A NOOP-computed night is always
                 // true/false here; imported nights never reach this path and keep nil (unknown).
-                stagingSparse: gravitySparse)
+                stagingSparse: sessionSparse(s))
         }
 
         // ── Per-session per-epoch motion (H8) ─────────────────────────────────
