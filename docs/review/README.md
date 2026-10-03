@@ -102,6 +102,8 @@ item as it lands.
       owner's 2026-09-28 morning export (11.9.13) showed W06-083 twice more (toggles 140 s and 22 s into their
       links) and one SET_CLOCK last evening that stepped the strap 2 s; four app launches soon after evicted its
       process from the three-generation log ring, so its reason is not attributable. Checks 2 and 5 are still due.
+      Check 5 passes on the owner's 2026-09-30 export (11.9.15): a power-off 2.3 s into a link left the next link
+      with a clock read and a verdict of its own. Check 2 is still due.
 - [ ] Sixth W6 batch, `review/w06-fixes-6` (stacked on `review/strap-run-2026-09-27`), from the 2026-09-27 export:
       W06-108 (the strap log keeps hours, and a clipped session says so), W06-113, W06-109; W06-114 and W06-115
       recorded. V2 (independent subagent) held all three with caveats and added W06-116 … W06-122 and W07-005:
@@ -134,13 +136,16 @@ item as it lands.
       run: an iPhone relaunch by state restoration, a reconnect in the middle of an offload, and a sync whose
       status no longer names v20/v21 records as undecodable. Shipped in 11.9.14; the 2026-09-28 export ran on
       11.9.13, so only a replay was possible: `main` classifies the 24 dumped rejects of that export's sync as
-      0 undecodable.
+      0 undecodable. On the 2026-09-30 export (11.9.15) the reject archive's v20/v21 rejects stop at 2026-09-28
+      09:05 and 44 completed syncs log no undecodable status; a power-off mid-offload left no drain line after
+      its teardown. Still due: a state-restoration relaunch (this export's session heads are clipped).
 - [ ] Eighth W6 batch, `review/w06-fixes-8` (stacked on `review/strap-run-2026-09-27b`, which is stacked on the
       seventh batch), from the owner's 2026-09-27 evening export: W06-140 (the owner-name redaction rule was
       quadratic on a long hex run) and W06-110 (the reject hex dump is logged after the ack, since the strap drops a
       transfer acked 7 s or more after its chunk). StrandTests 2,100, both builds. Then a strap run: a sync with
       undecodable records whose ack follows its chunk within about 2 s. Shipped in 11.9.14; not yet on the
-      phone at the 2026-09-28 export. W06-083 (a Bluetooth power-off skips the
+      phone at the 2026-09-28 export. The 2026-09-30 export (11.9.15) captured no undecodable records, so its
+      check could not run. W06-083 (a Bluetooth power-off skips the
       next link's handshake) is proposed to the owner for the next batch.
 - [ ] Ninth W6 batch, `review/w06-fixes-9` (stacked on `review/strap-run-2026-09-28`): W06-083 (a Bluetooth
       power-off or reset ends the held link through the same teardown as a disconnect), W06-141 (the launch reconnect
@@ -154,7 +159,10 @@ item as it lands.
       builds (NOOPiOS without the watch app). Then a strap run: Bluetooth off and on mid-link from Settings and from
       Control Center (a `Link ended` line, then GET_CLOCK and a clock verdict on the next link), and the strap put back
       on while unlinked (`WRIST_ON reached through a sync`), then on and off again while unlinked
-      (`WRIST_OFF reached through a sync`).
+      (`WRIST_OFF reached through a sync`). Merged as PR #39 and shipped in 11.9.15. Its strap run, on the owner's
+      2026-09-30 export, is partial: two power-offs mid-link each logged `Link ended: Bluetooth off` and the next
+      link read the clock and gave a verdict (the log does not say which came from Settings and which from Control
+      Center). Still due: the wrist lines reached through a sync. The same export recorded W06-167 and W07-016.
 - [x] Batch check (METHOD step 6) for the first three batches: suites and both builds pass on 11.9.8. The day
       and night on the strap ran on 11.9.11 and 11.9.12, which carry all three batches (owner's 2026-09-27
       export): W01-003, W01-004, W02-002, W02-003 and W06-002 move to `Verified`; the batch rows without a
@@ -173,6 +181,8 @@ item as it lands.
       migrations, 37 tables and about 5.33 M rows, identical. Re-run on the 2026-09-27 evening export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.53 M rows, identical. Re-run on the 2026-09-28 export from 11.9.13: 50 →
       50 migrations, 37 tables and about 5.85 M rows, identical.
+      Re-run on the 2026-09-30 export from 11.9.15: 50 → 50 migrations, 37 tables and about 6.96 M rows,
+      identical.
 - [ ] W3 out of phase, `review/w03-spo2-quality` (off `main`), from the owner's 2026-09-30 export: W03-007
       (the SpO₂ candidate leaves low-quality byte-82 readings out of the night and states a night with no
       reliable reading as such, the owner's choice). V2 (independent subagent) found one S2, four S3 and
