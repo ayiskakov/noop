@@ -137,7 +137,9 @@ final class SleepFragmentedNightTests: XCTestCase {
         _ = SleepStager.detectSleep(hr: hr, gravity: grav, traceSink: { lines.append($0) })
         let bridge = lines.first { $0.contains("gate=sparseBridge ") }
         XCTAssertNotNil(bridge, "expected a sparseBridge line, got:\n" + lines.joined(separator: "\n"))
-        XCTAssertTrue(bridge!.contains("sparse=false fragmentedToNothing=true gapMin="),
+        // W03-023: sparseness is judged per gap from its neighbourhood, so the line counts the long gravity
+        // gaps that were locally sparse rather than asserting one read-wide flag.
+        XCTAssertTrue(bridge!.contains("sparseGaps=0/0 fragmentedToNothing=true gapMin="),
                       "unexpected sparseBridge detail format: \(bridge!)")
     }
 }

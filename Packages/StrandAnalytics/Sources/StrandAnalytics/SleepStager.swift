@@ -411,6 +411,86 @@ public enum SleepStager {
         return largestGapS(grav.map { $0.ts }) > Double(maxGapMin * 60)
     }
 
+    // MARK: - Local context (W03-023)
+
+    /// Radius of the gravity and sleep-run neighbourhood that decides whether the bridge may join two sleep
+    /// runs at a time `t`: gravity is judged sparse, or the nearby runs fragmented to nothing, over
+    /// [t − r, t + r] only.
+    public static let localSparseRadiusS = 6 * 3600
+    /// Radius of the heart-rate neighbourhood whose median is the baseline a decision at `t` is held to. A
+    /// 24 h span keeps waking hours in it, so it keeps the meaning of the day median it replaces.
+    public static let localBaselineRadiusS = 12 * 3600
+
+    /// The inputs a detection decision at time `t` may read, and nothing beyond them (W03-023). The sparse
+    /// flag, the fragmentation rescue and the HR baseline were each taken over the whole read, about 54 h,
+    /// so a gravity gap or the heart rate half a day after a night moved that night's bounds, and the same
+    /// night detected from two reads of different reach came out different. Read through this, a decision
+    /// at `t` depends only on data within `localBaselineRadiusS` of `t`: any read covering that span gives
+    /// the same answer.
+    struct LocalContext {
+        let gravTs: [Int]
+        let hrTs: [Int]
+        let hrBpm: [Int]
+        private let maxBpm: Int
+
+        /// `grav` and `hr` must be sorted by time.
+        init(grav: [GravitySample], hr: [HRSample]) {
+            gravTs = grav.map(\.ts)
+            hrTs = hr.map(\.ts)
+            hrBpm = hr.map(\.bpm)
+            maxBpm = max(0, hrBpm.max() ?? 0)
+        }
+
+        /// The indices of `a` (sorted) within [lo, hi].
+        static func range(_ a: [Int], _ lo: Int, _ hi: Int) -> Range<Int> {
+            func lowerBound(_ x: Int) -> Int {
+                var l = 0, h = a.count
+                while l < h { let m = (l + h) / 2; if a[m] < x { l = m + 1 } else { h = m } }
+                return l
+            }
+            let a0 = lowerBound(lo), a1 = lowerBound(hi + 1)
+            return a0..<max(a0, a1)
+        }
+
+        /// `isGravitySparse` over [t − localSparseRadiusS, t + localSparseRadiusS].
+        func sparse(at t: Int) -> Bool {
+            let r = SleepStager.localSparseRadiusS
+            let g = Self.range(gravTs, t - r, t + r), h = Self.range(hrTs, t - r, t + r)
+            if g.count < 2 || h.count < 2 { return false }
+            let hrSpan = Double(hrTs[h.upperBound - 1] - hrTs[h.lowerBound])
+            if hrSpan <= 0 { return false }
+            let gravSpan = Double(gravTs[g.upperBound - 1] - gravTs[g.lowerBound])
+            if gravSpan < SleepStager.sparseGravitySpanFrac * hrSpan { return true }
+            var largest = 0
+            for i in g.lowerBound..<(g.upperBound - 1) { largest = max(largest, gravTs[i + 1] - gravTs[i]) }
+            return Double(largest) > Double(SleepStager.maxGapMin * 60)
+        }
+
+        /// The median bpm over [t − localBaselineRadiusS, t + localBaselineRadiusS], as `hrBaseline`
+        /// computes it (the mean of the middle two for an even count); nil with no samples there.
+        func baseline(at t: Int) -> Double? {
+            let r = SleepStager.localBaselineRadiusS
+            let h = Self.range(hrTs, t - r, t + r)
+            guard !h.isEmpty else { return nil }
+            var counts = [Int](repeating: 0, count: maxBpm + 1)
+            var negatives: [Int] = []
+            for i in h { let b = hrBpm[i]; if b >= 0 { counts[b] += 1 } else { negatives.append(b) } }
+            negatives.sort()
+            let n = h.count
+            func value(at k: Int) -> Int {   // the k-th smallest, 0-based
+                if k < negatives.count { return negatives[k] }
+                var seen = negatives.count
+                for (b, c) in counts.enumerated() where c > 0 {
+                    seen += c
+                    if k < seen { return b }
+                }
+                return maxBpm
+            }
+            if n % 2 == 1 { return Double(value(at: n / 2)) }
+            return (Double(value(at: n / 2 - 1)) + Double(value(at: n / 2))) / 2.0
+        }
+    }
+
     /// True when HR stays in the sleep band (≤ baseline × hrSleepBandMult) across (a, b], used to
     /// decide whether a pure gravity gap is a real wake or just a dropout. With no baseline or no
     /// HR in the interval, the answer is false (cannot vouch for the gap → treat as a real break).
@@ -461,8 +541,12 @@ public enum SleepStager {
     /// (no contrary motion) does NOT close a SLEEP run while HR stays in the sleep band across
     /// the gap: the strap simply banked no motion there, not a wake. A class change always still
     /// closes the run, and the dense path (`sparse == false`) is byte-identical to the original.
+    ///
+    /// With a `context` (W03-023) the sparse flag and the HR baseline for each gap are taken from the gap's
+    /// own neighbourhood, and `sparse` and `baseline` are ignored.
     static func buildRuns(_ grav: [GravitySample], _ flags: [Bool],
-                          sparse: Bool = false, hr: [HRSample] = [], baseline: Double? = nil) -> [Period] {
+                          sparse: Bool = false, hr: [HRSample] = [], baseline: Double? = nil,
+                          context: LocalContext? = nil) -> [Period] {
         let n = grav.count
         if n == 0 { return [] }
         let times = grav.map { $0.ts }
@@ -479,8 +563,11 @@ public enum SleepStager {
                 var gapExceeded = (times[i] - times[i - 1]) > maxGapS
                 // Sparse override: a pure gravity gap (no class change) does not break a sleep
                 // run when HR stays in the sleep band across it — the gap is a dropout, not a wake.
-                if sparse && gapExceeded && !classChanged && flags[runStart]
-                    && hrSleepBandAcross(times[i - 1], times[i], hr: hr, baseline: baseline) {
+                let mid = (times[i - 1] + times[i]) / 2
+                if gapExceeded && !classChanged && flags[runStart]
+                    && (context.map { $0.sparse(at: mid) } ?? sparse)
+                    && hrSleepBandAcross(times[i - 1], times[i], hr: hr,
+                                         baseline: context.map { $0.baseline(at: mid) } ?? baseline) {
                     gapExceeded = false
                 }
                 close = classChanged || gapExceeded
@@ -825,9 +912,23 @@ public enum SleepStager {
     /// This USED to be a shadow copy of the loop kept only for tracing, which had to be edited in step
     /// with the real one — a trace that quietly disagrees with the behaviour it describes is worse than
     /// no trace. Merge and trace are one pass now. Kotlin twin: `bridgeSparseSleepTraced`.
+    ///
+    /// With a `context` (W03-023) each pair is judged on its own neighbourhood: it is considered when
+    /// gravity is sparse around the gap between the two runs, or when the sleep runs within
+    /// `localSparseRadiusS` of it are fragmented to nothing (#1937), and its HR band uses the baseline
+    /// there; `sparse` and `baseline` are ignored.
     static func bridgeSparseSleepTraced(_ periods: [Period], sparse: Bool, hr: [HRSample],
-                                        baseline: Double?) -> ([Period], [SparseBridgeAttempt]) {
-        if !sparse || periods.isEmpty { return (periods, []) }
+                                        baseline: Double?, context: LocalContext? = nil,
+                                        minSleepS: Int = minSleepMin * 60) -> ([Period], [SparseBridgeAttempt]) {
+        if periods.isEmpty || (context == nil && !sparse) { return (periods, []) }
+        let sleepRuns = periods.filter { $0.stage == "sleep" }
+        func enabled(at t: Int) -> Bool {
+            guard let context else { return true }
+            if context.sparse(at: t) { return true }
+            let r = localSparseRadiusS
+            return isFragmentedToNothing(sleepRuns.filter { $0.end >= t - r && $0.start <= t + r }
+                                            .map { $0.end - $0.start }, minSleepS: minSleepS)
+        }
         let bridgeGapS = sparseBridgeGapMin * 60
         let activeMaxS = sparseBridgeActiveMaxMin * 60
         let activeMaxInBandS = sparseBridgeActiveMaxInBandMin * 60
@@ -846,7 +947,10 @@ public enum SleepStager {
         func consider(_ left: Period, _ right: Period, activeS: Int,
                       dropTrailing: Bool, activeMaxS: Int, activeMaxInBandS: Int = 0) -> Bool {
             let gap = right.start - left.end
-            let inBand = hrSleepBandAcross(left.end, right.start, hr: hr, baseline: baseline)
+            let mid = (left.end + right.start) / 2
+            guard enabled(at: mid) else { return false }
+            let inBand = hrSleepBandAcross(left.end, right.start, hr: hr,
+                                           baseline: context.map { $0.baseline(at: mid) } ?? baseline)
             // The HR band is the real guard, so let it widen the minute bound rather than be vetoed by
             // it. max, not a swap: in-band can only ever be MORE permissive, and case 1 (activeMaxS = 0,
             // no intervening run) is untouched because activeS is 0 there too.
@@ -1535,16 +1639,16 @@ public enum SleepStager {
         let rrS = rr.sortedByTsStable()   // stable: keeps #823 emission order within a second
         let respS = resp.sorted { $0.ts < $1.ts }
 
-        let baseline = hrBaseline(hrS)
         // Sparse-gravity gate (#308): an un-unlocked WHOOP 5.0 backfills mostly v18/v26 records
         // where gravity is clumped (~25% coverage), so the gravity-only spine fragments the night.
-        // ONLY when sparse do the three robustness branches engage; a dense 4.0 night is `false`
-        // here and follows the exact original path (byte-identical).
-        let sparse = isGravitySparse(grav, hr: hrS)
+        // ONLY where gravity is sparse do the robustness branches engage. W03-023: "where" is local. The
+        // flag, the fragmentation rescue and the HR baseline were each taken over the whole read, so data
+        // half a day after a night moved its bounds; every decision now reads its own neighbourhood.
+        let context = LocalContext(grav: grav, hr: hrS)
 
         let deltas = gravityDeltas(grav)
         let flags = classifyStill(grav, deltas)
-        var runs = buildRuns(grav, flags, sparse: sparse, hr: hrS, baseline: baseline)
+        var runs = buildRuns(grav, flags, hr: hrS, context: context)
         runs = mergePeriods(runs)
         let minSleepS = minSleepMin * 60
         // #1937: a night whose sleep runs are ALL shorter than minSleepMin yields NO session at all,
@@ -1575,14 +1679,22 @@ public enum SleepStager {
         // runs.
         let fragmentedToNothing = isFragmentedToNothing(
             runs.filter { $0.stage == "sleep" }.map { $0.end - $0.start }, minSleepS: minSleepS)
-        let bridgeEnabled = sparse || fragmentedToNothing
+        // Trace only: whether any gravity gap over `maxGapMin` sits where gravity is locally sparse. The
+        // bridge decides per pair from its own neighbourhood (W03-023).
+        let longGaps = traceSink == nil ? []
+            : zip(context.gravTs, context.gravTs.dropFirst()).filter { $1 - $0 > maxGapMin * 60 }
+        let sparseGaps = longGaps.filter { context.sparse(at: ($0 + $1) / 2) }.count
+        // `fragmentedToNothing` here is the read-wide value, kept for the trace; the bridge judges each pair's
+        // own neighbourhood.
         // Re-stitch sleep runs fragmented by gravity dropouts, before minSleepMin.
         let runsBeforeBridge = traceSink == nil ? 0 : runs.filter { $0.stage == "sleep" }.count
         // #737: capture the per-pair reasons BEFORE the merge mutates `runs`, so a bridge that changed
         // nothing still says why (gapTooLong / hrOutOfBand / overlap) instead of only before==after.
-        let bridgeResult = bridgeSparseSleepTraced(runs, sparse: bridgeEnabled, hr: hrS, baseline: baseline)
+        let bridgeResult = bridgeSparseSleepTraced(runs, sparse: true, hr: hrS, baseline: nil, context: context,
+                                                   minSleepS: minSleepS)
         let bridgeAttempts = bridgeResult.1
         runs = bridgeResult.0
+        let bridgeEnabled = !bridgeAttempts.isEmpty || sparseGaps > 0 || fragmentedToNothing
         // Sleep & Rest test mode (E3): record the bridge result, so a night rescued from fragmentation
         // is visible. Emitted whenever the bridge was ENABLED (sparse, or #1937's fragmented-to-nothing
         // night) and only when tracing. Side-effect-only.
@@ -1595,7 +1707,7 @@ public enum SleepStager {
             // needs.
             traceSink(GateTrace.runLine(index: -1, startTs: 0, endTs: 0,
                 verdict: runsAfterBridge < runsBeforeBridge ? .kept : .dropped, gate: "sparseBridge",
-                detail: "sparse=\(sparse) fragmentedToNothing=\(fragmentedToNothing) "
+                detail: "sparseGaps=\(sparseGaps)/\(longGaps.count) fragmentedToNothing=\(fragmentedToNothing) "
                     + "gapMin=\(sparseBridgeGapMin) runsBefore=\(runsBeforeBridge) runsAfter=\(runsAfterBridge)"))
             // #737: one line per pair the bridge CONSIDERED, each naming what it decided.
             //
@@ -1667,6 +1779,8 @@ public enum SleepStager {
                     detail: "spanMin=\(spanMin) maxMainSleepSpanMin=\(maxMainSleepSpanS / 60)"))
                 continue
             }
+            // W03-023: the baseline a run is held to is the median of the 24 h around it, not of the read.
+            let baseline = context.baseline(at: (p.start + p.end) / 2)
             if !confirmSleepWithHR(p, hr: hrS, baseline: baseline, grav: grav, sleepHRBaseline: sleepHRBaseline) {
                 traceSink?(GateTrace.runLine(index: runIndex, startTs: p.start, endTs: p.end,
                     verdict: .dropped, gate: "hrConfirm",
@@ -1769,7 +1883,7 @@ public enum SleepStager {
             let survivingSpanMin = sessions.reduce(0) { $0 + ($1.end - $1.start) } / 60
             traceSink("sleep-detect summary: sleepRuns=\(sleepRunsSeen) droppedMinSleep=\(minSleepDrops) "
                 + "kept=\(sessions.count) detectedSpanMin=\(detectedSpanMin) survivingSpanMin=\(survivingSpanMin) "
-                + "sparse=\(sparse) grav=\(grav.count) hr=\(hrS.count)")
+                + "sparseGaps=\(sparseGaps)/\(longGaps.count) grav=\(grav.count) hr=\(hrS.count)")
         }
         return sessions
     }
