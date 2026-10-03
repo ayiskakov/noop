@@ -131,7 +131,9 @@ final class LastSyncAttributionTests: XCTestCase {
                        "Backfill: refreshing dashboard cache from completed sync")
         XCTAssertNil(LastSyncOrigin.completedSync.rescoreTriggerLabel)
         XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.contains("completed sync"))
-        XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "launch-seed")
+        XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "stored-seed")
+        XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.hasPrefix("Launch"),
+                       "a retried bootstrap seeds after launch (W07-046)")
     }
 
     /// W07-044: a value with no recorded writer is reported as unattributed, never as a completed sync.
