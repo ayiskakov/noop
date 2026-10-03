@@ -1761,8 +1761,18 @@ final class Repository: ObservableObject {
     private func restageFromRaw(start: Int, end: Int) async -> String? {
         guard let store = await ensureStore() else { return nil }
         let lo = start - 3_600, hi = end + 3_600
-        let grav = (try? await store.gravitySamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? []
-        let inWindowGravity = grav.lazy.filter { $0.ts >= start && $0.ts <= end }.count
+        // W07-043: the night's raw lives under the strap that recorded it, which after a re-add is not the
+        // active one. Read from the registered strap with the most gravity inside the window (the active one
+        // first on a tie), so a canonical night is re-staged from its own raw and never from another strap's
+        // partial raw.
+        var deviceId = self.deviceId
+        var grav: [GravitySample] = []
+        var inWindowGravity = 0
+        for id in rawPhysiologyReadIds(store: store) {
+            let g = (try? await store.gravitySamples(deviceId: id, from: lo, to: hi, limit: 200_000)) ?? []
+            let n = g.lazy.filter { $0.ts >= start && $0.ts <= end }.count
+            if n > inWindowGravity { deviceId = id; grav = g; inWindowGravity = n }
+        }
         let windowSeconds = max(1, end - start)
         guard inWindowGravity >= max(20, windowSeconds / 120) else { return nil }
         let hr = (try? await store.hrSamples(deviceId: deviceId, from: lo, to: hi, limit: 200_000)) ?? []
@@ -1810,20 +1820,28 @@ final class Repository: ObservableObject {
     /// rows, oldest first, so the caller recomputes daily aggregates from the corrected stages.
     func selfHealEditedStages(from windowStart: Int, to windowEnd: Int) async -> [CachedSleepSession] {
         guard let store = await ensureStore() else { return [] }
-        let ids = computedReadIds
-        func editedRows() async -> [(id: String, row: CachedSleepSession)] {
-            var byStart: [Int: (id: String, row: CachedSleepSession)] = [:]
+        // Every registered strap's computed sibling, active first: the set the Sleep tab shows nights from
+        // (W07-041). Two re-adds later a nap logged under the first re-added strap's sibling is still shown.
+        let ids = rawComputedReadIds(store: store)
+        /// Every edited row, in read order, and the one per start scoring takes (the first read, so the
+        /// active strap's copy wins).
+        func editedRows() async -> (all: [(id: String, row: CachedSleepSession)], scored: [CachedSleepSession]) {
+            var all: [(id: String, row: CachedSleepSession)] = []
             for id in ids {
                 let rows = ((try? await store.sleepSessions(deviceId: id, from: windowStart,
                                                             to: windowEnd, limit: 100_000)) ?? [])
-                for row in rows where row.userEdited && byStart[row.startTs] == nil { byStart[row.startTs] = (id, row) }
+                all += rows.filter(\.userEdited).map { (id, $0) }
             }
-            return byStart.values.sorted { $0.row.startTs < $1.row.startTs }
+            var byStart: [Int: CachedSleepSession] = [:]
+            for (_, row) in all where byStart[row.startTs] == nil { byStart[row.startTs] = row }
+            return (all, byStart.values.sorted { $0.startTs < $1.startTs })
         }
         let edited = await editedRows()
-        guard !edited.isEmpty else { return [] }
+        guard !edited.all.isEmpty else { return [] }
         var healed = false
-        for (id, row) in edited {
+        // Every copy is healed, not only the one scoring takes, so a copy the Sleep tab still shows does not
+        // go stale (W07-042).
+        for (id, row) in edited.all {
             // Re-derive over the LOCKED corrected window (effective onset → wake). Skip when the raw
             // isn't dense yet, or when the result already matches what's stored (steady state , no write).
             guard let newJSON = await restageFromRaw(start: row.effectiveStartTs, end: row.endTs),
@@ -1833,7 +1851,7 @@ final class Repository: ObservableObject {
                                                         stagesJSON: newJSON)) ?? 0
             if n > 0 { healed = true }
         }
-        return (healed ? await editedRows() : edited).map(\.row)
+        return (healed ? await editedRows() : edited).scored
     }
 
     // MARK: - Metric explorer reads (generic substrate)
