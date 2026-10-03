@@ -234,8 +234,9 @@ public struct DeviceRegistryStore: Sendable {
     /// mixed day keeps its row. A cell sourced from an estimator (weekly VO₂max) never names a device, and
     /// a day scored before provenance existed has no cells, so both stay.
     ///
-    /// Sleeps and detected workouts carry no day key, so they are attributed by heart rate: a session goes
-    /// when the device has heart rate inside it and no other source does. Nights the user edited or added
+    /// Sleeps and workouts under the canonical id (detected ones; user workouts live under the strap's own
+    /// id) carry no day key, so they are attributed by heart rate: a session goes when the device has heart
+    /// rate inside it and no other source does. Nights the user edited or added
     /// stay, as in the exclusive case. Must run before the device's heart rate is deleted.
     static func deleteAttributedCanonicalRows(_ db: Database, of deviceId: String) throws {
         let canonical = canonicalComputedId
@@ -269,18 +270,44 @@ public struct DeviceRegistryStore: Sendable {
         try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?",
                        arguments: [canonical, deviceId])
 
-        let coveredOnlyByDevice = """
-            EXISTS(SELECT 1 FROM hrSample h WHERE h.deviceId = :device AND h.ts BETWEEN s.startTs AND s.endTs)
-            AND NOT EXISTS(SELECT 1 FROM hrSample h WHERE h.deviceId != :device AND h.deviceId NOT LIKE '%' || :suffix
-                           AND h.ts BETWEEN s.startTs AND s.endTs)
-            """
-        let args: StatementArguments = ["canonical": canonical, "device": deviceId, "suffix": computedSuffix]
-        try db.execute(sql: """
-            DELETE FROM sleepSession AS s WHERE s.deviceId = :canonical AND s.userEdited = 0 AND \(coveredOnlyByDevice)
-            """, arguments: args)
-        try db.execute(sql: """
-            DELETE FROM workout AS s WHERE s.deviceId = :canonical AND \(coveredOnlyByDevice)
-            """, arguments: args)
+        // Each session is probed with key lookups on (deviceId, ts): one for the device, one per other heart-rate
+        // source. A `deviceId != ?` predicate cannot use the key and scanned the whole heart-rate index per
+        // session, 25–53 s on 115 days of 1 Hz rows inside this write transaction (W07-002 V2).
+        let otherSources = try heartRateSourceIds(db).filter { $0 != deviceId && !$0.hasSuffix(computedSuffix) }
+        func hasHeartRate(_ id: String, _ start: Int, _ end: Int) throws -> Bool {
+            try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM hrSample WHERE deviceId = ? AND ts BETWEEN ? AND ?)",
+                              arguments: [id, start, end]) ?? false
+        }
+        func coveredOnlyByDevice(_ start: Int, _ end: Int) throws -> Bool {
+            guard try hasHeartRate(deviceId, start, end) else { return false }
+            return try !otherSources.contains { try hasHeartRate($0, start, end) }
+        }
+        for row in try Row.fetchAll(db, sql: "SELECT startTs, endTs FROM sleepSession WHERE deviceId = ? AND userEdited = 0",
+                                    arguments: [canonical]) {
+            let start: Int = row["startTs"], end: Int = row["endTs"]
+            guard try coveredOnlyByDevice(start, end) else { continue }
+            try db.execute(sql: "DELETE FROM sleepSession WHERE deviceId = ? AND startTs = ?", arguments: [canonical, start])
+        }
+        for row in try Row.fetchAll(db, sql: "SELECT startTs, endTs, sport FROM workout WHERE deviceId = ?",
+                                    arguments: [canonical]) {
+            let start: Int = row["startTs"], end: Int = row["endTs"], sport: String = row["sport"]
+            guard try coveredOnlyByDevice(start, end) else { continue }
+            try db.execute(sql: "DELETE FROM workout WHERE deviceId = ? AND startTs = ? AND sport = ?",
+                           arguments: [canonical, start, sport])
+        }
+    }
+
+    /// The distinct `deviceId`s holding heart rate, read by skipping through the (deviceId, ts) key one id at a
+    /// time rather than scanning every row.
+    static func heartRateSourceIds(_ db: Database) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            WITH RECURSIVE ids(id) AS (
+                SELECT MIN(deviceId) FROM hrSample
+                UNION ALL
+                SELECT (SELECT MIN(deviceId) FROM hrSample WHERE deviceId > ids.id) FROM ids WHERE ids.id IS NOT NULL
+            )
+            SELECT id FROM ids WHERE id IS NOT NULL
+            """)
     }
 
     /// #771: re-point the ACTIVE Oura device from its CoreBluetooth-UUID id (`activeId`, e.g.
