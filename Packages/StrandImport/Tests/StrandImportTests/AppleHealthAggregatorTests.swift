@@ -138,6 +138,42 @@ final class AppleHealthAggregatorTests: XCTestCase {
         XCTAssertEqual(a.steps!, 7500, accuracy: 1e-9)
     }
 
+    /// W04-005: active and basal energy follow the #589 rule too. A watch and another app (the WHOOP app,
+    /// or NOOP's own write-back) both write the same day's energy; summing across sources doubled it.
+    func testEnergyDoesNotDoubleCountAcrossSources() {
+        let day = Fixtures.utc(2024, 3, 8, 10, 0, 0)
+        func energy(_ type: String, _ v: Double, _ src: String) -> HealthSample {
+            HealthSample(type: type, value: v, valueString: String(v), unit: "kcal",
+                         start: day, end: day, tzOffsetMin: 0, sourceName: src)
+        }
+        let samples = [
+            energy("ActiveEnergyBurned", 300, "Apple Watch"), energy("ActiveEnergyBurned", 200, "Apple Watch"),
+            energy("ActiveEnergyBurned", 480, "WHOOP"),
+            energy("BasalEnergyBurned", 1700, "Apple Watch"), energy("BasalEnergyBurned", 1650, "WHOOP"),
+        ]
+        let a = try! XCTUnwrap(agg(AppleHealthAggregator.daily(samples: samples), "2024-03-08"))
+        XCTAssertEqual(a.activeKcal ?? -1, 500, accuracy: 1e-9)
+        XCTAssertEqual(a.basalKcal ?? -1, 1700, accuracy: 1e-9)
+    }
+
+    /// W04-005: the same night written by two sources (a staged watch night and another app's unstaged
+    /// asleep) is one night, not two. The day takes one source's night, the one with the most sleep, as
+    /// #589 does for steps.
+    func testSleepDoesNotDoubleCountAcrossSources() {
+        let start = Fixtures.utc(2024, 3, 8, 23, 0, 0)
+        let mid = start.addingTimeInterval(4 * 3600)
+        let end = start.addingTimeInterval(8 * 3600)
+        let intervals = [
+            SleepStageInterval(stage: .asleepCore, start: start, end: mid, tzOffsetMin: 0, sourceName: "Apple Watch"),
+            SleepStageInterval(stage: .asleepDeep, start: mid, end: end, tzOffsetMin: 0, sourceName: "Apple Watch"),
+            SleepStageInterval(stage: .asleepUnspecified, start: start.addingTimeInterval(600), end: end,
+                               tzOffsetMin: 0, sourceName: "WHOOP"),
+        ]
+        let n = try! XCTUnwrap(AppleHealthAggregator.sleepDaily(intervals)["2024-03-09"])
+        XCTAssertEqual(n.asleep, 480, accuracy: 1e-9)
+        XCTAssertEqual(n.deep, 240, accuracy: 1e-9)
+    }
+
     // MARK: - VO2Max latest
 
     func testVO2MaxLatestWins() {
