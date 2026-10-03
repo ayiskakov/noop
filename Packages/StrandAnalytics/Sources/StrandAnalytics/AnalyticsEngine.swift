@@ -204,10 +204,14 @@ public enum AnalyticsEngine {
     /// declines — so the shortcut can only ever DECLINE to a direct read, never return wrong data.
     /// Mirrors Kotlin `AnalyticsEngine.daySliceFromNight`; lives here (like `offWristIntervals`)
     /// so the pure logic is package-testable. (#997)
+    ///
+    /// `limit` is the cap the night read itself used (`StreamReadCap`), so a night that came back AT it is
+    /// treated as truncated and a complete one is sliced. It has no default: a 200,000 default fell below a
+    /// complete 66-hour read at 1 Hz after W03-024, and every day re-read its streams (W03-045).
     public static func daySliceFromNight<T>(_ night: [T],
                                             nightLo: Int, nightHi: Int,
                                             dayLo: Int, dayHi: Int,
-                                            limit: Int = 200_000,
+                                            limit: Int,
                                             ts: (T) -> Int) -> [T]? {
         guard dayLo >= nightLo, dayHi <= nightHi, night.count < limit else { return nil }
         return night.filter { ts($0) >= dayLo && ts($0) <= dayHi }

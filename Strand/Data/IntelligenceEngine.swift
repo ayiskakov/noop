@@ -1310,20 +1310,22 @@ final class IntelligenceEngine: ObservableObject {
                 // hr/steps/grav lists already in memory — derive the day streams by filtering them
                 // (AnalyticsEngine.daySliceFromNight) instead of a second store read (~60 redundant reads
                 // per pass, incl. the big HR ones). TODAY (its day runs past the 18 h night cap) and a
-                // night read that hit the 200_000 limit DECLINE (nil) and read directly, so the shortcut
+                // night read that came back at its own cap (W03-045) DECLINE (nil) and read directly, so the shortcut
                 // can only ever skip work, never change data. Byte-identical: same owner, same inclusive
                 // bounds, same ts-ASC order as the direct read. (`??` can't take an `await` right-hand
                 // side, hence the explicit if/else at each site.)
                 let dayHr: [HRSample]
                 if let slice = AnalyticsEngine.daySliceFromNight(hr, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.hr, ts: { $0.ts }) {
                     dayHr = slice
                 } else {
                     dayHr = (try? await store.hrSamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
                 }
                 let daySteps: [StepSample]
                 if let slice = AnalyticsEngine.daySliceFromNight(steps, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.steps, ts: { $0.ts }) {
                     daySteps = slice
                 } else {
                     daySteps = (try? await store.stepSamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
@@ -1335,7 +1337,8 @@ final class IntelligenceEngine: ObservableObject {
                 // detector see the whole day, so a 5 pm run shows up on the same day.
                 let dayGrav: [GravitySample]
                 if let slice = AnalyticsEngine.daySliceFromNight(grav, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.gravity, ts: { $0.ts }) {
                     dayGrav = slice
                 } else {
                     dayGrav = (try? await store.gravitySamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
