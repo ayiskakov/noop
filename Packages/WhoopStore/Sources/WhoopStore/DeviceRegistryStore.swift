@@ -232,8 +232,9 @@ public struct DeviceRegistryStore: Sendable {
     /// day's recovery, strain and Rest-point series. Each series cell naming the device goes; a day's
     /// `dailyMetric` row goes when the device owns it (its strain cell, else its recovery cell, names the
     /// device), and when the device supplied only a legacy snapshot's recovery on another source's row, just
-    /// the snapshot's columns are cleared (W07-035). A cell sourced from an estimator (weekly VO₂max) never names a device, and
-    /// a day scored before provenance existed has no cells, so both stay.
+    /// the snapshot's columns are cleared (W07-035). The weekly VO₂max cell names its
+    /// estimator, not a device, so it goes with the day it was computed on (W07-036); a day scored before
+    /// provenance existed has no cells and stays.
     ///
     /// Sleeps and workouts under the canonical id (detected ones; user workouts live under the strap's own
     /// id) carry no day key, so they are attributed by heart rate: a session goes when the device has heart
@@ -268,11 +269,13 @@ public struct DeviceRegistryStore: Sendable {
                 // The day was the device's, so its other computed cells were derived from it too: values a
                 // later pass stopped producing (which lose their provenance but keep their value) and the
                 // Healthspan and Fitness Age points, which are never attributed. A cell another source is
-                // named for stays.
+                // named for stays. The weekly VO2max cell names its estimator, not a source; it comes from the
+                // same Fitness Age computation over the same week, so it goes with it (W07-036).
                 try db.execute(sql: """
                     DELETE FROM metricSeries AS m WHERE m.deviceId = ? AND m.day = ?
                     AND NOT EXISTS(SELECT 1 FROM scoreInputProvenance p
-                                   WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key AND p.sourceId != ?)
+                                   WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key
+                                     AND p.sourceId != ? AND p.key != 'vo2max_est')
                     """, arguments: [canonical, day, deviceId])
                 try db.execute(sql: """
                     DELETE FROM scoreInputProvenance WHERE deviceId = ? AND day = ? AND key IN ('recovery', 'strain')

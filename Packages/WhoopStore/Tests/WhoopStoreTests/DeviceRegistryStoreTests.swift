@@ -318,9 +318,9 @@ final class DeviceRegistryStoreTests: XCTestCase {
         let left = try canonicalCells(dbq)
         XCTAssertEqual(left.days, ["B", "L"],
                        "day A was whoop-new's alone; day M's row is whoop-new's too (its strain cell), only its legacy recovery is not (W07-035)")
-        XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:vo2max_est", "B:sleep_performance",
+        XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "B:sleep_performance",
                                      "B:spo2_candidate", "L:sleep_performance"],
-                       "the unattributed cells of the days whoop-new owned go with them")
+                       "the unattributed cells of the days whoop-new owned go with them, and the weekly VO2max with Fitness Age (W07-036)")
         XCTAssertEqual(left.sleeps, [3000, 5000, 7000], "a night only whoop-new's heart rate covers goes; an edited one stays")
         XCTAssertEqual(left.workouts, [7000])
     }
