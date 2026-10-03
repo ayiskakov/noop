@@ -242,7 +242,8 @@ Separate the routing token from the partition id, and replace the three strap-se
 pure resolver of registry rows and the active id (worn-strap set and owner precedence) that settles
 archived straps one way. `Repository`'s unions, `resolveDayOwner`, the day-cycle candidates,
 `selfHealEditedStages`, `restageFromRaw`, `rescoreManualWorkouts` and the Health bridge call it. Per-day
-attribution of computed rows closes W07-002. The single-id readers are fixed as bugs first; the resolver
+attribution of computed rows replaces the provenance-based delete that closed W07-002 (which cannot
+reach days scored before provenance existed). The single-id readers are fixed as bugs first; the resolver
 is the Phase 5 refactor (with AD-1).
 
 ### AD-8

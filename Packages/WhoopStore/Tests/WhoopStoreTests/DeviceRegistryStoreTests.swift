@@ -240,6 +240,105 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(try rows(dbq, "sleepSession", "whoop-new-noop"), 1)
     }
 
+    // MARK: W07-002 — the shared canonical namespace, attributed per cell
+
+    /// Seeds the canonical computed namespace the way the engine leaves it with two straps registered:
+    /// day A scored from `whoop-new`, day B from `my-whoop`, day M mixed (recovery from a legacy snapshot of
+    /// `my-whoop`, strain from `whoop-new`), day L from before provenance existed, and a weekly VO₂max cell on
+    /// day A whose source is an estimator, not a device. An unattributed cell sits on days A, B and M, as a
+    /// value a later pass stopped producing does. Sleeps and a detected workout carry no day key, so they
+    /// are attributed by whose heart rate covers them.
+    private func seedSharedNamespace(_ dbq: DatabaseQueue) throws {
+        try dbq.write { db in
+            for day in ["A", "B", "M", "L"] {
+                try db.execute(sql: "INSERT INTO dailyMetric (deviceId, day, recovery, strain) VALUES ('my-whoop-noop', ?, 60, 10)",
+                               arguments: [day])
+                try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES ('my-whoop-noop', ?, 'sleep_performance', 80)",
+                               arguments: [day])
+            }
+            try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES ('my-whoop-noop', 'A', 'vo2max_est', 45)")
+            // Unattributed cells: a value a later pass stopped producing (it keeps its value, loses its
+            // provenance) on day A, day M and day B, and the Healthspan model marker on its sentinel day.
+            for day in ["A", "M", "B"] {
+                try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES ('my-whoop-noop', ?, 'spo2_candidate', 95)",
+                               arguments: [day])
+            }
+            try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES ('my-whoop-noop', '1970-01-01', 'healthspan_model', 2)")
+            let cells: [(String, String, String)] = [
+                ("A", "recovery", "whoop-new"), ("A", "strain", "whoop-new"), ("A", "sleep_performance", "whoop-new"),
+                ("A", "vo2max_est", "nes"),
+                ("B", "recovery", "my-whoop"), ("B", "strain", "my-whoop"), ("B", "sleep_performance", "my-whoop"),
+                ("M", "recovery", "my-whoop"), ("M", "strain", "whoop-new"), ("M", "sleep_performance", "whoop-new"),
+            ]
+            for (day, key, source) in cells {
+                try db.execute(sql: "INSERT INTO scoreInputProvenance (deviceId, day, key, sourceId) VALUES ('my-whoop-noop', ?, ?, ?)",
+                               arguments: [day, key, source])
+            }
+            // Heart rate: whoop-new alone over 1000…2000, both straps over 3000…4000, my-whoop alone over 7000…8000.
+            for (dev, ts) in [("whoop-new", 1500), ("whoop-new", 3500), ("my-whoop", 3600), ("whoop-new", 5500), ("my-whoop", 7500)] {
+                try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES (?, ?, 60)", arguments: [dev, ts])
+            }
+            for (start, end, edited) in [(1000, 2000, 0), (3000, 4000, 0), (5000, 6000, 1), (7000, 8000, 0)] {
+                try db.execute(sql: "INSERT INTO sleepSession (deviceId, startTs, endTs, userEdited) VALUES ('my-whoop-noop', ?, ?, ?)",
+                               arguments: [start, end, edited])
+            }
+            for (start, end) in [(1000, 2000), (7000, 8000)] {
+                try db.execute(sql: "INSERT INTO workout (deviceId, startTs, endTs, sport, source) VALUES ('my-whoop-noop', ?, ?, 'Running', 'detected')",
+                               arguments: [start, end])
+            }
+        }
+    }
+
+    private func canonicalCells(_ dbq: DatabaseQueue) throws -> (days: [String], series: [String], sleeps: [Int], workouts: [Int]) {
+        try dbq.read { db in
+            (try String.fetchAll(db, sql: "SELECT day FROM dailyMetric WHERE deviceId = 'my-whoop-noop' ORDER BY day"),
+             try String.fetchAll(db, sql: "SELECT day || ':' || key FROM metricSeries WHERE deviceId = 'my-whoop-noop' ORDER BY day, key"),
+             try Int.fetchAll(db, sql: "SELECT startTs FROM sleepSession WHERE deviceId = 'my-whoop-noop' ORDER BY startTs"),
+             try Int.fetchAll(db, sql: "SELECT startTs FROM workout WHERE deviceId = 'my-whoop-noop' ORDER BY startTs"))
+        }
+    }
+
+    /// Deleting a re-added strap's data takes the scores computed from it out of the canonical namespace:
+    /// the cells its provenance names, the day rows it alone supplied, and the sleeps and detected workouts
+    /// only its heart rate covers. Another strap's cells, a mixed day's row, a day with no provenance, the
+    /// estimator-sourced VO₂max cell and a night the user edited all stay.
+    func testDeletingAReAddedStrapClearsTheCanonicalCellsAttributedToIt() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try store.add(PairedDevice(id: "whoop-new", brand: "WHOOP", model: "WHOOP 5.0 / MG", sourceKind: .liveBLE,
+                                   capabilities: [.hr], status: .active, addedAt: 1, lastSeenAt: 1))
+        try seedSharedNamespace(dbq)
+
+        try store.deleteAllData(deviceId: "whoop-new")
+
+        let left = try canonicalCells(dbq)
+        XCTAssertEqual(left.days, ["B", "L", "M"], "day A was whoop-new's alone; a mixed day keeps its row")
+        XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:vo2max_est", "B:sleep_performance",
+                                     "B:spo2_candidate", "L:sleep_performance", "M:spo2_candidate"],
+                       "day A's unattributed cell goes with the day; a mixed day keeps its unattributed cell")
+        XCTAssertEqual(left.sleeps, [3000, 5000, 7000], "a night only whoop-new's heart rate covers goes; an edited one stays")
+        XCTAssertEqual(left.workouts, [7000])
+    }
+
+    /// The same rule from the other side: deleting the canonical strap's data while a re-added strap is
+    /// registered takes only the canonical strap's cells.
+    func testDeletingTheCanonicalStrapClearsOnlyItsCellsFromASharedNamespace() throws {
+        let dbq = try makeDB()
+        let store = DeviceRegistryStore(dbQueue: dbq)
+        try store.add(PairedDevice(id: "whoop-new", brand: "WHOOP", model: "WHOOP 5.0 / MG", sourceKind: .liveBLE,
+                                   capabilities: [.hr], status: .active, addedAt: 1, lastSeenAt: 1))
+        try seedSharedNamespace(dbq)
+
+        try store.deleteAllData(deviceId: "my-whoop")
+
+        let left = try canonicalCells(dbq)
+        XCTAssertEqual(left.days, ["A", "L", "M"])
+        XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:sleep_performance", "A:spo2_candidate",
+                                     "A:vo2max_est", "L:sleep_performance", "M:sleep_performance", "M:spo2_candidate"])
+        XCTAssertEqual(left.sleeps, [1000, 3000, 5000])
+        XCTAssertEqual(left.workouts, [1000])
+    }
+
     // Regression guard (audit finding): every table with a `deviceId` column MUST appear in
     // `deviceScopedTables`, or `deleteAllData` silently leaves that device's rows behind — a privacy
     // defect for a delete-means-gone app. Enumerate the live schema and fail if any deviceId-keyed table

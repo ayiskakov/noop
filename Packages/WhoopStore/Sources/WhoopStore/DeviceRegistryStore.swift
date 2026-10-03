@@ -183,8 +183,15 @@ public struct DeviceRegistryStore: Sendable {
     /// series) goes with it when it is the device's alone. Left behind, the scores computed from the deleted
     /// recordings stayed on screen, and no rescore could evict them once their raw input was gone (W02-005).
     /// Nights the user edited or added by hand are user data, not scores, and are never cleared this way.
+    ///
+    /// When the device's scores share the canonical namespace instead, only what is attributed to it goes
+    /// (`deleteAttributedCanonicalRows`, W07-002). That runs first, while the device's heart rate still exists.
     public func deleteAllData(deviceId: String) throws {
         try dbQueue.write { db in
+            let exclusiveSibling = try Self.exclusiveComputedSibling(db, of: deviceId)
+            if exclusiveSibling != Self.canonicalComputedId {
+                try Self.deleteAttributedCanonicalRows(db, of: deviceId)
+            }
             for table in Self.deviceScopedTables {
                 try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [deviceId])
             }
@@ -192,7 +199,7 @@ public struct DeviceRegistryStore: Sendable {
             // namespace. Forgetting a provider must remove those associations too.
             try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [deviceId])
 
-            guard let sibling = try Self.exclusiveComputedSibling(db, of: deviceId) else { return }
+            guard let sibling = exclusiveSibling else { return }
             for table in Self.deviceScopedTables where table != "sleepSession" {
                 try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [sibling])
             }
@@ -214,6 +221,66 @@ public struct DeviceRegistryStore: Sendable {
         let others = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM pairedDevice WHERE id != ?",
                                       arguments: [deviceId]) ?? 0
         return others == 0 ? sibling : nil
+    }
+
+    /// The computed namespace the engine writes every scored day under, whichever source supplied it.
+    static let canonicalComputedId = "my-whoop" + computedSuffix
+
+    /// Removes from the shared canonical namespace what was computed from `deviceId` (W07-002).
+    ///
+    /// Scored days are attributed per cell by `scoreInputProvenance`, which names the source of each
+    /// day's recovery, strain and Rest-point series. Each series cell naming the device goes; a day's
+    /// `dailyMetric` row goes only when no recovery or strain cell of that day names another source, so a
+    /// mixed day keeps its row. A cell sourced from an estimator (weekly VO₂max) never names a device, and
+    /// a day scored before provenance existed has no cells, so both stay.
+    ///
+    /// Sleeps and detected workouts carry no day key, so they are attributed by heart rate: a session goes
+    /// when the device has heart rate inside it and no other source does. Nights the user edited or added
+    /// stay, as in the exclusive case. Must run before the device's heart rate is deleted.
+    static func deleteAttributedCanonicalRows(_ db: Database, of deviceId: String) throws {
+        let canonical = canonicalComputedId
+        let cells = try Row.fetchAll(db, sql: """
+            SELECT day, key FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?
+            """, arguments: [canonical, deviceId])
+        var days = Set<String>()
+        for cell in cells {
+            let day: String = cell["day"], key: String = cell["key"]
+            days.insert(day)
+            try db.execute(sql: "DELETE FROM metricSeries WHERE deviceId = ? AND day = ? AND key = ?",
+                           arguments: [canonical, day, key])
+        }
+        for day in days {
+            let otherSource = try Bool.fetchOne(db, sql: """
+                SELECT EXISTS(SELECT 1 FROM scoreInputProvenance
+                              WHERE deviceId = ? AND day = ? AND key IN ('recovery', 'strain') AND sourceId != ?)
+                """, arguments: [canonical, day, deviceId]) ?? true
+            guard !otherSource else { continue }
+            try db.execute(sql: "DELETE FROM dailyMetric WHERE deviceId = ? AND day = ?", arguments: [canonical, day])
+            // The day was the device's alone, so its other computed cells were derived from it too: values a
+            // later pass stopped producing (which lose their provenance but keep their value) and the
+            // Healthspan and Fitness Age points, which are never attributed. A cell another source is
+            // named for stays.
+            try db.execute(sql: """
+                DELETE FROM metricSeries AS m WHERE m.deviceId = ? AND m.day = ?
+                AND NOT EXISTS(SELECT 1 FROM scoreInputProvenance p
+                               WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key AND p.sourceId != ?)
+                """, arguments: [canonical, day, deviceId])
+        }
+        try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?",
+                       arguments: [canonical, deviceId])
+
+        let coveredOnlyByDevice = """
+            EXISTS(SELECT 1 FROM hrSample h WHERE h.deviceId = :device AND h.ts BETWEEN s.startTs AND s.endTs)
+            AND NOT EXISTS(SELECT 1 FROM hrSample h WHERE h.deviceId != :device AND h.deviceId NOT LIKE '%' || :suffix
+                           AND h.ts BETWEEN s.startTs AND s.endTs)
+            """
+        let args: StatementArguments = ["canonical": canonical, "device": deviceId, "suffix": computedSuffix]
+        try db.execute(sql: """
+            DELETE FROM sleepSession AS s WHERE s.deviceId = :canonical AND s.userEdited = 0 AND \(coveredOnlyByDevice)
+            """, arguments: args)
+        try db.execute(sql: """
+            DELETE FROM workout AS s WHERE s.deviceId = :canonical AND \(coveredOnlyByDevice)
+            """, arguments: args)
     }
 
     /// #771: re-point the ACTIVE Oura device from its CoreBluetooth-UUID id (`activeId`, e.g.
