@@ -92,4 +92,14 @@ final class SleepDetectWindowInvarianceTests: XCTestCase {
         XCTAssertEqual(ctx.baseline(at: t), 65)
         XCTAssertNil(SleepStager.LocalContext(grav: [], hr: far).baseline(at: t))
     }
+
+    /// W03-051: a corrupt bpm far outside the physiological range must neither change the median rule nor
+    /// size the histogram every call allocates.
+    func testAnOutOfRangeBpmIsCountedWithoutSizingTheHistogram() {
+        let t = 1_000_000
+        let hr = [HRSample(ts: t - 10, bpm: 50), HRSample(ts: t, bpm: 60), HRSample(ts: t + 10, bpm: 65_000)]
+        let ctx = SleepStager.LocalContext(grav: [], hr: hr)
+        XCTAssertEqual(ctx.baseline(at: t), SleepStager.hrBaseline(hr))
+        XCTAssertLessThanOrEqual(ctx.histogramSize, SleepStager.LocalContext.maxHistogramBpm + 1)
+    }
 }

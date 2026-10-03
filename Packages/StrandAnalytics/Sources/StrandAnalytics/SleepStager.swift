@@ -441,14 +441,18 @@ public enum SleepStager {
         let gravTs: [Int]
         let hrTs: [Int]
         let hrBpm: [Int]
+        /// The histogram covers 0 ... `maxHistogramBpm`; a value outside it (a corrupt or negative bpm) is
+        /// counted from a sorted list instead, so it cannot size what every call allocates (W03-051).
+        static let maxHistogramBpm = 511
         private let maxBpm: Int
+        var histogramSize: Int { maxBpm + 1 }
 
         /// `grav` and `hr` must be sorted by time.
         init(grav: [GravitySample], hr: [HRSample]) {
             gravTs = grav.map(\.ts)
             hrTs = hr.map(\.ts)
             hrBpm = hr.map(\.bpm)
-            maxBpm = max(0, hrBpm.max() ?? 0)
+            maxBpm = min(Self.maxHistogramBpm, max(0, hrBpm.max() ?? 0))
         }
 
         /// The indices of `a` (sorted) within [lo, hi].
@@ -483,9 +487,12 @@ public enum SleepStager {
             let h = Self.range(hrTs, t - r, t + r)
             guard !h.isEmpty else { return nil }
             var counts = [Int](repeating: 0, count: maxBpm + 1)
-            var negatives: [Int] = []
-            for i in h { let b = hrBpm[i]; if b >= 0 { counts[b] += 1 } else { negatives.append(b) } }
-            negatives.sort()
+            var negatives: [Int] = [], above: [Int] = []
+            for i in h {
+                let b = hrBpm[i]
+                if b < 0 { negatives.append(b) } else if b > maxBpm { above.append(b) } else { counts[b] += 1 }
+            }
+            negatives.sort(); above.sort()
             let n = h.count
             func value(at k: Int) -> Int {   // the k-th smallest, 0-based
                 if k < negatives.count { return negatives[k] }
@@ -494,7 +501,7 @@ public enum SleepStager {
                     seen += c
                     if k < seen { return b }
                 }
-                return maxBpm
+                return above[k - seen]
             }
             if n % 2 == 1 { return Double(value(at: n / 2)) }
             return (Double(value(at: n / 2 - 1)) + Double(value(at: n / 2))) / 2.0
