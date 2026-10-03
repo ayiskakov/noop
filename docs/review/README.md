@@ -51,18 +51,24 @@ five review passes are ticked.
 Phase 2 — Computation: W3 Analytics, W4 Import and export, W7 App data layer; decisions AD-1, AD-7 and
 AD-8. Tick each item as it lands.
 
-- [ ] Run the Phase 2 review workflow (the owner's 2026-09-25 choice: one multi-agent workflow per phase, under
+- [x] Run the Phase 2 review workflow (the owner's 2026-09-25 choice: one multi-agent workflow per phase, under
       ten agents): passes 1 Map, 2 Static sweep and 3 Deep read in six slices (W3 sleep; W3 scores and engines;
       W3 activity, ECG and SpO₂; W4; W7 orchestration; W7 resolution and partition), then pass 5 Adversarial
       once per workstream. One writer records the surviving findings as `Reported` rows.
+      Done 2026-10-03, run `wf_b77f01a5-1aa`: 6 reviewers and 3 adversaries; P5 refuted none. Rows W03-023 …
+      W03-042, W04-002 … W04-018, W07-017 … W07-031. The S2s: W03-023, W03-024, W03-028, W03-030, W04-002 …
+      W04-005, W07-023, plus W07-002.
 - [ ] W07-002 (S2, carried from Phase 1's W02-005) is Phase 2's one open S2 at the start: V0 it with two straps
       registered, then fix it first.
 - [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch.
 - [ ] Rebuild the replay harness against current `main` (the Phase 0 one is pinned to `01baf82a`, before V3
       became the default) and run it over the newest backup: the exit gate needs its diff explained row by row.
+      Sleep half done 2026-10-03 on the 2026-09-30 backup: V3 reproduces 13 of 15 stored nights byte for byte;
+      the other two are W07-003 and a W03-023/W03-024 collision. Still to add: the daily rows and series.
 - [ ] Oracle inventory: which scorers and engines whose output reaches disk have a pinned oracle, and an oracle
       for each that changes in this phase.
-- [ ] Settle AD-1, AD-7 and AD-8 in [`DECISIONS.md`](DECISIONS.md).
+- [x] Settle AD-1, AD-7 and AD-8 in [`DECISIONS.md`](DECISIONS.md): all three Amend (2026-10-03); AD-14
+      gained scoring-pipeline evidence and leans Amend.
 - [ ] Exit gate: the replay diff explained row by row, and every changed formula pinned by an oracle.
 
 Phase 1 — Data integrity: W2 Storage, W1 Protocol, and the safe-trim and backfill part of W6. Closed
