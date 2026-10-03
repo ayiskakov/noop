@@ -411,9 +411,17 @@ final class IntelligenceEngine: ObservableObject {
     /// Today is now capped at `now`, which keeps the only property the old bound was there for — never read
     /// past the present — and is what that original comment already assumed was happening. It stops the
     /// window from asserting that nobody wakes after 6 PM.
+    ///
+    /// **W03-024: past the next midnight.** A read that stopped at the next midnight could not see a night
+    /// that ran across it: the evening part stood alone as its own session ending on the earlier day, while
+    /// the next day's read joined it to the night, so two days banked one start with two ends. The read now
+    /// reaches `SleepStager.localBaselineRadiusS` past the next midnight, which covers the neighbourhood every
+    /// detection decision reads (W03-023), so a session ending on the day is detected as the next day's
+    /// read detects it. Sessions ending later are still filtered out by day. Never past `now`.
+    /// `nowLocalMidnight` is no longer read; it stays so the call sites keep one shape.
     nonisolated static func sleepReadWindowEnd(dayStart: Int, nowLocalMidnight: Int, now: Int) -> Int {
-        let nextMidnight = dayStart + 86_400
-        return dayStart < nowLocalMidnight ? nextMidnight : min(nextMidnight, now)
+        _ = nowLocalMidnight
+        return min(dayStart + StreamReadCap.forwardSeconds, now)
     }
 
     /// Counts + a window length only — same privacy class as the sibling `sleep day=` line, no PII. Pure so
@@ -1185,7 +1193,9 @@ final class IntelligenceEngine: ObservableObject {
                 // this resolves to `deviceId` (active strap, has data → priority 0), so nothing changes; with
                 // multiple sources the day is scored from exactly one (active strap > other live straps >
                 // imports, or a locked override). Falls back to `deviceId` if the registry is unreadable.
-                let owner = await Self.resolveDayOwner(day: day, from: from, to: to, store: store,
+                // The owner probe stays on the day's own span: the read's reach past midnight (W03-024) must
+                // not let a strap whose only heart rate is the next morning's own this day.
+                let owner = await Self.resolveDayOwner(day: day, from: from, to: min(to, dayStart + 86_400), store: store,
                                                        devices: regDevices, activeId: regActiveId,
                                                        registry: registry, fallbackDeviceId: ownerFallbackId)
 
