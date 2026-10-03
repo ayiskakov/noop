@@ -282,7 +282,12 @@ final class DeviceRegistryStoreTests: XCTestCase {
             for (dev, ts) in [("whoop-new", 1500), ("whoop-new", 3500), ("my-whoop", 3600), ("whoop-new", 5500), ("my-whoop", 7500)] {
                 try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES (?, ?, 60)", arguments: [dev, ts])
             }
-            for (start, end, edited) in [(1000, 2000, 0), (3000, 4000, 0), (5000, 6000, 1), (7000, 8000, 0)] {
+            // A night whoop-new recorded, with one stray my-whoop sample inside it (W07-038).
+            for ts in stride(from: 9100, through: 9900, by: 90) {
+                try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('whoop-new', ?, 60)", arguments: [ts])
+            }
+            try db.execute(sql: "INSERT INTO hrSample (deviceId, ts, bpm) VALUES ('my-whoop', 9500, 60)")
+            for (start, end, edited) in [(1000, 2000, 0), (3000, 4000, 0), (5000, 6000, 1), (7000, 8000, 0), (9000, 10000, 0)] {
                 try db.execute(sql: "INSERT INTO sleepSession (deviceId, startTs, endTs, userEdited) VALUES ('my-whoop-noop', ?, ?, ?)",
                                arguments: [start, end, edited])
             }
@@ -324,7 +329,8 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "B:sleep_performance",
                                      "B:spo2_candidate", "L:sleep_performance"],
                        "the unattributed cells of the days whoop-new owned go with them, and the weekly VO2max with Fitness Age (W07-036)")
-        XCTAssertEqual(left.sleeps, [3000, 5000, 7000], "a night only whoop-new's heart rate covers goes; an edited one stays")
+        XCTAssertEqual(left.sleeps, [3000, 5000, 7000],
+                       "a night mostly whoop-new's heart rate covers goes, a stray sample of another source notwithstanding (W07-038); an even split and an edited night stay")
         XCTAssertEqual(left.workouts, [1100, 7000], "a manual workout is user data and stays (W07-037)")
     }
 
@@ -349,7 +355,7 @@ final class DeviceRegistryStoreTests: XCTestCase {
         XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:sleep_performance", "A:spo2_candidate",
                                      "A:vo2max_est", "L:sleep_performance", "M:sleep_performance", "M:spo2_candidate",
                                      "R:sleep_performance"])
-        XCTAssertEqual(left.sleeps, [1000, 3000, 5000])
+        XCTAssertEqual(left.sleeps, [1000, 3000, 5000, 9000])
         XCTAssertEqual(left.workouts, [1000, 1100])
     }
 

@@ -236,9 +236,10 @@ public struct DeviceRegistryStore: Sendable {
     /// estimator, not a device, so it goes with the day it was computed on (W07-036); a day scored before
     /// provenance existed has no cells and stays.
     ///
-    /// Sleeps and detected workouts under the canonical id carry no day key, so they are attributed by heart rate: a session goes when the device has heart
-    /// rate inside it and no other source does. Nights the user edited or added
-    /// stay, as in the exclusive case. Must run before the device's heart rate is deleted.
+    /// Sleeps and detected workouts under the canonical id carry no day key, so they are attributed by heart
+    /// rate: a session goes when the device's heart rate inside it outnumbers every other source's (W07-038).
+    /// Nights the user edited or added, and workouts the user entered, stay. Must run before the device's
+    /// heart rate is deleted.
     static func deleteAttributedCanonicalRows(_ db: Database, of deviceId: String) throws {
         let canonical = canonicalComputedId
         let cells = try Row.fetchAll(db, sql: """
@@ -294,13 +295,17 @@ public struct DeviceRegistryStore: Sendable {
         // source. A `deviceId != ?` predicate cannot use the key and scanned the whole heart-rate index per
         // session, 25–53 s on 115 days of 1 Hz rows inside this write transaction (W07-002 V2).
         let otherSources = try heartRateSourceIds(db).filter { $0 != deviceId && !$0.hasSuffix(computedSuffix) }
-        func hasHeartRate(_ id: String, _ start: Int, _ end: Int) throws -> Bool {
-            try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM hrSample WHERE deviceId = ? AND ts BETWEEN ? AND ?)",
-                              arguments: [id, start, end]) ?? false
+        func heartRateCount(_ id: String, _ start: Int, _ end: Int) throws -> Int {
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM hrSample WHERE deviceId = ? AND ts BETWEEN ? AND ?",
+                             arguments: [id, start, end]) ?? 0
         }
+        // The device recorded the session when its heart rate outnumbers every other source's inside it. A
+        // single stray sample of another source (a chest strap, an activity file) no longer protects a night
+        // the device recorded (W07-038); an even split stays, the safe side.
         func coveredOnlyByDevice(_ start: Int, _ end: Int) throws -> Bool {
-            guard try hasHeartRate(deviceId, start, end) else { return false }
-            return try !otherSources.contains { try hasHeartRate($0, start, end) }
+            let own = try heartRateCount(deviceId, start, end)
+            guard own > 0 else { return false }
+            return try !otherSources.contains { try heartRateCount($0, start, end) >= own }
         }
         for row in try Row.fetchAll(db, sql: "SELECT startTs, endTs FROM sleepSession WHERE deviceId = ? AND userEdited = 0",
                                     arguments: [canonical]) {
