@@ -27,6 +27,8 @@ import Foundation
 
 struct CoupledView: View {
     @EnvironmentObject var repo: Repository
+    /// The engine's scored days, so the Charge sheet shows the drivers the stored Charge was scored with (W03-030).
+    @EnvironmentObject var intelligence: IntelligenceEngine
 
     /// "Card transparency" (0–100, default 100): fades the coupled glance cards in lockstep with the
     /// frosted cards; content stays readable. Mirrors Kotlin `NoopPrefs.cardOpacityPercent`.
@@ -534,7 +536,9 @@ struct CoupledView: View {
     private func chargeBreakdown() -> (drivers: [ChargeDriver], confidence: ScoreConfidence)? {
         guard let row = breakdownRow else { return nil }
         return ChargeBreakdownWiring.breakdown(days: repo.days, row: row, sleepPerfPercent: sleepPerformance,
-                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch())
+                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch(),
+                                               recoveryBaselineEpoch: Baselines.recoveryBaselineEpoch(),
+                                               engineDrivers: intelligence.chargeDrivers(forDay: row.day))
     }
 
     @ViewBuilder

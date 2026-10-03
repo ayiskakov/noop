@@ -18,34 +18,37 @@ import WhoopStore
 // folded HRV baseline the drivers scored with, so the header and the rows agree by construction.
 enum ChargeBreakdownWiring {
 
-    /// The ordered Charge driver rows for `row` plus its confidence tier, folded from the visible `days`
-    /// history, or nil when the night cannot honestly score (missing HRV or resting HR, or an HRV
-    /// baseline that is not yet usable) so the sheet hides rather than showing fabricated rows.
+    /// The ordered Charge driver rows for `row` plus its confidence tier, or nil when the night cannot honestly
+    /// score (missing HRV or resting HR, or an HRV baseline that is not yet usable) so the sheet hides rather
+    /// than showing fabricated rows.
     ///
-    /// `sleepPerfPercent` is the Rest composite on a 0-100 scale, divided by 100 here to match
-    /// `AnalyticsEngine`'s `sleepPerf` form, so the Sleep row scores against the headline's own input.
+    /// W03-030: the rows describe the stored Charge. When the engine still holds the drivers it scored the day
+    /// with (`engineDrivers`, the rows the Intelligence screen shows), they are returned as they are. Otherwise
+    /// each baseline is folded as the engine folds it since efa0bdcb: over the nights strictly BEFORE the day,
+    /// from the HRV recalibration epoch for HRV and the Charge-wide epoch for resting HR and respiration. A
+    /// whole-history fold included the night itself and every later one, so the sheet scored against a
+    /// different baseline than the headline. Not mirrored: the engine's per-brand era cut on respiration,
+    /// which is 0 on a WHOOP-only history.
     ///
-    /// The resting-HR and respiration baselines are passed only when usable. `RecoveryScorer` and
-    /// `chargeDrivers` both apply that gate themselves since #1990, so these are belt-and-braces rather
-    /// than load-bearing; they are kept because they say the intent at the call site, which is where a
-    /// reader looks first.
+    /// `sleepPerfPercent` is the Rest score on a 0-100 scale, divided by 100 here to match `AnalyticsEngine`'s
+    /// `sleepPerf` form, so the Sleep row scores against the headline's own input.
     static func breakdown(days: [DailyMetric],
                           row: DailyMetric,
                           sleepPerfPercent: Double?,
-                          hrvBaselineEpoch: Double = 0) -> (drivers: [ChargeDriver], confidence: ScoreConfidence)? {
+                          hrvBaselineEpoch: Double = 0,
+                          recoveryBaselineEpoch: Double = 0,
+                          engineDrivers: [ChargeDriver]? = nil) -> (drivers: [ChargeDriver], confidence: ScoreConfidence)? {
         guard let hrv = row.avgHrv, let rhr = row.restingHr else { return nil }
-        // PERF: one pass per series. The two private copies this replaces each re-folded the full history
-        // per body evaluation of the open sheet; the guard above still runs before any fold.
-        // #2315: fold with the recalibration epoch, exactly as the engine does. Without it these rows and
-        // the confidence tier scored against the WHOLE history while the headline scored against the
-        // post-Recalibrate nights, so the Charge page showed two baselines for one metric. `0` (no
-        // recalibration) delegates to the plain fold, so a user who never recalibrated sees no change.
-        let hrvBase = Baselines.foldHistory(days.map(\.avgHrv), dayKeys: days.map(\.day),
-                                            cfg: Baselines.hrvCfg, baselineEpoch: hrvBaselineEpoch)
+        let keys = days.map(\.day)
+        func prior(_ values: [Double?], _ cfg: MetricCfg, _ epoch: Double) -> BaselineState {
+            Baselines.priorFold(values, dayKeys: keys, cfg: cfg, baselineEpoch: epoch).state(before: row.day)
+        }
+        let hrvBase = prior(days.map(\.avgHrv), Baselines.hrvCfg, hrvBaselineEpoch)
         guard hrvBase.usable else { return nil }
-        let rhrBase = Baselines.foldHistory(days.map { $0.restingHr.map(Double.init) },
-                                            cfg: Baselines.restingHRCfg)
-        let respBase = Baselines.foldHistory(days.map(\.respRateBpm), cfg: Baselines.respCfg)
+        let confidence = ScoreConfidence.charge(recovery: row.recovery, hrvBaseline: hrvBase)
+        if let engineDrivers, !engineDrivers.isEmpty { return (engineDrivers, confidence) }
+        let rhrBase = prior(days.map { $0.restingHr.map(Double.init) }, Baselines.restingHRCfg, recoveryBaselineEpoch)
+        let respBase = prior(days.map(\.respRateBpm), Baselines.respCfg, recoveryBaselineEpoch)
         let drivers = RecoveryScorer.chargeDrivers(
             hrv: hrv, rhr: Double(rhr), resp: row.respRateBpm,
             hrvBaseline: hrvBase,
@@ -53,6 +56,6 @@ enum ChargeBreakdownWiring {
             respBaseline: respBase.usable ? respBase : nil,
             sleepPerf: sleepPerfPercent.map { $0 / 100.0 },
             skinTempDev: row.skinTempDevC)
-        return (drivers, ScoreConfidence.charge(recovery: row.recovery, hrvBaseline: hrvBase))
+        return (drivers, confidence)
     }
 }

@@ -194,6 +194,8 @@ struct TodayView: View {
     /// classification and tint selection stable when the app language changes.
     private static let whoopBrandName = "WHOOP"
     @EnvironmentObject var repo: Repository
+    /// The engine's scored days, so the Charge sheet shows the drivers the stored Charge was scored with (W03-030).
+    @EnvironmentObject var intelligence: IntelligenceEngine
     // PERF (scroll stutter): TodayView deliberately does NOT observe `LiveState` directly. A connected
     // strap publishes `LiveState` ~1 Hz (heart rate + each R-R packet), and an `@EnvironmentObject live`
     // here would invalidate the ENTIRE Today `body` on every tick, re-evaluating the scene backdrop, the
@@ -841,7 +843,9 @@ struct TodayView: View {
     private func chargeBreakdown() -> (drivers: [ChargeDriver], confidence: ScoreConfidence)? {
         guard let row = chargeBreakdownRow else { return nil }
         return ChargeBreakdownWiring.breakdown(days: repo.days, row: row, sleepPerfPercent: restScore,
-                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch())
+                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch(),
+                                               recoveryBaselineEpoch: Baselines.recoveryBaselineEpoch(),
+                                               engineDrivers: intelligence.chargeDrivers(forDay: row.day))
     }
 
     /// The night's relative skin-temp marker for the displayed row (A5), or nil. Surfaced verbatim from
