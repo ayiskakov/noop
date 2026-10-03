@@ -43,9 +43,26 @@ the macOS leg of `app-build.yml`, only for PRs that touch app paths.
 UIKit or CoreBluetooth use; which of them already have package twins; how many fix commits touched
 each.
 
-**Evidence found.** —
+**Evidence found.** 2026-10-03, Phase 2 review (workflow run `wf_b77f01a5-1aa`).
 
-**Verdict.** Open.
+- `Strand/Data` and `Strand/System` hold 82 Swift files; about 50 import no SwiftUI, AppKit, UIKit or
+  CoreBluetooth. The two hot spots, `IntelligenceEngine` (3.6k lines, 59 fix commits) and `Repository`
+  (3.6k, 41), import none of them either; both are `@MainActor` `ObservableObject`s covered only by
+  `StrandTests`.
+- Their resolution and merge logic is already written as nonisolated statics: `mergeDaily`, `coalesceDay`,
+  `dailyColumn`, `sourceCandidates`, `rawWhoopSourceIds`, `workoutNamespaces`, `resolveToday` in
+  `Repository`; `resolveDayOwner`, `staleRestPointDays`, `recomputeRecoveryDaily`, `editedRowsForDay` in
+  the engine. Three confirmed Phase 2 findings sit in exactly these statics (W07-021, W07-024, W07-026),
+  and four more are one fact with two resolvers (W03-028, W03-030, W07-026, W07-027), the shape W3 fixed for
+  SpO₂ with a package-side `Spo2CandidateSeries.Read`.
+- `NoopLocalAccess` carries a second copy of `sourceCandidates` that has already diverged (4 Apple keys
+  against 11).
+
+**Verdict.** Amend. The packages are sound; the shell is not thin where it decides what every screen
+shows. In Phase 5, move source precedence, per-day owner resolution and the merge rules into a package
+(under `swift test` and oracle pins), with `Repository`, the engine and `NoopLocalAccess` calling one
+resolver; the diverged `sourceCandidates` copy is the first merge target. `IntelligenceEngine` and
+`Repository` stay in the app as orchestration.
 
 ### AD-2
 
@@ -118,6 +135,12 @@ the packages are nearly clean under complete checking (WhoopStore, StrandAnalyti
 NoopLocalAccess 0; WhoopProtocol 2 plus one `whoop-re` CLI compile error; StrandImport 2; StrandDesign
 6). The macOS app does not compile under it: two main-actor-isolated default arguments are errors, and
 at least 41 warnings printed before the build stopped. Triage of each warning is still to do (Phase 3).
+
+2026-10-03, Phase 2 review: `StrandImport` has its two baseline warnings and two real shared-state
+hazards that complete checking cannot see: `WhoopTime.plainFormatter` and `LiftingImporter.hevyFormatter`
+mutate a shared `DateFormatter` per call from both the main actor and background tasks. `DateFormatter`
+is `Sendable`, so neither warning-clean nor Swift 6 mode would flag them; a zero count would overstate
+safety.
 
 **Verdict.** Open.
 
@@ -199,9 +222,28 @@ registry's active strap id. What happens on a strap swap, or with two straps reg
 **Evidence to gather.** Every literal classified as read or write; a test with two straps in the
 registry; how `DeviceFamily.forRegistryDevice(model:brand:)` interacts with the partition.
 
-**Evidence found.** —
+**Evidence found.** 2026-10-03, Phase 2 review (workflow run `wf_b77f01a5-1aa`).
 
-**Verdict.** Open.
+- 191 lines carry the exact `"my-whoop"` token (193 at Phase 0); 78 of the 199 lines with any
+  `"my-whoop…"` literal are comments. Of the code sites, most are a routing token: `MetricCatalog` (43),
+  the screens and widgets pass `"my-whoop"` to `Repository`, which maps it to the active and canonical
+  union. That is a read that threads the active id, so the literal count overstates the problem.
+- The same literal is also the engine's fixed partition id: every computed row goes to `my-whoop-noop`,
+  imports and live workouts to `my-whoop` (`AppModel.deviceId`). One literal does two jobs.
+- Three definitions of "the user's straps" coexist: `importedReadIds` (active plus canonical),
+  `rawPhysiologyReadIds` (every registered WHOOP, archived included, #1730), and `resolveDayOwner`
+  (non-archived only, canonical fallback); the same pass's day-cycle candidates include archived straps.
+- Single-id readers that break on a re-added strap: `selfHealEditedStages` (W07-023, S2),
+  `rescoreManualWorkouts` (W07-028), `restageFromRaw`, `resolveDayOwner` on archived straps (W07-024),
+  `HealthKitBridge` (W07-031), and the deletion side (W07-002, S2).
+
+**Verdict.** Amend. Keep the canonical computed namespace, since moving it would orphan history.
+Separate the routing token from the partition id, and replace the three strap-set definitions with one
+pure resolver of registry rows and the active id (worn-strap set and owner precedence) that settles
+archived straps one way. `Repository`'s unions, `resolveDayOwner`, the day-cycle candidates,
+`selfHealEditedStages`, `restageFromRaw`, `rescoreManualWorkouts` and the Health bridge call it. Per-day
+attribution of computed rows closes W07-002. The single-id readers are fixed as bugs first; the resolver
+is the Phase 5 refactor (with AD-1).
 
 ### AD-8
 
@@ -221,7 +263,31 @@ none reproduce on `main`, under either V2 (the epoch grid moved to the wall-cloc
 new default V3. The rows carry no stager version, so nothing can tell a V2-era row from a V3 one. Still
 to find: what rescores these rows after an update, and whether a trend can mix them.
 
-**Verdict.** Open.
+2026-10-03, Phase 2 review (workflow run `wf_b77f01a5-1aa`):
+
+- Healthspan's `healthspan_model` marker is the only per-family version marker; it re-derives 730 days
+  when the model moves. `sleepSession`, `dailyMetric` and the other series carry nothing.
+- After an app update only the 21-day window is re-scored, and only incidentally (the
+  `APP_VERSION_CHANGED` event moves the fingerprint). The stager sits in the in-memory `dayCacheConfig`,
+  so a picker change re-stages 21 days. efa0bdcb changed the Charge recipe with no re-score flag, so a
+  trend forks at day 22. Edits older than 21 days never reach their scores either (W07-030).
+- Rows are not reproducible even under one recipe: night bounds depend on how far the read window
+  reaches (W03-023), two day passes write one session start with two ends (W03-024), Rest uses
+  pass-global sleep parameters (W07-018), and every day is windowed with one offset (W07-019).
+- A restore cannot reproduce derived rows when the exporter changed an engine toggle: the toggles are
+  deliberately outside the backup whitelist and the watermark is in UserDefaults (recorded here, not as
+  a row).
+- The SpO₂ candidate's key presence (`windowsKey`, `lowQualityKey`) works as a de facto recipe marker
+  that readers already branch on.
+- Replay of the 2026-09-30 backup on `review/phase-2` (sleep only): V3 reproduces 13 of 15 stored nights
+  byte for byte; the other two are W07-003's short daytime row and a W03-023/W03-024 collision.
+
+**Verdict.** Amend. Keep derived caches and background re-scoring. First make a row reproducible:
+per-day sleep parameters (W07-018), per-day offsets (W07-019), window-invariant night bounds (W03-023)
+and one session per start (W03-024). Then generalise the Healthspan pattern: a per-family recipe marker
+(stager and scoring revision) checked at launch that queues a paced full-history re-derivation through
+the background scheduler, plus a recipe column on `sleepSession` so a trend can tell rows apart until it
+finishes.
 
 ### AD-9
 
@@ -330,9 +396,15 @@ least to the log?
 **Evidence to gather.** Every `fatalError` and `precondition` reachable from data; every `try?` on a
 store write; fault-injection tests for a full disk and a corrupt row.
 
-**Evidence found.** —
+**Evidence found.** 2026-10-03, Phase 2 review (workflow run `wf_b77f01a5-1aa`), scoring pipeline only: 16 store writes in
+`IntelligenceEngine` and `HealthspanPipeline` are `try?` and none logs a failure. The pass advances its
+watermark and settles its re-score debt whether or not they landed, against its own comment (W07-020).
+Read failures collapse to empty arrays (`SlidingStreamWindow` drops the nil it already has) and can
+evict or blank stored rows. Only Healthspan's model marker is conditional on its write.
 
-**Verdict.** Open.
+**Verdict.** Open (leaning Amend from the scoring pipeline: a failed persist neither advances the
+watermark nor settles the debt, and says so in one always-on line; a failed read aborts the reconcile
+step it feeds). The `fatalError` inventory and fault injection are Phase 3.
 
 ### AD-15
 
