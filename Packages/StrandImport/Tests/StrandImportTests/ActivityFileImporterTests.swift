@@ -277,6 +277,34 @@ final class ActivityFileImporterTests: XCTestCase {
         XCTAssertEqual(a.hrSamples.map { $0.ts }, [fitBase, fitBase + 10, fitBase + 20])
     }
 
+    /// W04-002: 0xFF is the FIT uint8 invalid value, written whenever the HR sensor drops out. It must read
+    /// as no heart rate, not 255 bpm, in records, laps and the session summary.
+    func testFitHeartRateInvalidValueIsDropped() throws {
+        var fit = FitFixture()
+        let sessionStart: UInt32 = 100_000
+        // session (18): start_time, sport, avg_heart_rate, max_heart_rate — both summaries invalid.
+        fit.definition(local: 0, global: 18, fields: [(2, 4, 0x86), (5, 1, 0x00), (16, 1, 0x02), (17, 1, 0x02)])
+        fit.dataHeader(local: 0)
+        fit.u32(sessionStart); fit.u8(1); fit.u8(0xFF); fit.u8(0xFF)
+        // lap (19): max_heart_rate invalid.
+        fit.definition(local: 2, global: 19, fields: [(16, 1, 0x02)])
+        fit.dataHeader(local: 2)
+        fit.u8(0xFF)
+        // record (20): timestamp, heart_rate; the sensor drops out on the middle record.
+        fit.definition(local: 1, global: 20, fields: [(253, 4, 0x86), (3, 1, 0x02)])
+        for (k, bpm) in [UInt8(120), 0xFF, 130].enumerated() {
+            fit.dataHeader(local: 1)
+            fit.u32(sessionStart + UInt32(k * 10))
+            fit.u8(bpm)
+        }
+
+        let a = try XCTUnwrap(ActivityFileImporter.parse(data: fit.finish(), filename: "ride.fit").activity)
+        XCTAssertEqual(a.hrSamples.map(\.bpm), [120, 130])
+        XCTAssertEqual(a.hrSampleCount, 2)
+        XCTAssertEqual(a.maxHr, 130)
+        XCTAssertEqual(a.avgHr, 125)
+    }
+
     func testFitDetectionFromMagicBytes() {
         var fit = FitFixture()
         fit.definition(local: 0, global: 20, fields: [(253, 4, 0x86), (3, 1, 0x02)])

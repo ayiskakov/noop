@@ -138,6 +138,42 @@ final class AppleHealthAggregatorTests: XCTestCase {
         XCTAssertEqual(a.steps!, 7500, accuracy: 1e-9)
     }
 
+    /// W04-005: active and basal energy follow the #589 rule too. A watch and another app (the WHOOP app,
+    /// or NOOP's own write-back) both write the same day's energy; summing across sources doubled it.
+    func testEnergyDoesNotDoubleCountAcrossSources() {
+        let day = Fixtures.utc(2024, 3, 8, 10, 0, 0)
+        func energy(_ type: String, _ v: Double, _ src: String) -> HealthSample {
+            HealthSample(type: type, value: v, valueString: String(v), unit: "kcal",
+                         start: day, end: day, tzOffsetMin: 0, sourceName: src)
+        }
+        let samples = [
+            energy("ActiveEnergyBurned", 300, "Apple Watch"), energy("ActiveEnergyBurned", 200, "Apple Watch"),
+            energy("ActiveEnergyBurned", 480, "WHOOP"),
+            energy("BasalEnergyBurned", 1700, "Apple Watch"), energy("BasalEnergyBurned", 1650, "WHOOP"),
+        ]
+        let a = try! XCTUnwrap(agg(AppleHealthAggregator.daily(samples: samples), "2024-03-08"))
+        XCTAssertEqual(a.activeKcal ?? -1, 500, accuracy: 1e-9)
+        XCTAssertEqual(a.basalKcal ?? -1, 1700, accuracy: 1e-9)
+    }
+
+    /// W04-005: the same night written by two sources (a staged watch night and another app's unstaged
+    /// asleep) is one night, not two. The day takes one source's night, the one with the most sleep, as
+    /// #589 does for steps.
+    func testSleepDoesNotDoubleCountAcrossSources() {
+        let start = Fixtures.utc(2024, 3, 8, 23, 0, 0)
+        let mid = start.addingTimeInterval(4 * 3600)
+        let end = start.addingTimeInterval(8 * 3600)
+        let intervals = [
+            SleepStageInterval(stage: .asleepCore, start: start, end: mid, tzOffsetMin: 0, sourceName: "Apple Watch"),
+            SleepStageInterval(stage: .asleepDeep, start: mid, end: end, tzOffsetMin: 0, sourceName: "Apple Watch"),
+            SleepStageInterval(stage: .asleepUnspecified, start: start.addingTimeInterval(600), end: end,
+                               tzOffsetMin: 0, sourceName: "WHOOP"),
+        ]
+        let n = try! XCTUnwrap(AppleHealthAggregator.sleepDaily(intervals)["2024-03-09"])
+        XCTAssertEqual(n.asleep, 480, accuracy: 1e-9)
+        XCTAssertEqual(n.deep, 240, accuracy: 1e-9)
+    }
+
     // MARK: - VO2Max latest
 
     func testVO2MaxLatestWins() {
@@ -268,6 +304,25 @@ final class AppleHealthAggregatorTests: XCTestCase {
         let m = AppleHealthAggregator.sleepDaily([sleep(.asleepCore, from: start, to: end)])
         XCTAssertNil(m["2024-03-11"])
         XCTAssertEqual(m["2024-03-12"]!.core, 60, accuracy: 1e-9)
+    }
+
+    /// W04-004: Apple Watch writes a staged night as many short intervals. The whole night belongs to its
+    /// wake day; keying each interval by its own end put the pre-midnight part on the bed day, so every
+    /// stored day held the tail of one night and the head of the next. An evening nap hours before the
+    /// night stays on its own day.
+    func testStagedNightStartingBeforeMidnightLandsOnWakeDay() {
+        var intervals: [SleepStageInterval] = []
+        let napStart = Fixtures.utc(2024, 3, 11, 18, 0, 0)
+        intervals.append(sleep(.asleepCore, from: napStart, to: napStart.addingTimeInterval(3600)))
+        let nightStart = Fixtures.utc(2024, 3, 11, 22, 30, 0)
+        for k in 0..<16 {   // 22:30 → 06:30 in 30-minute intervals
+            let s = nightStart.addingTimeInterval(Double(k) * 1800)
+            intervals.append(sleep(k % 4 == 1 ? .asleepDeep : .asleepCore, from: s, to: s.addingTimeInterval(1800)))
+        }
+        let m = AppleHealthAggregator.sleepDaily(intervals)
+        XCTAssertEqual(m["2024-03-11"]?.asleep ?? -1, 60, accuracy: 1e-9, "the evening nap stays on its day")
+        XCTAssertEqual(m["2024-03-12"]?.asleep ?? -1, 480, accuracy: 1e-9, "the whole night is on its wake day")
+        XCTAssertEqual(m["2024-03-12"]?.deep ?? -1, 120, accuracy: 1e-9)
     }
 
     func testLegacyAsleepUnspecifiedCountsAsAsleep() {
