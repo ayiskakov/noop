@@ -173,10 +173,18 @@ public enum AppleHealthAggregator {
 
     // MARK: - Sleep daily aggregation
 
+    /// A gap this long between one sleep interval's end and the next one's start
+    /// separates two nights (or a nap and a night) in `sleepDaily`.
+    public static let nightGapSeconds: TimeInterval = 2 * 3600
+
     /// Collapse sleep-stage intervals into per-night totals keyed by the **wake
-    /// day** — the local civil day of each interval's `end`. Minutes are summed
-    /// per stage; `asleep = core + deep + rem` (+ any legacy "asleep
-    /// unspecified" intervals, which Apple emitted before staged sleep).
+    /// day** — the local civil day the night ends on. Intervals are first joined
+    /// into nights (a gap of `nightGapSeconds` or more starts a new one), because
+    /// Apple Watch writes a staged night as many short intervals: keyed one by one,
+    /// the part before midnight landed on the bed day and every stored day mixed two
+    /// nights (W04-004). Minutes are summed per stage; `asleep = core + deep + rem`
+    /// (+ any legacy "asleep unspecified" intervals, which Apple emitted before
+    /// staged sleep).
     public static func sleepDaily(
         _ intervals: [SleepStageInterval]
     ) -> [String: (asleep: Double, deep: Double, rem: Double, core: Double, awake: Double, inBed: Double)] {
@@ -185,10 +193,28 @@ public enum AppleHealthAggregator {
         }
         var byDay: [String: Night] = [:]
 
-        for iv in intervals {
+        // Wake day of each interval = local day of the end of the night it belongs to. Every interval of a
+        // night takes the offset of the interval that ends it.
+        var wakeDay: [Int: String] = [:]
+        var night: [Int] = []
+        var nightEnd = Date.distantPast
+        var nightEndOffset = 0
+        func closeNight() {
+            let day = localDay(nightEnd, tzOffsetMin: nightEndOffset)
+            for i in night { wakeDay[i] = day }
+            night = []
+        }
+        for i in intervals.indices.sorted(by: { intervals[$0].start < intervals[$1].start }) {
+            let iv = intervals[i]
+            if !night.isEmpty, iv.start.timeIntervalSince(nightEnd) >= nightGapSeconds { closeNight() }
+            if night.isEmpty || iv.end > nightEnd { nightEnd = iv.end; nightEndOffset = iv.tzOffsetMin }
+            night.append(i)
+        }
+        if !night.isEmpty { closeNight() }
+
+        for (i, iv) in intervals.enumerated() {
             let minutes = max(0, iv.end.timeIntervalSince(iv.start)) / 60.0
-            // Wake day = local day of the interval end.
-            let day = localDay(iv.end, tzOffsetMin: iv.tzOffsetMin)
+            guard let day = wakeDay[i] else { continue }
             var n = byDay[day] ?? Night()
             switch iv.stage {
             case .asleepDeep:        n.deep += minutes

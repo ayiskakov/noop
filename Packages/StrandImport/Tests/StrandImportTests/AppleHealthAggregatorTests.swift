@@ -270,6 +270,25 @@ final class AppleHealthAggregatorTests: XCTestCase {
         XCTAssertEqual(m["2024-03-12"]!.core, 60, accuracy: 1e-9)
     }
 
+    /// W04-004: Apple Watch writes a staged night as many short intervals. The whole night belongs to its
+    /// wake day; keying each interval by its own end put the pre-midnight part on the bed day, so every
+    /// stored day held the tail of one night and the head of the next. An evening nap hours before the
+    /// night stays on its own day.
+    func testStagedNightStartingBeforeMidnightLandsOnWakeDay() {
+        var intervals: [SleepStageInterval] = []
+        let napStart = Fixtures.utc(2024, 3, 11, 18, 0, 0)
+        intervals.append(sleep(.asleepCore, from: napStart, to: napStart.addingTimeInterval(3600)))
+        let nightStart = Fixtures.utc(2024, 3, 11, 22, 30, 0)
+        for k in 0..<16 {   // 22:30 → 06:30 in 30-minute intervals
+            let s = nightStart.addingTimeInterval(Double(k) * 1800)
+            intervals.append(sleep(k % 4 == 1 ? .asleepDeep : .asleepCore, from: s, to: s.addingTimeInterval(1800)))
+        }
+        let m = AppleHealthAggregator.sleepDaily(intervals)
+        XCTAssertEqual(m["2024-03-11"]?.asleep ?? -1, 60, accuracy: 1e-9, "the evening nap stays on its day")
+        XCTAssertEqual(m["2024-03-12"]?.asleep ?? -1, 480, accuracy: 1e-9, "the whole night is on its wake day")
+        XCTAssertEqual(m["2024-03-12"]?.deep ?? -1, 120, accuracy: 1e-9)
+    }
+
     func testLegacyAsleepUnspecifiedCountsAsAsleep() {
         let start = Fixtures.utc(2024, 3, 13, 1, 0, 0)
         let end = Fixtures.utc(2024, 3, 13, 1, 30, 0) // 30 min
