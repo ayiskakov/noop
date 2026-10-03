@@ -230,8 +230,9 @@ public struct DeviceRegistryStore: Sendable {
     ///
     /// Scored days are attributed per cell by `scoreInputProvenance`, which names the source of each
     /// day's recovery, strain and Rest-point series. Each series cell naming the device goes; a day's
-    /// `dailyMetric` row goes only when no recovery or strain cell of that day names another source, so a
-    /// mixed day keeps its row. A cell sourced from an estimator (weekly VO₂max) never names a device, and
+    /// `dailyMetric` row goes when the device owns it (its strain cell, else its recovery cell, names the
+    /// device), and when the device supplied only a legacy snapshot's recovery on another source's row, just
+    /// the snapshot's columns are cleared (W07-035). A cell sourced from an estimator (weekly VO₂max) never names a device, and
     /// a day scored before provenance existed has no cells, so both stay.
     ///
     /// Sleeps and workouts under the canonical id (detected ones; user workouts live under the strap's own
@@ -251,21 +252,38 @@ public struct DeviceRegistryStore: Sendable {
                            arguments: [canonical, day, key])
         }
         for day in days {
-            let otherSource = try Bool.fetchOne(db, sql: """
-                SELECT EXISTS(SELECT 1 FROM scoreInputProvenance
-                              WHERE deviceId = ? AND day = ? AND key IN ('recovery', 'strain') AND sourceId != ?)
-                """, arguments: [canonical, day, deviceId]) ?? true
-            guard !otherSource else { continue }
-            try db.execute(sql: "DELETE FROM dailyMetric WHERE deviceId = ? AND day = ?", arguments: [canonical, day])
-            // The day was the device's alone, so its other computed cells were derived from it too: values a
-            // later pass stopped producing (which lose their provenance but keep their value) and the
-            // Healthspan and Fitness Age points, which are never attributed. A cell another source is
-            // named for stays.
-            try db.execute(sql: """
-                DELETE FROM metricSeries AS m WHERE m.deviceId = ? AND m.day = ?
-                AND NOT EXISTS(SELECT 1 FROM scoreInputProvenance p
-                               WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key AND p.sourceId != ?)
-                """, arguments: [canonical, day, deviceId])
+            // The row's owner is the source its strain cell names, the pass that scored it; its recovery cell
+            // can instead name an older source whose score a legacy snapshot kept (W07-035). Without a strain
+            // cell the recovery cell is the owner.
+            let cell = { (key: String) in
+                try String.fetchOne(db, sql: """
+                    SELECT sourceId FROM scoreInputProvenance WHERE deviceId = ? AND day = ? AND key = ?
+                    """, arguments: [canonical, day, key])
+            }
+            let strainSource = try cell("strain"), recoverySource = try cell("recovery")
+            // A day with neither cell came in through a Rest-point cell naming the device, and a pass names
+            // one owner for every cell of a day.
+            if (strainSource ?? recoverySource ?? deviceId) == deviceId {
+                try db.execute(sql: "DELETE FROM dailyMetric WHERE deviceId = ? AND day = ?", arguments: [canonical, day])
+                // The day was the device's, so its other computed cells were derived from it too: values a
+                // later pass stopped producing (which lose their provenance but keep their value) and the
+                // Healthspan and Fitness Age points, which are never attributed. A cell another source is
+                // named for stays.
+                try db.execute(sql: """
+                    DELETE FROM metricSeries AS m WHERE m.deviceId = ? AND m.day = ?
+                    AND NOT EXISTS(SELECT 1 FROM scoreInputProvenance p
+                                   WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key AND p.sourceId != ?)
+                    """, arguments: [canonical, day, deviceId])
+                try db.execute(sql: """
+                    DELETE FROM scoreInputProvenance WHERE deviceId = ? AND day = ? AND key IN ('recovery', 'strain')
+                    """, arguments: [canonical, day])
+            } else if recoverySource == deviceId {
+                // Another source owns the row; only the legacy snapshot's columns came from the device.
+                try db.execute(sql: """
+                    UPDATE dailyMetric SET recovery = NULL, avgHrv = NULL, respRateBpm = NULL, avgSdnn = NULL
+                    WHERE deviceId = ? AND day = ?
+                    """, arguments: [canonical, day])
+            }
         }
         try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?",
                        arguments: [canonical, deviceId])

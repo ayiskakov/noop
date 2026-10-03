@@ -250,6 +250,10 @@ final class DeviceRegistryStoreTests: XCTestCase {
     /// are attributed by whose heart rate covers them.
     private func seedSharedNamespace(_ dbq: DatabaseQueue) throws {
         try dbq.write { db in
+            // Day R: whoop-new scored a night but no Charge, so only a Rest-point cell names it.
+            try db.execute(sql: "INSERT INTO dailyMetric (deviceId, day, totalSleepMin) VALUES ('my-whoop-noop', 'R', 400)")
+            try db.execute(sql: "INSERT INTO metricSeries (deviceId, day, key, value) VALUES ('my-whoop-noop', 'R', 'sleep_performance', 70)")
+            try db.execute(sql: "INSERT INTO scoreInputProvenance (deviceId, day, key, sourceId) VALUES ('my-whoop-noop', 'R', 'sleep_performance', 'whoop-new')")
             for day in ["A", "B", "M", "L"] {
                 try db.execute(sql: "INSERT INTO dailyMetric (deviceId, day, recovery, strain) VALUES ('my-whoop-noop', ?, 60, 10)",
                                arguments: [day])
@@ -312,10 +316,11 @@ final class DeviceRegistryStoreTests: XCTestCase {
         try store.deleteAllData(deviceId: "whoop-new")
 
         let left = try canonicalCells(dbq)
-        XCTAssertEqual(left.days, ["B", "L", "M"], "day A was whoop-new's alone; a mixed day keeps its row")
+        XCTAssertEqual(left.days, ["B", "L"],
+                       "day A was whoop-new's alone; day M's row is whoop-new's too (its strain cell), only its legacy recovery is not (W07-035)")
         XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:vo2max_est", "B:sleep_performance",
-                                     "B:spo2_candidate", "L:sleep_performance", "M:spo2_candidate"],
-                       "day A's unattributed cell goes with the day; a mixed day keeps its unattributed cell")
+                                     "B:spo2_candidate", "L:sleep_performance"],
+                       "the unattributed cells of the days whoop-new owned go with them")
         XCTAssertEqual(left.sleeps, [3000, 5000, 7000], "a night only whoop-new's heart rate covers goes; an edited one stays")
         XCTAssertEqual(left.workouts, [7000])
     }
@@ -332,9 +337,15 @@ final class DeviceRegistryStoreTests: XCTestCase {
         try store.deleteAllData(deviceId: "my-whoop")
 
         let left = try canonicalCells(dbq)
-        XCTAssertEqual(left.days, ["A", "L", "M"])
+        XCTAssertEqual(left.days, ["A", "L", "M", "R"])
+        let m = try dbq.read { db in
+            try Row.fetchOne(db, sql: "SELECT recovery, strain FROM dailyMetric WHERE deviceId = 'my-whoop-noop' AND day = 'M'")
+        }
+        XCTAssertNil(m?["recovery"] as Double?, "day M's recovery was a legacy snapshot of my-whoop's (W07-035)")
+        XCTAssertEqual(m?["strain"] as Double?, 10, "day M's own scores are whoop-new's and stay")
         XCTAssertEqual(left.series, ["1970-01-01:healthspan_model", "A:sleep_performance", "A:spo2_candidate",
-                                     "A:vo2max_est", "L:sleep_performance", "M:sleep_performance", "M:spo2_candidate"])
+                                     "A:vo2max_est", "L:sleep_performance", "M:sleep_performance", "M:spo2_candidate",
+                                     "R:sleep_performance"])
         XCTAssertEqual(left.sleeps, [1000, 3000, 5000])
         XCTAssertEqual(left.workouts, [1000])
     }
