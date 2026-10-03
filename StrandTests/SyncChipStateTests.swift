@@ -20,7 +20,7 @@ final class SyncChipStateTests: XCTestCase {
 
     func testLastSyncedAt_isSyncedWithAgeText() {
         let live = LiveState()
-        live.lastSyncedAt = Date().timeIntervalSince1970 - 65
+        live.stampCompletedSync(at: Date().timeIntervalSince1970 - 65)
         XCTAssertEqual(SyncChipState.resolve(live: live), .synced(agoText: "1m"))
     }
 
@@ -30,7 +30,7 @@ final class SyncChipStateTests: XCTestCase {
     /// "<1m" is the fix and this pins it. Twin of the Android `lastSyncedUnderAMinute_usesSubMinuteToken`.
     func testLastSyncedUnderAMinute_usesSubMinuteToken() {
         let live = LiveState()
-        live.lastSyncedAt = Date().timeIntervalSince1970 - 5
+        live.stampCompletedSync(at: Date().timeIntervalSince1970 - 5)
         XCTAssertEqual(SyncChipState.resolve(live: live), .synced(agoText: "<1m"))
     }
 
@@ -49,13 +49,13 @@ final class SyncChipStateTests: XCTestCase {
         let live = LiveState()
         live.backfilling = true
         live.syncChunksThisSession = 2
-        live.lastSyncedAt = Date().timeIntervalSince1970 - 5
+        live.stampCompletedSync(at: Date().timeIntervalSince1970 - 5)
         XCTAssertEqual(SyncChipState.resolve(live: live), .syncing(chunks: 2, pagesBehind: nil))
     }
 
     func testLastSyncedAt_takesPriorityOverHistorySyncExperimental() {
         let live = LiveState()
-        live.lastSyncedAt = Date().timeIntervalSince1970 - 5
+        live.stampCompletedSync(at: Date().timeIntervalSince1970 - 5)
         live.historySyncExperimental = true
         if case .synced = SyncChipState.resolve(live: live) {
             // expected
@@ -101,7 +101,7 @@ final class SyncChipStateTests: XCTestCase {
     func testNotBackfillingIgnoresTheBacklog() {
         let live = LiveState()
         live.backfilling = false
-        live.lastSyncedAt = Date().timeIntervalSince1970 - 65
+        live.stampCompletedSync(at: Date().timeIntervalSince1970 - 65)
         live.pagesBehindAtConnect = 120
         XCTAssertEqual(SyncChipState.resolve(live: live), .synced(agoText: "1m"))
     }

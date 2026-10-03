@@ -131,6 +131,39 @@ final class LastSyncAttributionTests: XCTestCase {
                        "Backfill: refreshing dashboard cache from completed sync")
         XCTAssertNil(LastSyncOrigin.completedSync.rescoreTriggerLabel)
         XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.contains("completed sync"))
-        XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "launch-seed")
+        XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "stored-seed")
+        XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.hasPrefix("Launch"),
+                       "a retried bootstrap seeds after launch (W07-046)")
+    }
+
+    /// W07-047: the app's own chain, not a bare subscriber. A seed that a HISTORY_COMPLETE follows inside the
+    /// debounce settles once, as a completed sync; a seed alone settles as the stored seed.
+    @MainActor
+    func testTheAppsRefreshChainSettlesOnTheLastWritersOrigin() {
+        let live = LiveState()
+        var seen: [LastSyncOrigin] = []
+        let done = expectation(description: "settled")
+        let c = AppModel.lastSyncRefreshes(live, debounce: .milliseconds(50)).sink { seen.append($0); done.fulfill() }
+        live.seedLastSynced(1_790_000_000)
+        live.stampCompletedSync(at: 1_790_000_900)
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(seen, [.completedSync])
+
+        let live2 = LiveState()
+        var seen2: [LastSyncOrigin] = []
+        let done2 = expectation(description: "settled alone")
+        let c2 = AppModel.lastSyncRefreshes(live2, debounce: .milliseconds(50)).sink { seen2.append($0); done2.fulfill() }
+        live2.seedLastSynced(1_790_000_000)
+        wait(for: [done2], timeout: 2)
+        XCTAssertEqual(seen2, [.persisted])
+        c.cancel(); c2.cancel()
+    }
+
+    /// W07-044: a value with no recorded writer is reported as unattributed, never as a completed sync.
+    func testAnUnrecordedOriginIsNotLoggedAsACompletedSync() {
+        XCTAssertEqual(LastSyncOrigin.observed(nil), .unattributed)
+        XCTAssertEqual(LastSyncOrigin.observed(.completedSync), .completedSync)
+        XCTAssertFalse(LastSyncOrigin.unattributed.refreshLogLine.contains("completed sync"))
+        XCTAssertEqual(LastSyncOrigin.unattributed.rescoreTriggerLabel, "last-sync-unattributed")
     }
 }
