@@ -236,8 +236,7 @@ public struct DeviceRegistryStore: Sendable {
     /// estimator, not a device, so it goes with the day it was computed on (W07-036); a day scored before
     /// provenance existed has no cells and stays.
     ///
-    /// Sleeps and workouts under the canonical id (detected ones; user workouts live under the strap's own
-    /// id) carry no day key, so they are attributed by heart rate: a session goes when the device has heart
+    /// Sleeps and detected workouts under the canonical id carry no day key, so they are attributed by heart rate: a session goes when the device has heart
     /// rate inside it and no other source does. Nights the user edited or added
     /// stay, as in the exclusive case. Must run before the device's heart rate is deleted.
     static func deleteAttributedCanonicalRows(_ db: Database, of deviceId: String) throws {
@@ -309,8 +308,12 @@ public struct DeviceRegistryStore: Sendable {
             guard try coveredOnlyByDevice(start, end) else { continue }
             try db.execute(sql: "DELETE FROM sleepSession WHERE deviceId = ? AND startTs = ?", arguments: [canonical, start])
         }
-        for row in try Row.fetchAll(db, sql: "SELECT startTs, endTs, sport FROM workout WHERE deviceId = ?",
-                                    arguments: [canonical]) {
+        // Detected bouts only: banked with sport "detected" or a computed source. A workout the user entered
+        // (`source = 'manual'`) is user data even under the canonical id, as an edited night is (W07-037).
+        for row in try Row.fetchAll(db, sql: """
+            SELECT startTs, endTs, sport FROM workout
+            WHERE deviceId = ? AND source != 'manual' AND (sport = 'detected' OR source LIKE '%' || ?)
+            """, arguments: [canonical, computedSuffix]) {
             let start: Int = row["startTs"], end: Int = row["endTs"], sport: String = row["sport"]
             guard try coveredOnlyByDevice(start, end) else { continue }
             try db.execute(sql: "DELETE FROM workout WHERE deviceId = ? AND startTs = ? AND sport = ?",

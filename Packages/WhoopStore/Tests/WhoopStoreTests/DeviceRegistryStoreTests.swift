@@ -286,10 +286,13 @@ final class DeviceRegistryStoreTests: XCTestCase {
                 try db.execute(sql: "INSERT INTO sleepSession (deviceId, startTs, endTs, userEdited) VALUES ('my-whoop-noop', ?, ?, ?)",
                                arguments: [start, end, edited])
             }
+            // Detected bouts as they are banked (sport "detected", a computed source), and a legacy manual
+            // workout under the canonical id that only whoop-new's heart rate covers (W07-037): user data.
             for (start, end) in [(1000, 2000), (7000, 8000)] {
-                try db.execute(sql: "INSERT INTO workout (deviceId, startTs, endTs, sport, source) VALUES ('my-whoop-noop', ?, ?, 'Running', 'detected')",
+                try db.execute(sql: "INSERT INTO workout (deviceId, startTs, endTs, sport, source) VALUES ('my-whoop-noop', ?, ?, 'detected', 'my-whoop-noop')",
                                arguments: [start, end])
             }
+            try db.execute(sql: "INSERT INTO workout (deviceId, startTs, endTs, sport, source) VALUES ('my-whoop-noop', 1100, 1900, 'Running', 'manual')")
         }
     }
 
@@ -322,7 +325,7 @@ final class DeviceRegistryStoreTests: XCTestCase {
                                      "B:spo2_candidate", "L:sleep_performance"],
                        "the unattributed cells of the days whoop-new owned go with them, and the weekly VO2max with Fitness Age (W07-036)")
         XCTAssertEqual(left.sleeps, [3000, 5000, 7000], "a night only whoop-new's heart rate covers goes; an edited one stays")
-        XCTAssertEqual(left.workouts, [7000])
+        XCTAssertEqual(left.workouts, [1100, 7000], "a manual workout is user data and stays (W07-037)")
     }
 
     /// The same rule from the other side: deleting the canonical strap's data while a re-added strap is
@@ -347,7 +350,7 @@ final class DeviceRegistryStoreTests: XCTestCase {
                                      "A:vo2max_est", "L:sleep_performance", "M:sleep_performance", "M:spo2_candidate",
                                      "R:sleep_performance"])
         XCTAssertEqual(left.sleeps, [1000, 3000, 5000])
-        XCTAssertEqual(left.workouts, [1000])
+        XCTAssertEqual(left.workouts, [1000, 1100])
     }
 
     // Regression guard (audit finding): every table with a `deviceId` column MUST appear in
