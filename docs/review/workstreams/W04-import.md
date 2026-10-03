@@ -64,3 +64,4 @@ Fixture tests including malformed input; import → export round-trip; app build
 - 2026-09-25 — File created from the plan.
 - 2026-09-27 — The owner's 24-hour raw CSV matches the backup taken at the same moment row for row on every stream (a full multiset compare, 0 mismatches); the one event missing from the CSV arrived after it was written. W04-001 recorded.
 - 2026-09-28 — The owner's morning raw CSV (24 h, 11.9.13) matches the backup taken 38 s before it on every stream (full multiset compare, 0 mismatches on the shared window); the CSV's only extra rows are 32 HR and 26 RR rows newer than the backup's newest. W04-001 stands (no `spo2Sample` rows, the byte 82 candidate still not exported).
+- 2026-10-03 — Phase 2 started; W4 claimed for the Phase 2 review workflow (passes 1, 2, 3 and 5).

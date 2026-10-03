@@ -23,18 +23,19 @@ Claude Doc (NOOP — Whole-Project Code Review Plan); where the two disagree, th
 Each fact on this board lives here only. Findings live only in their workstream file; verdicts live
 only in `DECISIONS.md`. Do not copy counts from those files onto this board — link instead.
 
-**Current phase:** 1 — Data integrity (in review since 2026-09-25). Phase 0 closed 2026-09-25; its numbers are in
+**Current phase:** 2 — Computation (in review since 2026-10-03). Phase 1 closed 2026-10-03 on the owner's word (see
+its census below); Phase 0 closed 2026-09-25, its numbers are in
 [`BASELINE.md`](BASELINE.md#phase-0-measurements). See [`PLAN.md`](PLAN.md#phases).
 
 | WS | Area | File | Phase | Status |
 |---|---|---|---|---|
 | W1 | Protocol | [W01-protocol.md](workstreams/W01-protocol.md) | 1 | In review |
 | W2 | Storage | [W02-storage.md](workstreams/W02-storage.md) | 1 | In review |
-| W3 | Analytics | [W03-analytics.md](workstreams/W03-analytics.md) | 2 | Not started |
-| W4 | Import and export | [W04-import.md](workstreams/W04-import.md) | 2 | Not started |
+| W3 | Analytics | [W03-analytics.md](workstreams/W03-analytics.md) | 2 | In review |
+| W4 | Import and export | [W04-import.md](workstreams/W04-import.md) | 2 | In review |
 | W5 | Local access (MCP / CLI) | [W05-local-access.md](workstreams/W05-local-access.md) | 4 | Not started |
 | W6 | BLE and collection | [W06-ble-collect.md](workstreams/W06-ble-collect.md) | 1 (safe-trim), 3 (rest) | In review |
-| W7 | App data layer | [W07-app-data.md](workstreams/W07-app-data.md) | 2 | Not started |
+| W7 | App data layer | [W07-app-data.md](workstreams/W07-app-data.md) | 2 | In review |
 | W8 | Screens and design system | [W08-screens-design.md](workstreams/W08-screens-design.md) | 4 | Not started |
 | W9 | App shell and services | [W09-app-shell.md](workstreams/W09-app-shell.md) | 3 | Not started |
 | W10 | iOS, widgets, watch | [W10-ios-widgets-watch.md](workstreams/W10-ios-widgets-watch.md) | 3 | Not started |
@@ -47,8 +48,26 @@ five review passes are ticked.
 
 ## Next up
 
-Phase 1 — Data integrity: W2 Storage, W1 Protocol, and the safe-trim and backfill part of W6. Tick each
-item as it lands.
+Phase 2 — Computation: W3 Analytics, W4 Import and export, W7 App data layer; decisions AD-1, AD-7 and
+AD-8. Tick each item as it lands.
+
+- [ ] Run the Phase 2 review workflow (the owner's 2026-09-25 choice: one multi-agent workflow per phase, under
+      ten agents): passes 1 Map, 2 Static sweep and 3 Deep read in six slices (W3 sleep; W3 scores and engines;
+      W3 activity, ECG and SpO₂; W4; W7 orchestration; W7 resolution and partition), then pass 5 Adversarial
+      once per workstream. One writer records the surviving findings as `Reported` rows.
+- [ ] W07-002 (S2, carried from Phase 1's W02-005) is Phase 2's one open S2 at the start: V0 it with two straps
+      registered, then fix it first.
+- [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch.
+- [ ] Rebuild the replay harness against current `main` (the Phase 0 one is pinned to `01baf82a`, before V3
+      became the default) and run it over the newest backup: the exit gate needs its diff explained row by row.
+- [ ] Oracle inventory: which scorers and engines whose output reaches disk have a pinned oracle, and an oracle
+      for each that changes in this phase.
+- [ ] Settle AD-1, AD-7 and AD-8 in [`DECISIONS.md`](DECISIONS.md).
+- [ ] Exit gate: the replay diff explained row by row, and every changed formula pinned by an oracle.
+
+Phase 1 — Data integrity: W2 Storage, W1 Protocol, and the safe-trim and backfill part of W6. Closed
+2026-10-03 on the owner's word. The unticked items below stay open only for their strap checks, which ride
+the next exports.
 
 - [x] Run the Phase 1 review workflow (owner's choice: one multi-agent workflow per phase, under ten
       agents): passes 1 Map, 2 Static sweep, 3 Deep read and 5 Adversarial for each of the three areas.
@@ -196,12 +215,14 @@ item as it lands.
       a completed sync; the pass itself is kept. StrandTests 2,132, both builds (NOOPiOS without the watch
       app). Then a strap run: a launch's log reads the launch line before `Connected`, and `post-offload`
       only after a HISTORY_COMPLETE.
-- [ ] Phase 1 census (2026-09-30), against `PLAN.md`'s scope (W1, W2, and the safe-trim and backfill part
+- [x] Phase 1 census (2026-09-30), against `PLAN.md`'s scope (W1, W2, and the safe-trim and backfill part
       of W6): no S1 or S2 in scope is open. W02-005 is Fixed with a V2 and not yet Verified; W06-051 and
       W06-053 are Raw Data Collector findings, Phase 3 scope. W01-006's independent V2 holds with caveats
       and it is Verified; the caveats are W01-017 … W01-019 and W02-021 … W02-023, all S4. Pass 4 is not
       done: 46 Reported rows carry no V0 (W1 6, W2 6, W6 34), all S3 or S4. Closing the phase is the owner's
-      call.
+      call. Closed 2026-10-03: the owner closed Phase 1 and started Phase 2. The 34 W6 rows are Phase 3 scope.
+      The 12 W1 and W2 rows stay `Reported` in their files; each is V0'd with the first later batch that
+      touches its file, and any left go to Phase 6, whose exit criteria need every S3 fixed or deferred.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 

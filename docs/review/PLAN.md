@@ -58,7 +58,7 @@ by the next build. Architecture refactors wait until the correctness fixes in th
 |---|---|---|---|
 | 0. Baseline | All (measure only) | AD-12, AD-13 | Upstream freeze point recorded; every suite and both app builds run once, with failures recorded; strict-concurrency warning count taken; replay harness runs on the newest backup |
 | 1. Data integrity | W2, W1, safe-trim and backfill part of W6 | AD-2, AD-5, AD-6 | No open S1 or S2 in these areas; migration and backup round-trip tests green on a real backup |
-| 2. Computation | W3, W4, W7 | AD-7, AD-8 | Replay diff explained row by row; every changed formula pinned by an oracle |
+| 2. Computation | W3, W4, W7 | AD-1, AD-7, AD-8 | Replay diff explained row by row; every changed formula pinned by an oracle |
 | 3. Device and runtime | Rest of W6, W9, W10 | AD-3, AD-4, AD-11, AD-14 | Overnight strap run clean on the new build; no new strict-concurrency warnings |
 | 4. Presentation | W8, W5 | AD-9, AD-10 | Single-resolver tests for each shared fact; token scan clean; i18n gate green |
 | 5. Architecture refactors | Per Amend or Replace verdict | Act on the verdicts | Each refactor shows zero behaviour diff |

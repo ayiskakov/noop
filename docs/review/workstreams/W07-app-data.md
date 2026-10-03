@@ -96,3 +96,4 @@ the two biggest hot spots).
 - 2026-09-28 — Owner's morning export on 11.9.13: W07-005 passes a second V3 and moves to Verified with the day-and-night batch check. W07-015 recorded (background re-scores run cold each time, at 6 to 8 times the CPU of a cold foreground pass).
 - 2026-09-30 — Owner's export on 11.9.15: W07-016 recorded (each launch runs the completed-sync refresh and a `post-offload` re-score with no sync behind them).
 - 2026-09-30 — W07-016 fixed on `review/w07-launch-seed` (stacked on `review/strap-run-2026-09-30`): the launch seed's refresh and re-score are logged as a launch seed, not a completed sync.
+- 2026-10-03 — Phase 2 started; W7 claimed for the Phase 2 review workflow (passes 1, 2, 3 and 5 in two slices: orchestration; resolution and partition). W07-002 (S2) is fixed first.
