@@ -288,8 +288,9 @@ public enum AnalyticsEngine {
                                   // (preserving the pure-function contract). The caller
                                   // (IntelligenceEngine) supplies a full
                                   // [localMidnight(day), localMidnight(day)+86400) read here so a
-                                  // day's late hours — which fall outside the ~42h night-detection
-                                  // window (it ends at dayStart+12h ≈ noon) — are still seen.
+                                  // day's whole span is read on its own, and TODAY's (read to `now`) too.
+                                  // (Since W03-024 a past day's night window reaches 12 h past its next
+                                  // midnight, so it covers the day; the shortcut slices it from that.)
                                   //
                                   // dayHr/daySteps drive the additive step + calorie totals.
                                   // dayHr/dayGravity ALSO feed WorkoutDetector so an afternoon /

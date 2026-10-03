@@ -424,9 +424,19 @@ public enum SleepStager {
     /// The inputs a detection decision at time `t` may read, and nothing beyond them (W03-023). The sparse
     /// flag, the fragmentation rescue and the HR baseline were each taken over the whole read, about 54 h,
     /// so a gravity gap or the heart rate half a day after a night moved that night's bounds, and the same
-    /// night detected from two reads of different reach came out different. Read through this, a decision
-    /// at `t` depends only on data within `localBaselineRadiusS` of `t`: any read covering that span gives
-    /// the same answer.
+    /// night detected from two reads of different reach came out different. Read through this, each of those
+    /// decisions at `t` depends only on data within `localBaselineRadiusS` of `t`.
+    ///
+    /// What still reads the whole window (W03-048), so "any read covering a session's 12 h gives the same
+    /// session" is true of these decisions, not of detection as a whole:
+    /// - `classifyStill`'s rolling window is sized from the median gravity interval of the whole read
+    ///   (`windowSize`). Adding 1 Hz gravity half a day away to a 30-second-cadence read changes it. On 5/MG
+    ///   reads it is the same on every read measured.
+    /// - The overnight chain (`chainPrevEnd`, `chainFromOvernight`) carries acceptance from one run to the
+    ///   next, so a truncated predecessor can change whether a daytime block passes the morning guard. It
+    ///   changes acceptance, not bounds.
+    /// - `offWristHRGapSpans` gates on the HR span and count of the whole read; it passes on dense HR.
+    /// - A gap decision is centred on the gap's midpoint, so it reads up to half the gap past either end.
     struct LocalContext {
         let gravTs: [Int]
         let hrTs: [Int]

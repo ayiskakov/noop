@@ -72,7 +72,7 @@ final class StreamReadCapTests: XCTestCase {
         }
     }
 
-    /// Gravity is the third stream on the 54-hour window, and the field capture put it at 192,698 rows -
+    /// Gravity is the third stream on the window, and the field capture put it at 192,698 rows on 54 hours -
     /// 96% of the old shared cap. Unlike HR and R-R it is a PLAIN read with no truncation counter, so a
     /// clip there reports nothing at all; sleep staging simply gets a night missing its tail.
     func testGravityClearsWhatTheFieldMeasured() {

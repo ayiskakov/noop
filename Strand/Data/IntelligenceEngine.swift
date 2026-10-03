@@ -1295,9 +1295,8 @@ final class IntelligenceEngine: ObservableObject {
                 let wristOff = AnalyticsEngine.offWristIntervals(events: wristEvents, windowEnd: to)
 
                 // Calendar-day window for the ADDITIVE daily totals (steps + calories). The night window
-                // above is anchored to the current time-of-day and ends at dayStart+12h, so for a PAST
-                // day whose late hours sit after that bound those hours are never read and the totals
-                // undercount. Read exactly [localMidnight(day), localMidnight(day)+86400) and hand it to
+                // above reaches 12 h past the next midnight (W03-024), so the totals must be cut to the
+                // calendar day rather than taken from it, or they would count the next morning. Read exactly [localMidnight(day), localMidnight(day)+86400) and hand it to
                 // analyzeDay's dayHr/daySteps, which use it ONLY for those totals. `dayStart` is already a
                 // LOCAL midnight; midnightLocal is idempotent on it (the store range is inclusive, so end
                 // at -1 s). (#277 , local-day bucketing.)
@@ -1330,11 +1329,9 @@ final class IntelligenceEngine: ObservableObject {
                 } else {
                     daySteps = (try? await store.stepSamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
                 }
-                // Full calendar-day gravity for WORKOUT detection. The night window above ends at
-                // dayStart+12h (≈ noon), so an afternoon/evening workout sits outside it and was only
-                // detected once a later pass re-read it through the next night window , a ~day lag. This
-                // [localMidnight, localMidnight+24h) read (today: clamped to `now` by the store) lets the
-                // detector see the whole day, so a 5 pm run shows up on the same day.
+                // Full calendar-day gravity for WORKOUT detection, cut to [localMidnight, localMidnight+24h)
+                // (today: clamped to `now` by the store), so a workout is detected on the day it happened
+                // and the next morning, which the night window also reaches since W03-024, is not.
                 let dayGrav: [GravitySample]
                 if let slice = AnalyticsEngine.daySliceFromNight(grav, nightLo: from, nightHi: to,
                                                                  dayLo: dayMid, dayHi: dayEnd,
@@ -1499,10 +1496,11 @@ final class IntelligenceEngine: ObservableObject {
                     // session (past the ≥200-HR gate → this is the "HR tracked, no sleep" case), carry a
                     // counts-only reason line on the SAME loop-1 diagnostic channel (emitted in the
                     // main-actor replay below) so the report says WHY the stager found nothing. `window` is
-                    // the read span in whole hours (30 h back → next local midnight, or +18 h for today).
+                    // the read span in whole hours (30 h back → 12 h past the next local midnight, or to
+                    // `now` for a day not yet that old; W03-024).
                     if res.cachedSleep.isEmpty {
-                        // from/to are Int unix seconds; the span is always a whole-hour multiple
-                        // (30 h + 24 h, or 30 h + 18 h), so integer division is exact. Matches Kotlin.
+                        // from/to are Int unix seconds. A past day's span is 66 h exactly; a span ending at
+                        // `now` is not a whole number of hours and the division truncates it.
                         let windowHours = (to - from) / 3_600
                         hrvDiag = Self.sleepDetectNoNightLogLine(
                             day: day, hrCount: hr.count, rrCount: rr.count, respCount: resp.count,
