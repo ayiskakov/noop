@@ -189,7 +189,10 @@ public struct DeviceRegistryStore: Sendable {
     public func deleteAllData(deviceId: String) throws {
         try dbQueue.write { db in
             let exclusiveSibling = try Self.exclusiveComputedSibling(db, of: deviceId)
-            if exclusiveSibling != Self.canonicalComputedId {
+            // The canonical namespace is cleared whole only when it is this device's alone; otherwise only
+            // what is attributed to the device leaves it.
+            let canonicalIsDevicesAlone = exclusiveSibling == Self.canonicalComputedId
+            if !canonicalIsDevicesAlone {
                 try Self.deleteAttributedCanonicalRows(db, of: deviceId)
             }
             for table in Self.deviceScopedTables {
@@ -217,14 +220,16 @@ public struct DeviceRegistryStore: Sendable {
     static func exclusiveComputedSibling(_ db: Database, of deviceId: String) throws -> String? {
         guard !deviceId.hasSuffix(computedSuffix) else { return nil }
         let sibling = deviceId + computedSuffix
-        guard deviceId == "my-whoop" else { return sibling }
+        guard deviceId == canonicalDeviceId else { return sibling }
         let others = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM pairedDevice WHERE id != ?",
                                       arguments: [deviceId]) ?? 0
         return others == 0 ? sibling : nil
     }
 
-    /// The computed namespace the engine writes every scored day under, whichever source supplied it.
-    static let canonicalComputedId = "my-whoop" + computedSuffix
+    /// The canonical strap id, and the computed namespace the engine writes every scored day under,
+    /// whichever source supplied it. One spelling, so the two cannot drift (W07-040).
+    static let canonicalDeviceId = "my-whoop"
+    static let canonicalComputedId = canonicalDeviceId + computedSuffix
 
     /// Removes from the shared canonical namespace what was computed from `deviceId` (W07-002).
     ///
