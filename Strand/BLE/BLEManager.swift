@@ -1451,7 +1451,7 @@ public final class BLEManager: NSObject, ObservableObject {
         Task { @MainActor [state] in
             // Never overwrite a value this session earned: a HISTORY_COMPLETE landing while the registry
             // read was in flight is newer than anything persisted, and must win.
-            if state.lastSyncedAt == nil { state.lastSyncedAt = seed }
+            state.seedLastSynced(seed)
         }
     }
 
@@ -2841,7 +2841,7 @@ public final class BLEManager: NSObject, ObservableObject {
         if persistedSensorRows { consecutiveEmptyOffloads = 0 }
         else if consecutiveAutoContinues == 0 { consecutiveEmptyOffloads += 1 }
         if reason == "HISTORY_COMPLETE" {
-            state.lastSyncedAt = Date().timeIntervalSince1970
+            state.stampCompletedSync(at: Date().timeIntervalSince1970)
             // #77 / #91: a sync that COMPLETED but discarded records must not read as a clean
             // "History synced" — the wording distinguishes bytes saved on this Mac from bytes the
             // full archive could not preserve, so "saved" is never claimed falsely.

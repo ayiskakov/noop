@@ -191,6 +191,17 @@ item as it lands.
       Package suite, `StrandTests`, both builds (NOOPiOS without the watch app), i18n and hygiene gates pass. Then a strap run: a night on the build
       whose card reads "N of M" with the readings left out named, and its strap-log line; ideally one night
       with the strap deliberately loose, to see "no reliable reading".
+- [ ] W07-016 on `review/w07-launch-seed` (stacked on `review/strap-run-2026-09-30`): the refresh and re-score
+      a launch runs off the persisted last-sync time are logged as a launch seed (`trigger=launch-seed`), not as
+      a completed sync; the pass itself is kept. StrandTests 2,132, both builds (NOOPiOS without the watch
+      app). Then a strap run: a launch's log reads the launch line before `Connected`, and `post-offload`
+      only after a HISTORY_COMPLETE.
+- [ ] Phase 1 census (2026-09-30), against `PLAN.md`'s scope (W1, W2, and the safe-trim and backfill part
+      of W6): no S1 or S2 in scope is open. W02-005 is Fixed with a V2 and not yet Verified; W06-051 and
+      W06-053 are Raw Data Collector findings, Phase 3 scope. W01-006's independent V2 holds with caveats
+      and it is Verified; the caveats are W01-017 … W01-019 and W02-021 … W02-023, all S4. Pass 4 is not
+      done: 46 Reported rows carry no V0 (W1 6, W2 6, W6 34), all S3 or S4. Closing the phase is the owner's
+      call.
 - [ ] Still open from Phase 0: AD-4's target (warning-clean vs Swift 6 mode), now that the counts are
       in. Needed by Phase 3.
 
