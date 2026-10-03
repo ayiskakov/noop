@@ -36,6 +36,13 @@ final class IntelligenceEngine: ObservableObject {
     private let deviceId: String
 
     @Published var results: [Computed] = []      // newest first
+
+    /// The Charge drivers this engine scored `day`'s stored Charge with, or nil when it holds none for that
+    /// day or an import won the day's Charge (W03-030).
+    func chargeDrivers(forDay day: String) -> [ChargeDriver]? {
+        guard let r = results.first(where: { $0.day == day }), r.source == .computed, !r.drivers.isEmpty else { return nil }
+        return r.drivers
+    }
     @Published var computing = false
     @Published var note: String?
 

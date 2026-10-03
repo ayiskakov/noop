@@ -63,6 +63,33 @@ final class ChargeBreakdownWiringTests: XCTestCase {
         XCTAssertNotEqual(out?.confidence, .calibrating)
     }
 
+    /// W03-030: the stored Charge scores each day against the nights strictly before it (efa0bdcb), so the
+    /// sheet's rows for a night must not move when later nights, or the night itself, enter the history.
+    func testRowsScoreAgainstTheNightsBeforeTheDayOnly() {
+        let past = (1...10).map { day(String(format: "2026-01-%02d", $0), hrv: 50 + Double($0 % 3), rhr: 52) }
+        let row = day("2026-01-11", hrv: 62, rhr: 51, recovery: 64)
+        let later = (12...20).map { day(String(format: "2026-01-%02d", $0), hrv: 80, rhr: 45) }
+        let priorOnly = ChargeBreakdownWiring.breakdown(days: past + [row], row: row, sleepPerfPercent: 85)
+        let wholeHistory = ChargeBreakdownWiring.breakdown(days: past + [row] + later, row: row, sleepPerfPercent: 85)
+        XCTAssertNotNil(priorOnly)
+        XCTAssertEqual(wholeHistory?.drivers.map(\.baselineText), priorOnly?.drivers.map(\.baselineText))
+        XCTAssertEqual(wholeHistory?.drivers.map(\.deltaPoints), priorOnly?.drivers.map(\.deltaPoints))
+        XCTAssertEqual(wholeHistory?.confidence, priorOnly?.confidence)
+    }
+
+    /// W03-030: when the engine still holds the drivers it scored the day's stored Charge with, the sheet shows
+    /// those rows, the ones the Intelligence screen shows, rather than recomputing its own.
+    func testEngineDriversAreShownAsTheyAre() {
+        let past = (1...10).map { day(String(format: "2026-01-%02d", $0), hrv: 50 + Double($0 % 3)) }
+        let row = day("2026-01-11", hrv: 62, rhr: 51, recovery: 64)
+        guard let engine = ChargeBreakdownWiring.breakdown(days: past + [row], row: row, sleepPerfPercent: 70)?.drivers,
+              !engine.isEmpty else { return XCTFail("the fixture must score") }
+        let out = ChargeBreakdownWiring.breakdown(days: past + [row], row: row, sleepPerfPercent: 85,
+                                                  engineDrivers: engine)
+        XCTAssertEqual(out?.drivers.map(\.deltaPoints), engine.map(\.deltaPoints))
+        XCTAssertEqual(out?.drivers.map(\.label), engine.map(\.label))
+    }
+
     /// Epoch for a `yyyy-MM-dd` key at UTC midnight, matching what Recalibrate writes.
     private func epochOf(_ day: String) -> Double {
         var cal = Calendar(identifier: .gregorian)
