@@ -533,7 +533,10 @@ public final class LiveState: ObservableObject {
 
     /// Wall time (unix seconds) of the last successfully-completed offload (a sync, even if nothing new
     /// came — i.e. caught up). Drives the sync tile + the staleness nudge.
-    @Published public var lastSyncedAt: TimeInterval?
+    ///
+    /// The setter is private (W07-045): `seedLastSynced` and `stampCompletedSync` are the only writers, so
+    /// `lastSyncedAtOrigin` always names the writer of the value an observer is handed.
+    @Published public private(set) var lastSyncedAt: TimeInterval?
     /// Which writer set `lastSyncedAt` last (W07-016). Written only by the two methods below, each before
     /// the value, so an observer of `$lastSyncedAt` reads the origin of the value it was handed.
     private(set) var lastSyncedAtOrigin: LastSyncOrigin?
