@@ -871,8 +871,13 @@ public enum SleepStager {
         let hrInSleepBand: Bool
         /// Whether this pair was merged.
         let bridged: Bool
-        /// Stable token for the log: bridged / gapTooLong / hrOutOfBand / overlap / activeTooLong.
+        /// Stable token for the log: bridged / gapTooLong / hrOutOfBand / overlap / activeTooLong, or `dense`
+        /// for a pair the local rule did not open (W03-047).
         let reason: String
+        /// What opened the pair (W03-047): `sparse` (gravity sparse within `localSparseRadiusS` of the gap),
+        /// `fragmented` (the sleep runs there are fragmented to nothing, #1937), `none` for a `dense` pair,
+        /// or `flag` when the caller passed one read-wide flag and no context.
+        var enabledBy: String = "flag"
     }
 
     /// True when this night's sleep runs will ALL be dropped by `minSleepMin` yet add up to a plausible
@@ -922,12 +927,14 @@ public enum SleepStager {
                                         minSleepS: Int = minSleepMin * 60) -> ([Period], [SparseBridgeAttempt]) {
         if periods.isEmpty || (context == nil && !sparse) { return (periods, []) }
         let sleepRuns = periods.filter { $0.stage == "sleep" }
-        func enabled(at t: Int) -> Bool {
-            guard let context else { return true }
-            if context.sparse(at: t) { return true }
+        /// What opens a pair at `t`, or nil when nothing does.
+        func enablingCause(at t: Int) -> String? {
+            guard let context else { return "flag" }
+            if context.sparse(at: t) { return "sparse" }
             let r = localSparseRadiusS
-            return isFragmentedToNothing(sleepRuns.filter { $0.end >= t - r && $0.start <= t + r }
-                                            .map { $0.end - $0.start }, minSleepS: minSleepS)
+            let fragmented = isFragmentedToNothing(sleepRuns.filter { $0.end >= t - r && $0.start <= t + r }
+                                                       .map { $0.end - $0.start }, minSleepS: minSleepS)
+            return fragmented ? "fragmented" : nil
         }
         let bridgeGapS = sparseBridgeGapMin * 60
         let activeMaxS = sparseBridgeActiveMaxMin * 60
@@ -948,7 +955,13 @@ public enum SleepStager {
                       dropTrailing: Bool, activeMaxS: Int, activeMaxInBandS: Int = 0) -> Bool {
             let gap = right.start - left.end
             let mid = (left.end + right.start) / 2
-            guard enabled(at: mid) else { return false }
+            guard let cause = enablingCause(at: mid) else {
+                var dense = SparseBridgeAttempt(gapMin: gap / 60, activeMin: activeS / 60, activeCapMin: 0,
+                                                hrInSleepBand: false, bridged: false, reason: "dense")
+                dense.enabledBy = "none"
+                attempts.append(dense)
+                return false
+            }
             let inBand = hrSleepBandAcross(left.end, right.start, hr: hr,
                                            baseline: context.map { $0.baseline(at: mid) } ?? baseline)
             // The HR band is the real guard, so let it widen the minute bound rather than be vetoed by
@@ -962,9 +975,11 @@ public enum SleepStager {
             else if !inBand { reason = "hrOutOfBand" }
             else { reason = "bridged" }
             let bridged = reason == "bridged"
-            attempts.append(SparseBridgeAttempt(gapMin: gap / 60, activeMin: activeS / 60,
-                                                activeCapMin: activeCapS / 60,
-                                                hrInSleepBand: inBand, bridged: bridged, reason: reason))
+            var attempt = SparseBridgeAttempt(gapMin: gap / 60, activeMin: activeS / 60,
+                                              activeCapMin: activeCapS / 60,
+                                              hrInSleepBand: inBand, bridged: bridged, reason: reason)
+            attempt.enabledBy = cause
+            attempts.append(attempt)
             guard bridged else { return false }
             if dropTrailing { out.removeLast() }
             out[out.count - 1] = Period(stage: "sleep", start: left.start, end: right.end)
@@ -1660,32 +1675,17 @@ public enum SleepStager {
         // was dense. On the reporting device gravity coverage was 99.9%: the rescue was declined
         // precisely because the data was good.
         //
-        // So the bridge also runs when the night is fragmented to nothing. The gate is deliberately
-        // "today's answer is zero": if any single run already clears the floor this is false and the
-        // sparse rule decides exactly as before, so a night that currently scores cannot change. It can
-        // only turn nothing into something.
+        // So the bridge also runs where the night is fragmented to nothing. Since W03-023 that is judged per
+        // pair, over the sleep runs within `localSparseRadiusS` of it: no single run there clears the floor
+        // and together they do. The old guarantee, "a night that currently scores cannot change", now holds
+        // within that neighbourhood only: a cluster of fragments more than 6 h from a night that scores is
+        // judged on its own and can become a session (W03-049).
         //
         // Requiring the SUM to clear the floor keeps a handful of brief stirs from becoming a night, and
         // the bridge's own rules still apply underneath — a gap longer than sparseBridgeGapMin, an
         // intervening active run that is too long, or HR above the sleep band all still refuse. This
-        // enables the attempt; it does not weaken what the attempt checks.
-        //
-        // Deliberately NOT passed to buildRuns above, which takes its own `sparse` for the HR-vouched
-        // gap rule. That decides how runs are FORMED, so widening it would change the input to
-        // everything downstream including nights that currently score. This only re-stitches runs that
-        // are already built, and only when every one of them was about to be discarded.
-        // Evaluated unconditionally rather than short-circuited behind `sparse`, so the trace can
-        // report what it actually was on a sparse night too. It is a filter/map/sum over a handful of
-        // runs.
-        let fragmentedToNothing = isFragmentedToNothing(
-            runs.filter { $0.stage == "sleep" }.map { $0.end - $0.start }, minSleepS: minSleepS)
-        // Trace only: whether any gravity gap over `maxGapMin` sits where gravity is locally sparse. The
-        // bridge decides per pair from its own neighbourhood (W03-023).
-        let longGaps = traceSink == nil ? []
-            : zip(context.gravTs, context.gravTs.dropFirst()).filter { $1 - $0 > maxGapMin * 60 }
-        let sparseGaps = longGaps.filter { context.sparse(at: ($0 + $1) / 2) }.count
-        // `fragmentedToNothing` here is the read-wide value, kept for the trace; the bridge judges each pair's
-        // own neighbourhood.
+        // enables the attempt; it does not weaken what the attempt checks. It does not reach `buildRuns`,
+        // which decides how runs are FORMED; it only re-stitches runs that are already built.
         // Re-stitch sleep runs fragmented by gravity dropouts, before minSleepMin.
         let runsBeforeBridge = traceSink == nil ? 0 : runs.filter { $0.stage == "sleep" }.count
         // #737: capture the per-pair reasons BEFORE the merge mutates `runs`, so a bridge that changed
@@ -1694,7 +1694,8 @@ public enum SleepStager {
                                                    minSleepS: minSleepS)
         let bridgeAttempts = bridgeResult.1
         runs = bridgeResult.0
-        let bridgeEnabled = !bridgeAttempts.isEmpty || sparseGaps > 0 || fragmentedToNothing
+        let bridgeEnabled = !bridgeAttempts.isEmpty
+        let pairsBy = Dictionary(grouping: bridgeAttempts, by: \.enabledBy).mapValues(\.count)
         // Sleep & Rest test mode (E3): record the bridge result, so a night rescued from fragmentation
         // is visible. Emitted whenever the bridge was ENABLED (sparse, or #1937's fragmented-to-nothing
         // night) and only when tracing. Side-effect-only.
@@ -1707,7 +1708,8 @@ public enum SleepStager {
             // needs.
             traceSink(GateTrace.runLine(index: -1, startTs: 0, endTs: 0,
                 verdict: runsAfterBridge < runsBeforeBridge ? .kept : .dropped, gate: "sparseBridge",
-                detail: "sparseGaps=\(sparseGaps)/\(longGaps.count) fragmentedToNothing=\(fragmentedToNothing) "
+                detail: "pairs=\(bridgeAttempts.count) sparse=\(pairsBy["sparse"] ?? 0) "
+                    + "fragmented=\(pairsBy["fragmented"] ?? 0) dense=\(pairsBy["none"] ?? 0) "
                     + "gapMin=\(sparseBridgeGapMin) runsBefore=\(runsBeforeBridge) runsAfter=\(runsAfterBridge)"))
             // #737: one line per pair the bridge CONSIDERED, each naming what it decided.
             //
@@ -1726,7 +1728,7 @@ public enum SleepStager {
                 traceSink(GateTrace.runLine(index: -1, startTs: 0, endTs: 0,
                     verdict: a.bridged ? .kept : .dropped, gate: "sparseBridgePair",
                     detail: "pair=\(i) gapMin=\(a.gapMin) activeMin=\(a.activeMin) activeCapMin=\(a.activeCapMin) "
-                        + "hrInSleepBand=\(a.hrInSleepBand) reason=\(a.reason)"))
+                        + "hrInSleepBand=\(a.hrInSleepBand) reason=\(a.reason) enabledBy=\(a.enabledBy)"))
             }
         }
 
@@ -1883,7 +1885,7 @@ public enum SleepStager {
             let survivingSpanMin = sessions.reduce(0) { $0 + ($1.end - $1.start) } / 60
             traceSink("sleep-detect summary: sleepRuns=\(sleepRunsSeen) droppedMinSleep=\(minSleepDrops) "
                 + "kept=\(sessions.count) detectedSpanMin=\(detectedSpanMin) survivingSpanMin=\(survivingSpanMin) "
-                + "sparseGaps=\(sparseGaps)/\(longGaps.count) grav=\(grav.count) hr=\(hrS.count)")
+                + "bridgePairs=\(bridgeAttempts.count) grav=\(grav.count) hr=\(hrS.count)")
         }
         return sessions
     }
