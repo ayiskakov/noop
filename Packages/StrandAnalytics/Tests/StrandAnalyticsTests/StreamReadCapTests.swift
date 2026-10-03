@@ -60,6 +60,16 @@ final class StreamReadCapTests: XCTestCase {
         XCTAssertEqual(StreamReadCap.rr, 712_800)
         XCTAssertEqual(StreamReadCap.gravity, 356_400)
         XCTAssertEqual(StreamReadCap.skin, 356_400)
+        XCTAssertEqual(StreamReadCap.steps, 356_400)
+        XCTAssertEqual(StreamReadCap.resp, 356_400)
+        XCTAssertEqual(StreamReadCap.spo2, 356_400)
+    }
+
+    /// W03-046: every stream the per-day window reads at one row a second fits a full window.
+    func testOneRowASecondStreamsFitAFullWindow() {
+        for cap in [StreamReadCap.steps, StreamReadCap.resp, StreamReadCap.spo2, StreamReadCap.v18Aux, StreamReadCap.skin] {
+            XCTAssertGreaterThan(cap, StreamReadCap.windowSeconds)
+        }
     }
 
     /// Gravity is the third stream on the 54-hour window, and the field capture put it at 192,698 rows -

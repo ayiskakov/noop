@@ -1274,14 +1274,14 @@ final class IntelligenceEngine: ObservableObject {
                     unlabelledAliasOfWhoop5: activeWhoop5RR && owner == Repository.whoopSource)) ?? true
                 let rr = await rrWindow.rows(owner: owner, from: from, to: to, allowReuse: !strictWhoop5RR)
                 let resp = (try? await store.respSamples(deviceId: owner, from: from, to: to,
-                                                         limit: 200_000)) ?? []
+                                                         limit: StreamReadCap.resp)) ?? []
                 let grav = (try? await store.gravitySamples(deviceId: owner, from: from, to: to,
                                                             limit: StreamReadCap.gravity)) ?? []
-                let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: StreamReadCap.steps)) ?? []
                 let skin = (try? await store.skinTempSamples(deviceId: owner, from: from, to: to, limit: StreamReadCap.skin)) ?? []
                 // #93: raw SpO2 PPG samples for the night, if any; analyzeDay banks the nightly red/IR ADC
                 // means on the DailyMetric. Empty on a 5/MG (no v24 spo2 channels) → the raw means stay nil.
-                let spo2 = (try? await store.spo2Samples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                let spo2 = (try? await store.spo2Samples(deviceId: owner, from: from, to: to, limit: StreamReadCap.spo2)) ?? []
                 // #938: the strap family that wrote this owner's skin-temp rows (always `.whoop5` now; stated,
                 // not assumed, so the conversion names the hardware it applies to).
                 let skinFamily = Self.skinTempFamily(forOwner: owner, devices: regDevices)
@@ -1704,7 +1704,7 @@ final class IntelligenceEngine: ObservableObject {
                 var spo2CandidateNight: Spo2CandidateNight? = nil
                 if spo2CandidateDisplayOn {
                     let auxSamples = (try? await store.v18AuxSamples(
-                        deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                        deviceId: owner, from: from, to: to, limit: StreamReadCap.v18Aux)) ?? []
                     if !auxSamples.isEmpty {
                         spo2CandidateNight = AnalyticsEngine.nightlySpo2CandidateNight(
                             res.sleepSessions, aux: auxSamples)

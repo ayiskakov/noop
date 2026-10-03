@@ -116,4 +116,13 @@ public enum StreamReadCap {
     /// 356,400 - the same shape as `hr`, for the same 66-hour window. Only the 66-hour read needs it;
     /// the day-scoped gravity reads span 24 hours and cannot approach any of these.
     public static let gravity = cap(rowsPerSecond: gravityRowsPerSecond)
+    /// Steps, respiration, raw SpO₂ and the v18 auxiliary record (the byte 82 SpO₂ candidate) on the same
+    /// window (W03-046). They were read at a literal 200,000,
+    /// under a full 66-hour window at one row a second: the steps counter measured about 230,000 rows per
+    /// window on the 2026-09-30 backup. Their peak densities are not measured, so they are sized like
+    /// gravity, one row a second plus half again.
+    public static let steps = cap(rowsPerSecond: 1.0)
+    public static let resp = cap(rowsPerSecond: 1.0)
+    public static let spo2 = cap(rowsPerSecond: 1.0)
+    public static let v18Aux = cap(rowsPerSecond: 1.0)
 }
