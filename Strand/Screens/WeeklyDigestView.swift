@@ -28,18 +28,17 @@ enum WeeklyDigestSource {
     /// history. Extracts each tracked metric into a "yyyy-MM-dd"→value map and hands
     /// it to the pure engine.
     static func digest(from days: [DailyMetric],
+                       restByDay: [String: Double],
                        anchorDay: String,
                        effortDisplayFactor: Double = UnitPrefs.currentEffortDisplayFactor()) -> WeeklyDigest {
         var charge: [String: Double] = [:]
         var effort: [String: Double] = [:]
-        var rest: [String: Double] = [:]
+        let rest = Self.restByDay(from: days, restByDay: restByDay)
         var rhr: [String: Double] = [:]
         var hrv: [String: Double] = [:]
         for d in days {
             if let v = d.recovery { charge[d.day] = v }
             if let v = d.strain   { effort[d.day] = v }
-            // Rest = the sleep-performance composite, recomputed on the persisted day.
-            if let r = restScore(for: d) { rest[d.day] = r }
             if let v = d.restingHr { rhr[d.day] = Double(v) }
             if let v = d.avgHrv    { hrv[d.day] = v }
         }
@@ -49,12 +48,12 @@ enum WeeklyDigestSource {
             effortDisplayFactor: effortDisplayFactor)
     }
 
-    /// The 0–100 Rest composite for a persisted day, via AnalyticsEngine's display-path
-    /// helper (duration-vs-need / efficiency / restorative / consistency). Returns nil
-    /// for a day with no in-bed sleep / missing efficiency, so non-sleep days are simply
-    /// absent from the Rest series.
-    private static func restScore(for d: DailyMetric) -> Double? {
-        AnalyticsEngine.Rest.composite(daily: d)
+    /// The digest's Rest by day: the Rest score Today shows (`Repository.restByDay`) for each persisted
+    /// day, not a default-need recomputation (W03-028). Days with no score are absent.
+    static func restByDay(from days: [DailyMetric], restByDay: [String: Double]) -> [String: Double] {
+        var out: [String: Double] = [:]
+        for d in days { if let r = restByDay[d.day] { out[d.day] = r } }
+        return out
     }
 }
 
@@ -66,7 +65,7 @@ struct WeeklyDigestCard: View {
     @EnvironmentObject var repo: Repository
 
     var body: some View {
-        let digest = WeeklyDigestSource.digest(from: repo.days, anchorDay: Repository.localDayKey(Date()))
+        let digest = WeeklyDigestSource.digest(from: repo.days, restByDay: repo.restByDay, anchorDay: Repository.localDayKey(Date()))
         if digest.isEmpty {
             EmptyView()
         } else {
@@ -98,7 +97,7 @@ struct WeeklyDigestView: View {
                     ? "A weekly digest needs a few days of history. Wear your strap or import your WHOOP export in Data Sources."
                     : "Loading your history…")
             } else {
-                let digest = WeeklyDigestSource.digest(from: repo.days, anchorDay: Repository.localDayKey(Date()))
+                let digest = WeeklyDigestSource.digest(from: repo.days, restByDay: repo.restByDay, anchorDay: Repository.localDayKey(Date()))
                 if digest.isEmpty {
                     DataPendingNote(
                         title: "No readings this week yet",

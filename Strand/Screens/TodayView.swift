@@ -4657,6 +4657,7 @@ struct TodayView: View {
             sleeps: repo.sleeps,
             allSessions: hostedSessions,
             importedSleep: repo.importedSleep,
+            restByDay: repo.restByDay,
             habitualMidsleepSec: hostedHabitual,
             motionByStart: hostedMotion))
     }

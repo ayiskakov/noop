@@ -96,13 +96,11 @@ struct CoupledView: View {
     /// so the number matches every other Effort read-out's conversion factor exactly.
     private var dayStrain21: Double? { strain100.map { UnitFormatter.effortValue($0, scale: strainScale) } }
 
-    /// Sleep performance % for the day, the SAME single source of truth the Today Rest score and the Sleep
-    /// detail graph read: the imported figure when the export carried one, else the resolved Rest composite.
-    /// Never a local hours-vs-need approximation (keeps the coupled read in agreement with Today's Rest).
+    /// Sleep performance % for the day: the Rest score Today shows (`Repository.restScore(forDay:)`,
+    /// W03-028). Never a local recomputation, which read the default need and consistency.
     private var sleepPerformance: Double? {
         guard let d = day else { return nil }
-        if let p = repo.importedSleep[d.day]?.performancePct { return p }
-        return AnalyticsEngine.Rest.composite(daily: d)
+        return repo.restScore(forDay: d.day)
     }
 
     /// On-device readiness, computed EXACTLY as Today does (ReadinessEngine.evaluate over the same rows,
