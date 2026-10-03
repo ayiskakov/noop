@@ -404,16 +404,13 @@ struct SleepView: View {
         (nightOffset == 0 ? model.night : navNight) ?? model.night
     }
 
-    /// The sleep-performance score (0–100) for a SPECIFIC night: the imported WHOOP figure for that
-    /// night's LOCAL wake-day when the export carried one, else the resolved Rest composite for that
-    /// day. Mirrors `performanceSeries`'s per-day transform exactly (the same single source of truth
-    /// the Today Rest score reads), keyed by the wake-day (sleep is filed under the day you woke) so
-    /// a navigated past night reads ITS OWN score, never last night's. nil when that day has no score.
+    /// The sleep-performance score (0–100) for a SPECIFIC night: the Rest score Today shows for that
+    /// night's LOCAL wake-day (`Repository.restScore(forDay:)`, W03-028), keyed by the wake-day (sleep is
+    /// filed under the day you woke) so a navigated past night reads ITS OWN score, never last night's.
+    /// nil when that day has no score.
     private func performanceScore(for night: Night) -> Double? {
         let wakeDay = Repository.localDayKey(Date(timeIntervalSince1970: TimeInterval(night.session.endTs)))
-        if let p = repo.importedSleep[wakeDay]?.performancePct { return p }
-        guard let daily = repo.days.last(where: { $0.day == wakeDay }) else { return nil }
-        return AnalyticsEngine.Rest.composite(daily: daily)
+        return repo.restScore(forDay: wakeDay)
     }
 
     /// Dispatch a reorderable Sleep section to its card. Naps rides with `.stages` (drawn inside the stages
@@ -1775,6 +1772,7 @@ struct SleepView: View {
             sleeps: repo.sleeps,
             allSessions: allSessions,
             importedSleep: repo.importedSleep,
+            restByDay: repo.restByDay,
             habitualMidsleepSec: habitualMidsleepSec,
             motionByStart: motionByStart))
     }
