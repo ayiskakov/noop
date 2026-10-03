@@ -133,4 +133,12 @@ final class LastSyncAttributionTests: XCTestCase {
         XCTAssertFalse(LastSyncOrigin.persisted.refreshLogLine.contains("completed sync"))
         XCTAssertEqual(LastSyncOrigin.persisted.rescoreTriggerLabel, "launch-seed")
     }
+
+    /// W07-044: a value with no recorded writer is reported as unattributed, never as a completed sync.
+    func testAnUnrecordedOriginIsNotLoggedAsACompletedSync() {
+        XCTAssertEqual(LastSyncOrigin.observed(nil), .unattributed)
+        XCTAssertEqual(LastSyncOrigin.observed(.completedSync), .completedSync)
+        XCTAssertFalse(LastSyncOrigin.unattributed.refreshLogLine.contains("completed sync"))
+        XCTAssertEqual(LastSyncOrigin.unattributed.rescoreTriggerLabel, "last-sync-unattributed")
+    }
 }

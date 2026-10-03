@@ -84,6 +84,14 @@ enum LastSyncOrigin: Equatable {
     case persisted
     /// Stamped by a HISTORY_COMPLETE in this session.
     case completedSync
+    /// A value whose writer the observer cannot name (W07-044). Unreachable while the two writers above are
+    /// the only ones, which `LiveState` enforces; if it is ever reached, the log says so instead of
+    /// claiming a sync.
+    case unattributed
+
+    /// The origin an observer of `lastSyncedAt` reports for the value it was handed: the recorded writer,
+    /// or `unattributed` when none is recorded. Never a completed sync by default (W07-044).
+    static func observed(_ recorded: LastSyncOrigin?) -> LastSyncOrigin { recorded ?? .unattributed }
 
     /// The strap-log line for the dashboard refresh this origin causes. The completed-sync wording is
     /// unchanged, since existing logs and their readers know it.
@@ -93,6 +101,8 @@ enum LastSyncOrigin: Equatable {
             return "Launch: refreshing dashboard cache from the persisted last-sync time (no sync this session yet)"
         case .completedSync:
             return "Backfill: refreshing dashboard cache from completed sync"
+        case .unattributed:
+            return "Refreshing dashboard cache after a last-sync change this session cannot attribute"
         }
     }
 
@@ -102,6 +112,7 @@ enum LastSyncOrigin: Equatable {
         switch self {
         case .persisted: return "launch-seed"
         case .completedSync: return nil
+        case .unattributed: return "last-sync-unattributed"
         }
     }
 }

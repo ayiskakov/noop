@@ -376,7 +376,7 @@ final class AppModel: ObservableObject {
                 // W07-016: the launch seed of the persisted time is an emission too. Read the origin here,
                 // after the debounce: if a HISTORY_COMPLETE landed inside it, a sync did complete.
                 guard let self else { return }
-                let origin = self.live.lastSyncedAtOrigin ?? .completedSync
+                let origin = LastSyncOrigin.observed(self.live.lastSyncedAtOrigin)
                 Task { [weak self] in await self?.refreshAfterCompletedBackfill(origin: origin) }
             }
             .store(in: &hrCancellables)
