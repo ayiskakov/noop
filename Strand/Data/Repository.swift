@@ -1803,29 +1803,37 @@ final class Repository: ObservableObject {
     /// bed/wake correction. Idempotent: a night already staged from raw re-derives to the same JSON
     /// (equality-skip, no write); a night edited-too-early heals the moment its raw arrives; a true
     /// imported night (raw never dense) is left untouched (`restageFromRaw` returns nil). Reads/writes the
-    /// COMPUTED source , the same one `analyzeRecent` reads edited rows from. Returns the (possibly
-    /// refreshed) edited rows so the caller recomputes daily aggregates from the corrected stages.
+    /// COMPUTED sources, every one `computedReadIds` unions: the engine banks detected nights, and so their
+    /// edits, under the canonical sibling even on a re-added strap whose own sibling is the active one
+    /// (W07-023). A night edited under both is returned once, the active strap's copy winning, and each
+    /// heal is written back to the namespace its row came from. Returns the (possibly refreshed) edited
+    /// rows, oldest first, so the caller recomputes daily aggregates from the corrected stages.
     func selfHealEditedStages(from windowStart: Int, to windowEnd: Int) async -> [CachedSleepSession] {
         guard let store = await ensureStore() else { return [] }
-        func editedRows() async -> [CachedSleepSession] {
-            ((try? await store.sleepSessions(deviceId: computedDeviceId, from: windowStart,
-                                             to: windowEnd, limit: 100_000)) ?? [])
-                .filter { $0.userEdited }
+        let ids = computedReadIds
+        func editedRows() async -> [(id: String, row: CachedSleepSession)] {
+            var byStart: [Int: (id: String, row: CachedSleepSession)] = [:]
+            for id in ids {
+                let rows = ((try? await store.sleepSessions(deviceId: id, from: windowStart,
+                                                            to: windowEnd, limit: 100_000)) ?? [])
+                for row in rows where row.userEdited && byStart[row.startTs] == nil { byStart[row.startTs] = (id, row) }
+            }
+            return byStart.values.sorted { $0.row.startTs < $1.row.startTs }
         }
         let edited = await editedRows()
         guard !edited.isEmpty else { return [] }
         var healed = false
-        for row in edited {
+        for (id, row) in edited {
             // Re-derive over the LOCKED corrected window (effective onset → wake). Skip when the raw
             // isn't dense yet, or when the result already matches what's stored (steady state , no write).
             guard let newJSON = await restageFromRaw(start: row.effectiveStartTs, end: row.endTs),
                   newJSON != row.stagesJSON else { continue }
-            let n = (try? await store.updateSleepStages(deviceId: computedDeviceId,
+            let n = (try? await store.updateSleepStages(deviceId: id,
                                                         detectedStartTs: row.startTs,
                                                         stagesJSON: newJSON)) ?? 0
             if n > 0 { healed = true }
         }
-        return healed ? await editedRows() : edited
+        return (healed ? await editedRows() : edited).map(\.row)
     }
 
     // MARK: - Metric explorer reads (generic substrate)

@@ -235,7 +235,9 @@ registry; how `DeviceFamily.forRegistryDevice(model:brand:)` interacts with the 
   (non-archived only, canonical fallback); the same pass's day-cycle candidates include archived straps.
 - Single-id readers that break on a re-added strap: `selfHealEditedStages` (W07-023, S2),
   `rescoreManualWorkouts` (W07-028), `restageFromRaw`, `resolveDayOwner` on archived straps (W07-024),
-  `HealthKitBridge` (W07-031), and the deletion side (W07-002, S2).
+  `HealthKitBridge` (W07-031), and the deletion side (W07-002, S2). W07-023's fix unions the computed
+  ids for edited nights, but `restageFromRaw` still reads raw under the active id only: one more reader for
+  the resolver.
 
 **Verdict.** Amend. Keep the canonical computed namespace, since moving it would orphan history.
 Separate the routing token from the partition id, and replace the three strap-set definitions with one
