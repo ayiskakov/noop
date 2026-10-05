@@ -121,7 +121,7 @@ final class SleepFragmentedNightTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(spanMin, 240, "expected most of the 295 sleeping minutes, got \(spanMin)")
         // Anti-vacuity: the session must exist BECAUSE the rescue fired. Without this the test passes
         // when the fixture is not actually fragmented, which is exactly what a 3-minute stir did.
-        XCTAssertTrue(lines.contains { $0.contains("gate=sparseBridge ") && $0.contains("fragmentedToNothing=true") },
+        XCTAssertTrue(lines.contains { $0.contains("gate=sparseBridgePair ") && $0.contains("enabledBy=fragmented") },
                       "the session must come from the #1937 rescue, not an unfragmented fixture.\n"
                         + lines.joined(separator: "\n"))
     }
@@ -137,7 +137,10 @@ final class SleepFragmentedNightTests: XCTestCase {
         _ = SleepStager.detectSleep(hr: hr, gravity: grav, traceSink: { lines.append($0) })
         let bridge = lines.first { $0.contains("gate=sparseBridge ") }
         XCTAssertNotNil(bridge, "expected a sparseBridge line, got:\n" + lines.joined(separator: "\n"))
-        XCTAssertTrue(bridge!.contains("sparse=false fragmentedToNothing=true gapMin="),
+        // W03-047: each pair is opened by its own neighbourhood (W03-023), so the night line counts the pairs
+        // by what opened them rather than asserting one read-wide flag. Four pairs, all opened by the #1937
+        // fragmentation rule on this dense night.
+        XCTAssertTrue(bridge!.contains("pairs=4 sparse=0 fragmented=4 dense=0 gapMin="),
                       "unexpected sparseBridge detail format: \(bridge!)")
     }
 }

@@ -49,10 +49,14 @@ public enum StreamReadCap {
     /// in two places" shape this whole type exists because of.
     public static let lookbackSeconds = 30 * 3_600
 
-    /// How far AFTER it, capped at `now` for a day still in progress. A whole day.
-    public static let forwardSeconds = 24 * 3_600
+    /// How far AFTER it, capped at `now`: the whole day, plus the detection neighbourhood past its next
+    /// midnight (`SleepStager.localBaselineRadiusS`, W03-024), so a session ending on the day is detected
+    /// from all the data its decisions read. The engine's read end is this value, so the caps below grow
+    /// with it.
+    public static let forwardSeconds = 24 * 3_600 + SleepStager.localBaselineRadiusS
 
-    /// The per-day read window: `dayStart - 30h` through the night, i.e. 54 hours.
+    /// The per-day read window: `dayStart - 30h` through the night and 12 h past the next midnight, i.e.
+    /// 66 hours.
     public static let windowSeconds = lookbackSeconds + forwardSeconds
 
     /// HR: one sample per second.
@@ -89,24 +93,36 @@ public enum StreamReadCap {
     /// Shared by two reads with very different spans - the night window, and the ~21-day WHOOP 4.0 anchor
     /// scan. Only the window read's count reaches the no-night line, so an `atCap=skin` marker means THAT
     /// read was clipped; a clipped anchor scan still goes unreported.
-    public static let skin = 200_000
+    ///
+    /// W03-024: 200,000 sat about 3% over a full 54-hour window at gravity's density and under a 66-hour
+    /// one, so it is now sized like gravity, whose record skin rides.
+    public static let skin = cap(rowsPerSecond: gravityRowsPerSecond)
 
     /// The cap for a stream producing `rowsPerSecond` at its densest.
     public static func cap(rowsPerSecond: Double) -> Int {
         Int((Double(windowSeconds) * rowsPerSecond * headroom).rounded(.up))
     }
 
-    /// 291,600 - a full HR window plus half again.
+    /// 356,400 - a full HR window plus half again.
     ///
     /// STORED, not computed. A window's read cap and its truncation threshold must be the same number,
     /// and the engine names this in both slots - a stored constant makes those two references provably
     /// one value rather than two evaluations that merely ought to agree.
     public static let hr = cap(rowsPerSecond: hrRowsPerSecond)
 
-    /// 583,200 - a full R-R window at its densest, plus half again. Stored for the reason `hr` gives.
+    /// 712,800 - a full R-R window at its densest, plus half again. Stored for the reason `hr` gives.
     public static let rr = cap(rowsPerSecond: rrRowsPerSecond)
 
-    /// 291,600 - the same shape as `hr`, for the same 54-hour window. Only the 54-hour read needs it;
+    /// 356,400 - the same shape as `hr`, for the same 66-hour window. Only the 66-hour read needs it;
     /// the day-scoped gravity reads span 24 hours and cannot approach any of these.
     public static let gravity = cap(rowsPerSecond: gravityRowsPerSecond)
+    /// Steps, respiration, raw SpO₂ and the v18 auxiliary record (the byte 82 SpO₂ candidate) on the same
+    /// window (W03-046). They were read at a literal 200,000,
+    /// under a full 66-hour window at one row a second: the steps counter measured about 230,000 rows per
+    /// window on the 2026-09-30 backup. Their peak densities are not measured, so they are sized like
+    /// gravity, one row a second plus half again.
+    public static let steps = cap(rowsPerSecond: 1.0)
+    public static let resp = cap(rowsPerSecond: 1.0)
+    public static let spo2 = cap(rowsPerSecond: 1.0)
+    public static let v18Aux = cap(rowsPerSecond: 1.0)
 }
