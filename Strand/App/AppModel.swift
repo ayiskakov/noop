@@ -367,16 +367,8 @@ final class AppModel: ObservableObject {
         // trailing edge, so the dashboard still refreshes with the newly-synced data , freshness is kept,
         // we just stop re-doing it dozens of times mid-download. removeDuplicates() still drops a slice that
         // stamped an identical second; the trailing refresh after a real change is never dropped.
-        live.$lastSyncedAt
-            .dropFirst()
-            .compactMap { $0 }
-            .removeDuplicates()
-            .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
-                // W07-016: the launch seed of the persisted time is an emission too. Read the origin here,
-                // after the debounce: if a HISTORY_COMPLETE landed inside it, a sync did complete.
-                guard let self else { return }
-                let origin = self.live.lastSyncedAtOrigin ?? .completedSync
+        Self.lastSyncRefreshes(live, debounce: .seconds(2))
+            .sink { [weak self] origin in
                 Task { [weak self] in await self?.refreshAfterCompletedBackfill(origin: origin) }
             }
             .store(in: &hrCancellables)
@@ -693,6 +685,21 @@ final class AppModel: ObservableObject {
         // exist. The bridge coalesces a call that lands during an in-flight write-back.
         await healthWriteBack?()
         #endif
+    }
+
+    /// The dashboard refreshes `lastSyncedAt` drives, one per settled change, each with the origin of the
+    /// value it settled on. The chain the app runs, extracted so the tests drive it rather than a copy
+    /// (W07-047). W07-016: the seed of the stored time is an emission too, and the origin is read after the
+    /// debounce, so a HISTORY_COMPLETE landing inside it makes the refresh a completed sync's.
+    static func lastSyncRefreshes(_ live: LiveState,
+                                  debounce: DispatchQueue.SchedulerTimeType.Stride) -> AnyPublisher<LastSyncOrigin, Never> {
+        live.$lastSyncedAt
+            .dropFirst()
+            .compactMap { $0 }
+            .removeDuplicates()
+            .debounce(for: debounce, scheduler: DispatchQueue.main)
+            .map { [weak live] _ in LastSyncOrigin.observed(live?.lastSyncedAtOrigin) }
+            .eraseToAnyPublisher()
     }
 
     private func refreshAfterCompletedBackfill(origin: LastSyncOrigin) async {

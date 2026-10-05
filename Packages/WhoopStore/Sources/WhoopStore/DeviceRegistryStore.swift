@@ -183,8 +183,18 @@ public struct DeviceRegistryStore: Sendable {
     /// series) goes with it when it is the device's alone. Left behind, the scores computed from the deleted
     /// recordings stayed on screen, and no rescore could evict them once their raw input was gone (W02-005).
     /// Nights the user edited or added by hand are user data, not scores, and are never cleared this way.
+    ///
+    /// When the device's scores share the canonical namespace instead, only what is attributed to it goes
+    /// (`deleteAttributedCanonicalRows`, W07-002). That runs first, while the device's heart rate still exists.
     public func deleteAllData(deviceId: String) throws {
         try dbQueue.write { db in
+            let exclusiveSibling = try Self.exclusiveComputedSibling(db, of: deviceId)
+            // The canonical namespace is cleared whole only when it is this device's alone; otherwise only
+            // what is attributed to the device leaves it.
+            let canonicalIsDevicesAlone = exclusiveSibling == Self.canonicalComputedId
+            if !canonicalIsDevicesAlone {
+                try Self.deleteAttributedCanonicalRows(db, of: deviceId)
+            }
             for table in Self.deviceScopedTables {
                 try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [deviceId])
             }
@@ -192,7 +202,7 @@ public struct DeviceRegistryStore: Sendable {
             // namespace. Forgetting a provider must remove those associations too.
             try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE sourceId = ?", arguments: [deviceId])
 
-            guard let sibling = try Self.exclusiveComputedSibling(db, of: deviceId) else { return }
+            guard let sibling = exclusiveSibling else { return }
             for table in Self.deviceScopedTables where table != "sleepSession" {
                 try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [sibling])
             }
@@ -210,10 +220,128 @@ public struct DeviceRegistryStore: Sendable {
     static func exclusiveComputedSibling(_ db: Database, of deviceId: String) throws -> String? {
         guard !deviceId.hasSuffix(computedSuffix) else { return nil }
         let sibling = deviceId + computedSuffix
-        guard deviceId == "my-whoop" else { return sibling }
+        guard deviceId == canonicalDeviceId else { return sibling }
         let others = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM pairedDevice WHERE id != ?",
                                       arguments: [deviceId]) ?? 0
         return others == 0 ? sibling : nil
+    }
+
+    /// The canonical strap id, and the computed namespace the engine writes every scored day under,
+    /// whichever source supplied it. One spelling, so the two cannot drift (W07-040).
+    static let canonicalDeviceId = "my-whoop"
+    static let canonicalComputedId = canonicalDeviceId + computedSuffix
+
+    /// Removes from the shared canonical namespace what was computed from `deviceId` (W07-002).
+    ///
+    /// Scored days are attributed per cell by `scoreInputProvenance`, which names the source of each
+    /// day's recovery, strain and Rest-point series. Each series cell naming the device goes; a day's
+    /// `dailyMetric` row goes when the device owns it (its strain cell, else its recovery cell, names the
+    /// device), and when the device supplied only a legacy snapshot's recovery on another source's row, just
+    /// the snapshot's columns are cleared (W07-035). The weekly VO₂max cell names its
+    /// estimator, not a device, so it goes with the day it was computed on (W07-036); a day scored before
+    /// provenance existed has no cells and stays.
+    ///
+    /// Sleeps and detected workouts under the canonical id carry no day key, so they are attributed by heart
+    /// rate: a session goes when the device's heart rate inside it outnumbers every other source's (W07-038).
+    /// Nights the user edited or added, and workouts the user entered, stay. Must run before the device's
+    /// heart rate is deleted.
+    static func deleteAttributedCanonicalRows(_ db: Database, of deviceId: String) throws {
+        let canonical = canonicalComputedId
+        let cells = try Row.fetchAll(db, sql: """
+            SELECT day, key FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?
+            """, arguments: [canonical, deviceId])
+        var days = Set<String>()
+        for cell in cells {
+            let day: String = cell["day"], key: String = cell["key"]
+            days.insert(day)
+            try db.execute(sql: "DELETE FROM metricSeries WHERE deviceId = ? AND day = ? AND key = ?",
+                           arguments: [canonical, day, key])
+        }
+        for day in days {
+            // The row's owner is the source its strain cell names, the pass that scored it; its recovery cell
+            // can instead name an older source whose score a legacy snapshot kept (W07-035). Without a strain
+            // cell the recovery cell is the owner.
+            let cell = { (key: String) in
+                try String.fetchOne(db, sql: """
+                    SELECT sourceId FROM scoreInputProvenance WHERE deviceId = ? AND day = ? AND key = ?
+                    """, arguments: [canonical, day, key])
+            }
+            let strainSource = try cell("strain"), recoverySource = try cell("recovery")
+            // A day with neither cell came in through a Rest-point cell naming the device, and a pass names
+            // one owner for every cell of a day.
+            if (strainSource ?? recoverySource ?? deviceId) == deviceId {
+                try db.execute(sql: "DELETE FROM dailyMetric WHERE deviceId = ? AND day = ?", arguments: [canonical, day])
+                // The day was the device's, so its other computed cells were derived from it too: values a
+                // later pass stopped producing (which lose their provenance but keep their value) and the
+                // Healthspan and Fitness Age points, which are never attributed. A cell another source is
+                // named for stays. The weekly VO2max cell names its estimator, not a source; it comes from the
+                // same Fitness Age computation over the same week, so it goes with it (W07-036).
+                try db.execute(sql: """
+                    DELETE FROM metricSeries AS m WHERE m.deviceId = ? AND m.day = ?
+                    AND NOT EXISTS(SELECT 1 FROM scoreInputProvenance p
+                                   WHERE p.deviceId = m.deviceId AND p.day = m.day AND p.key = m.key
+                                     AND p.sourceId != ? AND p.key != 'vo2max_est')
+                    """, arguments: [canonical, day, deviceId])
+                try db.execute(sql: """
+                    DELETE FROM scoreInputProvenance WHERE deviceId = ? AND day = ? AND key IN ('recovery', 'strain')
+                    """, arguments: [canonical, day])
+            } else if recoverySource == deviceId {
+                // Another source owns the row; only the legacy snapshot's columns came from the device.
+                try db.execute(sql: """
+                    UPDATE dailyMetric SET recovery = NULL, avgHrv = NULL, respRateBpm = NULL, avgSdnn = NULL
+                    WHERE deviceId = ? AND day = ?
+                    """, arguments: [canonical, day])
+            }
+        }
+        try db.execute(sql: "DELETE FROM scoreInputProvenance WHERE deviceId = ? AND sourceId = ?",
+                       arguments: [canonical, deviceId])
+
+        // Each session is probed with key lookups on (deviceId, ts): one for the device, one per other heart-rate
+        // source. A `deviceId != ?` predicate cannot use the key and scanned the whole heart-rate index per
+        // session, 25–53 s on 115 days of 1 Hz rows inside this write transaction (W07-002 V2).
+        let otherSources = try heartRateSourceIds(db).filter { $0 != deviceId && !$0.hasSuffix(computedSuffix) }
+        func heartRateCount(_ id: String, _ start: Int, _ end: Int) throws -> Int {
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM hrSample WHERE deviceId = ? AND ts BETWEEN ? AND ?",
+                             arguments: [id, start, end]) ?? 0
+        }
+        // The device recorded the session when its heart rate outnumbers every other source's inside it. A
+        // single stray sample of another source (a chest strap, an activity file) no longer protects a night
+        // the device recorded (W07-038); an even split stays, the safe side.
+        func coveredOnlyByDevice(_ start: Int, _ end: Int) throws -> Bool {
+            let own = try heartRateCount(deviceId, start, end)
+            guard own > 0 else { return false }
+            return try !otherSources.contains { try heartRateCount($0, start, end) >= own }
+        }
+        for row in try Row.fetchAll(db, sql: "SELECT startTs, endTs FROM sleepSession WHERE deviceId = ? AND userEdited = 0",
+                                    arguments: [canonical]) {
+            let start: Int = row["startTs"], end: Int = row["endTs"]
+            guard try coveredOnlyByDevice(start, end) else { continue }
+            try db.execute(sql: "DELETE FROM sleepSession WHERE deviceId = ? AND startTs = ?", arguments: [canonical, start])
+        }
+        // Detected bouts only: banked with sport "detected" or a computed source. A workout the user entered
+        // (`source = 'manual'`) is user data even under the canonical id, as an edited night is (W07-037).
+        for row in try Row.fetchAll(db, sql: """
+            SELECT startTs, endTs, sport FROM workout
+            WHERE deviceId = ? AND source != 'manual' AND (sport = 'detected' OR source LIKE '%' || ?)
+            """, arguments: [canonical, computedSuffix]) {
+            let start: Int = row["startTs"], end: Int = row["endTs"], sport: String = row["sport"]
+            guard try coveredOnlyByDevice(start, end) else { continue }
+            try db.execute(sql: "DELETE FROM workout WHERE deviceId = ? AND startTs = ? AND sport = ?",
+                           arguments: [canonical, start, sport])
+        }
+    }
+
+    /// The distinct `deviceId`s holding heart rate, read by skipping through the (deviceId, ts) key one id at a
+    /// time rather than scanning every row.
+    static func heartRateSourceIds(_ db: Database) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            WITH RECURSIVE ids(id) AS (
+                SELECT MIN(deviceId) FROM hrSample
+                UNION ALL
+                SELECT (SELECT MIN(deviceId) FROM hrSample WHERE deviceId > ids.id) FROM ids WHERE ids.id IS NOT NULL
+            )
+            SELECT id FROM ids WHERE id IS NOT NULL
+            """)
     }
 
     /// #771: re-point the ACTIVE Oura device from its CoreBluetooth-UUID id (`activeId`, e.g.
