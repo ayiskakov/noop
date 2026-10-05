@@ -1,4 +1,5 @@
 import XCTest
+import StrandAnalytics
 @testable import Strand
 
 /// Pins the sleep READ window's end bound.
@@ -37,11 +38,12 @@ final class SleepReadWindowTests: XCTestCase {
         XCTAssertEqual(end, now)
     }
 
-    /// …and never past the day's own end, even if `now` has somehow run on.
-    func testTodayIsStillBoundedByTheNextLocalMidnight() {
-        let now = today + 30 * 3_600                 // absurd, but the bound must hold
+    /// …and never past the next local midnight plus the detection neighbourhood (W03-024), even if `now`
+    /// has run on.
+    func testTodayIsStillBoundedByTheNextLocalMidnightPlusTheNeighbourhood() {
+        let now = today + 40 * 3_600                 // absurd, but the bound must hold
         let end = IntelligenceEngine.sleepReadWindowEnd(dayStart: today, nowLocalMidnight: today, now: now)
-        XCTAssertEqual(end, tomorrow)
+        XCTAssertEqual(end, tomorrow + SleepStager.localBaselineRadiusS)
     }
 
     /// Early in the morning the window is still short — nothing here widens it beyond the present.
@@ -54,13 +56,22 @@ final class SleepReadWindowTests: XCTestCase {
 
     // MARK: - Past days
 
-    /// A past day reads the whole day — this is the half #500 already fixed, pinned so it stays fixed.
-    func testAPastDayReadsThroughToTheNextLocalMidnight() {
+    /// A past day reads the whole day — the half #500 fixed — and, since W03-024, the neighbourhood past its
+    /// next midnight, so a night running across that midnight is seen whole.
+    func testAPastDayReadsPastTheNextLocalMidnight() {
         let yesterday = today - 86_400
         let now = today + 21 * 3_600
         let end = IntelligenceEngine.sleepReadWindowEnd(dayStart: yesterday,
                                                        nowLocalMidnight: today, now: now)
-        XCTAssertEqual(end, today, "a past day must read to its own next midnight")
+        XCTAssertEqual(end, today + SleepStager.localBaselineRadiusS)
+    }
+
+    /// Yesterday read in the morning reaches only to `now`: nothing reads the future.
+    func testYesterdayReadInTheMorningStopsAtNow() {
+        let yesterday = today - 86_400
+        let now = today + 8 * 3_600
+        let end = IntelligenceEngine.sleepReadWindowEnd(dayStart: yesterday, nowLocalMidnight: today, now: now)
+        XCTAssertEqual(end, now)
     }
 
     /// A past day's window must NOT be shortened by `now` — that would re-truncate old nights.
@@ -68,7 +79,7 @@ final class SleepReadWindowTests: XCTestCase {
         let longAgo = today - 10 * 86_400
         let end = IntelligenceEngine.sleepReadWindowEnd(dayStart: longAgo,
                                                        nowLocalMidnight: today, now: today + 60)
-        XCTAssertEqual(end, longAgo + 86_400)
+        XCTAssertEqual(end, longAgo + 86_400 + SleepStager.localBaselineRadiusS)
     }
 
     // MARK: - The rollover itself
@@ -87,6 +98,6 @@ final class SleepReadWindowTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(before, wake, "pre-midnight read still truncates the wake")
         XCTAssertGreaterThanOrEqual(after, wake)
-        XCTAssertEqual(after, tomorrow)
+        XCTAssertEqual(after, tomorrow + 60, "just after midnight the read reaches the present")
     }
 }

@@ -272,9 +272,7 @@ private struct FitDecoder {
                     ele = Double(v) / 5.0 - 500.0
                 }
             case 3:   // heart_rate (u8 bpm)
-                if let v = uintField(at: offset, size: f.size, bigEndian: def.bigEndian) {
-                    hr = ActivityFileImporter.validHr(Double(v))
-                }
+                hr = heartRateField(at: offset, size: f.size, bigEndian: def.bigEndian)
             default:
                 break
             }
@@ -315,8 +313,7 @@ private struct FitDecoder {
                     lapAscentSum += Double(v)
                 }
             case 16: // max_heart_rate (u8 bpm)
-                if let v = uintField(at: offset, size: f.size, bigEndian: def.bigEndian),
-                   let hr = ActivityFileImporter.validHr(Double(v)) {
+                if let hr = heartRateField(at: offset, size: f.size, bigEndian: def.bigEndian) {
                     lapMaxHr = max(lapMaxHr ?? 0, hr)
                 }
             default:
@@ -356,13 +353,9 @@ private struct FitDecoder {
                     sessionAscent = Double(v)
                 }
             case 16: // avg_heart_rate (u8 bpm)
-                if let v = uintField(at: offset, size: f.size, bigEndian: def.bigEndian) {
-                    sessionAvgHr = ActivityFileImporter.validHr(Double(v))
-                }
+                sessionAvgHr = heartRateField(at: offset, size: f.size, bigEndian: def.bigEndian)
             case 17: // max_heart_rate (u8 bpm)
-                if let v = uintField(at: offset, size: f.size, bigEndian: def.bigEndian) {
-                    sessionMaxHr = ActivityFileImporter.validHr(Double(v))
-                }
+                sessionMaxHr = heartRateField(at: offset, size: f.size, bigEndian: def.bigEndian)
             default:
                 break
             }
@@ -371,6 +364,13 @@ private struct FitDecoder {
     }
 
     // MARK: - Field readers (bounds-checked)
+
+    /// A heart-rate field in bpm, or nil when it is FIT's uint8 invalid value 0xFF (written whenever the
+    /// sensor drops out) or out of the plausible range. 0xFF passed `validHr` as 255 bpm (W04-002).
+    private func heartRateField(at offset: Int, size: Int, bigEndian: Bool) -> Int? {
+        guard let v = uintField(at: offset, size: size, bigEndian: bigEndian), v != 0xFF else { return nil }
+        return ActivityFileImporter.validHr(Double(v))
+    }
 
     /// Read an unsigned little/big-endian integer of `size` bytes at `offset`. Returns nil out of
     /// bounds or for an unsupported size. The all-0xFF "invalid" sentinel is left to the caller.

@@ -31,16 +31,17 @@ final class StreamReadCapTests: XCTestCase {
         XCTAssertEqual(StreamReadCap.windowSeconds,
                        StreamReadCap.lookbackSeconds + StreamReadCap.forwardSeconds)
         XCTAssertEqual(StreamReadCap.lookbackSeconds, 30 * 3_600)
-        XCTAssertEqual(StreamReadCap.forwardSeconds, 86_400)
+        XCTAssertEqual(StreamReadCap.forwardSeconds, 86_400 + SleepStager.localBaselineRadiusS)
     }
 
     /// The regression itself, in the numbers that caused it. The old shared cap of 200,000 was ABOVE a
     /// full HR window and BELOW a full R-R one — which is exactly why HR never truncated, R-R always did,
     /// and one number looked adequate from the HR side.
     func testTheOldSharedCapWasBelowAFullRRWindow() {
+        // The 54-hour window those numbers were measured on, before W03-024 widened it to 66.
         let oldSharedCap = 200_000.0
-        let fullHR = Double(StreamReadCap.windowSeconds) * StreamReadCap.hrRowsPerSecond
-        let fullRR = Double(StreamReadCap.windowSeconds) * StreamReadCap.rrRowsPerSecond
+        let fullHR = Double(54 * 3_600) * StreamReadCap.hrRowsPerSecond
+        let fullRR = Double(54 * 3_600) * StreamReadCap.rrRowsPerSecond
         XCTAssertGreaterThan(oldSharedCap, fullHR, "the old cap fitted HR, which is why it looked fine")
         XCTAssertLessThan(oldSharedCap, fullRR, "and did not fit R-R, which is why nights were clipped")
         XCTAssertGreaterThan(Double(StreamReadCap.rr), fullRR, "the new cap does fit it")
@@ -51,16 +52,27 @@ final class StreamReadCapTests: XCTestCase {
         XCTAssertGreaterThan(StreamReadCap.rr, StreamReadCap.hr)
     }
 
-    /// The window is 54 hours — `dayStart - 30h` running through the night. Pinned because both caps are
-    /// derived from it, so a silent change here would resize them both.
-    func testWindowIsFiftyFourHours() {
-        XCTAssertEqual(StreamReadCap.windowSeconds, 54 * 3_600)
-        XCTAssertEqual(StreamReadCap.hr, 291_600)
-        XCTAssertEqual(StreamReadCap.rr, 583_200)
-        XCTAssertEqual(StreamReadCap.gravity, 291_600)
+    /// The window is 66 hours — `dayStart - 30h` running through the night and 12 h past the next midnight
+    /// (W03-024). Pinned because every cap is derived from it, so a silent change here would resize them all.
+    func testWindowIsSixtySixHours() {
+        XCTAssertEqual(StreamReadCap.windowSeconds, 66 * 3_600)
+        XCTAssertEqual(StreamReadCap.hr, 356_400)
+        XCTAssertEqual(StreamReadCap.rr, 712_800)
+        XCTAssertEqual(StreamReadCap.gravity, 356_400)
+        XCTAssertEqual(StreamReadCap.skin, 356_400)
+        XCTAssertEqual(StreamReadCap.steps, 356_400)
+        XCTAssertEqual(StreamReadCap.resp, 356_400)
+        XCTAssertEqual(StreamReadCap.spo2, 356_400)
     }
 
-    /// Gravity is the third stream on the 54-hour window, and the field capture put it at 192,698 rows -
+    /// W03-046: every stream the per-day window reads at one row a second fits a full window.
+    func testOneRowASecondStreamsFitAFullWindow() {
+        for cap in [StreamReadCap.steps, StreamReadCap.resp, StreamReadCap.spo2, StreamReadCap.v18Aux, StreamReadCap.skin] {
+            XCTAssertGreaterThan(cap, StreamReadCap.windowSeconds)
+        }
+    }
+
+    /// Gravity is the third stream on the window, and the field capture put it at 192,698 rows on 54 hours -
     /// 96% of the old shared cap. Unlike HR and R-R it is a PLAIN read with no truncation counter, so a
     /// clip there reports nothing at all; sleep staging simply gets a night missing its tail.
     func testGravityClearsWhatTheFieldMeasured() {

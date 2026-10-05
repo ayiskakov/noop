@@ -461,6 +461,47 @@ final class MetricsCacheTests: XCTestCase {
         XCTAssertEqual(rows[0], d2)
     }
 
+    /// W04-003: a writer that carries only some columns (an Apple Shortcut payload) must not erase the
+    /// ones an export.zip import filled for the same day. The default upsert still replaces the row.
+    func testUpsertKeepingStoredValuesLeavesNilColumnsAlone() async throws {
+        let store = try await WhoopStore.inMemory()
+        let full = DailyMetric(day: "2026-05-23", totalSleepMin: 420.0, efficiency: 0.9,
+                               deepMin: 90, remMin: 110, lightMin: 220, disturbances: 3,
+                               restingHr: 53, avgHrv: 60.0, recovery: nil, strain: nil, exerciseCount: nil,
+                               spo2Pct: 96, skinTempDevC: nil, respRateBpm: 14.5)
+        let partial = DailyMetric(day: "2026-05-23", totalSleepMin: 400.0, efficiency: nil,
+                                  deepMin: nil, remMin: nil, lightMin: nil, disturbances: nil,
+                                  restingHr: 55, avgHrv: nil, recovery: nil, strain: nil, exerciseCount: nil)
+        try await store.upsertDailyMetrics([full], deviceId: "apple-health")
+        try await store.upsertDailyMetrics([partial], deviceId: "apple-health", keepingStoredValuesForNil: true)
+        var row = try await store.dailyMetrics(deviceId: "apple-health", from: "2026-05-23", to: "2026-05-23")[0]
+        XCTAssertEqual(row.totalSleepMin, 400.0, "a carried column updates")
+        XCTAssertEqual(row.restingHr, 55)
+        XCTAssertEqual(row.deepMin, 90, "a nil column keeps the stored value")
+        XCTAssertEqual(row.avgHrv, 60.0)
+        XCTAssertEqual(row.spo2Pct, 96)
+        XCTAssertEqual(row.respRateBpm, 14.5)
+
+        try await store.upsertDailyMetrics([partial], deviceId: "apple-health")
+        row = try await store.dailyMetrics(deviceId: "apple-health", from: "2026-05-23", to: "2026-05-23")[0]
+        XCTAssertEqual(row, partial, "the default upsert replaces the whole row")
+    }
+
+    func testAppleDailyUpsertKeepingStoredValuesLeavesNilColumnsAlone() async throws {
+        let store = try await WhoopStore.inMemory()
+        try await store.upsertAppleDaily([AppleDaily(day: "2026-05-23", steps: 9123, activeKcal: 540.2, basalKcal: 1600.0,
+                                                     vo2max: 44, avgHr: 70, maxHr: 150, walkingHr: 95, weightKg: 80)],
+                                         deviceId: "apple-health")
+        try await store.upsertAppleDaily([AppleDaily(day: "2026-05-23", steps: 8000, activeKcal: nil, basalKcal: nil,
+                                                     vo2max: nil, avgHr: nil, maxHr: nil, walkingHr: nil, weightKg: nil)],
+                                         deviceId: "apple-health", keepingStoredValuesForNil: true)
+        let row = try await store.appleDaily(deviceId: "apple-health", from: "2026-05-23", to: "2026-05-23")[0]
+        XCTAssertEqual(row.steps, 8000)
+        XCTAssertEqual(row.basalKcal, 1600.0)
+        XCTAssertEqual(row.maxHr, 150)
+        XCTAssertEqual(row.walkingHr, 95)
+    }
+
     func testDailyMetricDayRangeFilter() async throws {
         let store = try await WhoopStore.inMemory()
         try await store.upsertDailyMetrics([

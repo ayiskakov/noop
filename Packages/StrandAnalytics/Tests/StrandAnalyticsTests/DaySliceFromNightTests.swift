@@ -24,7 +24,7 @@ final class DaySliceFromNightTests: XCTestCase {
 
     func testPastDayReturnsTheInRangeFilterOfTheNightList() throws {
         let slice = try XCTUnwrap(AnalyticsEngine.daySliceFromNight(
-            night, nightLo: nightLo, nightHi: nightHi, dayLo: dayLo, dayHi: dayHi, ts: { $0.ts }))
+            night, nightLo: nightLo, nightHi: nightHi, dayLo: dayLo, dayHi: dayHi, limit: StreamReadCap.hr, ts: { $0.ts }))
         // Byte-identical to filtering the night list (which, for a complete night, equals the direct read).
         XCTAssertEqual(slice, night.filter { $0.ts >= dayLo && $0.ts <= dayHi })
         // Nothing outside the day leaks in; order is preserved (ascending, as the store returned it).
@@ -36,26 +36,37 @@ final class DaySliceFromNightTests: XCTestCase {
         // TODAY: the night window caps at dayStart + 18 h, so the calendar day (to +24 h) reaches past it.
         let todayNightHi = dayStart + 18 * 3_600
         XCTAssertNil(AnalyticsEngine.daySliceFromNight(
-            night, nightLo: nightLo, nightHi: todayNightHi, dayLo: dayLo, dayHi: dayHi, ts: { $0.ts }))
+            night, nightLo: nightLo, nightHi: todayNightHi, dayLo: dayLo, dayHi: dayHi, limit: StreamReadCap.hr, ts: { $0.ts }))
     }
 
     func testDstShiftedDayBeforeTheNightWindowDeclines() {
         // The self-protecting guard the other way: a shifted dayLo that falls before the night window
         // (e.g. a DST-moved local midnight) must decline to the direct read, never slice a partial window.
         XCTAssertNil(AnalyticsEngine.daySliceFromNight(
-            night, nightLo: nightLo, nightHi: nightHi, dayLo: nightLo - 1, dayHi: dayHi, ts: { $0.ts }))
+            night, nightLo: nightLo, nightHi: nightHi, dayLo: nightLo - 1, dayHi: dayHi, limit: StreamReadCap.hr, ts: { $0.ts }))
     }
 
     func testTruncatedNightReadDeclines() {
         // A night read that returned exactly `limit` rows may be truncated inside the day span (ORDER BY
         // ts ASC LIMIT drops the LATE rows — exactly where the day sits). Locked at an injected small
-        // limit AND at the real 200_000 default the IntelligenceEngine call sites rely on.
+        // limit AND at the real HR cap the IntelligenceEngine call site passes.
         let small = (0..<10).map { S(ts: $0) }
         XCTAssertNil(AnalyticsEngine.daySliceFromNight(
             small, nightLo: 0, nightHi: 10, dayLo: 0, dayHi: 5, limit: 10, ts: { $0.ts }))
-        let atDefaultLimit = (0..<200_000).map { S(ts: $0) }
+        let atCap = (0..<StreamReadCap.hr).map { S(ts: $0) }
         XCTAssertNil(AnalyticsEngine.daySliceFromNight(
-            atDefaultLimit, nightLo: 0, nightHi: 200_000, dayLo: 0, dayHi: 100, ts: { $0.ts }))
+            atCap, nightLo: 0, nightHi: StreamReadCap.hr, dayLo: 0, dayHi: 100, limit: StreamReadCap.hr, ts: { $0.ts }))
+    }
+
+    /// W03-045: a complete night read is sliced, not re-read. Since W03-024 a past day's window is 66 h, so a
+    /// 1 Hz stream holds about 237,600 rows; a limit of 200,000 made every such read look truncated and the
+    /// shortcut declined on almost every day. The limit is the cap the read itself used.
+    func testACompleteSixtySixHourReadAtOneHertzIsSliced() {
+        let lo = dayStart - StreamReadCap.lookbackSeconds, hi = dayStart + StreamReadCap.forwardSeconds
+        let full = stride(from: lo, through: hi, by: 1).map { S(ts: $0) }
+        XCTAssertGreaterThan(full.count, 200_000)
+        XCTAssertNotNil(AnalyticsEngine.daySliceFromNight(
+            full, nightLo: lo, nightHi: hi, dayLo: dayLo, dayHi: dayHi, limit: StreamReadCap.hr, ts: { $0.ts }))
     }
 
     func testBoundsAreInclusiveOnBothEnds() {
@@ -63,7 +74,7 @@ final class DaySliceFromNightTests: XCTestCase {
         // the boundary samples and drop their immediate neighbours.
         let edge = [S(ts: dayLo - 1), S(ts: dayLo), S(ts: dayHi), S(ts: dayHi + 1)]
         let slice = AnalyticsEngine.daySliceFromNight(
-            edge, nightLo: nightLo, nightHi: nightHi, dayLo: dayLo, dayHi: dayHi, ts: { $0.ts })
+            edge, nightLo: nightLo, nightHi: nightHi, dayLo: dayLo, dayHi: dayHi, limit: StreamReadCap.hr, ts: { $0.ts })
         XCTAssertEqual(slice, [S(ts: dayLo), S(ts: dayHi)])
     }
 }

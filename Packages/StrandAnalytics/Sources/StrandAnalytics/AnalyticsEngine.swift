@@ -204,10 +204,14 @@ public enum AnalyticsEngine {
     /// declines — so the shortcut can only ever DECLINE to a direct read, never return wrong data.
     /// Mirrors Kotlin `AnalyticsEngine.daySliceFromNight`; lives here (like `offWristIntervals`)
     /// so the pure logic is package-testable. (#997)
+    ///
+    /// `limit` is the cap the night read itself used (`StreamReadCap`), so a night that came back AT it is
+    /// treated as truncated and a complete one is sliced. It has no default: a 200,000 default fell below a
+    /// complete 66-hour read at 1 Hz after W03-024, and every day re-read its streams (W03-045).
     public static func daySliceFromNight<T>(_ night: [T],
                                             nightLo: Int, nightHi: Int,
                                             dayLo: Int, dayHi: Int,
-                                            limit: Int = 200_000,
+                                            limit: Int,
                                             ts: (T) -> Int) -> [T]? {
         guard dayLo >= nightLo, dayHi <= nightHi, night.count < limit else { return nil }
         return night.filter { ts($0) >= dayLo && ts($0) <= dayHi }
@@ -284,8 +288,9 @@ public enum AnalyticsEngine {
                                   // (preserving the pure-function contract). The caller
                                   // (IntelligenceEngine) supplies a full
                                   // [localMidnight(day), localMidnight(day)+86400) read here so a
-                                  // day's late hours — which fall outside the ~42h night-detection
-                                  // window (it ends at dayStart+12h ≈ noon) — are still seen.
+                                  // day's whole span is read on its own, and TODAY's (read to `now`) too.
+                                  // (Since W03-024 a past day's night window reaches 12 h past its next
+                                  // midnight, so it covers the day; the shortcut slices it from that.)
                                   //
                                   // dayHr/daySteps drive the additive step + calorie totals.
                                   // dayHr/dayGravity ALSO feed WorkoutDetector so an afternoon /
@@ -577,8 +582,14 @@ public enum AnalyticsEngine {
             consistency: sleepConsistency,
             deepSeconds: deepS)
         // #345: gravity-sparse computed ONCE — reused by the sleep-motion trace below AND the Rest
-        // confidence guard, so the two can never diverge and isGravitySparse runs only once per day.
-        let gravitySparse = SleepStager.isGravitySparse(gravity, hr: hr)
+        // confidence guard, so the two can never diverge. W03-044: judged per session over its own
+        // neighbourhood (`LocalContext.sparse` at its midpoint, the bridge's ±6 h), not over the read, which
+        // stamped dense nights "may be incomplete" for a gravity gap half a day away. The day's value is
+        // whether any session of its main night is sparse.
+        let motionContext = SleepStager.LocalContext(grav: gravity.sorted { $0.ts < $1.ts },
+                                                     hr: hr.sorted { $0.ts < $1.ts })
+        func sessionSparse(_ s: SleepSession) -> Bool { motionContext.sparse(at: (s.start + s.end) / 2) }
+        let gravitySparse = mainGroup.contains(where: sessionSparse)
         // Sleep & Rest test mode (E5): emit the Rest sub-score breakdown for this night, reusing the
         // IDENTICAL inputs `restScore` consumed above so the trace can never disagree with the score.
         // `subScoreLine` itself reuses `Rest.composite` for the final value. Side-effect-only; emitted
@@ -956,10 +967,10 @@ public enum AnalyticsEngine {
                 restingHr: s.restingHR,
                 avgHrv: s.avgHRV,
                 stagesJSON: encodeStages(s.stages),
-                // #345 follow-up: stamp the DAY's motion-coverage verdict on every session so the Sleep
-                // tab can caption a sparse (likely under-detected) night. A NOOP-computed night is always
+                // #345 follow-up: stamp each session's motion-coverage verdict so the Sleep tab can caption
+                // a sparse (likely under-detected) night (per session since W03-044). A NOOP-computed night is always
                 // true/false here; imported nights never reach this path and keep nil (unknown).
-                stagingSparse: gravitySparse)
+                stagingSparse: sessionSparse(s))
         }
 
         // ── Per-session per-epoch motion (H8) ─────────────────────────────────
