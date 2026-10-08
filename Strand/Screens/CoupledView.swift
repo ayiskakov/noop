@@ -27,6 +27,8 @@ import Foundation
 
 struct CoupledView: View {
     @EnvironmentObject var repo: Repository
+    /// The engine's scored days, so the Charge sheet shows the drivers the stored Charge was scored with (W03-030).
+    @EnvironmentObject var intelligence: IntelligenceEngine
 
     /// "Card transparency" (0–100, default 100): fades the coupled glance cards in lockstep with the
     /// frosted cards; content stays readable. Mirrors Kotlin `NoopPrefs.cardOpacityPercent`.
@@ -96,13 +98,11 @@ struct CoupledView: View {
     /// so the number matches every other Effort read-out's conversion factor exactly.
     private var dayStrain21: Double? { strain100.map { UnitFormatter.effortValue($0, scale: strainScale) } }
 
-    /// Sleep performance % for the day, the SAME single source of truth the Today Rest score and the Sleep
-    /// detail graph read: the imported figure when the export carried one, else the resolved Rest composite.
-    /// Never a local hours-vs-need approximation (keeps the coupled read in agreement with Today's Rest).
+    /// Sleep performance % for the day: the Rest score Today shows (`Repository.restScore(forDay:)`,
+    /// W03-028). Never a local recomputation, which read the default need and consistency.
     private var sleepPerformance: Double? {
         guard let d = day else { return nil }
-        if let p = repo.importedSleep[d.day]?.performancePct { return p }
-        return AnalyticsEngine.Rest.composite(daily: d)
+        return repo.restScore(forDay: d.day)
     }
 
     /// On-device readiness, computed EXACTLY as Today does (ReadinessEngine.evaluate over the same rows,
@@ -536,7 +536,9 @@ struct CoupledView: View {
     private func chargeBreakdown() -> (drivers: [ChargeDriver], confidence: ScoreConfidence)? {
         guard let row = breakdownRow else { return nil }
         return ChargeBreakdownWiring.breakdown(days: repo.days, row: row, sleepPerfPercent: sleepPerformance,
-                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch())
+                                               hrvBaselineEpoch: Baselines.hrvBaselineEpoch(),
+                                               recoveryBaselineEpoch: Baselines.recoveryBaselineEpoch(),
+                                               engineDrivers: intelligence.chargeDrivers(forDay: row.day))
     }
 
     @ViewBuilder
