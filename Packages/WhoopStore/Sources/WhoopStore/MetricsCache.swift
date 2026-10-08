@@ -528,16 +528,24 @@ extension WhoopStore {
 
     /// Upsert cached daily metrics. Natural key (deviceId, day). Returns rows changed.
     @discardableResult
-    public func upsertDailyMetrics(_ days: [DailyMetric], deviceId: String) async throws -> Int {
+    /// With `keepingStoredValuesForNil`, a nil column leaves the stored value in place instead of
+    /// clearing it: a writer that carries only some columns (an Apple Shortcut payload) must not erase the
+    /// ones another import filled for the same day (W04-003).
+    public func upsertDailyMetrics(_ days: [DailyMetric], deviceId: String,
+                                   keepingStoredValuesForNil: Bool = false) async throws -> Int {
         try syncWrite { db in
-            try Self.upsertDailyMetrics(days, deviceId: deviceId, in: db)
+            try Self.upsertDailyMetrics(days, deviceId: deviceId, keepingStoredValuesForNil: keepingStoredValuesForNil, in: db)
         }
     }
 
     /// Transaction-sharing primitive used by computed-score persistence. Keeping the SQL here ensures
     /// ordinary cache writes and score+provenance writes cannot drift.
-    static func upsertDailyMetrics(_ days: [DailyMetric], deviceId: String, in db: Database) throws -> Int {
+    static func upsertDailyMetrics(_ days: [DailyMetric], deviceId: String,
+                                   keepingStoredValuesForNil: Bool = false, in db: Database) throws -> Int {
         var n = 0
+        let set = dailyMetricUpdateColumns.map {
+            keepingStoredValuesForNil ? "\($0) = COALESCE(excluded.\($0), dailyMetric.\($0))" : "\($0) = excluded.\($0)"
+        }.joined(separator: ",\n")
         for d in days {
             try db.execute(sql: """
                 INSERT INTO dailyMetric
@@ -547,27 +555,7 @@ extension WhoopStore {
                      spo2Red, spo2Ir, avgSdnn, skinTempC, sleepHrOnly)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(deviceId, day) DO UPDATE SET
-                    totalSleepMin = excluded.totalSleepMin,
-                    efficiency = excluded.efficiency,
-                    deepMin = excluded.deepMin,
-                    remMin = excluded.remMin,
-                    lightMin = excluded.lightMin,
-                    disturbances = excluded.disturbances,
-                    restingHr = excluded.restingHr,
-                    avgHrv = excluded.avgHrv,
-                    recovery = excluded.recovery,
-                    strain = excluded.strain,
-                    exerciseCount = excluded.exerciseCount,
-                    spo2Pct = excluded.spo2Pct,
-                    skinTempDevC = excluded.skinTempDevC,
-                    respRateBpm = excluded.respRateBpm,
-                    steps = excluded.steps,
-                    activeKcalEst = excluded.activeKcalEst,
-                    spo2Red = excluded.spo2Red,
-                    spo2Ir = excluded.spo2Ir,
-                    avgSdnn = excluded.avgSdnn,
-                    skinTempC = excluded.skinTempC,
-                    sleepHrOnly = excluded.sleepHrOnly
+                \(set)
                 """, arguments: [deviceId, d.day, d.totalSleepMin, d.efficiency, d.deepMin,
                                  d.remMin, d.lightMin, d.disturbances, d.restingHr, d.avgHrv,
                                  d.recovery, d.strain, d.exerciseCount,
@@ -578,6 +566,31 @@ extension WhoopStore {
         }
         return n
     }
+
+    /// The `dailyMetric` columns an upsert updates on conflict, in schema order.
+    static let dailyMetricUpdateColumns = [
+        "totalSleepMin",
+        "efficiency",
+        "deepMin",
+        "remMin",
+        "lightMin",
+        "disturbances",
+        "restingHr",
+        "avgHrv",
+        "recovery",
+        "strain",
+        "exerciseCount",
+        "spo2Pct",
+        "skinTempDevC",
+        "respRateBpm",
+        "steps",
+        "activeKcalEst",
+        "spo2Red",
+        "spo2Ir",
+        "avgSdnn",
+        "skinTempC",
+        "sleepHrOnly",
+    ]
 
     /// Delete a source's cached daily rows whose day-key is in [from, to] (inclusive, yyyy-MM-dd
     /// lexicographic = chronological). The #277 local-day re-bucketing migration uses this to drop

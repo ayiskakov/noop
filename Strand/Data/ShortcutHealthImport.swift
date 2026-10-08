@@ -301,8 +301,12 @@ enum ShortcutHealthImport {
         let parsed = pending.parsed
         do {
             if !parsed.days.isEmpty {
-                try await store.upsertAppleDaily(appleDailyRows(parsed.days), deviceId: source)
-                try await store.upsertDailyMetrics(dailyMetricRows(parsed.days), deviceId: source)
+                // A payload carries only some columns; keep the ones an export.zip import filled for the
+                // same days instead of nulling them (W04-003).
+                try await store.upsertAppleDaily(appleDailyRows(parsed.days), deviceId: source,
+                                                 keepingStoredValuesForNil: true)
+                try await store.upsertDailyMetrics(dailyMetricRows(parsed.days), deviceId: source,
+                                                   keepingStoredValuesForNil: true)
                 try await store.upsertMetricSeries(metricPointRows(parsed.days), deviceId: source)
             }
             if !parsed.workouts.isEmpty {

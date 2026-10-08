@@ -367,13 +367,9 @@ final class AppModel: ObservableObject {
         // trailing edge, so the dashboard still refreshes with the newly-synced data , freshness is kept,
         // we just stop re-doing it dozens of times mid-download. removeDuplicates() still drops a slice that
         // stamped an identical second; the trailing refresh after a real change is never dropped.
-        live.$lastSyncedAt
-            .dropFirst()
-            .compactMap { $0 }
-            .removeDuplicates()
-            .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { [weak self] in await self?.refreshAfterCompletedBackfill() }
+        Self.lastSyncRefreshes(live, debounce: .seconds(2))
+            .sink { [weak self] origin in
+                Task { [weak self] in await self?.refreshAfterCompletedBackfill(origin: origin) }
             }
             .store(in: &hrCancellables)
 
@@ -691,8 +687,23 @@ final class AppModel: ObservableObject {
         #endif
     }
 
-    private func refreshAfterCompletedBackfill() async {
-        live.append(log: "Backfill: refreshing dashboard cache from completed sync")
+    /// The dashboard refreshes `lastSyncedAt` drives, one per settled change, each with the origin of the
+    /// value it settled on. The chain the app runs, extracted so the tests drive it rather than a copy
+    /// (W07-047). W07-016: the seed of the stored time is an emission too, and the origin is read after the
+    /// debounce, so a HISTORY_COMPLETE landing inside it makes the refresh a completed sync's.
+    static func lastSyncRefreshes(_ live: LiveState,
+                                  debounce: DispatchQueue.SchedulerTimeType.Stride) -> AnyPublisher<LastSyncOrigin, Never> {
+        live.$lastSyncedAt
+            .dropFirst()
+            .compactMap { $0 }
+            .removeDuplicates()
+            .debounce(for: debounce, scheduler: DispatchQueue.main)
+            .map { [weak live] _ in LastSyncOrigin.observed(live?.lastSyncedAtOrigin) }
+            .eraseToAnyPublisher()
+    }
+
+    private func refreshAfterCompletedBackfill(origin: LastSyncOrigin) async {
+        live.append(log: origin.refreshLogLine)
         await repo.refresh(days: 120)
         // Score the freshly-offloaded raw data RIGHT NOW rather than waiting for the next 15-minute
         // analyzeRecent tick , otherwise a just-synced night's Charge / Effort / Rest can take up to
@@ -712,7 +723,7 @@ final class AppModel: ObservableObject {
         // foreground pass is never deferred.
         await RescoreBackgroundScheduler.run(passInProgress: intelligence.computing,
                                              log: { [live] line in live.append(log: line) }) {
-            await intelligence.analyzeRecent(skipIfUnchanged: true)
+            await intelligence.analyzeRecent(skipIfUnchanged: true, triggerLabel: origin.rescoreTriggerLabel)
         }
         await refreshV5Signals()
         #if os(iOS)

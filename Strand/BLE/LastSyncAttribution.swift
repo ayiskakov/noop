@@ -68,3 +68,54 @@ enum LastSyncAttribution {
         return "sync.\(kind).\(p.lowercased())"
     }
 }
+
+/// Where the published `lastSyncedAt` came from, carried beside the value because the value cannot say.
+///
+/// There are two writers: the launch seed, which republishes the time a PREVIOUS session persisted, and
+/// HISTORY_COMPLETE, which stamps a sync this session finished. Both are emissions of the same published
+/// property, so the observer that refreshes the dashboard and re-scores ran for both and logged both as a
+/// completed sync (W07-016): a launch read "refreshing dashboard cache from completed sync" and
+/// `trigger=post-offload` before the strap had connected.
+///
+/// The work is the same either way, and on a background launch the seeded pass is the only one the
+/// launch gets, so the pass is kept. What differs is what the log may claim about it.
+enum LastSyncOrigin: Equatable {
+    /// Read back from defaults when the store is bootstrapped: at launch, or later when a first open failed
+    /// (a relaunch while the phone is locked) and a later tick retried it. No sync has completed in this
+    /// session.
+    case persisted
+    /// Stamped by a HISTORY_COMPLETE in this session.
+    case completedSync
+    /// A value whose writer the observer cannot name (W07-044). Unreachable while the two writers above are
+    /// the only ones, which `LiveState` enforces; if it is ever reached, the log says so instead of
+    /// claiming a sync.
+    case unattributed
+
+    /// The origin an observer of `lastSyncedAt` reports for the value it was handed: the recorded writer,
+    /// or `unattributed` when none is recorded. Never a completed sync by default (W07-044).
+    static func observed(_ recorded: LastSyncOrigin?) -> LastSyncOrigin { recorded ?? .unattributed }
+
+    /// The strap-log line for the dashboard refresh this origin causes. The completed-sync wording is
+    /// unchanged, since existing logs and their readers know it.
+    var refreshLogLine: String {
+        switch self {
+        case .persisted:
+            // W07-046: not "Launch:", since a retried bootstrap seeds after the strap has connected.
+            return "Seed: refreshing dashboard cache from the stored last-sync time (no sync completed this session yet)"
+        case .completedSync:
+            return "Backfill: refreshing dashboard cache from completed sync"
+        case .unattributed:
+            return "Refreshing dashboard cache after a last-sync change this session cannot attribute"
+        }
+    }
+
+    /// The `trigger=` label for the re-score that follows. nil leaves `analyzeRecent` to derive
+    /// `post-offload`, as it did before this type existed.
+    var rescoreTriggerLabel: String? {
+        switch self {
+        case .persisted: return "stored-seed"
+        case .completedSync: return nil
+        case .unattributed: return "last-sync-unattributed"
+        }
+    }
+}

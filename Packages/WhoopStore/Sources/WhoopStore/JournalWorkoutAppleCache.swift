@@ -195,8 +195,13 @@ extension WhoopStore {
 
     /// Upsert Apple-Health daily aggregates. Natural key (deviceId, day). Returns rows changed.
     @discardableResult
-    public func upsertAppleDaily(_ rows: [AppleDaily], deviceId: String) async throws -> Int {
-        try syncWrite { db in
+    /// `keepingStoredValuesForNil` as in `upsertDailyMetrics` (W04-003).
+    public func upsertAppleDaily(_ rows: [AppleDaily], deviceId: String,
+                                 keepingStoredValuesForNil: Bool = false) async throws -> Int {
+        let set = ["steps", "activeKcal", "basalKcal", "vo2max", "avgHr", "maxHr", "walkingHr", "weightKg"].map {
+            keepingStoredValuesForNil ? "\($0) = COALESCE(excluded.\($0), appleDaily.\($0))" : "\($0) = excluded.\($0)"
+        }.joined(separator: ",\n")
+        return try syncWrite { db in
             var n = 0
             for r in rows {
                 try db.execute(sql: """
@@ -205,14 +210,7 @@ extension WhoopStore {
                          avgHr, maxHr, walkingHr, weightKg)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(deviceId, day) DO UPDATE SET
-                        steps = excluded.steps,
-                        activeKcal = excluded.activeKcal,
-                        basalKcal = excluded.basalKcal,
-                        vo2max = excluded.vo2max,
-                        avgHr = excluded.avgHr,
-                        maxHr = excluded.maxHr,
-                        walkingHr = excluded.walkingHr,
-                        weightKg = excluded.weightKg
+                        \(set)
                     """, arguments: [deviceId, r.day, r.steps, r.activeKcal, r.basalKcal, r.vo2max,
                                      r.avgHr, r.maxHr, r.walkingHr, r.weightKg])
                 n += db.changesCount

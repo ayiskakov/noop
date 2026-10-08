@@ -411,9 +411,17 @@ final class IntelligenceEngine: ObservableObject {
     /// Today is now capped at `now`, which keeps the only property the old bound was there for — never read
     /// past the present — and is what that original comment already assumed was happening. It stops the
     /// window from asserting that nobody wakes after 6 PM.
+    ///
+    /// **W03-024: past the next midnight.** A read that stopped at the next midnight could not see a night
+    /// that ran across it: the evening part stood alone as its own session ending on the earlier day, while
+    /// the next day's read joined it to the night, so two days banked one start with two ends. The read now
+    /// reaches `SleepStager.localBaselineRadiusS` past the next midnight, which covers the neighbourhood every
+    /// detection decision reads (W03-023), so a session ending on the day is detected as the next day's
+    /// read detects it. Sessions ending later are still filtered out by day. Never past `now`.
+    /// `nowLocalMidnight` is no longer read; it stays so the call sites keep one shape.
     nonisolated static func sleepReadWindowEnd(dayStart: Int, nowLocalMidnight: Int, now: Int) -> Int {
-        let nextMidnight = dayStart + 86_400
-        return dayStart < nowLocalMidnight ? nextMidnight : min(nextMidnight, now)
+        _ = nowLocalMidnight
+        return min(dayStart + StreamReadCap.forwardSeconds, now)
     }
 
     /// Counts + a window length only — same privacy class as the sibling `sleep day=` line, no PII. Pure so
@@ -1185,7 +1193,9 @@ final class IntelligenceEngine: ObservableObject {
                 // this resolves to `deviceId` (active strap, has data → priority 0), so nothing changes; with
                 // multiple sources the day is scored from exactly one (active strap > other live straps >
                 // imports, or a locked override). Falls back to `deviceId` if the registry is unreadable.
-                let owner = await Self.resolveDayOwner(day: day, from: from, to: to, store: store,
+                // The owner probe stays on the day's own span: the read's reach past midnight (W03-024) must
+                // not let a strap whose only heart rate is the next morning's own this day.
+                let owner = await Self.resolveDayOwner(day: day, from: from, to: min(to, dayStart + 86_400), store: store,
                                                        devices: regDevices, activeId: regActiveId,
                                                        registry: registry, fallbackDeviceId: ownerFallbackId)
 
@@ -1264,14 +1274,14 @@ final class IntelligenceEngine: ObservableObject {
                     unlabelledAliasOfWhoop5: activeWhoop5RR && owner == Repository.whoopSource)) ?? true
                 let rr = await rrWindow.rows(owner: owner, from: from, to: to, allowReuse: !strictWhoop5RR)
                 let resp = (try? await store.respSamples(deviceId: owner, from: from, to: to,
-                                                         limit: 200_000)) ?? []
+                                                         limit: StreamReadCap.resp)) ?? []
                 let grav = (try? await store.gravitySamples(deviceId: owner, from: from, to: to,
                                                             limit: StreamReadCap.gravity)) ?? []
-                let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: StreamReadCap.steps)) ?? []
                 let skin = (try? await store.skinTempSamples(deviceId: owner, from: from, to: to, limit: StreamReadCap.skin)) ?? []
                 // #93: raw SpO2 PPG samples for the night, if any; analyzeDay banks the nightly red/IR ADC
                 // means on the DailyMetric. Empty on a 5/MG (no v24 spo2 channels) → the raw means stay nil.
-                let spo2 = (try? await store.spo2Samples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                let spo2 = (try? await store.spo2Samples(deviceId: owner, from: from, to: to, limit: StreamReadCap.spo2)) ?? []
                 // #938: the strap family that wrote this owner's skin-temp rows (always `.whoop5` now; stated,
                 // not assumed, so the conversion names the hardware it applies to).
                 let skinFamily = Self.skinTempFamily(forOwner: owner, devices: regDevices)
@@ -1285,9 +1295,8 @@ final class IntelligenceEngine: ObservableObject {
                 let wristOff = AnalyticsEngine.offWristIntervals(events: wristEvents, windowEnd: to)
 
                 // Calendar-day window for the ADDITIVE daily totals (steps + calories). The night window
-                // above is anchored to the current time-of-day and ends at dayStart+12h, so for a PAST
-                // day whose late hours sit after that bound those hours are never read and the totals
-                // undercount. Read exactly [localMidnight(day), localMidnight(day)+86400) and hand it to
+                // above reaches 12 h past the next midnight (W03-024), so the totals must be cut to the
+                // calendar day rather than taken from it, or they would count the next morning. Read exactly [localMidnight(day), localMidnight(day)+86400) and hand it to
                 // analyzeDay's dayHr/daySteps, which use it ONLY for those totals. `dayStart` is already a
                 // LOCAL midnight; midnightLocal is idempotent on it (the store range is inclusive, so end
                 // at -1 s). (#277 , local-day bucketing.)
@@ -1300,32 +1309,33 @@ final class IntelligenceEngine: ObservableObject {
                 // hr/steps/grav lists already in memory — derive the day streams by filtering them
                 // (AnalyticsEngine.daySliceFromNight) instead of a second store read (~60 redundant reads
                 // per pass, incl. the big HR ones). TODAY (its day runs past the 18 h night cap) and a
-                // night read that hit the 200_000 limit DECLINE (nil) and read directly, so the shortcut
+                // night read that came back at its own cap (W03-045) DECLINE (nil) and read directly, so the shortcut
                 // can only ever skip work, never change data. Byte-identical: same owner, same inclusive
                 // bounds, same ts-ASC order as the direct read. (`??` can't take an `await` right-hand
                 // side, hence the explicit if/else at each site.)
                 let dayHr: [HRSample]
                 if let slice = AnalyticsEngine.daySliceFromNight(hr, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.hr, ts: { $0.ts }) {
                     dayHr = slice
                 } else {
                     dayHr = (try? await store.hrSamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
                 }
                 let daySteps: [StepSample]
                 if let slice = AnalyticsEngine.daySliceFromNight(steps, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.steps, ts: { $0.ts }) {
                     daySteps = slice
                 } else {
                     daySteps = (try? await store.stepSamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
                 }
-                // Full calendar-day gravity for WORKOUT detection. The night window above ends at
-                // dayStart+12h (≈ noon), so an afternoon/evening workout sits outside it and was only
-                // detected once a later pass re-read it through the next night window , a ~day lag. This
-                // [localMidnight, localMidnight+24h) read (today: clamped to `now` by the store) lets the
-                // detector see the whole day, so a 5 pm run shows up on the same day.
+                // Full calendar-day gravity for WORKOUT detection, cut to [localMidnight, localMidnight+24h)
+                // (today: clamped to `now` by the store), so a workout is detected on the day it happened
+                // and the next morning, which the night window also reaches since W03-024, is not.
                 let dayGrav: [GravitySample]
                 if let slice = AnalyticsEngine.daySliceFromNight(grav, nightLo: from, nightHi: to,
-                                                                 dayLo: dayMid, dayHi: dayEnd, ts: { $0.ts }) {
+                                                                 dayLo: dayMid, dayHi: dayEnd,
+                                                                 limit: StreamReadCap.gravity, ts: { $0.ts }) {
                     dayGrav = slice
                 } else {
                     dayGrav = (try? await store.gravitySamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
@@ -1486,10 +1496,11 @@ final class IntelligenceEngine: ObservableObject {
                     // session (past the ≥200-HR gate → this is the "HR tracked, no sleep" case), carry a
                     // counts-only reason line on the SAME loop-1 diagnostic channel (emitted in the
                     // main-actor replay below) so the report says WHY the stager found nothing. `window` is
-                    // the read span in whole hours (30 h back → next local midnight, or +18 h for today).
+                    // the read span in whole hours (30 h back → 12 h past the next local midnight, or to
+                    // `now` for a day not yet that old; W03-024).
                     if res.cachedSleep.isEmpty {
-                        // from/to are Int unix seconds; the span is always a whole-hour multiple
-                        // (30 h + 24 h, or 30 h + 18 h), so integer division is exact. Matches Kotlin.
+                        // from/to are Int unix seconds. A past day's span is 66 h exactly; a span ending at
+                        // `now` is not a whole number of hours and the division truncates it.
                         let windowHours = (to - from) / 3_600
                         hrvDiag = Self.sleepDetectNoNightLogLine(
                             day: day, hrCount: hr.count, rrCount: rr.count, respCount: resp.count,
@@ -1694,7 +1705,7 @@ final class IntelligenceEngine: ObservableObject {
                 var spo2CandidateNight: Spo2CandidateNight? = nil
                 if spo2CandidateDisplayOn {
                     let auxSamples = (try? await store.v18AuxSamples(
-                        deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                        deviceId: owner, from: from, to: to, limit: StreamReadCap.v18Aux)) ?? []
                     if !auxSamples.isEmpty {
                         spo2CandidateNight = AnalyticsEngine.nightlySpo2CandidateNight(
                             res.sleepSessions, aux: auxSamples)

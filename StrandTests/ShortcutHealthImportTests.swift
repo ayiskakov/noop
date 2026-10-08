@@ -183,6 +183,38 @@ final class ShortcutHealthImportTests: XCTestCase {
         }
     }
 
+    /// W04-003: a Shortcut payload carries only some columns. Ingesting it for a day an export.zip import
+    /// already filled must keep the columns it does not carry, not null them by replacing the whole row.
+    func testShortcutImportKeepsColumnsAnExportImportFilled() async throws {
+        let store = try await WhoopStore.inMemory()
+        try await store.upsertAppleDaily([AppleDaily(day: "2026-06-01", steps: 9000, activeKcal: 500, basalKcal: 1600,
+                                                     vo2max: 44, avgHr: 70, maxHr: 150, walkingHr: 95, weightKg: 80)],
+                                         deviceId: "apple-health")
+        try await store.upsertDailyMetrics([DailyMetric(day: "2026-06-01", totalSleepMin: 450, efficiency: nil,
+                                                        deepMin: 90, remMin: 100, lightMin: 260, disturbances: nil,
+                                                        restingHr: 52, avgHrv: 60, recovery: nil, strain: nil,
+                                                        exerciseCount: nil, spo2Pct: 96, skinTempDevC: nil,
+                                                        respRateBpm: 14, avgSdnn: 40)],
+                                           deviceId: "apple-health")
+
+        let outcome = await ShortcutHealthImport.ingest(url: url(payloadText: "D,2026-06-01,8000,,,,,,,"), into: store)
+        XCTAssertEqual(outcome, .imported(days: 1, workouts: 0))
+
+        let apple = try await store.appleDaily(deviceId: "apple-health", from: "2026-06-01", to: "2026-06-01")[0]
+        XCTAssertEqual(apple.steps, 8000, "the column the payload carries updates")
+        XCTAssertEqual(apple.basalKcal, 1600)
+        XCTAssertEqual(apple.maxHr, 150)
+        XCTAssertEqual(apple.walkingHr, 95)
+        let daily = try await store.dailyMetrics(deviceId: "apple-health", from: "2026-06-01", to: "2026-06-01")[0]
+        XCTAssertEqual(daily.totalSleepMin, 450)
+        XCTAssertEqual(daily.deepMin, 90)
+        XCTAssertEqual(daily.remMin, 100)
+        XCTAssertEqual(daily.spo2Pct, 96)
+        XCTAssertEqual(daily.respRateBpm, 14)
+        XCTAssertEqual(daily.avgSdnn, 40)
+        XCTAssertEqual(daily.restingHr, 52)
+    }
+
     func testEmptyPayloadIsNothingToImport() async throws {
         let store = try await WhoopStore.inMemory()
         let outcome = await ShortcutHealthImport.ingest(url: url(payloadText: "X,junk\n\n"), into: store)
