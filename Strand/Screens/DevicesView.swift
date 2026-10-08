@@ -361,7 +361,8 @@ private struct DevicesContent: View {
                 let deviceId = device.id
                 Task {
                     guard let store = await model.repo.storeHandle() else { return }
-                    await registry.deleteDeviceData(deviceId, store: store)
+                    // No re-score may write around the delete; one runs after it (W07-017).
+                    await model.intelligence.withScoringHeld { await registry.deleteDeviceData(deviceId, store: store) }
                 }
                 deleteDataTarget = nil
             }
@@ -1261,7 +1262,8 @@ private struct ForgetDeviceSheet: ViewModifier {
                     let deviceId = device.id
                     Task {
                         guard let store = await model.repo.storeHandle() else { return }
-                        await registry.forget(deviceId, store: store)
+                        // No re-score may write around the delete; one runs after it (W07-017).
+                        await model.intelligence.withScoringHeld { await registry.forget(deviceId, store: store) }
                     }
                     target = nil
                 }
