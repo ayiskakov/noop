@@ -37,8 +37,11 @@ extension SleepStager {
         /// from a duration gate eating real runs (`sleepRuns` high, `longestMin` under `minSleepMin`).
         ///
         /// `anchorBpm` and `bandBpm` are printed because they are DERIVED, not configured: the anchor is
-        /// a percentile of THIS window, so the same code gives every wearer a different threshold.
-        public static func hrOnlyLine(anchorBpm: Double?, bandBpm: Double?,
+        /// a percentile of the heart rate around each epoch, so the same code gives every wearer a different
+        /// threshold. Each prints as the lowest and highest value any epoch of the read was held to
+        /// (`lo..hi`), since there is no single anchor to print (W03-043). `hrP50` and `hrP90` are the whole
+        /// read's spread.
+        public static func hrOnlyLine(anchorBpm: ClosedRange<Double>?, bandBpm: ClosedRange<Double>?,
                                       hrP50: Double?, hrP90: Double?, epochs: Int,
                                       runs: Int, mergedRuns: Int, sleepRuns: Int,
                                       longestSleepMin: Int, staged: Int, kept: Int,
@@ -61,6 +64,12 @@ extension SleepStager {
             guard let v else { return "nil" }
             let tenths = Int((v * 10.0).rounded())
             return "\(tenths / 10).\(abs(tenths % 10))"
+        }
+
+        /// `round1` at both ends, as `lo..hi`.
+        private static func round1(_ r: ClosedRange<Double>?) -> String {
+            guard let r else { return "nil" }
+            return "\(round1(r.lowerBound))..\(round1(r.upperBound))"
         }
 
         /// One verdict line for a candidate run. `gate` names the constant that decided it

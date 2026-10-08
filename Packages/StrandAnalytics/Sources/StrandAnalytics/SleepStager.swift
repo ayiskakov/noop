@@ -598,7 +598,8 @@ public enum SleepStager {
         return periods
     }
 
-    /// Percentile of the window's bpm that anchors the HR-only sleep band.
+    /// Percentile of the bpm around an epoch that anchors the HR-only sleep band there: the heart rate within
+    /// `localBaselineRadiusS` of the epoch, the 24 h a decision on the gravity path reads (W03-043).
     ///
     /// NOT `hrBaseline`. That is the window MEDIAN, and it is the right anchor where it is used — as a
     /// CONFIRMATION gate on a run gravity stillness already found, where being permissive is deliberate.
@@ -622,14 +623,78 @@ public enum SleepStager {
     /// screen; under-detection leaves "No data", which is the state this feature is trying to improve on
     /// and therefore a safe place to fail. p10 x 1.05 measured 8.1 h against a truth of 8 on a
     /// field-shaped 24 h window, and under-reads a long multi-night window rather than over-reading it
-    /// (8.7 h of 16 h across two nights in 54 h) — pinned in `SleepStagerHrOnlyAnchorTests`.
+    /// (8.7 h of 16 h across two nights in 54 h) — pinned in `SleepStagerHrOnlyAnchorTests`. Since
+    /// W03-043 the anchor is taken over the 24 h around each epoch, the window that sweep measured on, so
+    /// the multi-night figure describes one anchor held across a whole read, which nothing does any more.
     public static let hrOnlyBandMult: Double = 1.05
 
     /// The `hrOnlyAnchorPercentile` of `hr` by bpm, or nil when empty. Nearest-rank (no interpolation), so
     /// the value is always one the wearer actually recorded and the two platforms cannot disagree on a
-    /// rounding rule.
+    /// rounding rule. `hrOnlyLocalAnchors` applies this rule to the samples around each epoch.
     static func hrOnlyBaseline(_ hr: [HRSample]) -> Double? {
         hrPercentile(hr, hrOnlyAnchorPercentile)
+    }
+
+    /// For each of `times`, `hrOnlyBaseline` of the samples of `hr` in the 24 h window around it, or nil when
+    /// none lies there (W03-043). One anchor for the whole read let the heart rate of the next night, which
+    /// the engine's 66 h read (W03-024) holds, move the band a night was judged against; through this an
+    /// epoch's anchor depends only on the 24 h around it.
+    ///
+    /// The window is [t − `localBaselineRadiusS`, t + `localBaselineRadiusS`], slid inward to stay inside
+    /// [first sample, last sample] where it would reach past either, and the whole of `hr` when that spans
+    /// less than 24 h. Sliding rather than cutting keeps every anchor on 24 h of heart rate, the span
+    /// `hrOnlyBandMult` was measured on. A window cut at the data's end would hold this morning's night,
+    /// read up to now, to heart rate that is mostly the night itself, and its anchor would rise into the
+    /// night and split it. A past day's read reaches 12 h past the day, so its nights get the centred
+    /// window and do not depend on the read's reach.
+    ///
+    /// `hr` and `times` must be sorted ascending. The window slides once over `hr` (both of its ends only
+    /// move forward as `t` grows), and each anchor is read from a histogram of the window's bpm, so a read
+    /// costs one pass plus a histogram scan per epoch rather than a sort per epoch. A bpm outside
+    /// 0 ... `LocalContext.maxHistogramBpm` is kept in a sorted side list instead, so a corrupt value
+    /// neither sizes the histogram nor changes the rank (W03-051's rule).
+    static func hrOnlyLocalAnchors(_ hr: [HRSample], at times: [Int]) -> [Double?] {
+        guard let first = hr.first?.ts, let last = hr.last?.ts else { return times.map { _ in nil } }
+        let r = localBaselineRadiusS
+        let maxBpm = LocalContext.maxHistogramBpm
+        var counts = [Int](repeating: 0, count: maxBpm + 1)
+        var outside: [Int] = []
+        var n = 0
+        func insertionIndex(_ b: Int) -> Int {
+            var l = 0, h = outside.count
+            while l < h { let m = (l + h) / 2; if outside[m] < b { l = m + 1 } else { h = m } }
+            return l
+        }
+        func add(_ b: Int) {
+            if b >= 0 && b <= maxBpm { counts[b] += 1 } else { outside.insert(b, at: insertionIndex(b)) }
+            n += 1
+        }
+        func remove(_ b: Int) {
+            if b >= 0 && b <= maxBpm { counts[b] -= 1 } else { outside.remove(at: insertionIndex(b)) }
+            n -= 1
+        }
+        func kthSmallest(_ k: Int) -> Int {
+            let negatives = outside.prefix { $0 < 0 }.count
+            if k < negatives { return outside[k] }
+            var seen = negatives
+            for b in 0...maxBpm where counts[b] > 0 {
+                seen += counts[b]
+                if k < seen { return b }
+            }
+            return outside[negatives + (k - seen)]
+        }
+        var out: [Double?] = []
+        out.reserveCapacity(times.count)
+        var lo = 0, hi = 0
+        for t in times {
+            let start = min(max(t - r, first), max(first, last - 2 * r))
+            while hi < hr.count && hr[hi].ts <= start + 2 * r { add(hr[hi].bpm); hi += 1 }
+            while lo < hi && hr[lo].ts < start { remove(hr[lo].bpm); lo += 1 }
+            if n == 0 { out.append(nil); continue }
+            let k = min(max(Int(Double(n - 1) * hrOnlyAnchorPercentile), 0), n - 1)
+            out.append(Double(kthSmallest(k)))
+        }
+        return out
     }
 
     /// The `p` percentile of `hr` by bpm, nearest-rank. Shared with `hrOnlyBaseline` so the spread the
@@ -694,10 +759,24 @@ public enum SleepStager {
     ///
     /// Bucket order does not depend on sort stability: samples are grouped by epoch and reduced with a
     /// median, so their order within an epoch cannot change the result.
+    ///
+    /// This form holds every epoch to one `baseline`; `hrOnlySessions` passes each epoch its own anchor
+    /// through the form below (W03-043).
     static func hrOnlySleepRuns(_ hr: [HRSample], baseline: Double?,
                                 epochS: Int = hrOnlyEpochS,
                                 maxGapMinutes: Int = maxGapMin) -> [Period] {
         guard let baseline = baseline, baseline > 0 else { return [] }
+        return hrOnlySleepRuns(hr, epochS: epochS, maxGapMinutes: maxGapMinutes,
+                               anchors: { $0.map { _ in baseline } })
+    }
+
+    /// The spine with an anchor per epoch: `anchors` receives the epoch start times, ascending, and returns
+    /// the anchor each is held to, index for index. An epoch with no anchor, or a non-positive one, is not
+    /// in the band.
+    static func hrOnlySleepRuns(_ hr: [HRSample],
+                                epochS: Int = hrOnlyEpochS,
+                                maxGapMinutes: Int = maxGapMin,
+                                anchors: ([Int]) -> [Double?]) -> [Period] {
         if hr.isEmpty || epochS <= 0 { return [] }
         var byEpoch: [Int: [Double]] = [:]
         var lastTs: [Int: Int] = [:]
@@ -714,7 +793,12 @@ public enum SleepStager {
         // understatement would then be weighed against the caller's minimum-duration gate.
         let times = keys.map { $0 * epochS }
         let ends = keys.map { lastTs[$0]! }
-        let flags = keys.map { HRVAnalyzer.median(byEpoch[$0]!) <= baseline * hrOnlyBandMult }
+        let anchorAt = anchors(times)
+        precondition(anchorAt.count == keys.count, "one anchor per epoch")
+        let flags = keys.indices.map { i -> Bool in
+            guard let anchor = anchorAt[i], anchor > 0 else { return false }
+            return HRVAnalyzer.median(byEpoch[keys[i]]!) <= anchor * hrOnlyBandMult
+        }
         let maxGapS = maxGapMinutes * 60
         var periods: [Period] = []
         var runStart = 0
@@ -752,7 +836,8 @@ public enum SleepStager {
     /// were always V2, under a trace that named the chosen recipe. V1 stages no night without motion, so it
     /// maps to V2 (`hrOnlyRecipe`). The default keeps pure-function callers on V2.
     ///
-    /// The anchor is `hrOnlyBaseline` — the `hrOnlyAnchorPercentile` of the window — and NOT the
+    /// The anchor is `hrOnlyBaseline`'s rule — the `hrOnlyAnchorPercentile` of the heart rate within
+    /// `localBaselineRadiusS` of each epoch (`hrOnlyLocalAnchors`, W03-043) — and NOT the
     /// `hrBaseline` median the motion path derives. Reusing that median looked like parity and was a bug:
     /// as a confirmation gate on an already-detected run it is deliberately permissive, but as a primary
     /// threshold it admits over half of any window by definition. See `hrOnlyAnchorPercentile`.
@@ -773,9 +858,9 @@ public enum SleepStager {
                                       minMinutes: Int = minSleepMin,
                                       traceSink: ((String) -> Void)? = nil) -> [SleepSession] {
         let hrS = hr.sorted { $0.ts < $1.ts }
-        // ONE sort of the bpm axis, reused for the anchor and for the spread the trace reports.
+        // ONE sort of the bpm axis, for the spread the trace reports.
         let sortedBpm = hrS.map { Double($0.bpm) }.sorted()
-        guard let baseline = percentileOfSorted(sortedBpm, hrOnlyAnchorPercentile) else {
+        guard !hrS.isEmpty else {
             traceSink?(GateTrace.hrOnlyLine(anchorBpm: nil, bandBpm: nil, hrP50: nil, hrP90: nil,
                                             epochs: 0, runs: 0,
                                             mergedRuns: 0, sleepRuns: 0, longestSleepMin: 0,
@@ -784,12 +869,19 @@ public enum SleepStager {
         }
         let rrS = rr.sorted { $0.ts < $1.ts }
         var out: [SleepSession] = []
+        // Each epoch is held to the anchor of the heart rate around it (W03-043); the trace prints their range.
+        var anchors: [Double?] = []
+        let rawRuns = hrOnlySleepRuns(hrS) { epochStarts in
+            anchors = hrOnlyLocalAnchors(hrS, at: epochStarts)
+            return anchors
+        }
+        let held = anchors.compactMap { $0 }
+        let anchorRange = held.min().flatMap { lo in held.max().map { lo...$0 } }
         // mergePeriods for the same reason the motion path calls it: a run boundary is a threshold
         // crossing, and a sleeping heart rate oscillates across the band all night. Without this the
         // spine returns the night's minutes correctly but shredded into sub-mergeMin fragments, every one
         // of which then fails the minimum-duration gate below — 8 h of detected sleep yielding zero
         // sessions. Absorbing the short runs first is what turns a spine into a night.
-        let rawRuns = hrOnlySleepRuns(hrS, baseline: baseline)
         let merged = mergePeriods(rawRuns)
         var staged = 0
         var longestSleepS = 0
@@ -815,8 +907,8 @@ public enum SleepStager {
                                     hrOnly: true))
         }
         traceSink?(GateTrace.hrOnlyLine(
-            anchorBpm: baseline,
-            bandBpm: baseline * hrOnlyBandMult,
+            anchorBpm: anchorRange,
+            bandBpm: anchorRange.map { ($0.lowerBound * hrOnlyBandMult)...($0.upperBound * hrOnlyBandMult) },
             // The wearer's own spread. An anchor alone cannot be judged: p10 of 60 means one thing when
             // the median is 63 and quite another when it is 74, and only the second leaves a night the
             // band can separate.
