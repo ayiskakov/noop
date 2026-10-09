@@ -181,6 +181,10 @@ final class Repository: ObservableObject {
     @Published var sleeps: [CachedSleepSession] = []
     /// Imported (export-verbatim) sleep figures by day. Empty until a WHOOP import lands.
     @Published var importedSleep: [String: ImportedSleepFigures] = [:]
+    /// The Rest score by day, layered exactly as Today's `exploreSeries("sleep_performance")` is: the imported
+    /// series, else the engine's stored series (personal need and consistency), else the #614 placeholder
+    /// composite from the day's totals. Every surface reads Rest through `restScore(forDay:)` (W03-028).
+    @Published private(set) var restByDay: [String: Double] = [:]
     @Published var loaded = false
     /// How much history each source currently holds, recomputed on every `refresh()`. Powers the
     /// Data Sources "Freshness Pipeline" card so the user can see imported vs computed vs Apple coverage.
@@ -459,6 +463,34 @@ final class Repository: ObservableObject {
         }
         return byDay.values.sorted { $0.day < $1.day }
     }
+
+    /// `unionMetricSeries` over the computed ("-noop") ids, the active strap's sibling winning a day, as
+    /// `exploreSeries`' computed layer does.
+    private func unionComputedMetricSeries(store: WhoopStore, key: String, from: String, to: String) async -> [MetricPoint] {
+        var byDay: [String: MetricPoint] = [:]
+        for id in computedReadIds {
+            for p in (try? await store.metricSeries(deviceId: id, key: key, from: from, to: to)) ?? [] where byDay[p.day] == nil {
+                byDay[p.day] = p
+            }
+        }
+        return byDay.values.sorted { $0.day < $1.day }
+    }
+
+    /// Rest by day from the three layers `exploreSeries` uses for `sleep_performance`, lowest first: the
+    /// placeholder composite from each merged day's totals, the computed series, the imported series.
+    nonisolated static func restByDay(days: [DailyMetric], computed: [MetricPoint],
+                                      imported: [MetricPoint]) -> [String: Double] {
+        var byDay: [String: Double] = [:]
+        for d in days where byDay[d.day] == nil {
+            if let v = dailyColumn(key: "sleep_performance", day: d) { byDay[d.day] = v }
+        }
+        for p in computed { byDay[p.day] = p.value }
+        for p in imported { byDay[p.day] = p.value }
+        return byDay
+    }
+
+    /// The Rest score a surface shows for `day`; nil when the day has none (W03-028).
+    func restScore(forDay day: String) -> Double? { restByDay[day] }
 
     /// Sleep sessions across every registered WHOOP source for a ts range, keeping ALL sessions per day (a nap + a main
     /// night both survive) and dropping only EXACT-duplicate blocks (same start+end) recorded under both
@@ -882,6 +914,7 @@ final class Repository: ObservableObject {
     /// project's `minimal` strict-concurrency setting (SWIFT_STRICT_CONCURRENCY: minimal, Swift 5 mode).
     private struct MergedCaches {
         let importedSleep: [String: ImportedSleepFigures]
+        let restByDay: [String: Double]
         let days: [DailyMetric]
         let sleeps: [CachedSleepSession]
         let vitalRows: [SourcedDailyMetric]
@@ -994,6 +1027,7 @@ final class Repository: ObservableObject {
         // Export-verbatim sleep figures (long-format metricSeries rows from WhoopImporter).
         // SleepView prefers these per day over its APPROXIMATE recomputations.
         let perf = await unionMetricSeries(store: store, key: "sleep_performance", from: fromDay, to: toDay)
+        let computedPerf = await unionComputedMetricSeries(store: store, key: "sleep_performance", from: fromDay, to: toDay)
         let cons = await unionMetricSeries(store: store, key: "sleep_consistency", from: fromDay, to: toDay)
         let need = await unionMetricSeries(store: store, key: "sleep_need_min", from: fromDay, to: toDay)
         let debt = await unionMetricSeries(store: store, key: "sleep_debt_min", from: fromDay, to: toDay)
@@ -1012,12 +1046,14 @@ final class Repository: ObservableObject {
             // and IntelligenceEngine re-keys the computed DAILY row from it; collect those edited days so the
             // merge lets the computed row's SLEEP fields win there (imports still win on every un-edited day).
             let editedDays = Self.userEditedDays(compSleep)
+            let mergedDays = Self.mergeActivityFileSteps(
+                into: Self.mergeDaily(imported: imported, computed: computed, userEditedDays: editedDays),
+                activityFile
+            )
             return MergedCaches(
                 importedSleep: fig,
-                days: Self.mergeActivityFileSteps(
-                    into: Self.mergeDaily(imported: imported, computed: computed, userEditedDays: editedDays),
-                    activityFile
-                ),
+                restByDay: Self.restByDay(days: mergedDays, computed: computedPerf, imported: perf),
+                days: mergedDays,
                 sleeps: Self.mergeSleep(imported: impSleep, computed: compSleep),
                 vitalRows: Self.sourceRows(imported: imported, computed: computed, apple: apple),
                 freshness: Self.computeFreshness(imported: imported, computed: computed, apple: apple,
@@ -1036,6 +1072,7 @@ final class Repository: ObservableObject {
             && merged.days == days
             && merged.sleeps == sleeps
             && merged.importedSleep == importedSleep
+            && merged.restByDay == restByDay
             && merged.vitalRows == vitalRows
             && merged.freshness == freshness
         guard !unchanged else { return }
@@ -1043,6 +1080,7 @@ final class Repository: ObservableObject {
         // One consistent publish per refresh: assign every cache, flip `loaded`, then bump `refreshSeq` so
         // the intraday-updating views reload exactly once for this real change.
         self.importedSleep = merged.importedSleep
+        self.restByDay = merged.restByDay
         self.days = merged.days
         self.sleeps = merged.sleeps
         self.vitalRows = merged.vitalRows

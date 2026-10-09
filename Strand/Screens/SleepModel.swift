@@ -250,6 +250,8 @@ struct SleepModelInputs {
     let allSessions: [CachedSleepSession]
     /// Per-day imported WHOOP figures (`Repository.importedSleep`) — export-verbatim tile values.
     let importedSleep: [String: ImportedSleepFigures]
+    /// The Rest score by day (`Repository.restByDay`), the one Today shows.
+    let restByDay: [String: Double]
     /// The learned habitual midsleep (local seconds) the engine threaded into the daily totals.
     let habitualMidsleepSec: Int?
     /// Per-epoch motion keyed by detected block start (`SleepView.motionByStart`).
@@ -434,14 +436,11 @@ extension SleepModel {
         return (fresh?.value, latestDay, mean(series), series)
     }
 
-    /// Sleep performance %: the imported WHOOP figure when the export carried one for that day;
-    /// else the REAL resolved Rest composite for that day. (#614 follow-up)
-    static func performanceSeries(days: [DailyMetric], importedSleep: [String: ImportedSleepFigures]) -> Metric {
-        let imported = importedSleep
-        return metric(days: days) { d in
-            if let p = imported[d.day]?.performancePct { return p }   // export-verbatim
-            return AnalyticsEngine.Rest.composite(daily: d)            // real resolved Rest composite
-        }
+    /// Sleep performance %: the Rest score Today shows for each day (`Repository.restByDay`: the imported
+    /// figure, else the stored score with the personal need and consistency, else the #614 placeholder).
+    /// The default-need composite it used to recompute here read a different number (W03-028).
+    static func performanceSeries(days: [DailyMetric], restByDay: [String: Double]) -> Metric {
+        metric(days: days) { restByDay[$0.day] }
     }
 
     static func efficiencySeries(days: [DailyMetric]) -> Metric {
@@ -588,7 +587,7 @@ extension SleepModel {
             intervals: night.intervals,
             isPersistedHypnogram: (night.realSegments?.count ?? 0) >= 2,
             isStubNight: isStub,
-            performance: performanceSeries(days: inputs.days, importedSleep: inputs.importedSleep),
+            performance: performanceSeries(days: inputs.days, restByDay: inputs.restByDay),
             efficiency: efficiencySeries(days: inputs.days),
             consistency: consistencySeries(days: inputs.days, sleeps: inputs.sleeps, importedSleep: inputs.importedSleep),
             hoursVsNeeded: hoursVsNeededSeries(days: inputs.days, importedSleep: inputs.importedSleep),
