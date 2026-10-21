@@ -598,8 +598,10 @@ public enum SleepStager {
         return periods
     }
 
-    /// Percentile of the bpm around an epoch that anchors the HR-only sleep band there: the heart rate within
-    /// `localBaselineRadiusS` of the epoch, the 24 h a decision on the gravity path reads (W03-043).
+    /// Percentile of the bpm around an epoch that anchors the HR-only sleep band there: the heart rate of the
+    /// 24 h around the epoch, the span a decision on the gravity path reads (W03-043). At the data's ends
+    /// that window slides inward rather than being cut, so it can reach up to 24 h to one side; the gravity
+    /// path's `LocalContext.baseline` cuts instead (see `hrOnlyLocalAnchors` for why the two differ).
     ///
     /// NOT `hrBaseline`. That is the window MEDIAN, and it is the right anchor where it is used — as a
     /// CONFIRMATION gate on a run gravity stillness already found, where being permissive is deliberate.
@@ -645,8 +647,10 @@ public enum SleepStager {
     /// less than 24 h. Sliding rather than cutting keeps every anchor on 24 h of heart rate, the span
     /// `hrOnlyBandMult` was measured on. A window cut at the data's end would hold this morning's night,
     /// read up to now, to heart rate that is mostly the night itself, and its anchor would rise into the
-    /// night and split it. A past day's read reaches 12 h past the day, so its nights get the centred
-    /// window and do not depend on the read's reach.
+    /// night and split it. A past day's read reaches 12 h past the day once that time has passed, so its
+    /// nights get the centred window and do not depend on the read's reach. Until then (yesterday's read,
+    /// before local noon) a night ending late in the day can sit on a slid window; the per-day cache keys on
+    /// the heart rate read, so the next pass after more data lands scores it again.
     ///
     /// `hr` and `times` must be sorted ascending. The window slides once over `hr` (both of its ends only
     /// move forward as `t` grows), and each anchor is read from a histogram of the window's bpm, so a read
@@ -836,8 +840,8 @@ public enum SleepStager {
     /// were always V2, under a trace that named the chosen recipe. V1 stages no night without motion, so it
     /// maps to V2 (`hrOnlyRecipe`). The default keeps pure-function callers on V2.
     ///
-    /// The anchor is `hrOnlyBaseline`'s rule — the `hrOnlyAnchorPercentile` of the heart rate within
-    /// `localBaselineRadiusS` of each epoch (`hrOnlyLocalAnchors`, W03-043) — and NOT the
+    /// The anchor is `hrOnlyBaseline`'s rule — the `hrOnlyAnchorPercentile` of the heart rate of the
+    /// 24 h around each epoch, slid inward at the data's ends (`hrOnlyLocalAnchors`, W03-043) — and NOT the
     /// `hrBaseline` median the motion path derives. Reusing that median looked like parity and was a bug:
     /// as a confirmation gate on an already-detected run it is deliberately permissive, but as a primary
     /// threshold it admits over half of any window by definition. See `hrOnlyAnchorPercentile`.

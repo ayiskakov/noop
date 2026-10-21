@@ -20,16 +20,18 @@ extension SleepStager {
         /// The funnel line below only exists when the spine is CALLED, so its absence was ambiguous in
         /// exactly the way that made the first field report unreadable: it could mean the gate never
         /// opened, or that the sink was never wired. This says which, on any day with no motion — the
-        /// only days where the question arises.
+        /// only days where the question arises. `stored` counts the owner's stored nights that end on the
+        /// day (W03-052); before that fix it counted every stored night in the read, so logs from either
+        /// side of it do not compare on this field.
         public static func hrOnlyGateLine(attempted: Bool, reason: String,
                                           gravRows: Int, storedNights: Int) -> String {
             "[sleep] hr-only gate attempted=\(attempted) reason=\(reason) "
                 + "grav=\(gravRows) stored=\(storedNights)"
         }
 
-        /// The HR-only spine's own funnel line (#1801). Byte-identical twin of the Kotlin
-        /// `SleepStagerTrace.hrOnlyLine`, so an Android and an Apple log of the same night compare
-        /// directly — which is the entire reason these formatters are twinned at all.
+        /// The HR-only spine's own funnel line (#1801). It began as the byte-identical twin of the Kotlin
+        /// `SleepStagerTrace.hrOnlyLine`; since W03-043 its anchor and band print as `lo..hi`, which the
+        /// Kotlin line never did, so the two no longer compare field for field.
         ///
         /// The path shipped SILENT on both platforms, and a field log then showed `reason=no-motion`
         /// with no way to tell whether the spine had run and found nothing or never ran. Every number
