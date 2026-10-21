@@ -895,9 +895,10 @@ final class IntelligenceEngine: ObservableObject {
         runningPassAbandon = abandon
         // #1538: the pass is now past every gate and will do real work. Mark it started durably, so that a
         // process killed mid-pass leaves evidence a LATER process can read — the killed process itself gets
-        // no chance to record anything. Cleared beside the watermark at the end; there is no early return
-        // between here and there, so "started and never finished" means exactly "killed", never a silent
-        // internal skip. `RescoreBackgroundPolicy` reads it to stop re-attempting a pass that cannot
+        // no chance to record anything. Cleared beside the watermark at the end. The one early return
+        // between here and there is a pass dropped for a data delete (W07-017), which logs the drop and
+        // leaves the mark for the delete's re-score to settle; otherwise "started and never finished" means
+        // exactly "killed". `RescoreBackgroundPolicy` reads it to stop re-attempting a pass that cannot
         // finish in the background, which is the livelock in #1538.
         // #1681: keep the token this debt was stamped with. At the end of the pass it is what tells our
         // own debt apart from one a LATER trigger recorded while we were running - the latter must
@@ -920,6 +921,11 @@ final class IntelligenceEngine: ObservableObject {
             computing = false
             runningPassStart = nil
             runningPassAbandon = nil
+            // A delete's re-score stands in for a pass it dropped and for the re-pass this one owed, so it
+            // takes this pass's window too: a dropped 4,000-day heal must not come back as 21 days (W07-017).
+            if dataDeletesInFlight > 0, abandon.isRaised || pendingForcedRescore {
+                pendingForcedRescoreDays = max(pendingForcedRescoreDays, maxDays)
+            }
             let waiters = passEndWaiters
             passEndWaiters = []
             for waiter in waiters { waiter.resume() }
@@ -1863,7 +1869,7 @@ final class IntelligenceEngine: ObservableObject {
         // mark stays set (#1538): that re-score settles it.
         func droppedForDataDelete(at phase: String) -> Bool {
             guard abandon.isRaised else { return false }
-            diagnosticSink?("re-score: dropped after the \(phase), writing nothing: a data delete is waiting "
+            diagnosticSink?("re-score: dropped after the \(phase), writing no scores: a data delete is waiting "
                             + "and re-scores when done (W07-017)", nil)
             return true
         }
@@ -2548,8 +2554,10 @@ final class IntelligenceEngine: ObservableObject {
                                 sleepMin: row.totalSleepMin, hrv: row.avgHrv, rhr: row.restingHr,
                                 source: .appleHealth, confidence: w.confidence))
         }
-        // The pass's first write. Nothing between this check and it suspends, and a delete waits for the lock
-        // from here on, so no delete can land among the writes below (W07-017).
+        // The pass's first score write. Only the edited-stage heal above wrote before it, updating sleep rows
+        // in place, which the delete waiting for the lock still removes. Nothing between this check and the
+        // write suspends, and a delete waits for the lock from here on, so no delete can land among the
+        // writes below (W07-017).
         if droppedForDataDelete(at: "reads") { return }
         if !appleRecoveryRows.isEmpty {
             _ = try? await store.upsertDailyMetrics(appleRecoveryRows, deviceId: Repository.appleHealthSource)

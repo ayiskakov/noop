@@ -64,6 +64,33 @@ final class DataDeleteDuringRescoreTests: XCTestCase {
         }
     }
 
+    /// A dropped pass wider than the default hands its window to the delete's re-score. Otherwise a 4,000-day
+    /// heal or effort re-score dropped for a delete came back as 21 days, and its caller, seeing the lock
+    /// free, marked the work done (W07-017 V2).
+    func testADroppedWidePassKeepsItsWindowInTheDeletesRescore() async throws {
+        try await withEngineTestPreferences {
+            let store = try await WhoopStore.inMemory()
+            try await seed(store)
+            let engine = engine(store)
+            var rescored: [Int] = []
+            engine.launchRescoreAfterDataDelete = { rescored.append($0) }
+            var rePasses: [Int] = []
+            engine.launchForcedRePass = { rePasses.append($0) }
+            var delete: Task<Void, Never>?
+            engine.scanFinishedForTesting = {
+                engine.scanFinishedForTesting = nil
+                delete = Task { await engine.withScoringHeld { try? await store.deleteAllData(deviceId: self.canonical) } }
+                for _ in 0..<10_000 where !engine.isScoringHeldForDataDelete { await Task.yield() }
+            }
+
+            await engine.analyzeRecent(maxDays: 40, force: true)
+            await delete?.value
+
+            XCTAssertEqual(rescored, [40], "the delete's re-score must cover the dropped pass's window")
+            XCTAssertEqual(rePasses, [], "the dropped pass owes no re-pass of its own")
+        }
+    }
+
     /// With no pass running the delete runs at once and is followed by the re-score.
     func testADeleteWithNoPassRunningRunsAtOnceAndRescores() async throws {
         try await withEngineTestPreferences {
@@ -91,10 +118,8 @@ final class DataDeleteDuringRescoreTests: XCTestCase {
             var rePasses: [Int] = []
             engine.launchForcedRePass = { rePasses.append($0) }
 
-            await engine.withScoringHeld {
-                await engine.analyzeRecent(maxDays: 40, force: true)
-                XCTAssertFalse(engine.computing, "no pass may start while a delete runs")
-            }
+            // No pass may start while a delete runs: no `trigger=` line below, and the window is folded in.
+            await engine.withScoringHeld { await engine.analyzeRecent(maxDays: 40, force: true) }
 
             XCTAssertEqual(rescored, [40])
             XCTAssertEqual(rePasses, [])
