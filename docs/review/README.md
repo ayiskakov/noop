@@ -58,8 +58,12 @@ AD-8. Tick each item as it lands.
       Done 2026-10-03, run `wf_b77f01a5-1aa`: 6 reviewers and 3 adversaries; P5 refuted none. Rows W03-023 …
       W03-042, W04-002 … W04-018, W07-017 … W07-031. The S2s: W03-023, W03-024, W03-028, W03-030, W04-002 …
       W04-005, W07-023, plus W07-002.
-- [ ] W07-002 (S2, carried from Phase 1's W02-005) is Phase 2's one open S2 at the start: V0 it with two straps
-      registered, then fix it first.
+- [x] W07-002 (S2, carried from Phase 1's W02-005) is Phase 2's one open S2 at the start: V0 it with two straps
+      registered, then fix it first. Fixed in PR #44 with the rest of the first W7 batch; every Phase 2 S2 is
+      merged at `Fixed` (PRs #44 … #48), and V2 and V3 of them are still due.
+- [ ] First S3 batches (2026-10-08, V2 by independent subagents 2026-10-21): `review/w03-hr-only` (W03-043,
+      W03-052; both hold, docs corrected, W03-053 … W03-055 recorded) and `review/w07-delete-hold` (W07-017,
+      W07-033; holds with caveats, W07-048 fixed on the branch, W07-049 and W07-050 recorded). One PR each.
 - [ ] V0 every finding (pass 4); fix S1 and S2 first; one PR per workstream batch.
 - [ ] Rebuild the replay harness against current `main` (the Phase 0 one is pinned to `01baf82a`, before V3
       became the default) and run it over the newest backup: the exit gate needs its diff explained row by row.

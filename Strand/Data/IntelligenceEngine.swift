@@ -62,6 +62,49 @@ final class IntelligenceEngine: ObservableObject {
     lazy var launchForcedRePass: (Int) -> Void = { [weak self] days in
         Task { await self?.analyzeRecent(maxDays: days, force: true) }
     }
+    /// Awaited by a pass between its day scan and its first write; nil outside tests, which use it to land
+    /// a data delete inside that window (W07-017).
+    var scanFinishedForTesting: (() async -> Void)?
+    /// Data deletes in progress (W07-017). While one runs no pass starts, and the pass it found running
+    /// writes nothing.
+    private var dataDeletesInFlight = 0
+    /// The running pass's flag a data delete raises; nil when no pass runs.
+    private var runningPassAbandon: RescorePassAbandon?
+    /// `withScoringHeld` callers waiting for the running pass to release the lock.
+    private var passEndWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Launches the re-score `withScoringHeld` owes once the last delete is done, over `maxDays`. A test
+    /// replaces it to read the window instead of running the pass.
+    lazy var launchRescoreAfterDataDelete: (Int) -> Void = { [weak self] days in
+        Task { await self?.analyzeRecent(maxDays: days, force: true, triggerLabel: "data-delete") }
+    }
+    /// True while a data delete holds scoring off.
+    var isScoringHeldForDataDelete: Bool { dataDeletesInFlight > 0 }
+
+    /// Runs `work`, a data delete, with no scoring pass writing around it, then re-scores (W07-017, W07-033).
+    ///
+    /// A pass reads its raw first and writes at the end, so a delete landing in between was undone: the pass
+    /// wrote back the scores it had computed from what it read before the delete, and with no raw left no
+    /// later pass could evict them. Here new passes are held off, the running pass is told to drop its
+    /// writes (it stops at its next day, or before its first write), and `work` runs once the lock is free.
+    /// A pass already writing finishes first, and the delete then removes what it wrote. The re-score after
+    /// the last delete rebuilds the window from what remains; forced triggers held off meanwhile are folded
+    /// into it.
+    func withScoringHeld<T>(_ work: () async throws -> T) async rethrows -> T {
+        dataDeletesInFlight += 1
+        runningPassAbandon?.raise()
+        while computing { await withCheckedContinuation { passEndWaiters.append($0) } }
+        defer {
+            dataDeletesInFlight -= 1
+            if dataDeletesInFlight == 0 {
+                // 21 is `analyzeRecent`'s default window; a wider forced trigger held off meanwhile wins.
+                let days = max(21, pendingForcedRescoreDays)
+                pendingForcedRescore = false
+                pendingForcedRescoreDays = 0
+                launchRescoreAfterDataDelete(days)
+            }
+        }
+        return try await work()
+    }
     /// Uptime the pass holding `computing` started at, and how many days it covers; nil when none is running.
     private var runningPassStart: UInt64?
     private var runningPassDays = 0
@@ -739,13 +782,15 @@ final class IntelligenceEngine: ObservableObject {
     /// post-backfill rescore after a sync) , dropping it would leave a freshly-synced night unscored
     /// until the next cycle. Re-arm instead: flag it so the running pass's `defer` re-invokes once.
     private func queueBehindRunningPass(force: Bool, maxDays: Int) -> Bool {
-        guard computing else { return false }
+        guard computing || dataDeletesInFlight > 0 else { return false }
         if force {
             // Said once per running pass, not per trigger: a pass that holds the lock for hours otherwise
             // turns every post-offload re-score into a silent no-op, and the log shows syncs but no scores.
             if !pendingForcedRescore, let started = runningPassStart {
                 let heldFor = Int(Double(DispatchTime.now().uptimeNanoseconds &- started) / 1_000_000_000)
                 diagnosticSink?("re-score: queued behind a \(runningPassDays)-day pass running for \(heldFor) s", nil)
+            } else if !pendingForcedRescore, dataDeletesInFlight > 0 {
+                diagnosticSink?("re-score: held until a data delete finishes, which re-scores (W07-017)", nil)
             }
             pendingForcedRescore = true
             pendingForcedRescoreDays = max(pendingForcedRescoreDays, maxDays)
@@ -846,11 +891,14 @@ final class IntelligenceEngine: ObservableObject {
         computing = true
         runningPassStart = reScoreStart
         runningPassDays = maxDays
+        let abandon = RescorePassAbandon()
+        runningPassAbandon = abandon
         // #1538: the pass is now past every gate and will do real work. Mark it started durably, so that a
         // process killed mid-pass leaves evidence a LATER process can read — the killed process itself gets
-        // no chance to record anything. Cleared beside the watermark at the end; there is no early return
-        // between here and there, so "started and never finished" means exactly "killed", never a silent
-        // internal skip. `RescoreBackgroundPolicy` reads it to stop re-attempting a pass that cannot
+        // no chance to record anything. Cleared beside the watermark at the end. The one early return
+        // between here and there is a pass dropped for a data delete (W07-017), which logs the drop and
+        // leaves the mark for the delete's re-score to settle; otherwise "started and never finished" means
+        // exactly "killed". `RescoreBackgroundPolicy` reads it to stop re-attempting a pass that cannot
         // finish in the background, which is the livelock in #1538.
         // #1681: keep the token this debt was stamped with. At the end of the pass it is what tells our
         // own debt apart from one a LATER trigger recorded while we were running - the latter must
@@ -872,7 +920,17 @@ final class IntelligenceEngine: ObservableObject {
         defer {
             computing = false
             runningPassStart = nil
-            if pendingForcedRescore {
+            runningPassAbandon = nil
+            // A delete's re-score stands in for a pass it dropped and for the re-pass this one owed, so it
+            // takes this pass's window too: a dropped 4,000-day heal must not come back as 21 days (W07-017).
+            if dataDeletesInFlight > 0, abandon.isRaised || pendingForcedRescore {
+                pendingForcedRescoreDays = max(pendingForcedRescoreDays, maxDays)
+            }
+            let waiters = passEndWaiters
+            passEndWaiters = []
+            for waiter in waiters { waiter.resume() }
+            // While a data delete holds scoring, its own re-score folds this one in (W07-017).
+            if pendingForcedRescore, dataDeletesInFlight == 0 {
                 pendingForcedRescore = false
                 // Carry THIS pass's window into the re-pass: a heal firing during a wide one-shot pass
                 // must re-score the same width, not the default 21 days (Kotlin re-passes with the same
@@ -1186,6 +1244,8 @@ final class IntelligenceEngine: ObservableObject {
             }
             var paceMark = DispatchTime.now().uptimeNanoseconds
             for offset in 0..<maxDays {
+                // A data delete is waiting for this pass, which will write nothing (W07-017).
+                if abandon.isRaised { break }
                 if offset > 0 { await RescoreBackgroundScheduler.paceIfBackgrounded(since: &paceMark) }
                 let dayStart = nowLocalMidnight - offset * 86_400
                 let day = AnalyticsEngine.dayString(dayStart, offsetSec: tzOffset)
@@ -1803,6 +1863,17 @@ final class IntelligenceEngine: ObservableObject {
         // #1005: write the loop's updated reuse cache back to the (main-actor) stored property. The pass ran
         // to completion above (`.value` awaited), so there is no concurrent access.
         dayScanCache = updatedDayScanCache
+        if let scanFinishedForTesting { await scanFinishedForTesting() }
+        // W07-017: a data delete raised the flag while this pass read. Its writes would put back what the
+        // delete removes, so the pass ends here and the delete's own re-score redoes the window. The owed
+        // mark stays set (#1538): that re-score settles it.
+        func droppedForDataDelete(at phase: String) -> Bool {
+            guard abandon.isRaised else { return false }
+            diagnosticSink?("re-score: dropped after the \(phase), writing no scores: a data delete is waiting "
+                            + "and re-scores when done (W07-017)", nil)
+            return true
+        }
+        if droppedForDataDelete(at: "day scan") { return }
         // #1538: the pass after the day loop was never measured. The cost line above brackets the loop and
         // is emitted the moment it returns, so a pass whose time went somewhere later reported a small
         // prep/score and no account of the rest — which is where the steps calibration was re-folding sixty
@@ -2483,6 +2554,11 @@ final class IntelligenceEngine: ObservableObject {
                                 sleepMin: row.totalSleepMin, hrv: row.avgHrv, rhr: row.restingHr,
                                 source: .appleHealth, confidence: w.confidence))
         }
+        // The pass's first score write. Only the edited-stage heal above wrote before it, updating sleep rows
+        // in place, which the delete waiting for the lock still removes. Nothing between this check and the
+        // write suspends, and a delete waits for the lock from here on, so no delete can land among the
+        // writes below (W07-017).
+        if droppedForDataDelete(at: "reads") { return }
         if !appleRecoveryRows.isEmpty {
             _ = try? await store.upsertDailyMetrics(appleRecoveryRows, deviceId: Repository.appleHealthSource)
         }
@@ -3591,4 +3667,13 @@ extension IntelligenceEngine {
             hist[day] = v
         }
     }
+}
+
+/// Raised by a data delete while a pass runs; read by the pass's day loop, which runs off the main actor,
+/// and before its first write (W07-017).
+final class RescorePassAbandon: @unchecked Sendable {
+    private let lock = NSLock()
+    private var raised = false
+    var isRaised: Bool { lock.lock(); defer { lock.unlock() }; return raised }
+    func raise() { lock.lock(); raised = true; lock.unlock() }
 }
