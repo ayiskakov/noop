@@ -431,6 +431,31 @@ final class IntelligenceEngine: ObservableObject {
         return min(dayStart + StreamReadCap.forwardSeconds, now)
     }
 
+    /// Where a day with no motion takes its night from (#804, #1801). The raw values are the gate line's
+    /// `reason=`, so the log and the branch cannot name two different outcomes.
+    enum NoMotionNight: String {
+        /// The owner's own persisted hypnogram (a ring's night, #804), handed to `analyzeDay`.
+        case storedHypnogram = "stored-hypnogram"
+        /// A stored night under the WHOOP import namespace: the day is left alone.
+        case storedSessionsExist = "stored-sessions-exist"
+        /// Nothing stored: the night is staged from heart rate (#1801).
+        case hrOnly = "no-motion-no-hypnogram"
+    }
+
+    /// The `NoMotionNight` for `day`, from the owner's stored sessions in the day's read, and how many of
+    /// them decided it.
+    ///
+    /// Only a stored session that ends on `day` counts (W03-052): that is the rule `analyzeDay` keeps a
+    /// night by. The read runs from 30 h before the day to 12 h past it (W03-024), so it also holds the
+    /// nights of the day before and the day after; counting those skipped the HR-only night of a day that
+    /// had none stored, and the day scored no night at all.
+    nonisolated static func noMotionNight(owner: String, stored: [SleepSession], day: String,
+                                          tzOffsetSeconds: Int) -> (source: NoMotionNight, storedNights: Int) {
+        let onDay = stored.filter { AnalyticsEngine.dayString($0.end, offsetSec: tzOffsetSeconds) == day }.count
+        if onDay == 0 { return (.hrOnly, 0) }
+        return (owner != Repository.whoopSource ? .storedHypnogram : .storedSessionsExist, onDay)
+    }
+
     /// Counts + a window length only — same privacy class as the sibling `sleep day=` line, no PII. Pure so
     /// it's unit-tested directly; byte-identical to the Android `sleepDetectNoNightLogLine`.
 /// Fold the per-day diagnostic lines onto the one channel that already replays them.
@@ -1406,31 +1431,28 @@ final class IntelligenceEngine: ObservableObject {
                 // skipped before any heart rate was looked at.
                 //
                 // The stored lookup now runs for every no-motion day, so "nothing else knows about this
-                // night" is checked rather than assumed. A day that HAS stored sessions is left alone
-                // whoever owns it.
+                // night" is checked rather than assumed. A day with a stored night of its own (one ending
+                // on the day, W03-052) is left alone whoever owns it.
                 let providedSleep: [SleepSession]
                 if grav.count < 2 {
                     let persisted = (try? await store.sleepSessions(deviceId: owner, from: from, to: to,
                                                                     limit: 4000)) ?? []
                     let stored = persisted.compactMap { AnalyticsEngine.sleepSession(fromProvided: $0) }
-                    if owner != Repository.whoopSource, !stored.isEmpty {
-                        traceSink?(SleepStager.GateTrace.hrOnlyGateLine(
-                            attempted: false, reason: "stored-hypnogram",
-                            gravRows: grav.count, storedNights: stored.count))
+                    let gate = Self.noMotionNight(owner: owner, stored: stored, day: day,
+                                                  tzOffsetSeconds: tzOffset)
+                    traceSink?(SleepStager.GateTrace.hrOnlyGateLine(
+                        attempted: gate.source == .hrOnly, reason: gate.source.rawValue,
+                        gravRows: grav.count, storedNights: gate.storedNights))
+                    switch gate.source {
+                    case .storedHypnogram:
                         providedSleep = stored
-                    } else if !stored.isEmpty {
-                        traceSink?(SleepStager.GateTrace.hrOnlyGateLine(
-                            attempted: false, reason: "stored-sessions-exist",
-                            gravRows: grav.count, storedNights: stored.count))
+                    case .storedSessionsExist:
                         providedSleep = []
-                    } else {
+                    case .hrOnly:
                         // Reachable for ANY owner now, which widens this past the 5/MG it was built for:
                         // a WHOOP 4.0 day that banked nothing at all also lands here, where the owner
                         // check previously blocked it. A normal 4.0 day is untouched — it streams
                         // gravity, so it never reaches this gate.
-                        traceSink?(SleepStager.GateTrace.hrOnlyGateLine(
-                            attempted: true, reason: "no-motion-no-hypnogram",
-                            gravRows: grav.count, storedNights: 0))
                         providedSleep = SleepStager.hrOnlySessions(hr: hr, rr: rr, resp: resp,
                                                                    stager: sleepStager,
                                                                    traceSink: traceSink)
